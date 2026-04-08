@@ -3,10 +3,13 @@ import sys
 from pathlib import Path
 
 import yaml
-from PyQt6.QtWidgets import QApplication
+from PyQt6.QtWidgets import QApplication, QSystemTrayIcon, QMenu
+from PyQt6.QtGui import QIcon, QPixmap, QPainter, QColor
+from PyQt6.QtCore import Qt
 
-from gamepad_manager import GamepadManager
+from gamepad_watcher import GamepadWatcher
 from desktop import Desktop
+from home_overlay import HomeOverlay
 
 
 def _setup_logging() -> None:
@@ -25,6 +28,20 @@ def _load_apps() -> list[dict]:
     return data.get("apps", [])
 
 
+def _make_tray_icon() -> QIcon:
+    px = QPixmap(32, 32)
+    px.fill(Qt.GlobalColor.transparent)
+    painter = QPainter(px)
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+    painter.setBrush(QColor("#88c0d0"))
+    painter.setPen(Qt.PenStyle.NoPen)
+    painter.drawEllipse(2, 2, 28, 28)
+    painter.setBrush(QColor("#0b140e"))
+    painter.drawEllipse(8, 8, 16, 16)
+    painter.end()
+    return QIcon(px)
+
+
 def main() -> None:
     _setup_logging()
     logger = logging.getLogger(__name__)
@@ -35,9 +52,55 @@ def main() -> None:
 
     app = QApplication(sys.argv)
     app.setApplicationName("Console Desktop")
+    app.setQuitOnLastWindowClosed(False)   # aplikacja żyje w tray nawet gdy okna są ukryte
 
-    gamepad = GamepadManager()
-    desktop = Desktop(apps=apps, gamepad=gamepad)  # noqa: F841
+    gamepad = GamepadWatcher()
+    desktop = Desktop(apps=apps, gamepad=gamepad)
+    overlay = HomeOverlay(gamepad=gamepad)
+
+    # ── BTN_MODE → pokaż overlay z kontekstem ──────────────────────────────
+
+    def _on_btn_mode() -> None:
+        running_idx = desktop.app_manager.running_idx()
+        if running_idx is None:
+            overlay.show_overlay()
+        else:
+            name = apps[running_idx]["name"]
+            extra = [
+                {
+                    "label":    f"  Wróć do {name}",
+                    "icon":     "fa5s.arrow-left",
+                    "callback": lambda: None,   # overlay już się ukrywa przed wywołaniem callbacka
+                },
+                {
+                    "label":    f"  Zamknij {name}",
+                    "icon":     "fa5s.times-circle",
+                    "callback": desktop.request_close_running_app,
+                },
+            ]
+            overlay.show_overlay(extra_items=extra)
+
+    gamepad.btn_mode_pressed.connect(_on_btn_mode)
+
+    # ── Tray icon ──────────────────────────────────────────────────────────
+
+    tray = QSystemTrayIcon(_make_tray_icon())
+    tray.setToolTip("Console Desktop")
+
+    tray_menu = QMenu()
+    show_action = tray_menu.addAction("Pokaż pulpit")
+    show_action.triggered.connect(lambda: (desktop.showFullScreen(), desktop.activateWindow()))
+    tray_menu.addSeparator()
+    quit_action = tray_menu.addAction("Zamknij")
+    quit_action.triggered.connect(app.quit)
+
+    tray.setContextMenu(tray_menu)
+    tray.activated.connect(
+        lambda reason: (desktop.showFullScreen(), desktop.activateWindow())
+        if reason == QSystemTrayIcon.ActivationReason.Trigger
+        else None
+    )
+    tray.show()
 
     sys.exit(app.exec())
 

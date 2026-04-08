@@ -10,7 +10,7 @@ from PyQt6.QtGui import QColor, QKeyEvent
 
 import qtawesome as qta
 
-from gamepad_manager import GamepadManager
+from gamepad_watcher import GamepadWatcher
 
 logger = logging.getLogger(__name__)
 
@@ -48,14 +48,15 @@ class VolumeOverlay(QWidget):
 
     closed = pyqtSignal()
 
-    def __init__(self, gamepad: GamepadManager, parent: QWidget | None = None):
+    def __init__(self, gamepad: GamepadWatcher, parent: QWidget | None = None):
         super().__init__(parent)
         self._gamepad = gamepad
         self._volume  = _get_volume()
 
         self.setWindowFlags(
             Qt.WindowType.FramelessWindowHint |
-            Qt.WindowType.WindowStaysOnTopHint
+            Qt.WindowType.WindowStaysOnTopHint |
+            Qt.WindowType.Tool
         )
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setStyleSheet("background-color: rgba(0, 0, 0, 150);")

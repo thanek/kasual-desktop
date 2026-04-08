@@ -1,17 +1,16 @@
 import logging
 import subprocess
-from typing import Callable
 
 from PyQt6.QtWidgets import (
     QWidget, QPushButton, QVBoxLayout, QLabel, QFrame,
     QGraphicsDropShadowEffect,
 )
-from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtGui import QColor, QKeyEvent, QPainter
+from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QColor, QPainter, QKeyEvent
 
 import qtawesome as qta
 
-from gamepad_manager import GamepadManager
+from gamepad_watcher import GamepadWatcher
 from styles import Styles
 
 logger = logging.getLogger(__name__)
@@ -24,46 +23,44 @@ _STATIC_ITEMS = [
 ]
 
 
-class HomeMenu(QWidget):
+class HomeOverlay(QWidget):
     """
-    Overlay menu Home pokazywane jako dziecko Desktop (nie osobne okno).
-    Wypełnia cały obszar rodzica ciemnym tłem; karta z opcjami jest wyśrodkowana.
+    Fullscreen overlay pokazywany po wciśnięciu BTN_MODE.
 
-    extra_items – lista dict z kluczami label, icon, callback; wstawiana
-                  na szczycie listy (np. opcje dla działającej aplikacji).
+    Niezależne top-level okno (nie child Desktop) z WindowStaysOnTopHint –
+    przykrywa wszystko, łącznie z fullscreen aplikacjami.
+
+    Użycie:
+        overlay = HomeOverlay(gamepad)
+        overlay.show_overlay(extra_items=[...])   # pokazuje z kontekstem
+        overlay.hide_overlay()                    # chowa
     """
 
-    closed = pyqtSignal()
-
-    def __init__(
-        self,
-        gamepad: GamepadManager,
-        parent: QWidget,
-        extra_items: list[dict] | None = None,
-    ):
+    def __init__(self, gamepad: GamepadWatcher, parent=None):
         super().__init__(parent)
         self._gamepad = gamepad
         self._index   = 0
-        self._done    = False
+        self._items:   list[dict]       = []
+        self._buttons: list[QPushButton] = []
 
-        # Zbuduj pełną listę pozycji: najpierw extra, potem statyczne
-        self._items = list(extra_items or []) + list(_STATIC_ITEMS)
-        n_extra = len(extra_items) if extra_items else 0
-
-        # Wypełnij cały obszar rodzica
-        self.resize(parent.size())
-        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        self.setWindowFlags(
+            Qt.WindowType.FramelessWindowHint
+            | Qt.WindowType.WindowStaysOnTopHint
+            | Qt.WindowType.Tool          # nie pojawia się na taskbarze
+        )
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, False)
 
         outer = QVBoxLayout(self)
         outer.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
-        card = QWidget()
-        card.setFixedWidth(500)
-        card.setStyleSheet("background-color: #1e2430; border-radius: 14px;")
+        self._card = QWidget()
+        self._card.setFixedWidth(500)
+        self._card.setStyleSheet("background-color: #1e2430; border-radius: 14px;")
 
-        card_layout = QVBoxLayout(card)
-        card_layout.setContentsMargins(32, 32, 32, 32)
-        card_layout.setSpacing(8)
+        self._card_layout = QVBoxLayout(self._card)
+        self._card_layout.setContentsMargins(32, 32, 32, 32)
+        self._card_layout.setSpacing(8)
 
         title = QLabel("Menu")
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -71,44 +68,74 @@ class HomeMenu(QWidget):
             "font-size: 28px; color: #88c0d0; font-weight: bold;"
             " background: transparent; padding-bottom: 8px;"
         )
-        card_layout.addWidget(title)
+        self._card_layout.addWidget(title)
 
-        self._buttons: list[QPushButton] = []
+        shadow = QGraphicsDropShadowEffect(self._card)
+        shadow.setOffset(0, 10)
+        shadow.setColor(QColor(0, 0, 0, 220))
+        shadow.setBlurRadius(50)
+        self._card.setGraphicsEffect(shadow)
+
+        outer.addWidget(self._card)
+
+    # ── Tło ────────────────────────────────────────────────────────────────
+
+    def paintEvent(self, _) -> None:
+        painter = QPainter(self)
+        painter.fillRect(self.rect(), QColor(0, 0, 0, 170))
+
+    # ── Publiczne API ──────────────────────────────────────────────────────
+
+    def show_overlay(self, extra_items: list[dict] | None = None) -> None:
+        """
+        Pokaż overlay z dynamicznym menu.
+
+        extra_items – lista dict z kluczami: label, icon, callback.
+        Wstawiane na szczycie listy przed opcjami systemowymi.
+        """
+        if self.isVisible():
+            return
+        self._rebuild_buttons(extra_items or [])
+        self._index = 0
+        self._refresh_buttons()
+        self._gamepad.push_handler(self._handle_pad)
+        self.showFullScreen()
+        self.raise_()
+        self.activateWindow()
+
+    def hide_overlay(self) -> None:
+        if not self.isVisible():
+            return
+        self._gamepad.pop_handler(self._handle_pad)
+        self.hide()
+
+    # ── Budowanie menu ─────────────────────────────────────────────────────
+
+    def _rebuild_buttons(self, extra_items: list[dict]) -> None:
+        # Usuń stare przyciski i separatory (zostaw tylko tytuł = item 0)
+        while self._card_layout.count() > 1:
+            item = self._card_layout.takeAt(1)
+            if item.widget():
+                item.widget().deleteLater()
+        self._buttons.clear()
+
+        self._items = list(extra_items) + list(_STATIC_ITEMS)
+        n_extra = len(extra_items)
+
         for i, item in enumerate(self._items):
-            # Separator między sekcją extra a statyczną
             if i == n_extra and n_extra > 0:
                 sep = QFrame()
                 sep.setFrameShape(QFrame.Shape.HLine)
                 sep.setStyleSheet("color: #3b4252; background: #3b4252; margin: 4px 0;")
                 sep.setFixedHeight(1)
-                card_layout.addWidget(sep)
+                self._card_layout.addWidget(sep)
 
             btn = QPushButton(item["label"])
             btn.setMinimumHeight(62)
             btn.setIcon(qta.icon(item["icon"], color="white"))
             btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-            card_layout.addWidget(btn)
+            self._card_layout.addWidget(btn)
             self._buttons.append(btn)
-
-        shadow = QGraphicsDropShadowEffect(card)
-        shadow.setOffset(0, 10)
-        shadow.setColor(QColor(0, 0, 0, 220))
-        shadow.setBlurRadius(50)
-        card.setGraphicsEffect(shadow)
-
-        outer.addWidget(card)
-
-        self._refresh_buttons()
-        self._gamepad.push_handler(self._handle_pad)
-        self.show()
-        self.raise_()
-        self.setFocus()
-
-    # ── Tło (semi-transparentne, rysowane ręcznie) ─────────────────────────
-
-    def paintEvent(self, _) -> None:
-        painter = QPainter(self)
-        painter.fillRect(self.rect(), QColor(0, 0, 0, 170))
 
     # ── Handler pada ───────────────────────────────────────────────────────
 
@@ -122,7 +149,7 @@ class HomeMenu(QWidget):
         elif event == "select":
             self._activate(self._index)
         elif event in ("cancel", "close"):
-            self._close()
+            self.hide_overlay()
 
     # ── Klawiatura ─────────────────────────────────────────────────────────
 
@@ -137,41 +164,30 @@ class HomeMenu(QWidget):
         elif key in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
             self._activate(self._index)
         elif key in (Qt.Key.Key_Escape, Qt.Key.Key_F1):
-            self._close()
+            self.hide_overlay()
 
     # ── Akcje ──────────────────────────────────────────────────────────────
 
     def _activate(self, idx: int) -> None:
         item = self._items[idx]
 
-        # Pozycja z callbackiem (extra_items)
         if "callback" in item:
-            self._close()
+            self.hide_overlay()
             item["callback"]()
             return
 
-        # Pozycje statyczne
         action = item["action"]
         if action == "cancel":
-            self._close()
+            self.hide_overlay()
         elif action == "sleep":
-            self._close()
+            self.hide_overlay()
             subprocess.Popen(["systemctl", "suspend"])
         elif action == "restart":
-            self._close()
+            self.hide_overlay()
             subprocess.Popen(["systemctl", "reboot"])
         elif action == "shutdown":
-            self._close()
+            self.hide_overlay()
             subprocess.Popen(["systemctl", "poweroff"])
-
-    def _close(self) -> None:
-        if self._done:
-            return
-        self._done = True
-        self._gamepad.pop_handler(self._handle_pad)
-        self.closed.emit()
-        self.hide()
-        self.deleteLater()
 
     # ── Styl ───────────────────────────────────────────────────────────────
 

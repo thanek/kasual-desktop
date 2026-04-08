@@ -2,3 +2,4 @@ __pycache__
 *.user
 others
 venv
+btn_mode_daemon

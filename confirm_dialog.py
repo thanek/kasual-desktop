@@ -8,7 +8,7 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtGui import QColor, QKeyEvent
 
-from gamepad_manager import GamepadManager
+from gamepad_watcher import GamepadWatcher
 from styles import Styles
 
 logger = logging.getLogger(__name__)
@@ -25,7 +25,7 @@ class ConfirmDialog(QWidget):
         question: str,
         on_confirmed: Callable[[], None],
         on_cancelled: Callable[[], None],
-        gamepad: GamepadManager,
+        gamepad: GamepadWatcher,
         parent: QWidget | None = None,
     ):
         super().__init__(parent)
@@ -37,7 +37,8 @@ class ConfirmDialog(QWidget):
 
         self.setWindowFlags(
             Qt.WindowType.FramelessWindowHint |
-            Qt.WindowType.WindowStaysOnTopHint
+            Qt.WindowType.WindowStaysOnTopHint |
+            Qt.WindowType.Tool
         )
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setStyleSheet("background-color: rgba(0, 0, 0, 150);")
@@ -119,11 +120,21 @@ class ConfirmDialog(QWidget):
     def _close(self) -> bool:
         if self._closed:
             return False
+        logger.info("ConfirmDialog._close() – chowam dialog")
         self._closed = True
         self._gamepad.pop_handler(self._handle_pad)
         self.hide()
         self.deleteLater()
         return True
+
+    def force_close(self) -> None:
+        """Wymuś zamknięcie (np. gdy aplikacja zakończyła się z zewnątrz)."""
+        logger.warning("ConfirmDialog.force_close() – wymuszam zamknięcie")
+        if not self._closed:
+            self._closed = True
+            self._gamepad.pop_handler(self._handle_pad)
+        self.hide()
+        self.deleteLater()
 
     def _refresh_buttons(self) -> None:
         self._btn_yes.setStyleSheet(

@@ -4,7 +4,7 @@ import subprocess
 
 from PyQt6.QtWidgets import (
     QWidget, QPushButton, QHBoxLayout, QVBoxLayout,
-    QScrollArea, QLabel, QFrame, QGraphicsDropShadowEffect, QToolButton,
+    QScrollArea, QLabel, QGraphicsDropShadowEffect, QToolButton,
     QApplication, QSizePolicy,
 )
 from PyQt6.QtCore import Qt, QTimer, QSize, QEvent, pyqtSignal
@@ -12,10 +12,9 @@ from PyQt6.QtGui import QPainter, QRadialGradient, QColor, QIcon, QKeyEvent
 
 import qtawesome as qta
 
-from gamepad_manager import GamepadManager
+from gamepad_watcher import GamepadWatcher
 from app_manager import AppManager
 from confirm_dialog import ConfirmDialog
-from home_menu import HomeMenu
 from volume_overlay import VolumeOverlay
 from styles import Styles
 
@@ -63,7 +62,6 @@ class AppTile(QWidget):
         self._btn.setStyleSheet(Styles.tile_normal(color))
         self._btn.clicked.connect(self.clicked)
 
-        # Zielona kropka (uruchomiona)
         self._dot = QLabel(self)
         self._dot.setFixedSize(14, 14)
         self._dot.setStyleSheet(
@@ -72,7 +70,6 @@ class AppTile(QWidget):
         self._dot.move(TILE_W - 22, 8)
         self._dot.hide()
 
-        # Cień
         shadow = QGraphicsDropShadowEffect(self._btn)
         shadow.setOffset(4, 6)
         shadow.setColor(QColor(0, 0, 0, 160))
@@ -102,15 +99,15 @@ class AppTile(QWidget):
 class Desktop(QWidget):
     """Główne okno środowiska – zawsze pełnoekranowe."""
 
-    def __init__(self, apps: list[dict], gamepad: GamepadManager):
+    def __init__(self, apps: list[dict], gamepad: GamepadWatcher):
         super().__init__()
-        self._apps         = apps
-        self._gamepad      = gamepad
-        self._app_manager  = AppManager(self)
-        self._focus_mode   = "tiles"   # "tiles" | "topbar"
-        self._tile_index   = 0
-        self._topbar_index = 0
-        self._home_menu    = None      # aktywne HomeMenu (child widget)
+        self._apps        = apps
+        self._gamepad     = gamepad
+        self._app_manager = AppManager(self)
+        self._focus_mode     = "tiles"   # "tiles" | "topbar"
+        self._tile_index     = 0
+        self._topbar_index   = 0
+        self._confirm_dialog = None
 
         self.setWindowTitle("Console Desktop")
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint)
@@ -123,26 +120,47 @@ class Desktop(QWidget):
         main.addStretch(1)
         main.addWidget(self._build_tile_bar())
 
-        # Timer statusu kafelków (sprawdza czy app jeszcze żyje)
         self._status_timer = QTimer(self)
         self._status_timer.timeout.connect(self._refresh_tile_status)
         self._status_timer.start(500)
 
-        # Animacja tła
         self._bg_offset = 0.0
         self._bg_timer = QTimer(self)
         self._bg_timer.timeout.connect(self._tick_bg)
         self._bg_timer.start(33)
 
-        # Gamepad
-        self._gamepad.push_handler(self._handle_pad)
-        self._gamepad.menu_requested.connect(self._on_home)
         self._app_manager.app_finished.connect(self._on_app_finished)
 
-        # Filtr zdarzeń klawiatury
         QApplication.instance().installEventFilter(self)
 
+        self._gamepad.push_handler(self._handle_pad)
         self.showFullScreen()
+
+    # ── Publiczne API (dla main.py / HomeOverlay) ──────────────────────────
+
+    @property
+    def app_manager(self) -> AppManager:
+        return self._app_manager
+
+    def restore_app(self) -> None:
+        """Wróć do działającej aplikacji – ukryj Desktop, oddaj pada aplikacji."""
+        self._gamepad.pop_handler(self._handle_pad)
+        self.hide()
+
+    def request_close_running_app(self) -> None:
+        """Pokaż dialog potwierdzenia zamknięcia działającej aplikacji."""
+        if self._confirm_dialog is not None:
+            return  # dialog już otwarty
+        running = self._app_manager.running_idx()
+        if running is None:
+            return
+        name = self._apps[running]["name"]
+        self._confirm_dialog = ConfirmDialog(
+            question=f'Czy na pewno chcesz zamknąć aplikację\n"{name}"?',
+            on_confirmed=self._do_close_app,
+            on_cancelled=self._on_close_cancelled,
+            gamepad=self._gamepad,
+        )
 
     # ── Animacja tła ───────────────────────────────────────────────────────
 
@@ -186,7 +204,6 @@ class Desktop(QWidget):
         BTN_SPACING = 14
         BTNS_TOTAL  = len(TOPBAR_ACTIONS) * BTN_SIZE + (len(TOPBAR_ACTIONS) - 1) * BTN_SPACING
 
-        # Lewa strona (placeholder równy szerokości prawej)
         spacer = QWidget()
         spacer.setFixedWidth(BTNS_TOTAL)
         spacer.setStyleSheet("background: transparent;")
@@ -194,7 +211,6 @@ class Desktop(QWidget):
 
         layout.addStretch(1)
 
-        # Zegar pośrodku
         lbl_style = "font-size: 26px; color: white; background: transparent;"
         self._date_lbl = QLabel()
         self._date_lbl.setStyleSheet(lbl_style)
@@ -222,7 +238,6 @@ class Desktop(QWidget):
 
         layout.addStretch(1)
 
-        # Przyciski systemowe (prawa strona)
         self._topbar_buttons: list[QPushButton] = []
         btn_area = QWidget()
         btn_area.setFixedWidth(BTNS_TOTAL)
@@ -281,7 +296,7 @@ class Desktop(QWidget):
                 icon_name=app.get("icon", "fa5s.desktop"),
                 color=app.get("color", "#2e3440"),
             )
-            tile.clicked.connect(lambda _, idx=i: self._on_tile_clicked(idx))
+            tile.clicked.connect(lambda idx=i: self._on_tile_clicked(idx))
             self._tile_layout.addWidget(tile)
             self._tiles.append(tile)
 
@@ -329,17 +344,8 @@ class Desktop(QWidget):
     def eventFilter(self, obj, event) -> bool:
         if event.type() != QEvent.Type.KeyPress or not self.isActiveWindow():
             return False
-        key = event.key()
-        # F1 / Home – toggle menu
-        if key == Qt.Key.Key_F1:
-            if self._home_menu is not None:
-                self._gamepad.inject("cancel")   # zamknij otwarte menu
-            else:
-                self._on_home()
-            return True
-        mapped = self._KEY_MAP.get(key)
+        mapped = self._KEY_MAP.get(event.key())
         if mapped:
-            # Zawsze przez stos handlerów – działa zarówno dla Desktopu jak i HomeMenu
             self._gamepad.inject(mapped)
             return True
         return False
@@ -360,7 +366,7 @@ class Desktop(QWidget):
                 self._on_tile_clicked(self._tile_index)
             elif event == "close":
                 if self._app_manager.is_running():
-                    self._ask_close_app()
+                    self.request_close_running_app()
 
         elif self._focus_mode == "topbar":
             if event == "left":
@@ -380,54 +386,42 @@ class Desktop(QWidget):
     def _on_tile_clicked(self, idx: int) -> None:
         running = self._app_manager.running_idx()
         if running == idx:
-            # Przywróć uruchomioną aplikację – oddaj pada aplikacji
             logger.info("Przywracam aplikację %d", idx)
-            self._gamepad.pop_handler(self._handle_pad)
-            self.hide()
+            self.restore_app()
         elif running is not None:
             logger.info("Inna aplikacja (%d) już działa – ignoruję", running)
         else:
-            # Uruchom nową aplikację – oddaj pada aplikacji
             logger.info("Uruchamiam aplikację %d", idx)
             self._gamepad.pop_handler(self._handle_pad)
-            self.hide()
             self._app_manager.launch(idx, self._apps[idx])
+            self.hide()
 
     def _on_app_finished(self, idx: int) -> None:
         logger.info("Aplikacja %d zakończona – wracam do pulpitu", idx)
+        if self._confirm_dialog is not None:
+            logger.warning("Dialog nadal aktywny po zakończeniu aplikacji – wymuszam zamknięcie")
+            self._confirm_dialog.force_close()
+            self._confirm_dialog = None
         self._refresh_tile_status()
-        # Przejmij pada z powrotem
         self._gamepad.push_handler(self._handle_pad)
         self.showFullScreen()
-        self.raise_()
         self.activateWindow()
 
-    # ── Zamknięcie aplikacji (X / Q) ───────────────────────────────────────
-
-    def _ask_close_app(self) -> None:
-        running = self._app_manager.running_idx()
-        name = self._apps[running]["name"] if running is not None else "aplikację"
-        self._gamepad.pop_handler(self._handle_pad)
-        ConfirmDialog(
-            question=f'Czy na pewno chcesz zamknąć aplikację\n"{name}"?',
-            on_confirmed=self._do_close_app,
-            on_cancelled=self._on_close_cancelled,
-            gamepad=self._gamepad,
-        )
-
-    def _do_close_app(self) -> None:
-        self._app_manager.terminate()
-        self._gamepad.push_handler(self._handle_pad)
+    # ── Zamknięcie aplikacji ───────────────────────────────────────────────
 
     def _on_close_cancelled(self) -> None:
-        self._gamepad.push_handler(self._handle_pad)
+        self._confirm_dialog = None
+
+    def _do_close_app(self) -> None:
+        self._confirm_dialog = None
+        self._app_manager.terminate()
 
     # ── Akcje paska górnego ────────────────────────────────────────────────
 
     def _topbar_action(self, idx: int) -> None:
         action_type = TOPBAR_ACTIONS[idx]["type"]
         if action_type == "volume":
-            self._gamepad.pop_handler(self._handle_pad)
+            # VolumeOverlay pcha swój handler na stos – Desktop zostaje pod spodem
             overlay = VolumeOverlay(self._gamepad)
             overlay.closed.connect(self._on_volume_closed)
         elif action_type == "sleep":
@@ -439,55 +433,4 @@ class Desktop(QWidget):
 
     def _on_volume_closed(self) -> None:
         self._focus_mode = "topbar"
-        self._gamepad.push_handler(self._handle_pad)
         self._update_focus()
-
-    # ── Home menu ──────────────────────────────────────────────────────────
-
-    def _on_home(self) -> None:
-        # Nie otwieraj drugiego menu jeśli już jest otwarte
-        if self._home_menu is not None:
-            return
-
-        # Najpierw przywróć pulpit (jeśli aplikacja działała w tle)
-        if not self.isVisible():
-            # Przejmij pada z powrotem – aplikacja przestaje go dostawać
-            self._gamepad.push_handler(self._handle_pad)
-            self.showFullScreen()
-            self.raise_()
-            self.activateWindow()
-
-        # Dynamiczne pozycje menu gdy aplikacja działa w tle
-        extra: list[dict] = []
-        running_idx = self._app_manager.running_idx()
-        if running_idx is not None:
-            name = self._apps[running_idx]["name"]
-            extra = [
-                {
-                    "label":    f"  Wróć do {name}",
-                    "icon":     "fa5s.arrow-left",
-                    "callback": self._restore_from_menu,
-                },
-                {
-                    "label":    f"  Zamknij {name}",
-                    "icon":     "fa5s.times-circle",
-                    "callback": self._close_app_from_menu,
-                },
-            ]
-
-        # Pokaż menu jako child widget – w ramach tego samego okna
-        menu = HomeMenu(gamepad=self._gamepad, parent=self, extra_items=extra)
-        menu.closed.connect(self._on_home_menu_closed)
-        self._home_menu = menu
-
-    def _on_home_menu_closed(self) -> None:
-        self._home_menu = None
-
-    def _restore_from_menu(self) -> None:
-        """Wróć do działającej aplikacji (schowaj pulpit)."""
-        self._gamepad.pop_handler(self._handle_pad)
-        self.hide()
-
-    def _close_app_from_menu(self) -> None:
-        """Zamknij aplikację z potwierdzeniem (wywoływane z HomeMenu)."""
-        self._ask_close_app()
