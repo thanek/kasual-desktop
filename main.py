@@ -68,6 +68,11 @@ def main() -> None:
             name = apps[running_idx]["name"]
             extra = [
                 {
+                    "label":    "  Powrót do Pulpitu",
+                    "icon":     "fa5s.home",
+                    "callback": desktop.show_desktop,
+                },
+                {
                     "label":    f"  Wróć do {name}",
                     "icon":     "fa5s.arrow-left",
                     "callback": lambda: None,   # overlay już się ukrywa przed wywołaniem callbacka

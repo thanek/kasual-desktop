@@ -142,6 +142,12 @@ class Desktop(QWidget):
     def app_manager(self) -> AppManager:
         return self._app_manager
 
+    def show_desktop(self) -> None:
+        """Pokaż pulpit nie przerywając działającej aplikacji."""
+        self._gamepad.push_handler(self._handle_pad)
+        self.showFullScreen()
+        self.activateWindow()
+
     def restore_app(self) -> None:
         """Wróć do działającej aplikacji – ukryj Desktop, oddaj pada aplikacji."""
         self._gamepad.pop_handler(self._handle_pad)
