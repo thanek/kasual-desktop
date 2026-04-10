@@ -39,10 +39,11 @@ class HomeOverlay(QWidget):
 
     def __init__(self, gamepad: GamepadWatcher, parent=None):
         super().__init__(parent)
-        self._gamepad = gamepad
-        self._index   = 0
-        self._items:   list[dict]       = []
-        self._buttons: list[QPushButton] = []
+        self._gamepad    = gamepad
+        self._index      = 0
+        self._items:     list[dict]       = []
+        self._buttons:   list[QPushButton] = []
+        self._on_cancel  = None
 
         self.setWindowFlags(
             Qt.WindowType.FramelessWindowHint
@@ -87,15 +88,21 @@ class HomeOverlay(QWidget):
 
     # ── Publiczne API ──────────────────────────────────────────────────────
 
-    def show_overlay(self, extra_items: list[dict] | None = None) -> None:
+    def show_overlay(
+        self,
+        extra_items: list[dict] | None = None,
+        on_cancel=None,
+    ) -> None:
         """
         Pokaż overlay z dynamicznym menu.
 
         extra_items – lista dict z kluczami: label, icon, callback.
         Wstawiane na szczycie listy przed opcjami systemowymi.
+        on_cancel – callback wywoływany po wybraniu "Anuluj" w trybie desktop.
         """
         if self.isVisible():
             return
+        self._on_cancel = on_cancel
         self._rebuild_buttons(extra_items or [])
         self._index = 0
         self._refresh_buttons()
@@ -172,6 +179,8 @@ class HomeOverlay(QWidget):
         action = item["action"]
         if action == "cancel":
             self.hide_overlay()
+            if self._on_cancel:
+                self._on_cancel()
         elif action == "sleep":
             self.hide_overlay()
             self._ask_system_action("Czy na pewno chcesz uśpić system?", ["systemctl", "suspend"])

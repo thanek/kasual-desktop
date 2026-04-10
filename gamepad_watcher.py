@@ -138,12 +138,10 @@ class GamepadWatcher(QObject):
                                 self.btn_mode_pressed.emit()
 
                         else:
-                            # Przekaż do wirtualnego pada (chyba że Desktop jest aktywny)
+                            # Przekaż do wirtualnego pada (chyba że nasz UI jest aktywny)
                             if uinput:
-                                suppress_now = False
-                                if ev.type == ecodes.EV_KEY:
-                                    with self._lock:
-                                        suppress_now = self._suppress_uinput
+                                with self._lock:
+                                    suppress_now = self._suppress_uinput
                                 if not suppress_now:
                                     uinput.write(ev.type, ev.code, ev.value)
                             self._translate(ev, held, stick, pending)

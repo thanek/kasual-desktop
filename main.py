@@ -101,7 +101,9 @@ def main() -> None:
     def _on_btn_mode() -> None:
         running_idx = desktop.app_manager.running_idx()
         if running_idx is None:
-            overlay.show_overlay()
+            overlay.show_overlay(
+                on_cancel=lambda: (desktop.showFullScreen(), desktop.activateWindow()),
+            )
         else:
             # Pobierz aktywne okno PRZED pokazaniem overlay – to okno gry/aplikacji
             prev_win  = _get_active_xwindow()
