@@ -506,11 +506,25 @@ class Desktop(QWidget):
             overlay = VolumeOverlay(self._gamepad)
             overlay.closed.connect(self._on_volume_closed)
         elif action_type == "sleep":
-            subprocess.Popen(["systemctl", "suspend"])
+            self._ask_system_action("Czy na pewno chcesz uśpić system?", ["systemctl", "suspend"])
         elif action_type == "restart":
-            subprocess.Popen(["systemctl", "reboot"])
+            self._ask_system_action("Czy na pewno chcesz zrestartować komputer?", ["systemctl", "reboot"])
         elif action_type == "shutdown":
-            subprocess.Popen(["systemctl", "poweroff"])
+            self._ask_system_action("Czy na pewno chcesz wyłączyć komputer?", ["systemctl", "poweroff"])
+
+    def _ask_system_action(self, question: str, cmd: list[str]) -> None:
+        if self._confirm_dialog is not None:
+            return
+        self._confirm_dialog = ConfirmDialog(
+            question=question,
+            on_confirmed=lambda: self._do_system_action(cmd),
+            on_cancelled=self._on_close_cancelled,
+            gamepad=self._gamepad,
+        )
+
+    def _do_system_action(self, cmd: list[str]) -> None:
+        self._confirm_dialog = None
+        subprocess.Popen(cmd)
 
     def _on_volume_closed(self) -> None:
         self._focus_mode = "topbar"

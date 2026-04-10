@@ -11,6 +11,7 @@ from PyQt6.QtGui import QColor, QPainter, QKeyEvent
 import qtawesome as qta
 
 from gamepad_watcher import GamepadWatcher
+from confirm_dialog import ConfirmDialog
 from styles import Styles
 
 logger = logging.getLogger(__name__)
@@ -181,13 +182,21 @@ class HomeOverlay(QWidget):
             self.hide_overlay()
         elif action == "sleep":
             self.hide_overlay()
-            subprocess.Popen(["systemctl", "suspend"])
+            self._ask_system_action("Czy na pewno chcesz uśpić system?", ["systemctl", "suspend"])
         elif action == "restart":
             self.hide_overlay()
-            subprocess.Popen(["systemctl", "reboot"])
+            self._ask_system_action("Czy na pewno chcesz zrestartować komputer?", ["systemctl", "reboot"])
         elif action == "shutdown":
             self.hide_overlay()
-            subprocess.Popen(["systemctl", "poweroff"])
+            self._ask_system_action("Czy na pewno chcesz wyłączyć komputer?", ["systemctl", "poweroff"])
+
+    def _ask_system_action(self, question: str, cmd: list[str]) -> None:
+        ConfirmDialog(
+            question=question,
+            on_confirmed=lambda: subprocess.Popen(cmd),
+            on_cancelled=lambda: None,
+            gamepad=self._gamepad,
+        )
 
     # ── Styl ───────────────────────────────────────────────────────────────
 
