@@ -60,7 +60,7 @@ def _setup_logging() -> None:
 
 
 def _load_apps() -> list[dict]:
-    cfg_path = Path(__file__).parent / "apps.yml"
+    cfg_path = Path(__file__).parent.parent / "apps.yml"
     with open(cfg_path, encoding="utf-8") as f:
         data = yaml.safe_load(f)
     return data.get("apps", [])

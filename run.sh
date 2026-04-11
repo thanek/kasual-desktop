@@ -1,4 +1,4 @@
 #!/bin/bash
 
 source venv/bin/activate
-python3 main.py
+python3 src/main.py
