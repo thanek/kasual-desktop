@@ -1,0 +1,312 @@
+"""
+KWin D-Bus window management — Wayland-native, KDE Plasma 6.
+
+Plasma 6 nie ma activeWindow() / activateWindow() w /KWin.
+Zamiast tego:
+  - aktywne okno:  queryWindowInfo() → pole 'uuid'
+  - aktywacja:     jednorazowy skrypt KWin (workspace.activeWindow = ...)
+  - lista okien:   skrypt KWin (workspace.windowList()) + callDB-Bus adaptor
+
+Adaptor używa pyqtClassInfo('D-Bus Interface', ...) → eksportuje
+interfejs 'org.consoledesktop.WindowList' z metodą receive(),
+którą wywołuje callDBus() wewnątrz skryptu KWin.
+"""
+
+import json
+import logging
+import os
+import tempfile
+
+from PyQt6.QtCore import QObject, QTimer, pyqtClassInfo, pyqtSignal, pyqtSlot
+from PyQt6.QtDBus import (
+    QDBusAbstractAdaptor, QDBusConnection, QDBusInterface, QDBusMessage,
+)
+
+logger = logging.getLogger(__name__)
+
+_KWIN_SVC   = 'org.kde.KWin'
+_KWIN_PATH  = '/KWin'
+_KWIN_IFACE = 'org.kde.KWin'
+_SCRI_PATH  = '/Scripting'
+_SCRI_IFACE = 'org.kde.kwin.Scripting'
+
+_WL_SVC   = 'org.consoledesktop.WindowList'
+_WL_PATH  = '/WindowList'
+_WL_IFACE = 'org.consoledesktop.WindowList'
+
+# Skrypt listujący okna. Filtr: normalWindow + nie pulpit/dock.
+# skipTaskbar NIE jest filtrowany – gry pełnoekranowe mogą go mieć ustawionego.
+_LIST_SCRIPT = """\
+(function () {
+    var ws = workspace.windowList();
+    var out = [];
+    for (var i = 0; i < ws.length; i++) {
+        var w = ws[i];
+        if (w.normalWindow && !w.desktopWindow && !w.dock) {
+            out.push({
+                id:    String(w.internalId),
+                title: String(w.caption),
+                pid:   parseInt(w.pid) || 0
+            });
+        }
+    }
+    callDBus('org.consoledesktop.WindowList', '/WindowList',
+             'org.consoledesktop.WindowList', 'receive',
+             JSON.stringify(out));
+})();
+"""
+
+# Aktywacja okna po UUID — '{uuid}' jest zastępowane przez format().
+_ACTIVATE_SCRIPT = """\
+(function () {{
+    var target = '{uuid}';
+    var ws = workspace.windowList();
+    for (var i = 0; i < ws.length; i++) {{
+        if (String(ws[i].internalId) === target) {{
+            ws[i].minimized = false;
+            workspace.activeWindow = ws[i];
+            break;
+        }}
+    }}
+}})();
+"""
+
+_SCRIPT_TIMEOUT_MS = 5_000
+
+
+@pyqtClassInfo('D-Bus Interface', _WL_IFACE)
+class _WindowListAdaptor(QDBusAbstractAdaptor):
+    """
+    D-Bus adaptor przyjmujący wyniki od skryptu KWin.
+    pyqtClassInfo ustawia nazwę interfejsu na 'org.consoledesktop.WindowList',
+    co musi się zgadzać z pierwszym argumentem callDBus() w skrypcie JS.
+    """
+
+    def __init__(self, parent: QObject) -> None:
+        super().__init__(parent)
+        self.setAutoRelaySignals(False)
+
+    @pyqtSlot(str)
+    def receive(self, json_str: str) -> None:
+        logger.debug('D-Bus receive: %d znaków', len(json_str))
+        try:
+            data = json.loads(json_str)
+        except Exception as exc:
+            logger.warning('WindowList JSON błąd: %s', exc)
+            data = []
+        self.parent()._on_receive(data)      # type: ignore[attr-defined]
+
+
+class _WindowListHost(QObject):
+    """Obiekt-host rejestrujący adaptor i zbierający callbacki."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self._adaptor  = _WindowListAdaptor(self)   # child → auto-export przez Qt
+        self._callbacks: list = []
+
+        bus = QDBusConnection.sessionBus()
+        # Default ExportAdaptors – Qt znajdzie _WindowListAdaptor jako dziecko
+        ok_obj = bus.registerObject(_WL_PATH, self)
+        ok_svc = bus.registerService(_WL_SVC)
+        if not ok_obj or not ok_svc:
+            logger.error('D-Bus rejestracja nieudana: obj=%s svc=%s', ok_obj, ok_svc)
+        else:
+            logger.info('D-Bus WindowList zarejestrowany (%s)', _WL_SVC)
+
+    def add_callback(self, cb) -> None:
+        self._callbacks.append(cb)
+
+    def _on_receive(self, data: list[dict]) -> None:
+        callbacks, self._callbacks = self._callbacks, []
+        for cb in callbacks:
+            cb(data)
+
+    def cleanup(self) -> None:
+        bus = QDBusConnection.sessionBus()
+        bus.unregisterService(_WL_SVC)
+        bus.unregisterObject(_WL_PATH)
+
+
+class KWinWindowManager(QObject):
+    """
+    Zarządza oknami przez KWin D-Bus + jednorazowe skrypty KWin.
+    Wayland-native, bez xdotool. Kompatybilny z KDE Plasma 6.
+    """
+
+    windows_updated = pyqtSignal(list)   # list[dict]: id, title, pid
+
+    def __init__(self, parent: QObject | None = None) -> None:
+        super().__init__(parent)
+        bus = QDBusConnection.sessionBus()
+        self._kwin      = QDBusInterface(_KWIN_SVC, _KWIN_PATH, _KWIN_IFACE, bus)
+        self._scripting = QDBusInterface(_KWIN_SVC, _SCRI_PATH, _SCRI_IFACE, bus)
+
+        # Wymagane w Plasma 6: start() aktywuje silnik skryptowy KWin
+        # przed pierwszym loadScript(). Bezpieczne do wywołania wielokrotnie.
+        reply = self._scripting.call('start')
+        if reply.type() != QDBusMessage.MessageType.ReplyMessage:
+            logger.warning('KWin scripting start() nieudane: %s', reply.errorMessage())
+        else:
+            logger.debug('KWin scripting engine uruchomiony')
+
+        self._host: _WindowListHost | None = None
+        self._cache:   dict[str, dict] = {}
+        self._loading  = False
+        self._counter  = 0
+
+        self._timer = QTimer(self)
+        self._timer.timeout.connect(self._request_list_refresh)
+
+        self._timeout_guard = QTimer(self)
+        self._timeout_guard.setSingleShot(True)
+        self._timeout_guard.timeout.connect(self._on_script_timeout)
+
+    # ── Publiczne API ──────────────────────────────────────────────────────
+
+    def start_periodic_refresh(self, interval_ms: int = 3000) -> None:
+        self._ensure_host()
+        self._request_list_refresh()
+        self._timer.start(interval_ms)
+
+    def stop_refresh(self) -> None:
+        self._timer.stop()
+
+    def refresh_now(self) -> None:
+        """Wymusza natychmiastowe odświeżenie listy okien."""
+        self._request_list_refresh()
+
+    def get_active_window_id(self) -> str | None:
+        """
+        Zwraca UUID aktywnego okna przez queryWindowInfo() — Plasma 6 API.
+        Format: '{xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx}'
+        """
+        reply = self._kwin.call('queryWindowInfo')
+        if reply.type() != QDBusMessage.MessageType.ReplyMessage:
+            logger.debug('queryWindowInfo(): brak odpowiedzi (%s)', reply.errorMessage())
+            return None
+        args = reply.arguments()
+        if not args:
+            return None
+        info: dict = args[0]
+        uuid = info.get('uuid', '')
+        return str(uuid) if uuid else None
+
+    def get_cached_title(self, window_id: str) -> str | None:
+        entry = self._cache.get(window_id)
+        return entry['title'] if entry else None
+
+    def activate_window(self, window_id: str) -> None:
+        """
+        Aktywuje okno przez jednorazowy skrypt KWin.
+        (Plasma 6 nie ma activateWindow() w D-Bus /KWin.)
+        """
+        script = _ACTIVATE_SCRIPT.format(uuid=window_id.replace("'", "\\'"))
+        self._run_fire_and_forget(script, tag='activate')
+
+    def window_exists(self, window_id: str) -> bool:
+        return window_id in self._cache
+
+    def cached_windows(self) -> list[dict]:
+        return list(self._cache.values())
+
+    def close(self) -> None:
+        self.stop_refresh()
+        if self._host:
+            self._host.cleanup()
+            self._host = None
+
+    # ── Wewnętrzne: lista okien ────────────────────────────────────────────
+
+    def _ensure_host(self) -> None:
+        if self._host is None:
+            self._host = _WindowListHost()
+
+    def _request_list_refresh(self) -> None:
+        if self._loading:
+            return
+        self._ensure_host()
+
+        path = self._write_script(_LIST_SCRIPT)
+        if path is None:
+            return
+
+        self._counter += 1
+        plugin = f'consoled_list_{os.getpid()}_{self._counter}'
+
+        self._host.add_callback(
+            lambda wins, p=path, pg=plugin: self._on_windows(wins, p, pg)
+        )
+        self._loading = True
+        self._timeout_guard.start(_SCRIPT_TIMEOUT_MS)
+
+        if not self._load_script(path, plugin):
+            self._loading = False
+            self._timeout_guard.stop()
+            self._host._callbacks.clear()
+            try:
+                os.unlink(path)
+            except Exception:
+                pass
+
+    def _on_windows(self, windows: list[dict], script_path: str, plugin: str) -> None:
+        self._loading = False
+        self._timeout_guard.stop()
+        self._cleanup_script(script_path, plugin)
+
+        our_pid = os.getpid()
+        windows = [w for w in windows if w.get('pid') != our_pid]
+
+        self._cache = {w['id']: w for w in windows}
+        self.windows_updated.emit(list(self._cache.values()))
+        logger.debug('Lista okien: %d', len(self._cache))
+
+    def _on_script_timeout(self) -> None:
+        if self._loading:
+            logger.warning(
+                'Timeout (%dms): skrypt KWin nie odpowiedział – resetuję',
+                _SCRIPT_TIMEOUT_MS,
+            )
+            self._loading = False
+
+    # ── Wewnętrzne: helpers skryptów ───────────────────────────────────────
+
+    def _write_script(self, content: str) -> str | None:
+        try:
+            fd, path = tempfile.mkstemp(suffix='.js', prefix='consoled_')
+            with os.fdopen(fd, 'w') as f:
+                f.write(content)
+            return path
+        except Exception as exc:
+            logger.error('Nie można zapisać skryptu: %s', exc)
+            return None
+
+    def _load_script(self, path: str, plugin: str) -> bool:
+        reply = self._scripting.call('loadScript', path, plugin)
+        if reply.type() == QDBusMessage.MessageType.ReplyMessage:
+            logger.debug('loadScript OK: %s', plugin)
+            return True
+        logger.error('loadScript nieudane (%s): %s', plugin, reply.errorMessage())
+        return False
+
+    def _cleanup_script(self, path: str, plugin: str) -> None:
+        try:
+            os.unlink(path)
+        except Exception:
+            pass
+        self._scripting.call('unloadScript', plugin)
+
+    def _run_fire_and_forget(self, script: str, tag: str) -> None:
+        """Ładuje skrypt bez oczekiwania na wynik (aktywacja okna itp.)."""
+        path = self._write_script(script)
+        if path is None:
+            return
+        self._counter += 1
+        plugin = f'consoled_{tag}_{os.getpid()}_{self._counter}'
+        if self._load_script(path, plugin):
+            QTimer.singleShot(500, lambda: self._cleanup_script(path, plugin))
+        else:
+            try:
+                os.unlink(path)
+            except Exception:
+                pass

@@ -16,27 +16,10 @@ from gamepad_watcher import GamepadWatcher
 from app_manager import AppManager
 from confirm_dialog import ConfirmDialog
 from volume_overlay import VolumeOverlay
+from window_manager import KWinWindowManager
 from styles import Styles
 
 logger = logging.getLogger(__name__)
-
-
-def _xwin_activate(win_id: str) -> None:
-    try:
-        subprocess.Popen(["xdotool", "windowactivate", "--sync", win_id])
-    except Exception:
-        pass
-
-
-def _xwin_exists(win_id: str) -> bool:
-    try:
-        r = subprocess.run(
-            ["xdotool", "getwindowname", win_id],
-            capture_output=True, timeout=1,
-        )
-        return r.returncode == 0
-    except Exception:
-        return False
 
 DAYS_PL = [
     "Poniedziałek", "Wtorek", "Środa", "Czwartek",
@@ -56,6 +39,8 @@ TOPBAR_ACTIONS = [
 
 TILE_W = 180
 TILE_H = 200
+
+_DYN_TILE_MAX_TITLE = 22   # Maksymalna długość tytułu dynamicznego kafla
 
 
 class AppTile(QWidget):
@@ -117,17 +102,25 @@ class AppTile(QWidget):
 class Desktop(QWidget):
     """Główne okno środowiska – zawsze pełnoekranowe."""
 
-    def __init__(self, apps: list[dict], gamepad: GamepadWatcher):
+    def __init__(
+        self,
+        apps: list[dict],
+        gamepad: GamepadWatcher,
+        window_manager: KWinWindowManager,
+    ):
         super().__init__()
         self._apps        = apps
         self._gamepad     = gamepad
+        self._wm          = window_manager
         self._app_manager = AppManager(self)
         self._focus_mode     = "tiles"   # "tiles" | "topbar"
         self._tile_index     = 0
         self._topbar_index   = 0
         self._confirm_dialog = None
-        self._guest_tile:   AppTile | None = None
-        self._guest_win_id: str | None     = None
+
+        # Dynamiczne kafle: lista (window_id, AppTile)
+        self._dynamic_tiles:  list[tuple[str, AppTile]] = []
+        self._dyn_separator:  QWidget | None            = None
 
         self.setWindowTitle("Console Desktop")
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint)
@@ -150,29 +143,23 @@ class Desktop(QWidget):
         self._bg_timer.start(33)
 
         self._app_manager.app_finished.connect(self._on_app_finished)
-
-        self._guest_timer = QTimer(self)
-        self._guest_timer.timeout.connect(self._check_guest_window)
+        self._wm.windows_updated.connect(self._rebuild_dynamic_tiles)
 
         QApplication.instance().installEventFilter(self)
 
         self._gamepad.push_handler(self._handle_pad)
         self.showFullScreen()
 
-    # ── Publiczne API (dla main.py / HomeOverlay) ──────────────────────────
+    # ── Publiczne API ──────────────────────────────────────────────────────
 
     @property
     def app_manager(self) -> AppManager:
         return self._app_manager
 
-    def show_desktop(self, *, guest_win: str | None = None, guest_title: str | None = None) -> None:
-        """Pokaż pulpit nie przerywając działającej aplikacji.
-
-        Jeśli podano guest_win, pojawi się dodatkowy kafel dla tego okna (np. gra ze Steama).
-        """
+    def show_desktop(self) -> None:
+        """Pokaż pulpit nie przerywając działającej aplikacji."""
         self._gamepad.push_handler(self._handle_pad)
-        if guest_win and guest_title:
-            self._set_guest_tile(guest_win, guest_title)
+        self._wm.refresh_now()
         self.showFullScreen()
         self.activateWindow()
 
@@ -184,7 +171,7 @@ class Desktop(QWidget):
     def request_close_running_app(self) -> None:
         """Pokaż dialog potwierdzenia zamknięcia działającej aplikacji."""
         if self._confirm_dialog is not None:
-            return  # dialog już otwarty
+            return
         running = self._app_manager.running_idx()
         if running is None:
             return
@@ -341,25 +328,90 @@ class Desktop(QWidget):
         self._update_focus()
         return scroll
 
+    # ── Dynamiczne kafle (aktualnie otwarte okna) ──────────────────────────
+
+    def _rebuild_dynamic_tiles(self, windows: list[dict]) -> None:
+        """Przebudowuje sekcję dynamicznych kafli na podstawie listy z KWin."""
+        # Usuń stare dynamiczne kafle i separator
+        for _, tile in self._dynamic_tiles:
+            self._tile_layout.removeWidget(tile)
+            tile.deleteLater()
+        self._dynamic_tiles.clear()
+
+        if self._dyn_separator is not None:
+            self._tile_layout.removeWidget(self._dyn_separator)
+            self._dyn_separator.deleteLater()
+            self._dyn_separator = None
+
+        if not windows:
+            self._clamp_tile_index()
+            self._update_focus()
+            return
+
+        # Separator wizualny między kaflamai statycznymi a dynamicznymi
+        sep = QWidget()
+        sep.setFixedSize(2, TILE_H - 24)
+        sep.setStyleSheet("background: #3b4252;")
+        # Wstaw przed stretch (ostatni element w layoucie)
+        insert_pos = self._tile_layout.count() - 1
+        self._tile_layout.insertWidget(insert_pos, sep)
+        self._dyn_separator = sep
+
+        for w in windows:
+            title = w['title']
+            if len(title) > _DYN_TILE_MAX_TITLE:
+                title = title[:_DYN_TILE_MAX_TITLE - 1] + '…'
+            tile = AppTile(
+                name=title,
+                icon_name='fa5s.window-maximize',
+                color='#2e3440',
+            )
+            win_id = w['id']
+            tile.clicked.connect(lambda wid=win_id: self._on_dynamic_tile_clicked(wid))
+            self._tile_layout.insertWidget(self._tile_layout.count() - 1, tile)
+            self._dynamic_tiles.append((win_id, tile))
+
+        self._clamp_tile_index()
+        self._update_focus()
+        logger.debug('Dynamiczne kafle: %d', len(self._dynamic_tiles))
+
+    def _on_dynamic_tile_clicked(self, window_id: str) -> None:
+        self._wm.activate_window(window_id)
+        self._gamepad.pop_handler(self._handle_pad)
+        self.hide()
+
     # ── Fokus i styl ───────────────────────────────────────────────────────
 
+    def _total_tiles(self) -> int:
+        return len(self._tiles) + len(self._dynamic_tiles)
+
+    def _clamp_tile_index(self) -> None:
+        total = self._total_tiles()
+        if total == 0:
+            self._tile_index = 0
+        elif self._tile_index >= total:
+            self._tile_index = total - 1
+
     def _update_focus(self) -> None:
-        in_tiles = self._focus_mode == "tiles"
+        in_tiles  = self._focus_mode == "tiles"
+        n_static  = len(self._tiles)
+
         for i, tile in enumerate(self._tiles):
             tile.set_selected(in_tiles and i == self._tile_index)
-        if self._guest_tile is not None:
-            self._guest_tile.set_selected(in_tiles and self._tile_index == len(self._tiles))
+
+        for i, (_, tile) in enumerate(self._dynamic_tiles):
+            tile.set_selected(in_tiles and (n_static + i) == self._tile_index)
+
         for i, btn in enumerate(self._topbar_buttons):
             if self._focus_mode == "topbar" and i == self._topbar_index:
                 btn.setStyleSheet(Styles.topbar_selected())
             else:
                 btn.setStyleSheet(Styles.topbar_normal(TOPBAR_ACTIONS[i]["color"]))
 
-        if in_tiles and self._focus_mode == "tiles":
-            if self._tile_index < len(self._tiles):
-                self._scroll.ensureWidgetVisible(self._tiles[self._tile_index])
-            elif self._guest_tile is not None:
-                self._scroll.ensureWidgetVisible(self._guest_tile)
+        if in_tiles:
+            all_tiles: list[AppTile] = self._tiles + [t for _, t in self._dynamic_tiles]
+            if 0 <= self._tile_index < len(all_tiles):
+                self._scroll.ensureWidgetVisible(all_tiles[self._tile_index])
 
     def _refresh_tile_status(self) -> None:
         running = self._app_manager.running_idx()
@@ -390,7 +442,7 @@ class Desktop(QWidget):
 
     def _handle_pad(self, event: str) -> None:
         if self._focus_mode == "tiles":
-            max_idx = len(self._tiles) - 1 + (1 if self._guest_tile is not None else 0)
+            max_idx = self._total_tiles() - 1
             if event == "left" and self._tile_index > 0:
                 self._tile_index -= 1
                 self._update_focus()
@@ -402,10 +454,7 @@ class Desktop(QWidget):
                 self._topbar_index = 0
                 self._update_focus()
             elif event == "select":
-                if self._tile_index < len(self._tiles):
-                    self._on_tile_clicked(self._tile_index)
-                elif self._guest_tile is not None:
-                    self._on_guest_tile_clicked()
+                self._on_tile_clicked(self._tile_index)
             elif event == "close":
                 if self._app_manager.is_running():
                     self.request_close_running_app()
@@ -426,17 +475,28 @@ class Desktop(QWidget):
     # ── Akcje kafli ────────────────────────────────────────────────────────
 
     def _on_tile_clicked(self, idx: int) -> None:
-        running = self._app_manager.running_idx()
-        if running == idx:
-            logger.info("Przywracam aplikację %d", idx)
-            self.restore_app()
-        elif running is not None:
-            logger.info("Inna aplikacja (%d) już działa – ignoruję", running)
+        n_static = len(self._tiles)
+
+        if idx < n_static:
+            # Kafel statyczny (skonfigurowana aplikacja)
+            running = self._app_manager.running_idx()
+            if running == idx:
+                logger.info("Przywracam aplikację %d", idx)
+                self.restore_app()
+            elif running is not None:
+                logger.info("Inna aplikacja (%d) już działa – ignoruję", running)
+            else:
+                logger.info("Uruchamiam aplikację %d", idx)
+                self._gamepad.pop_handler(self._handle_pad)
+                self._app_manager.launch(idx, self._apps[idx])
+                self.hide()
+
         else:
-            logger.info("Uruchamiam aplikację %d", idx)
-            self._gamepad.pop_handler(self._handle_pad)
-            self._app_manager.launch(idx, self._apps[idx])
-            self.hide()
+            # Kafel dynamiczny (aktualnie otwarte okno)
+            dyn_idx = idx - n_static
+            if dyn_idx < len(self._dynamic_tiles):
+                win_id, _ = self._dynamic_tiles[dyn_idx]
+                self._on_dynamic_tile_clicked(win_id)
 
     def _on_app_finished(self, idx: int) -> None:
         logger.info("Aplikacja %d zakończona – wracam do pulpitu", idx)
@@ -444,8 +504,8 @@ class Desktop(QWidget):
             logger.warning("Dialog nadal aktywny po zakończeniu aplikacji – wymuszam zamknięcie")
             self._confirm_dialog.force_close()
             self._confirm_dialog = None
-        self._remove_guest_tile()
         self._refresh_tile_status()
+        self._wm.refresh_now()
         self._gamepad.push_handler(self._handle_pad)
         self.showFullScreen()
         self.activateWindow()
@@ -454,44 +514,6 @@ class Desktop(QWidget):
 
     def _on_close_cancelled(self) -> None:
         self._confirm_dialog = None
-
-    # ── Gościnny kafel (okno spoza listy, np. gra ze Steama) ──────────────
-
-    def _set_guest_tile(self, win_id: str, title: str) -> None:
-        self._remove_guest_tile()
-        self._guest_win_id = win_id
-        tile = AppTile(name=title, icon_name="fa5s.gamepad", color="#4c566a")
-        tile.clicked.connect(self._on_guest_tile_clicked)
-        # Wstaw przed rozciągaczem (ostatni element w layoucie)
-        self._tile_layout.insertWidget(len(self._tiles), tile)
-        self._guest_tile = tile
-        self._guest_timer.start(2000)
-        self._update_focus()
-        logger.debug("Gościnny kafel: %s (%s)", title, win_id)
-
-    def _remove_guest_tile(self) -> None:
-        if self._guest_tile is not None:
-            self._tile_layout.removeWidget(self._guest_tile)
-            self._guest_tile.deleteLater()
-            self._guest_tile = None
-            self._guest_win_id = None
-            # Upewnij się że fokus jest w prawidłowym zakresie
-            if self._tile_index >= len(self._tiles) and self._tiles:
-                self._tile_index = len(self._tiles) - 1
-            self._update_focus()
-        self._guest_timer.stop()
-
-    def _check_guest_window(self) -> None:
-        """Usuń gościnny kafel jeśli okno już nie istnieje."""
-        if self._guest_win_id and not _xwin_exists(self._guest_win_id):
-            logger.debug("Gościnne okno %s zniknęło – usuwam kafel", self._guest_win_id)
-            self._remove_guest_tile()
-
-    def _on_guest_tile_clicked(self) -> None:
-        if self._guest_win_id:
-            _xwin_activate(self._guest_win_id)
-        self._gamepad.pop_handler(self._handle_pad)
-        self.hide()
 
     def _do_close_app(self) -> None:
         self._confirm_dialog = None
@@ -502,7 +524,6 @@ class Desktop(QWidget):
     def _topbar_action(self, idx: int) -> None:
         action_type = TOPBAR_ACTIONS[idx]["type"]
         if action_type == "volume":
-            # VolumeOverlay pcha swój handler na stos – Desktop zostaje pod spodem
             overlay = VolumeOverlay(self._gamepad)
             overlay.closed.connect(self._on_volume_closed)
         elif action_type == "sleep":

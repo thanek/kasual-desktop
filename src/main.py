@@ -1,5 +1,4 @@
 import logging
-import subprocess
 import sys
 from pathlib import Path
 
@@ -11,43 +10,9 @@ from PyQt6.QtCore import Qt
 from gamepad_watcher import GamepadWatcher
 from desktop import Desktop
 from home_overlay import HomeOverlay
+from window_manager import KWinWindowManager
 
 logger = logging.getLogger(__name__)
-
-
-def _get_active_xwindow() -> str | None:
-    """Zwróć ID aktywnego okna X11 (działa dla aplikacji XWayland, np. gier przez Proton)."""
-    try:
-        result = subprocess.run(
-            ["xdotool", "getactivewindow"],
-            capture_output=True, text=True, timeout=1,
-        )
-        win_id = result.stdout.strip()
-        if not win_id or win_id == "0":
-            return None
-        return win_id
-    except Exception:
-        return None
-
-
-def _get_xwindow_title(win_id: str) -> str | None:
-    """Zwróć tytuł okna X11."""
-    try:
-        result = subprocess.run(
-            ["xdotool", "getwindowname", win_id],
-            capture_output=True, text=True, timeout=1,
-        )
-        return result.stdout.strip() or None
-    except Exception:
-        return None
-
-
-def _activate_xwindow(win_id: str) -> None:
-    """Przywróć i aktywuj okno X11 (un-minimize + focus)."""
-    try:
-        subprocess.Popen(["xdotool", "windowactivate", "--sync", win_id])
-    except Exception:
-        logger.warning("xdotool windowactivate nieudane dla okna %s", win_id)
 
 
 def _setup_logging() -> None:
@@ -90,11 +55,15 @@ def main() -> None:
 
     app = QApplication(sys.argv)
     app.setApplicationName("Console Desktop")
-    app.setQuitOnLastWindowClosed(False)   # aplikacja żyje w tray nawet gdy okna są ukryte
+    app.setQuitOnLastWindowClosed(False)
 
     gamepad = GamepadWatcher()
-    desktop = Desktop(apps=apps, gamepad=gamepad)
+    wm      = KWinWindowManager()
+    desktop = Desktop(apps=apps, gamepad=gamepad, window_manager=wm)
     overlay = HomeOverlay(gamepad=gamepad)
+
+    # Odświeżaj listę okien co 3 sekundy
+    wm.start_periodic_refresh(3000)
 
     # ── BTN_MODE → pokaż overlay z kontekstem ──────────────────────────────
 
@@ -105,20 +74,17 @@ def main() -> None:
                 on_cancel=lambda: (desktop.showFullScreen(), desktop.activateWindow()),
             )
         else:
-            # Pobierz aktywne okno PRZED pokazaniem overlay – to okno gry/aplikacji
-            prev_win  = _get_active_xwindow()
-            win_title = _get_xwindow_title(prev_win) if prev_win else None
-            app_name  = apps[running_idx]["name"]
+            # Zapamiętaj aktywne okno zanim overlay przykryje ekran
+            prev_win = wm.get_active_window_id()
+            app_name = apps[running_idx]["name"]
 
-            logger.debug("BTN_MODE: aktywne okno=%s (%s)", prev_win, win_title)
+            logger.debug("BTN_MODE: aktywne okno=%s", prev_win)
 
             extra = [
                 {
                     "label":    "  Powrót do Pulpitu",
                     "icon":     "fa5s.home",
-                    "callback": lambda w=prev_win, t=win_title: desktop.show_desktop(
-                        guest_win=w, guest_title=t
-                    ),
+                    "callback": desktop.show_desktop,
                 },
                 {
                     "label":    f"  Zamknij {app_name}",
@@ -128,7 +94,7 @@ def main() -> None:
                 {
                     "label":    "  Anuluj",
                     "icon":     "fa5s.times",
-                    "callback": lambda win=prev_win: _activate_xwindow(win) if win else None,
+                    "callback": lambda win=prev_win: wm.activate_window(win) if win else None,
                 },
             ]
             overlay.show_overlay(extra_items=extra)
