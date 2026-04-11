@@ -38,15 +38,18 @@ _WL_IFACE = 'org.consoledesktop.WindowList'
 # skipTaskbar NIE jest filtrowany – gry pełnoekranowe mogą go mieć ustawionego.
 _LIST_SCRIPT = """\
 (function () {
+    var aw = workspace.activeWindow;
+    var awId = aw ? String(aw.internalId) : '';
     var ws = workspace.windowList();
     var out = [];
     for (var i = 0; i < ws.length; i++) {
         var w = ws[i];
         if (w.normalWindow && !w.desktopWindow && !w.dock) {
             out.push({
-                id:    String(w.internalId),
-                title: String(w.caption),
-                pid:   parseInt(w.pid) || 0
+                id:     String(w.internalId),
+                title:  String(w.caption),
+                pid:    parseInt(w.pid) || 0,
+                active: String(w.internalId) === awId
             });
         }
     }
@@ -151,7 +154,8 @@ class KWinWindowManager(QObject):
             logger.debug('KWin scripting engine uruchomiony')
 
         self._host: _WindowListHost | None = None
-        self._cache:   dict[str, dict] = {}
+        self._cache:            dict[str, dict] = {}
+        self._active_window_id: str | None      = None
         self._loading  = False
         self._counter  = 0
 
@@ -177,20 +181,8 @@ class KWinWindowManager(QObject):
         self._request_list_refresh()
 
     def get_active_window_id(self) -> str | None:
-        """
-        Zwraca UUID aktywnego okna przez queryWindowInfo() — Plasma 6 API.
-        Format: '{xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx}'
-        """
-        reply = self._kwin.call('queryWindowInfo')
-        if reply.type() != QDBusMessage.MessageType.ReplyMessage:
-            logger.debug('queryWindowInfo(): brak odpowiedzi (%s)', reply.errorMessage())
-            return None
-        args = reply.arguments()
-        if not args:
-            return None
-        info: dict = args[0]
-        uuid = info.get('uuid', '')
-        return str(uuid) if uuid else None
+        """Zwraca ID aktywnego okna z ostatniego odświeżenia listy."""
+        return self._active_window_id
 
     def get_cached_title(self, window_id: str) -> str | None:
         entry = self._cache.get(window_id)
@@ -257,9 +249,12 @@ class KWinWindowManager(QObject):
         our_pid = os.getpid()
         windows = [w for w in windows if w.get('pid') != our_pid]
 
+        self._active_window_id = next(
+            (w['id'] for w in windows if w.get('active')), None
+        )
         self._cache = {w['id']: w for w in windows}
         self.windows_updated.emit(list(self._cache.values()))
-        logger.debug('Lista okien: %d', len(self._cache))
+        logger.debug('Lista okien: %d, aktywne: %s', len(self._cache), self._active_window_id)
 
     def _on_script_timeout(self) -> None:
         if self._loading:
