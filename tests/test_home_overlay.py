@@ -10,7 +10,7 @@ Testujemy:
 """
 
 import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 from home_overlay import HomeOverlay, _STATIC_ITEMS
 

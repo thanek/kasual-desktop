@@ -12,11 +12,8 @@ Subprocess.Popen i threading.Thread są zawsze mockowane — testy nie
 uruchamiają żadnych prawdziwych procesów ani wątków.
 """
 
-import os
 import signal
 from unittest.mock import MagicMock, patch
-
-import pytest
 
 
 def _make_manager():

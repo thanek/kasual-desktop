@@ -10,7 +10,6 @@ Testujemy:
 _get_volume i _set_volume są zawsze mockowane – testy nie wywołują pactl.
 """
 
-import pytest
 from unittest.mock import patch
 
 

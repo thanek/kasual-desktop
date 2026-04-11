@@ -11,7 +11,6 @@ Widget jest tworzony w trybie offscreen – showFullScreen() nie wymaga
 prawdziwego wyświetlacza.
 """
 
-import pytest
 from confirm_dialog import ConfirmDialog
 
 

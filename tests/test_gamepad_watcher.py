@@ -14,7 +14,6 @@ więc żadne evdev ani UInput nie są potrzebne.
 """
 
 import types
-import pytest
 from evdev import ecodes
 
 
