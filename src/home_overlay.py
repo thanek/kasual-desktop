@@ -19,11 +19,11 @@ import sound_player
 logger = logging.getLogger(__name__)
 
 _STATIC_ITEMS = [
-    {"label": "  Uśpij system",        "icon": "fa5s.moon",      "action": "sleep"},
+    {"label": "  Powrót do Pulpitu",    "icon": "fa5s.times",     "action": "cancel"},
+    {"label": "  Minimalizuj Pulpit",   "icon": "fa5s.window-minimize", "action": "hide_desktop"},
+    {"label": "  Uśpij system",         "icon": "fa5s.moon",      "action": "sleep"},
     {"label": "  Zrestartuj komputer",  "icon": "fa5s.redo-alt",  "action": "restart"},
-    {"label": "  Zamknij system",       "icon": "fa5s.power-off", "action": "shutdown"},
-    {"label": "  Anuluj",               "icon": "fa5s.times",     "action": "cancel"},
-    {"label": "  Minimalizuj Pulpit",    "icon": "fa5s.window-minimize", "action": "hide_desktop"}
+    {"label": "  Zamknij system",       "icon": "fa5s.power-off", "action": "shutdown"}
 ]
 
 

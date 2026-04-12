@@ -93,9 +93,9 @@ def main() -> None:
         label = title if len(title) <= 22 else title[:21] + '…'
         extra = [
             {
-                "label":    "  Powrót do Pulpitu",
-                "icon":     "fa5s.home",
-                "callback": desktop.show_desktop,
+                "label":    f"  Powrót do {label}",
+                "icon":     "fa5s.times",
+                "callback": cancel_cb,
             },
             {
                 "label":    f"  Zamknij {label}",
@@ -103,9 +103,9 @@ def main() -> None:
                 "callback": close_cb,
             },
             {
-                "label":    "  Anuluj",
-                "icon":     "fa5s.times",
-                "callback": cancel_cb,
+                "label": "  Powrót do Pulpitu",
+                "icon": "fa5s.home",
+                "callback": desktop.show_desktop,
             },
         ]
         overlay.show_overlay(extra_items=extra)
