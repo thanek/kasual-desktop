@@ -89,6 +89,7 @@ class VolumeOverlay(QWidget):
         self._slider = QSlider(Qt.Orientation.Horizontal)
         self._slider.setRange(0, 100)
         self._slider.setValue(self._volume)
+        self._slider.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self._slider.setStyleSheet("""
             QSlider::groove:horizontal {
                 height: 8px; background: #4c566a; border-radius: 4px;
@@ -122,9 +123,11 @@ class VolumeOverlay(QWidget):
 
         outer.addWidget(card)
 
+        sound_player.play("popup_open")
         self._gamepad.push_handler(self._handle_pad)
         self.showFullScreen()
         self.activateWindow()
+        self.setFocus()
 
     # ── Handler pada ───────────────────────────────────────────────────────
 
@@ -166,6 +169,7 @@ class VolumeOverlay(QWidget):
         self.activateWindow()
 
     def _close(self) -> None:
+        sound_player.play("popup_close")
         self._gamepad.pop_handler(self._handle_pad)
         self.hide()
         self.deleteLater()

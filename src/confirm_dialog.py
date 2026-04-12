@@ -67,6 +67,7 @@ class ConfirmDialog(QWidget):
         self._btn_no  = QPushButton("✘  Nie")
         for btn in (self._btn_yes, self._btn_no):
             btn.setMinimumSize(200, 80)
+            btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self._btn_yes.clicked.connect(self._confirm)
         self._btn_no.clicked.connect(self._cancel)
         btn_row.addWidget(self._btn_yes)
@@ -86,6 +87,7 @@ class ConfirmDialog(QWidget):
         sound_player.play("popup_open")
         self.showFullScreen()
         self.activateWindow()
+        self.setFocus()
 
     # ── Handler pada ───────────────────────────────────────────────────────
 
