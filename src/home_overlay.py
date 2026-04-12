@@ -207,9 +207,9 @@ class HomeOverlay(QWidget):
             self._on_hide_desktop if cmd is None
             else (lambda c=cmd: subprocess.Popen(c))
         )
+        self.hide_overlay()
         if on_confirmed is None:
             return
-        self.hide_overlay()
         ConfirmDialog(
             question=question,
             on_confirmed=on_confirmed,

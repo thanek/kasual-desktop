@@ -12,7 +12,7 @@ def _make_desktop(mock_gamepad):
     wm.windows_updated.connect = MagicMock()
     wm.refresh_now = MagicMock()
 
-    with patch("desktop._load_kde_wallpaper", return_value=None):
+    with patch("desktop.desktop.load_kde_wallpaper", return_value=None):
         from desktop import Desktop
         desktop = Desktop(apps=[], gamepad=mock_gamepad, window_manager=wm)
     return desktop

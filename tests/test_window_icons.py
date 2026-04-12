@@ -1,14 +1,13 @@
 """
-Testy jednostkowe dla helperów ikon i nazw okien KWin (desktop.py).
+Testy jednostkowe dla helperów ikon i nazw okien KWin (desktop/window_icons.py).
 
 Testujemy:
   - _icon_name_from_desktop: parsowanie pola Icon= z pliku .desktop
-  - _resolve_window_name:    wyszukiwanie Name= w katalogu XDG
+  - resolve_window_name:     wyszukiwanie Name= w katalogu XDG
 """
 
 import os
 import textwrap
-import tempfile
 
 import pytest
 
@@ -18,12 +17,12 @@ import pytest
 @pytest.fixture(autouse=True)
 def clear_caches():
     """Czyści lru_cache przed każdym testem, by wyniki nie przeciekały."""
-    from desktop import _resolve_window_name, _resolve_window_icon
-    _resolve_window_name.cache_clear()
-    _resolve_window_icon.cache_clear()
+    from desktop.window_icons import resolve_window_name, resolve_window_icon
+    resolve_window_name.cache_clear()
+    resolve_window_icon.cache_clear()
     yield
-    _resolve_window_name.cache_clear()
-    _resolve_window_icon.cache_clear()
+    resolve_window_name.cache_clear()
+    resolve_window_icon.cache_clear()
 
 
 def _write_desktop(dir_path: str, filename: str, content: str) -> str:
@@ -37,7 +36,7 @@ def _write_desktop(dir_path: str, filename: str, content: str) -> str:
 
 class TestIconNameFromDesktop:
     def test_returns_icon_value(self, tmp_path):
-        from desktop import _icon_name_from_desktop
+        from desktop.window_icons import _icon_name_from_desktop
         p = _write_desktop(str(tmp_path), "app.desktop", """\
             [Desktop Entry]
             Name=MyApp
@@ -46,7 +45,7 @@ class TestIconNameFromDesktop:
         assert _icon_name_from_desktop(p) == "myapp-icon"
 
     def test_returns_absolute_path_icon(self, tmp_path):
-        from desktop import _icon_name_from_desktop
+        from desktop.window_icons import _icon_name_from_desktop
         p = _write_desktop(str(tmp_path), "snap.desktop", """\
             [Desktop Entry]
             Name=SnapApp
@@ -55,7 +54,7 @@ class TestIconNameFromDesktop:
         assert _icon_name_from_desktop(p) == "/snap/myapp/current/icon.png"
 
     def test_returns_none_when_no_icon_key(self, tmp_path):
-        from desktop import _icon_name_from_desktop
+        from desktop.window_icons import _icon_name_from_desktop
         p = _write_desktop(str(tmp_path), "noicon.desktop", """\
             [Desktop Entry]
             Name=NoIcon
@@ -63,79 +62,79 @@ class TestIconNameFromDesktop:
         assert _icon_name_from_desktop(p) is None
 
     def test_returns_none_for_nonexistent_file(self):
-        from desktop import _icon_name_from_desktop
+        from desktop.window_icons import _icon_name_from_desktop
         assert _icon_name_from_desktop("/nonexistent/path/app.desktop") is None
 
     def test_returns_none_for_empty_file(self, tmp_path):
-        from desktop import _icon_name_from_desktop
+        from desktop.window_icons import _icon_name_from_desktop
         p = str(tmp_path / "empty.desktop")
         open(p, "w").close()
         assert _icon_name_from_desktop(p) is None
 
 
-# ── _resolve_window_name ──────────────────────────────────────────────────────
+# ── resolve_window_name ───────────────────────────────────────────────────────
 
 class TestResolveWindowName:
     def test_finds_name_by_desktop_file(self, tmp_path):
-        from desktop import _resolve_window_name
+        from desktop.window_icons import resolve_window_name
         _write_desktop(str(tmp_path), "myapp.desktop", """\
             [Desktop Entry]
             Name=My Application
             Icon=myapp
         """)
         with pytest.MonkeyPatch().context() as mp:
-            mp.setattr("desktop._xdg_app_dirs", lambda: [str(tmp_path)])
-            result = _resolve_window_name("myapp", "myapp")
+            mp.setattr("desktop.window_icons._xdg_app_dirs", lambda: [str(tmp_path)])
+            result = resolve_window_name("myapp", "myapp")
         assert result == "My Application"
 
     def test_appends_desktop_extension_if_missing(self, tmp_path):
-        from desktop import _resolve_window_name
+        from desktop.window_icons import resolve_window_name
         _write_desktop(str(tmp_path), "coolapp.desktop", """\
             [Desktop Entry]
             Name=Cool App
         """)
         with pytest.MonkeyPatch().context() as mp:
-            mp.setattr("desktop._xdg_app_dirs", lambda: [str(tmp_path)])
-            result = _resolve_window_name("coolapp", "")
+            mp.setattr("desktop.window_icons._xdg_app_dirs", lambda: [str(tmp_path)])
+            result = resolve_window_name("coolapp", "")
         assert result == "Cool App"
 
     def test_does_not_double_append_extension(self, tmp_path):
-        from desktop import _resolve_window_name
+        from desktop.window_icons import resolve_window_name
         _write_desktop(str(tmp_path), "already.desktop", """\
             [Desktop Entry]
             Name=Already Extended
         """)
         with pytest.MonkeyPatch().context() as mp:
-            mp.setattr("desktop._xdg_app_dirs", lambda: [str(tmp_path)])
-            result = _resolve_window_name("already.desktop", "")
+            mp.setattr("desktop.window_icons._xdg_app_dirs", lambda: [str(tmp_path)])
+            result = resolve_window_name("already.desktop", "")
         assert result == "Already Extended"
 
     def test_falls_back_to_resource_class(self, tmp_path):
-        from desktop import _resolve_window_name
+        from desktop.window_icons import resolve_window_name
         _write_desktop(str(tmp_path), "resourceclass.desktop", """\
             [Desktop Entry]
             Name=From ResourceClass
         """)
         with pytest.MonkeyPatch().context() as mp:
-            mp.setattr("desktop._xdg_app_dirs", lambda: [str(tmp_path)])
-            result = _resolve_window_name("", "resourceclass")
+            mp.setattr("desktop.window_icons._xdg_app_dirs", lambda: [str(tmp_path)])
+            result = resolve_window_name("", "resourceclass")
         assert result == "From ResourceClass"
 
     def test_returns_none_when_not_found(self, tmp_path):
-        from desktop import _resolve_window_name
+        from desktop.window_icons import resolve_window_name
         with pytest.MonkeyPatch().context() as mp:
-            mp.setattr("desktop._xdg_app_dirs", lambda: [str(tmp_path)])
-            result = _resolve_window_name("doesnotexist", "alsomissing")
+            mp.setattr("desktop.window_icons._xdg_app_dirs", lambda: [str(tmp_path)])
+            result = resolve_window_name("doesnotexist", "alsomissing")
         assert result is None
 
     def test_skips_duplicate_candidate_when_desktop_file_equals_resource_class(self, tmp_path):
         """Gdy desktop_file == resource_class, kandydat powinien być dodany tylko raz."""
-        from desktop import _resolve_window_name
+        from desktop.window_icons import resolve_window_name
         _write_desktop(str(tmp_path), "same.desktop", """\
             [Desktop Entry]
             Name=Same Name
         """)
         with pytest.MonkeyPatch().context() as mp:
-            mp.setattr("desktop._xdg_app_dirs", lambda: [str(tmp_path)])
-            result = _resolve_window_name("same", "same")
+            mp.setattr("desktop.window_icons._xdg_app_dirs", lambda: [str(tmp_path)])
+            result = resolve_window_name("same", "same")
         assert result == "Same Name"

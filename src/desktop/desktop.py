@@ -1,17 +1,14 @@
-import configparser
 import logging
 import os
 import subprocess
-from functools import lru_cache
-from pathlib import Path
 
 from PyQt6.QtWidgets import (
     QWidget, QPushButton, QHBoxLayout, QVBoxLayout,
-    QScrollArea, QLabel, QGraphicsDropShadowEffect, QToolButton,
-    QApplication, QSizePolicy,
+    QScrollArea, QLabel,
+    QApplication,
 )
 from PyQt6.QtCore import Qt, QTimer, QSize, QEvent, pyqtSignal
-from PyQt6.QtGui import QPainter, QColor, QIcon, QKeyEvent
+from PyQt6.QtGui import QPainter, QColor, QKeyEvent
 
 import qtawesome as qta
 
@@ -22,179 +19,12 @@ from volume_overlay import VolumeOverlay
 from window_manager import KWinWindowManager
 from styles import Styles
 from system_actions import SYSTEM_ACTION_SPECS
+from .wallpaper import load_kde_wallpaper
+from .window_icons import resolve_window_name, resolve_window_icon
+from .app_tile import AppTile, TILE_W, TILE_H
 import sound_player
 
 logger = logging.getLogger(__name__)
-
-
-def _wallpaper_package_image(directory: str) -> str | None:
-    """
-    Szuka najlepszego obrazu w paczce tapety KDE (katalog contents/images/).
-    Zwraca ścieżkę do pliku o największej rozdzielczości lub None.
-    """
-    images_dir = os.path.join(directory, 'contents', 'images')
-    if not os.path.isdir(images_dir):
-        return None
-
-    best: tuple[int, str] = (0, '')
-    for fname in os.listdir(images_dir):
-        fpath = os.path.join(images_dir, fname)
-        if not os.path.isfile(fpath):
-            continue
-        # Nazwy plików mają format WxH.ext — parsuj rozdzielczość
-        name = os.path.splitext(fname)[0]
-        if 'x' in name:
-            try:
-                w, h = name.split('x', 1)
-                pixels = int(w) * int(h)
-                if pixels > best[0]:
-                    best = (pixels, fpath)
-            except ValueError:
-                pass
-        elif best[0] == 0:
-            best = (1, fpath)   # fallback: jakikolwiek plik
-
-    return best[1] or None
-
-
-def _load_kde_wallpaper() -> 'QPixmap | None':
-    """
-    Czyta ścieżkę tapety z plasma-org.kde.plasma.desktop-appletsrc
-    i zwraca QPixmap lub None gdy nie udało się znaleźć pliku.
-
-    Obsługuje zarówno bezpośrednie ścieżki do pliku jak i paczki tapety
-    KDE (katalog z contents/images/WxH.ext).
-    """
-    from PyQt6.QtGui import QPixmap
-
-    cfg_path = Path.home() / '.config' / 'plasma-org.kde.plasma.desktop-appletsrc'
-    if not cfg_path.exists():
-        logger.warning('Nie znaleziono pliku konfiguracji Plasma: %s', cfg_path)
-        return None
-
-    cp = configparser.RawConfigParser()
-    cp.read(str(cfg_path), encoding='utf-8')
-
-    for section in cp.sections():
-        if '][Wallpaper][' not in section:
-            continue
-        raw = cp.get(section, 'Image', fallback=None)
-        if not raw:
-            continue
-
-        # Usuń opcjonalne cudzysłowy i prefiks file://
-        raw = raw.strip("'\"")
-        path = raw[7:] if raw.startswith('file://') else raw
-
-        # Paczka tapety (katalog) → znajdź najlepszy obraz w contents/images/
-        if os.path.isdir(path):
-            resolved = _wallpaper_package_image(path)
-            if resolved:
-                path = resolved
-            else:
-                logger.debug('Brak obrazów w paczce: %s', path)
-                continue
-
-        if not os.path.isfile(path):
-            logger.debug('Pomijam (nie plik): %s', path)
-            continue
-
-        px = QPixmap(path)
-        if px.isNull():
-            logger.debug('Nie udało się wczytać: %s', path)
-            continue
-
-        logger.info('Tapeta KDE: %s', path)
-        return px
-
-    logger.warning('Nie znaleziono żadnej tapety w konfiguracji Plasma')
-    return None
-
-
-# ── Rozwiązywanie ikon aplikacji ───────────────────────────────────────────────
-
-def _xdg_app_dirs() -> list[str]:
-    home   = os.environ.get('XDG_DATA_HOME', os.path.expanduser('~/.local/share'))
-    system = os.environ.get('XDG_DATA_DIRS', '/usr/local/share:/usr/share').split(':')
-    extra  = [
-        '/var/lib/flatpak/exports/share',
-        os.path.expanduser('~/.local/share/flatpak/exports/share'),
-    ]
-    return [os.path.join(d, 'applications') for d in [home] + system + extra]
-
-
-def _icon_name_from_desktop(path: str) -> str | None:
-    try:
-        cp = configparser.RawConfigParser()
-        cp.read(path, encoding='utf-8')
-        return cp.get('Desktop Entry', 'Icon', fallback=None)
-    except Exception:
-        return None
-
-
-@lru_cache(maxsize=128)
-def _resolve_window_name(desktop_file: str, resource_class: str) -> str | None:
-    """Zwraca oficjalną nazwę aplikacji (Name=) z pliku .desktop lub None."""
-    candidates: list[str] = []
-    if desktop_file:
-        candidates.append(desktop_file if desktop_file.endswith('.desktop')
-                          else desktop_file + '.desktop')
-    if resource_class and resource_class != desktop_file:
-        candidates.append(resource_class + '.desktop')
-
-    for apps_dir in _xdg_app_dirs():
-        for name in candidates:
-            path = os.path.join(apps_dir, name)
-            if os.path.isfile(path):
-                try:
-                    cp = configparser.RawConfigParser()
-                    cp.read(path, encoding='utf-8')
-                    result = cp.get('Desktop Entry', 'Name', fallback=None)
-                    if result:
-                        return result
-                except Exception:
-                    pass
-    return None
-
-
-@lru_cache(maxsize=128)
-def _resolve_window_icon(desktop_file: str, resource_class: str):
-    """Zwraca QIcon dla okna KWin lub None. Wynik jest cache'owany."""
-    from PyQt6.QtGui import QIcon
-
-    # Kandydaci na nazwy pliku .desktop (bez rozszerzenia → dodajemy)
-    candidates: list[str] = []
-    if desktop_file:
-        candidates.append(desktop_file if desktop_file.endswith('.desktop')
-                          else desktop_file + '.desktop')
-    if resource_class and resource_class != desktop_file:
-        candidates.append(resource_class + '.desktop')
-
-    icon_name: str | None = None
-    for apps_dir in _xdg_app_dirs():
-        for name in candidates:
-            path = os.path.join(apps_dir, name)
-            if os.path.isfile(path):
-                icon_name = _icon_name_from_desktop(path)
-                if icon_name:
-                    break
-        if icon_name:
-            break
-
-    # Fallback: spróbuj klasy zasobu jako nazwy ikony motywu
-    if not icon_name:
-        icon_name = resource_class or desktop_file
-
-    if not icon_name:
-        return None
-
-    # Absolutna ścieżka do pliku?
-    if os.path.isabs(icon_name):
-        icon = QIcon(icon_name)
-        return icon if not icon.isNull() else None
-
-    icon = QIcon.fromTheme(icon_name)
-    return icon if not icon.isNull() else None
 
 
 DAYS_PL = [
@@ -214,69 +44,7 @@ TOPBAR_ACTIONS = [
     {"icon": "fa5s.power-off", "color": "#bf616a", "type": "shutdown"},
 ]
 
-TILE_W = 180
-TILE_H = 200
-
 _DYN_TILE_MAX_TITLE = 22   # Maksymalna długość tytułu dynamicznego kafla
-
-
-class AppTile(QWidget):
-    """Kafel pojedynczej aplikacji."""
-
-    clicked = pyqtSignal()
-
-    def __init__(self, name: str, icon_name: str, color: str, qicon=None, parent=None):
-        super().__init__(parent)
-        self.setFixedSize(TILE_W, TILE_H)
-        self._color = color
-
-        self._btn = QToolButton(self)
-        self._btn.setFixedSize(TILE_W, TILE_H)
-        self._btn.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextUnderIcon)
-        self._btn.setIconSize(QSize(72, 72))
-        if qicon is not None and not qicon.isNull():
-            self._btn.setIcon(qicon)
-        else:
-            try:
-                self._btn.setIcon(qta.icon(icon_name, color="white"))
-            except Exception:
-                self._btn.setIcon(qta.icon("fa5s.desktop", color="white"))
-        self._btn.setText(name)
-        self._btn.setStyleSheet(Styles.tile_normal(color))
-        self._btn.clicked.connect(self.clicked)
-
-        self._dot = QLabel(self)
-        self._dot.setFixedSize(14, 14)
-        self._dot.setStyleSheet(
-            "background-color: #a3be8c; border-radius: 7px; border: 2px solid #0b140e;"
-        )
-        self._dot.move(TILE_W - 22, 8)
-        self._dot.hide()
-
-        shadow = QGraphicsDropShadowEffect(self._btn)
-        shadow.setOffset(4, 6)
-        shadow.setColor(QColor(0, 0, 0, 160))
-        shadow.setBlurRadius(18)
-        self._btn.setGraphicsEffect(shadow)
-
-    def set_selected(self, selected: bool) -> None:
-        if selected:
-            self._btn.setStyleSheet(Styles.tile_selected())
-            effect = QGraphicsDropShadowEffect(self._btn)
-            effect.setOffset(0, 0)
-            effect.setColor(QColor("#88c0d0"))
-            effect.setBlurRadius(36)
-            self._btn.setGraphicsEffect(effect)
-        else:
-            self._btn.setStyleSheet(Styles.tile_normal(self._color))
-            shadow = QGraphicsDropShadowEffect(self._btn)
-            shadow.setOffset(4, 6)
-            shadow.setColor(QColor(0, 0, 0, 160))
-            shadow.setBlurRadius(18)
-            self._btn.setGraphicsEffect(shadow)
-
-    def set_running(self, running: bool) -> None:
-        self._dot.setVisible(running)
 
 
 class Desktop(QWidget):
@@ -321,7 +89,7 @@ class Desktop(QWidget):
         self._status_timer.timeout.connect(self._refresh_tile_status)
         self._status_timer.start(500)
 
-        self._wallpaper: 'QPixmap | None' = _load_kde_wallpaper()
+        self._wallpaper: 'QPixmap | None' = load_kde_wallpaper()
 
         self._app_manager.app_finished.connect(self._on_app_finished)
         self._wm.windows_updated.connect(self._rebuild_dynamic_tiles)
@@ -592,7 +360,7 @@ class Desktop(QWidget):
 
         for w in extern_windows:
             full_title = w['title']
-            app_name   = _resolve_window_name(
+            app_name   = resolve_window_name(
                 w.get('desktopFile', ''), w.get('resourceClass', '')
             )
             if app_name and app_name != full_title:
@@ -601,7 +369,7 @@ class Desktop(QWidget):
                 combined = app_name or full_title
             display_title = (combined[:_DYN_TILE_MAX_TITLE - 1] + '…'
                              if len(combined) > _DYN_TILE_MAX_TITLE else combined)
-            app_icon = _resolve_window_icon(
+            app_icon = resolve_window_icon(
                 w.get('desktopFile', ''),
                 w.get('resourceClass', ''),
             )
