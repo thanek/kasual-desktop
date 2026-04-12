@@ -28,8 +28,13 @@ def _icon_name_from_desktop(path: str) -> str | None:
 
 
 @lru_cache(maxsize=128)
-def resolve_window_name(desktop_file: str, resource_class: str) -> str | None:
-    """Zwraca oficjalną nazwę aplikacji (Name=) z pliku .desktop lub None."""
+def _resolve_window_meta(
+    desktop_file: str, resource_class: str
+) -> tuple[str | None, str | None]:
+    """
+    Szuka pierwszego pasującego pliku .desktop i zwraca (name, icon_name).
+    Oba pola są odczytywane w jednym przebiegu — wynik jest cache'owany.
+    """
     candidates: list[str] = []
     if desktop_file:
         candidates.append(desktop_file if desktop_file.endswith('.desktop')
@@ -38,42 +43,30 @@ def resolve_window_name(desktop_file: str, resource_class: str) -> str | None:
         candidates.append(resource_class + '.desktop')
 
     for apps_dir in _xdg_app_dirs():
-        for name in candidates:
-            path = os.path.join(apps_dir, name)
+        for filename in candidates:
+            path = os.path.join(apps_dir, filename)
             if os.path.isfile(path):
                 try:
                     cp = configparser.RawConfigParser()
                     cp.read(path, encoding='utf-8')
-                    result = cp.get('Desktop Entry', 'Name', fallback=None)
-                    if result:
-                        return result
+                    name      = cp.get('Desktop Entry', 'Name', fallback=None) or None
+                    icon_name = cp.get('Desktop Entry', 'Icon', fallback=None) or None
+                    return name, icon_name
                 except Exception:
                     pass
-    return None
+    return None, None
 
 
-@lru_cache(maxsize=128)
+def resolve_window_name(desktop_file: str, resource_class: str) -> str | None:
+    """Zwraca oficjalną nazwę aplikacji (Name=) z pliku .desktop lub None."""
+    return _resolve_window_meta(desktop_file, resource_class)[0]
+
+
 def resolve_window_icon(desktop_file: str, resource_class: str):
-    """Zwraca QIcon dla okna KWin lub None. Wynik jest cache'owany."""
+    """Zwraca QIcon dla okna KWin lub None. Wynik jest cache'owany przez _resolve_window_meta."""
     from PyQt6.QtGui import QIcon
 
-    candidates: list[str] = []
-    if desktop_file:
-        candidates.append(desktop_file if desktop_file.endswith('.desktop')
-                          else desktop_file + '.desktop')
-    if resource_class and resource_class != desktop_file:
-        candidates.append(resource_class + '.desktop')
-
-    icon_name: str | None = None
-    for apps_dir in _xdg_app_dirs():
-        for name in candidates:
-            path = os.path.join(apps_dir, name)
-            if os.path.isfile(path):
-                icon_name = _icon_name_from_desktop(path)
-                if icon_name:
-                    break
-        if icon_name:
-            break
+    _, icon_name = _resolve_window_meta(desktop_file, resource_class)
 
     # Fallback: spróbuj klasy zasobu jako nazwy ikony motywu
     if not icon_name:
@@ -82,7 +75,6 @@ def resolve_window_icon(desktop_file: str, resource_class: str):
     if not icon_name:
         return None
 
-    # Absolutna ścieżka do pliku?
     if os.path.isabs(icon_name):
         icon = QIcon(icon_name)
         return icon if not icon.isNull() else None

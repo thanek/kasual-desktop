@@ -17,12 +17,10 @@ import pytest
 @pytest.fixture(autouse=True)
 def clear_caches():
     """Czyści lru_cache przed każdym testem, by wyniki nie przeciekały."""
-    from desktop.window_icons import resolve_window_name, resolve_window_icon
-    resolve_window_name.cache_clear()
-    resolve_window_icon.cache_clear()
+    from desktop.window_icons import _resolve_window_meta
+    _resolve_window_meta.cache_clear()
     yield
-    resolve_window_name.cache_clear()
-    resolve_window_icon.cache_clear()
+    _resolve_window_meta.cache_clear()
 
 
 def _write_desktop(dir_path: str, filename: str, content: str) -> str:
