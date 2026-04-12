@@ -4,3 +4,4 @@ others
 venv
 btn_mode_daemon
 .idea
+deploy.sh
