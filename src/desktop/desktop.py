@@ -31,10 +31,10 @@ logger = logging.getLogger(__name__)
 
 TOPBAR_ACTIONS = [
     {"icon": "fa5s.volume-up", "color": "#3b4252", "type": "volume"},
-    {"icon": "fa5s.window-minimize", "color": "#d580ff", "type": "hide_desktop"},
     {"icon": "fa5s.moon", "color": "#4c566a", "type": "sleep"},
     {"icon": "fa5s.redo-alt", "color": "#5e81ac", "type": "restart"},
     {"icon": "fa5s.power-off", "color": "#bf616a", "type": "shutdown"},
+    {"icon": "fa5s.window-minimize", "color": "#d580ff", "type": "hide_desktop"},
 ]
 
 _DYN_TILE_MAX_TITLE = 22   # Maximum length of a dynamic tile title
@@ -625,13 +625,12 @@ class Desktop(QWidget):
             return
         if action_type not in SYSTEM_ACTION_SPECS:
             return
+        if action_type == "hide_desktop":
+            self.hide()
+            return
         question_src, cmd = SYSTEM_ACTION_SPECS[action_type]
         question = QCoreApplication.translate("Kasual", question_src)
-        on_confirmed = (
-            (lambda: self.hide()) if cmd is None
-            else (lambda c=cmd: subprocess.Popen(c))
-        )
-        self._show_confirm(question=question, on_confirmed=on_confirmed)
+        self._show_confirm(question=question, on_confirmed=lambda c=cmd: subprocess.Popen(c))
 
     def _on_volume_closed(self) -> None:
         self._volume_overlay = None

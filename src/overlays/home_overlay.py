@@ -224,18 +224,17 @@ class HomeOverlay(QWidget):
 
         if action not in SYSTEM_ACTION_SPECS:
             return
+        if action == "hide_desktop":
+            self.hide_overlay()
+            if self._on_hide_desktop:
+                self._on_hide_desktop()
+            return
         question_src, cmd = SYSTEM_ACTION_SPECS[action]
         question = QCoreApplication.translate("Kasual", question_src)
-        on_confirmed = (
-            self._on_hide_desktop if cmd is None
-            else (lambda c=cmd: subprocess.Popen(c))
-        )
         self.hide_overlay()
-        if on_confirmed is None:
-            return
         ConfirmDialog(
             question=question,
-            on_confirmed=on_confirmed,
+            on_confirmed=lambda c=cmd: subprocess.Popen(c),
             on_cancelled=lambda: None,
             gamepad=self._gamepad,
         )

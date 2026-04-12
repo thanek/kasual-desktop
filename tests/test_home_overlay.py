@@ -170,13 +170,15 @@ class TestActivate:
             overlay._handle_pad("select")
         assert not overlay.isVisible()
 
-    def test_hide_desktop_calls_ask_before_hide(self, mock_gamepad):
-        overlay = _shown(mock_gamepad, on_hide_desktop=lambda: None)
+    def test_hide_desktop_calls_callback_immediately(self, mock_gamepad):
+        called = []
+        overlay = _shown(mock_gamepad, on_hide_desktop=lambda: called.append(True))
         hide_idx = next(i for i, it in enumerate(overlay._items) if it.get("action") == "hide_desktop")
         overlay._index = hide_idx
         with patch("overlays.home_overlay.ConfirmDialog") as mock_dlg:
             overlay._handle_pad("select")
-        mock_dlg.assert_called_once()
+        mock_dlg.assert_not_called()
+        assert called == [True]
 
     def test_hide_desktop_hides_overlay_before_confirming(self, mock_gamepad):
         overlay = _shown(mock_gamepad, on_hide_desktop=lambda: None)
