@@ -1,11 +1,11 @@
-"""Wspólne definicje akcji systemowych używane przez Desktop i HomeOverlay."""
+"""Shared system action definitions used by Desktop and HomeOverlay."""
 
 from PyQt6.QtCore import QT_TRANSLATE_NOOP
 
-# Mapowanie: typ akcji → (pytanie do potwierdzenia, polecenie systemowe lub None)
-# None jako polecenie oznacza akcję "hide_desktop" (obsługiwaną przez wywołującego).
-# Pytania oznaczone QT_TRANSLATE_NOOP – tłumaczenie następuje w miejscu użycia
-# przez QCoreApplication.translate("Kasual", question).
+# Mapping: action type → (confirmation question, system command or None)
+# None as command means the "hide_desktop" action (handled by the caller).
+# Questions marked with QT_TRANSLATE_NOOP — translation happens at the point of use
+# via QCoreApplication.translate("Kasual", question).
 SYSTEM_ACTION_SPECS: dict[str, tuple[str, list[str] | None]] = {
     "sleep":        (QT_TRANSLATE_NOOP("Kasual", "Are you sure you want to sleep?"),            ["systemctl", "suspend"]),
     "restart":      (QT_TRANSLATE_NOOP("Kasual", "Are you sure you want to restart?"),          ["systemctl", "reboot"]),

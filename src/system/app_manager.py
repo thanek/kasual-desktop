@@ -11,12 +11,12 @@ logger = logging.getLogger(__name__)
 
 
 class AppManager(QObject):
-    """Zarządza pojedynczą uruchomioną aplikacją."""
+    """Manages a single running application."""
 
     app_started  = pyqtSignal(int)   # idx
     app_finished = pyqtSignal(int)   # idx
 
-    # Wewnętrzny sygnał: wątek monitorujący → główny wątek Qt
+    # Internal signal: monitor thread → main Qt thread
     _proc_ended = pyqtSignal(int, int)   # idx, exit_code
 
     def __init__(self, parent: QObject | None = None):
@@ -41,7 +41,7 @@ class AppManager(QObject):
 
         self._process = subprocess.Popen(
             [command] + args,
-            start_new_session=True,   # nowa sesja → osobna grupa procesów
+            start_new_session=True,   # new session → separate process group
         )
         self._running_idx = idx
         threading.Thread(
@@ -53,7 +53,7 @@ class AppManager(QObject):
         if self._process is not None and self._process.poll() is None:
             logger.info("Ending app %d (SIGTERM)", self._running_idx)
             self._killpg(signal.SIGTERM)
-            # Jeśli proces nie zakończy się w 3 s – wymuś SIGKILL
+            # If the process does not terminate within 3 s — force SIGKILL
             QTimer.singleShot(3000, self._force_kill)
 
     def is_running(self) -> bool:
@@ -67,7 +67,7 @@ class AppManager(QObject):
             return self._process.pid
         return None
 
-    # ── Wewnętrzne ─────────────────────────────────────────────────────────
+    # ── Internal ───────────────────────────────────────────────────────────
 
     def _killpg(self, sig: signal.Signals) -> None:
         if self._process is None:
@@ -85,14 +85,14 @@ class AppManager(QObject):
             self._killpg(signal.SIGKILL)
 
     def _monitor(self, idx: int) -> None:
-        """Czeka na zakończenie procesu w wątku tła, potem sygnalizuje GUI."""
-        # start_new_session=True → pgid == pid procesu potomnego
+        """Waits for the process to finish in a background thread, then signals the GUI."""
+        # start_new_session=True → pgid == pid of the child process
         pgid = self._process.pid
         self._process.wait()
-        # Czekaj aż cała grupa procesów wyjdzie (obsługa launcher-ów które fork+exec)
+        # Wait until the entire process group exits (handles launchers that fork+exec)
         while True:
             try:
-                os.killpg(pgid, 0)   # sygnał 0 = tylko sprawdź czy istnieje
+                os.killpg(pgid, 0)   # signal 0 = just check if it exists
             except (ProcessLookupError, PermissionError):
                 break
             time.sleep(0.5)

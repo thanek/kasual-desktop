@@ -1,4 +1,4 @@
-"""Kafel pojedynczej aplikacji wyświetlany na pasku kafli pulpitu."""
+"""Single application tile displayed on the desktop tile bar."""
 
 import qtawesome as qta
 from PyQt6.QtCore import Qt, QSize, pyqtSignal
@@ -12,7 +12,7 @@ TILE_H = 200
 
 
 class AppTile(QWidget):
-    """Kafel pojedynczej aplikacji."""
+    """Single application tile."""
 
     clicked = pyqtSignal()
 

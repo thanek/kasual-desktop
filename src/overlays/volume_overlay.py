@@ -45,7 +45,7 @@ def _set_volume(pct: int) -> None:
 
 
 class VolumeOverlay(BaseOverlay):
-    """Fullscreen overlay ze sliderem głośności."""
+    """Fullscreen overlay with a volume slider."""
 
     closed = pyqtSignal()
 
@@ -64,7 +64,7 @@ class VolumeOverlay(BaseOverlay):
         layout.setContentsMargins(40, 36, 40, 36)
         layout.setSpacing(20)
 
-        # Tytuł
+        # Title
         title_row = QHBoxLayout()
         icon_lbl = QLabel()
         icon_lbl.setPixmap(qta.icon("fa5s.volume-up", color="white").pixmap(32, 32))
@@ -95,7 +95,7 @@ class VolumeOverlay(BaseOverlay):
         """)
         layout.addWidget(self._slider)
 
-        # Wartość
+        # Value
         self._value_lbl = QLabel(f"{self._volume}%")
         self._value_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._value_lbl.setStyleSheet("font-size: 32px; color: white; background: transparent;")
@@ -117,7 +117,7 @@ class VolumeOverlay(BaseOverlay):
         sound_player.play("popup_open")
         self._show()
 
-    # ── Handler pada ───────────────────────────────────────────────────────
+    # ── Gamepad handler ────────────────────────────────────────────────────
 
     def _handle_pad(self, event: str) -> None:
         if event == "left":
@@ -134,7 +134,7 @@ class VolumeOverlay(BaseOverlay):
         _set_volume(self._volume)
         sound_player.play("cursor")
 
-    # ── Klawiatura ─────────────────────────────────────────────────────────
+    # ── Keyboard ───────────────────────────────────────────────────────────
 
     def keyPressEvent(self, event: QKeyEvent) -> None:
         key = event.key()
@@ -145,7 +145,7 @@ class VolumeOverlay(BaseOverlay):
         elif key in (Qt.Key.Key_Return, Qt.Key.Key_Enter, Qt.Key.Key_Escape):
             self._close()
 
-    # ── Zamknięcie ─────────────────────────────────────────────────────────
+    # ── Closing ────────────────────────────────────────────────────────────
 
     def _close(self) -> None:
         sound_player.play("popup_close")

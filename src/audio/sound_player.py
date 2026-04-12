@@ -1,14 +1,14 @@
 """
-Odtwarzanie krótkich dźwięków UI przez QAudioSink + Python wave.
+Playing short UI sounds via QAudioSink + Python wave.
 
-Pliki WAV są dekodowane przy starcie (init()) przez standardową bibliotekę
-wave — bez FFmpeg, bez zewnętrznych narzędzi. QAudioSink gra surowe PCM
-bezpośrednio przez Qt Audio.
+WAV files are decoded at startup (init()) using the standard library
+wave — no FFmpeg, no external tools. QAudioSink plays raw PCM
+directly through Qt Audio.
 
-Użycie:
+Usage:
     import sound_player
-    sound_player.init()          # raz po QApplication
-    sound_player.play("cursor")  # potem w dowolnym miejscu
+    sound_player.init()          # once after QApplication
+    sound_player.play("cursor")  # then anywhere
 """
 
 import array
@@ -27,12 +27,12 @@ _SOUND_NAMES = ("cursor", "exit", "popup_open", "popup_close", "select", "start"
 # name → (QAudioFormat, bytes)
 _loaded: dict[str, tuple[QAudioFormat, bytes]] = {}
 
-# Aktywne sinki — trzymamy referencje do czasu zakończenia odtwarzania
+# Active sinks — we hold references until playback finishes
 _active: list[tuple[QAudioSink, QBuffer]] = []
 
 
 def _convert_24_to_16(data: bytes) -> bytes:
-    """Konwertuje surowe 24-bit PCM (little-endian) na 16-bit."""
+    """Converts raw 24-bit PCM (little-endian) to 16-bit."""
     out = array.array('h', [0] * (len(data) // 3))
     for i in range(len(out)):
         val24 = int.from_bytes(data[i * 3: i * 3 + 3], 'little', signed=True)
@@ -48,7 +48,7 @@ def _read_wav(path: Path) -> tuple[QAudioFormat, bytes] | None:
             sample_width = wf.getsampwidth()  # bytes per sample
             data         = wf.readframes(wf.getnframes())
 
-            # 24-bit PCM → konwertuj do 16-bit (QAudioSink nie obsługuje 24-bit)
+            # 24-bit PCM → convert to 16-bit (QAudioSink does not support 24-bit)
             if sample_width == 3:
                 data         = _convert_24_to_16(data)
                 sample_width = 2
@@ -73,7 +73,7 @@ def _read_wav(path: Path) -> tuple[QAudioFormat, bytes] | None:
 
 
 def init() -> None:
-    """Dekoduje pliki WAV do pamięci. Wywołać raz po QApplication."""
+    """Decodes WAV files into memory. Call once after QApplication."""
     for name in _SOUND_NAMES:
         path = _SOUNDS_DIR / f"{name}.wav"
         if not path.exists():
@@ -86,13 +86,13 @@ def init() -> None:
 
 
 def play(name: str) -> None:
-    """Odtwarza wcześniej załadowany dźwięk."""
+    """Plays a previously loaded sound."""
     entry = _loaded.get(name)
     if entry is None:
         logger.warning("Unknown sound or no init(): %s", name)
         return
 
-    # Usuń zakończone sinki
+    # Remove finished sinks
     _active[:] = [
         (s, b) for s, b in _active
         if s.state() == QAudio.State.ActiveState

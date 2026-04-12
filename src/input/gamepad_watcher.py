@@ -8,35 +8,35 @@ from evdev import InputDevice, UInput, ecodes, list_devices
 
 logger = logging.getLogger(__name__)
 
-STICK_THRESHOLD = 10000   # zakres osi analogowej: -32768..32767
-STICK_RESET     = 6000    # histereza – poniżej tej wartości oś jest "w centrum"
+STICK_THRESHOLD = 10000   # analog axis range: -32768..32767
+STICK_RESET     = 6000    # hysteresis — below this value the axis is "centered"
 
 VIRTUAL_DEVICE_NAME = "kasual-vpad"
 
 
 class GamepadWatcher(QObject):
     """
-    Czyta eventy fizycznego pada w wątku tła.
+    Reads events from a physical gamepad in a background thread.
 
-    Pad jest zawsze grabowany ekskluzywnie. Wszystkie eventy oprócz BTN_MODE
-    są przekazywane do wirtualnego pada (UInput, nazwa: VIRTUAL_DEVICE_NAME),
-    z którego korzystają zewnętrzne aplikacje (np. Steam).
+    The gamepad is always grabbed exclusively. All events except BTN_MODE
+    are forwarded to a virtual gamepad (UInput, name: VIRTUAL_DEVICE_NAME),
+    which external applications (e.g. Steam) use.
 
-    Eventy nawigacyjne (up/down/left/right/select/cancel/close) są tłumaczone
-    i rozsyłane przez stos handlerów LIFO – reaguje tylko handler na szczycie.
-    BTN_MODE emituje osobny sygnał (nie trafia do stosu ani do wirtualnego pada).
+    Navigation events (up/down/left/right/select/cancel/close) are translated
+    and dispatched through a LIFO handler stack — only the top handler reacts.
+    BTN_MODE emits a separate signal (not forwarded to the stack or virtual gamepad).
 
-    Interfejs stosu:
-        push_handler(fn)  – dodaje handler na szczyt (jeśli był wcześniej, przesuwa)
-        pop_handler(fn)   – usuwa handler
-        inject(event)     – wstrzykuje event nawigacyjny z pominięciem pada (np. z klawiatury)
+    Stack interface:
+        push_handler(fn)  — adds handler to the top (moves it if already present)
+        pop_handler(fn)   — removes handler
+        inject(event)     — injects a navigation event bypassing the gamepad (e.g. from keyboard)
 
-    Sygnały:
-        btn_mode_pressed()     – BTN_MODE wciśnięty
+    Signals:
+        btn_mode_pressed()     — BTN_MODE pressed
         connected_changed(bool)
     """
 
-    _raw              = pyqtSignal(str)    # wątek tła → GUI: event nawigacyjny
+    _raw              = pyqtSignal(str)    # background thread → GUI: navigation event
     btn_mode_pressed  = pyqtSignal()
     connected_changed = pyqtSignal(bool)
 
@@ -44,31 +44,31 @@ class GamepadWatcher(QObject):
         super().__init__(parent)
         self._handlers: list[Callable[[str], None]] = []
         self._lock = threading.Lock()
-        self._suppress_uinput: bool = False   # True gdy Desktop jest aktywny
+        self._suppress_uinput: bool = False   # True when Desktop is active
         self._raw.connect(self._dispatch)
         threading.Thread(target=self._loop, daemon=True, name="gamepad-watcher").start()
 
-    # ── Publiczne API ──────────────────────────────────────────────────────
+    # ── Public API ─────────────────────────────────────────────────────────
 
     def push_handler(self, handler: Callable[[str], None]) -> None:
         with self._lock:
             if handler in self._handlers:
                 self._handlers.remove(handler)
             self._handlers.append(handler)
-            self._suppress_uinput = True   # nasz UI jest aktywny → blokuj klawisze do pada
+            self._suppress_uinput = True   # our UI is active → block keys to gamepad
 
     def pop_handler(self, handler: Callable[[str], None]) -> None:
         with self._lock:
             if handler in self._handlers:
                 self._handlers.remove(handler)
-            self._suppress_uinput = bool(self._handlers)  # False gdy stos pusty (apka w kontroli)
+            self._suppress_uinput = bool(self._handlers)  # False when stack is empty (app in control)
 
     def inject(self, event: str) -> None:
-        """Wstrzyknij event nawigacyjny (np. z klawiatury) do aktywnego handlera."""
+        """Inject a navigation event (e.g. from keyboard) into the active handler."""
         self._dispatch(event)
 
 
-    # ── Wewnętrzne ─────────────────────────────────────────────────────────
+    # ── Internal ───────────────────────────────────────────────────────────
 
     def _dispatch(self, event: str) -> None:
         with self._lock:
@@ -84,7 +84,7 @@ class GamepadWatcher(QObject):
         stick = {"x": None, "y": None}
 
         while True:
-            # ── Szukaj pada ───────────────────────────────────────────────
+            # ── Search for gamepad ────────────────────────────────────────
             if device is None:
                 held.clear()
                 stick["x"] = stick["y"] = None
@@ -116,13 +116,13 @@ class GamepadWatcher(QObject):
                     except Exception as exc:
                         logger.debug("Ommitted device: %s", exc)
 
-            # ── Czytaj eventy ─────────────────────────────────────────────
+            # ── Read events ───────────────────────────────────────────────
             if device:
                 try:
                     pending: list[str] = []
                     for ev in device.read_loop():
                         if ev.type == ecodes.EV_SYN:
-                            # Koniec paczki – emituj unikalne eventy nawigacyjne
+                            # End of batch — emit unique navigation events
                             seen: set[str] = set()
                             for nav in pending:
                                 if nav not in seen:
@@ -133,12 +133,12 @@ class GamepadWatcher(QObject):
                                 uinput.syn()
 
                         elif ev.type == ecodes.EV_KEY and ev.code == ecodes.BTN_MODE:
-                            # BTN_MODE: przechwytuj lokalnie, NIE przekazuj do wirtualnego pada
+                            # BTN_MODE: capture locally, do NOT forward to virtual gamepad
                             if ev.value == 1:
                                 self.btn_mode_pressed.emit()
 
                         else:
-                            # Przekaż do wirtualnego pada (chyba że nasz UI jest aktywny)
+                            # Forward to virtual gamepad (unless our UI is active)
                             if uinput:
                                 with self._lock:
                                     suppress_now = self._suppress_uinput
@@ -170,9 +170,9 @@ class GamepadWatcher(QObject):
                 held.discard(ev.code)
 
         elif ev.type == ecodes.EV_ABS:
-            # D-pad (HAT0X/Y) ma tylko trzy wartości: -1, 0, 1 — nie potrzebuje histerezy.
-            # Gałka analogowa (ABS_X/Y) ma zakres -32768..32767 — obsługiwana przez
-            # _handle_stick_axis z progiem i histerezą. Asymetria jest celowa.
+            # D-pad (HAT0X/Y) has only three values: -1, 0, 1 — no hysteresis needed.
+            # Analog stick (ABS_X/Y) has range -32768..32767 — handled by
+            # _handle_stick_axis with threshold and hysteresis. The asymmetry is intentional.
             if ev.code == ecodes.ABS_HAT0X:
                 if ev.value == -1:
                     stick["x"] = "left";  pending.append("left")

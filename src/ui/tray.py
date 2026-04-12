@@ -1,4 +1,4 @@
-"""Ikona systemowa w zasobniku z menu kontekstowym."""
+"""System tray icon with context menu."""
 
 from collections.abc import Callable
 
@@ -14,7 +14,7 @@ def _make_icon(connected: bool) -> QIcon:
 
 
 class SystemTray:
-    """Hermetyzuje QSystemTrayIcon, menu kontekstowe i logikę ikony."""
+    """Encapsulates QSystemTrayIcon, context menu, and icon logic."""
 
     def __init__(
         self,
@@ -43,5 +43,5 @@ class SystemTray:
         self._tray.show()
 
     def set_connected(self, connected: bool) -> None:
-        """Aktualizuje ikonę w zależności od stanu połączenia pada."""
+        """Updates the icon based on the gamepad connection state."""
         self._tray.setIcon(_make_icon(connected))

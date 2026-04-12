@@ -1,4 +1,4 @@
-"""Ładowanie tapety KDE Plasma z plasma-org.kde.plasma.desktop-appletsrc."""
+"""Loading KDE Plasma wallpaper from plasma-org.kde.plasma.desktop-appletsrc."""
 
 import configparser
 import logging
@@ -10,8 +10,8 @@ logger = logging.getLogger(__name__)
 
 def _wallpaper_package_image(directory: str) -> str | None:
     """
-    Szuka najlepszego obrazu w paczce tapety KDE (katalog contents/images/).
-    Zwraca ścieżkę do pliku o największej rozdzielczości lub None.
+    Looks for the best image in a KDE wallpaper package (contents/images/ directory).
+    Returns the path to the file with the highest resolution, or None.
     """
     images_dir = os.path.join(directory, 'contents', 'images')
     if not os.path.isdir(images_dir):
@@ -22,7 +22,7 @@ def _wallpaper_package_image(directory: str) -> str | None:
         fpath = os.path.join(images_dir, fname)
         if not os.path.isfile(fpath):
             continue
-        # Nazwy plików mają format WxH.ext — parsuj rozdzielczość
+        # File names have the format WxH.ext — parse resolution
         name = os.path.splitext(fname)[0]
         if 'x' in name:
             try:
@@ -33,18 +33,18 @@ def _wallpaper_package_image(directory: str) -> str | None:
             except ValueError:
                 pass
         elif best[0] == 0:
-            best = (1, fpath)   # fallback: jakikolwiek plik
+            best = (1, fpath)   # fallback: any file
 
     return best[1] or None
 
 
 def load_kde_wallpaper() -> 'QPixmap | None':
     """
-    Czyta ścieżkę tapety z plasma-org.kde.plasma.desktop-appletsrc
-    i zwraca QPixmap lub None gdy nie udało się znaleźć pliku.
+    Reads the wallpaper path from plasma-org.kde.plasma.desktop-appletsrc
+    and returns a QPixmap, or None if the file could not be found.
 
-    Obsługuje zarówno bezpośrednie ścieżki do pliku jak i paczki tapety
-    KDE (katalog z contents/images/WxH.ext).
+    Handles both direct file paths and KDE wallpaper packages
+    (directory with contents/images/WxH.ext).
     """
     from PyQt6.QtGui import QPixmap
 
@@ -63,11 +63,11 @@ def load_kde_wallpaper() -> 'QPixmap | None':
         if not raw:
             continue
 
-        # Usuń opcjonalne cudzysłowy i prefiks file://
+        # Strip optional quotes and file:// prefix
         raw = raw.strip("'\"")
         path = raw[7:] if raw.startswith('file://') else raw
 
-        # Paczka tapety (katalog) → znajdź najlepszy obraz w contents/images/
+        # Wallpaper package (directory) → find the best image in contents/images/
         if os.path.isdir(path):
             resolved = _wallpaper_package_image(path)
             if resolved:

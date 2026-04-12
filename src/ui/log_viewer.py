@@ -34,7 +34,7 @@ QPushButton:hover {
 
 
 class LogViewer(QWidget):
-    """Okno wyświetlające zawartość pliku logów z auto-scrollem do dołu."""
+    """Window displaying log file contents with auto-scroll to the bottom."""
 
     def __init__(self, log_file: str, parent=None):
         super().__init__(parent)
@@ -86,7 +86,7 @@ class LogViewer(QWidget):
 
         return header
 
-    # ── Odświeżanie ───────────────────────────────────────────────────────
+    # ── Refreshing ────────────────────────────────────────────────────────
 
     def _refresh(self) -> None:
         if not os.path.exists(self._log_file):
@@ -115,7 +115,7 @@ class LogViewer(QWidget):
         except OSError as e:
             logger.warning("Could not clear log file: %s", e)
 
-    # ── Pokaż z wymuszonym odświeżeniem ──────────────────────────────────
+    # ── Show with forced refresh ──────────────────────────────────────────
 
     def showEvent(self, event) -> None:
         super().showEvent(event)

@@ -1,4 +1,4 @@
-"""Resolwowanie ikon i nazw aplikacji na podstawie plików .desktop (XDG)."""
+"""Resolving application icons and names based on .desktop files (XDG)."""
 
 import configparser
 import logging
@@ -32,8 +32,8 @@ def _resolve_window_meta(
     desktop_file: str, resource_class: str
 ) -> tuple[str | None, str | None]:
     """
-    Szuka pierwszego pasującego pliku .desktop i zwraca (name, icon_name).
-    Oba pola są odczytywane w jednym przebiegu — wynik jest cache'owany.
+    Finds the first matching .desktop file and returns (name, icon_name).
+    Both fields are read in a single pass — the result is cached.
     """
     candidates: list[str] = []
     if desktop_file:
@@ -58,17 +58,17 @@ def _resolve_window_meta(
 
 
 def resolve_window_name(desktop_file: str, resource_class: str) -> str | None:
-    """Zwraca oficjalną nazwę aplikacji (Name=) z pliku .desktop lub None."""
+    """Returns the official application name (Name=) from the .desktop file, or None."""
     return _resolve_window_meta(desktop_file, resource_class)[0]
 
 
 def resolve_window_icon(desktop_file: str, resource_class: str):
-    """Zwraca QIcon dla okna KWin lub None. Wynik jest cache'owany przez _resolve_window_meta."""
+    """Returns QIcon for a KWin window, or None. Result is cached by _resolve_window_meta."""
     from PyQt6.QtGui import QIcon
 
     _, icon_name = _resolve_window_meta(desktop_file, resource_class)
 
-    # Fallback: spróbuj klasy zasobu jako nazwy ikony motywu
+    # Fallback: try resource class as a theme icon name
     if not icon_name:
         icon_name = resource_class or desktop_file
 

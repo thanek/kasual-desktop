@@ -18,8 +18,8 @@ logger = logging.getLogger(__name__)
 
 class ConfirmDialog(BaseOverlay):
     """
-    Fullscreen overlay z pytaniem o potwierdzenie.
-    Rejestruje własny handler w GamepadManager na czas swojego życia.
+    Fullscreen overlay with a confirmation question.
+    Registers its own handler in GamepadManager for its lifetime.
     """
 
     def __init__(
@@ -77,7 +77,7 @@ class ConfirmDialog(BaseOverlay):
         sound_player.play("popup_open")
         self._show()
 
-    # ── Handler pada ───────────────────────────────────────────────────────
+    # ── Gamepad handler ────────────────────────────────────────────────────
 
     def _handle_pad(self, event: str) -> None:
         if event == "select":
@@ -89,7 +89,7 @@ class ConfirmDialog(BaseOverlay):
             self._refresh_buttons()
             sound_player.play("cursor")
 
-    # ── Klawiatura ─────────────────────────────────────────────────────────
+    # ── Keyboard ───────────────────────────────────────────────────────────
 
     def keyPressEvent(self, event: QKeyEvent) -> None:
         if event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
@@ -100,7 +100,7 @@ class ConfirmDialog(BaseOverlay):
             self._focus_yes = not self._focus_yes
             self._refresh_buttons()
 
-    # ── Akcje ──────────────────────────────────────────────────────────────
+    # ── Actions ────────────────────────────────────────────────────────────
 
     def _confirm(self) -> None:
         if self._close():
@@ -123,8 +123,8 @@ class ConfirmDialog(BaseOverlay):
         return True
 
     def force_close(self) -> None:
-        """Wymuś zamknięcie (np. gdy aplikacja zakończyła się z zewnątrz)."""
-        logger.warning("ConfirmDialog.force_close() – forcing closing the dialog")
+        """Force close (e.g. when the application ended from outside)."""
+        logger.warning("ConfirmDialog.force_close() – forcing to close the dialog")
         if not self._closed:
             self._closed = True
             self._gamepad.pop_handler(self._handler)

@@ -1,4 +1,4 @@
-"""Kontroler aplikacji — wiring między gamepadem, desktopem, overlayem i trayem."""
+"""Application controller — wiring between gamepad, desktop, overlay, and tray."""
 
 import logging
 
@@ -15,9 +15,9 @@ logger = logging.getLogger(__name__)
 
 class Application:
     """
-    Łączy wszystkie komponenty aplikacji i obsługuje globalne zdarzenia:
-      - BTN_MODE → buduje menu kontekstowe i pokazuje HomeOverlay
-      - connected_changed → synchronizuje stan desktopa, overlaya i traya
+    Connects all application components and handles global events:
+      - BTN_MODE → builds context menu and shows HomeOverlay
+      - connected_changed → synchronizes state of desktop, overlay, and tray
     """
 
     def __init__(
@@ -40,22 +40,22 @@ class Application:
         gamepad.connected_changed.connect(self._on_connected_changed)
 
     def start(self) -> None:
-        """Uruchamia okresowe odświeżanie listy okien."""
+        """Starts periodic window list refresh."""
         self._wm.start_periodic_refresh(3000)
 
-    # ── Obsługa zdarzeń ────────────────────────────────────────────────────
+    # ── Event handling ─────────────────────────────────────────────────────
 
     def _on_btn_mode(self) -> None:
-        """BTN_MODE: pokazuje overlay z menu dopasowanym do aktualnego kontekstu."""
+        """BTN_MODE: shows overlay with menu adapted to the current context."""
         running_idx = self._desktop.app_manager.running_idx()
         dyn         = self._desktop.active_dynamic_window
 
         if running_idx is None and dyn is None:
-            # Na pulpicie → menu systemowe z powrotem do pulpitu
+            # On the desktop → system menu with return to desktop
             self._overlay.show_overlay(on_cancel=self._desktop.show_desktop)
             return
 
-        # Aplikacja lub okno dynamiczne jest aktywne → menu kontekstowe
+        # Application or dynamic window is active → context menu
         if running_idx is not None:
             title     = self._apps[running_idx]["name"]
             close_cb  = self._desktop.request_close_running_app
@@ -74,7 +74,7 @@ class Application:
         self._overlay.show_overlay(extra_items=extra)
 
     def _on_connected_changed(self, connected: bool) -> None:
-        """Pad podłączony / odłączony: synchronizuje wszystkie komponenty."""
+        """Gamepad connected / disconnected: synchronizes all components."""
         self._tray.set_connected(connected)
         if connected:
             self._desktop.resume()

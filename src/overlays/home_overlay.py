@@ -22,12 +22,12 @@ logger = logging.getLogger(__name__)
 class MenuItem(TypedDict):
     label: str
     icon:  str
-    action:   NotRequired[str]       # dla pozycji statycznych (_STATIC_ITEMS)
-    callback: NotRequired[Callable]  # dla pozycji dynamicznych (extra_items)
+    action:   NotRequired[str]       # for static items (_STATIC_ITEMS)
+    callback: NotRequired[Callable]  # for dynamic items (extra_items)
 
 
-# Etykiety oznaczone QT_TRANSLATE_NOOP – wyodrębniane przez pylupdate6,
-# a tłumaczone dopiero przy budowaniu przycisków w _rebuild_buttons().
+# Labels marked with QT_TRANSLATE_NOOP — extracted by pylupdate6,
+# and translated only when building buttons in _rebuild_buttons().
 _STATIC_ITEMS: list[MenuItem] = [
     {"label": QT_TRANSLATE_NOOP("Kasual", "Return to Desktop"),  "icon": "fa5s.times",          "action": "cancel"},
     {"label": QT_TRANSLATE_NOOP("Kasual", "Minimize Desktop"),   "icon": "fa5s.window-minimize", "action": "hide_desktop"},
@@ -39,15 +39,15 @@ _STATIC_ITEMS: list[MenuItem] = [
 
 class HomeOverlay(QWidget):
     """
-    Fullscreen overlay pokazywany po wciśnięciu BTN_MODE.
+    Fullscreen overlay shown when BTN_MODE is pressed.
 
-    Niezależne top-level okno (nie child Desktop) z WindowStaysOnTopHint –
-    przykrywa wszystko, łącznie z fullscreen aplikacjami.
+    An independent top-level window (not a child of Desktop) with WindowStaysOnTopHint —
+    covers everything, including fullscreen applications.
 
-    Użycie:
+    Usage:
         overlay = HomeOverlay(gamepad)
-        overlay.show_overlay(extra_items=[...])   # pokazuje z kontekstem
-        overlay.hide_overlay()                    # chowa
+        overlay.show_overlay(extra_items=[...])   # show with context
+        overlay.hide_overlay()                    # hide
     """
 
     def __init__(self, gamepad: GamepadWatcher, on_hide_desktop: Callable | None = None, parent=None):
@@ -62,7 +62,7 @@ class HomeOverlay(QWidget):
         self.setWindowFlags(
             Qt.WindowType.FramelessWindowHint
             | Qt.WindowType.WindowStaysOnTopHint
-            | Qt.WindowType.Tool          # nie pojawia się na taskbarze
+            | Qt.WindowType.Tool          # does not appear on the taskbar
         )
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, False)
@@ -101,13 +101,13 @@ class HomeOverlay(QWidget):
 
         outer.addWidget(self._card)
 
-    # ── Tło ────────────────────────────────────────────────────────────────
+    # ── Background ─────────────────────────────────────────────────────────
 
     def paintEvent(self, _) -> None:
         painter = QPainter(self)
         painter.fillRect(self.rect(), QColor(0, 0, 0, 170))
 
-    # ── Publiczne API ──────────────────────────────────────────────────────
+    # ── Public API ─────────────────────────────────────────────────────────
 
     def show_overlay(
         self,
@@ -115,11 +115,11 @@ class HomeOverlay(QWidget):
         on_cancel=None,
     ) -> None:
         """
-        Pokaż overlay z dynamicznym menu.
+        Show overlay with a dynamic menu.
 
-        extra_items – lista dict z kluczami: label, icon, callback.
-        Wstawiane na szczycie listy przed opcjami systemowymi.
-        on_cancel – callback wywoływany po wybraniu "Anuluj" w trybie desktop.
+        extra_items — list of dicts with keys: label, icon, callback.
+        Inserted at the top of the list before system options.
+        on_cancel — callback invoked when "Cancel" is chosen in desktop mode.
         """
         if self.isVisible():
             return
@@ -140,13 +140,13 @@ class HomeOverlay(QWidget):
         self.hide()
 
     def _dismiss(self) -> None:
-        """Zamknij overlay i przywróć poprzedni kontekst (on_cancel)."""
+        """Close the overlay and restore the previous context (on_cancel)."""
         sound_player.play("popup_close")
         self.hide_overlay()
         if self._on_cancel:
             self._on_cancel()
 
-    # ── Budowanie menu ─────────────────────────────────────────────────────
+    # ── Building menu ──────────────────────────────────────────────────────
 
     def _rebuild_buttons(self, extra_items: list[MenuItem]) -> None:
         while self._buttons_layout.count():
@@ -158,8 +158,8 @@ class HomeOverlay(QWidget):
         self._items = list(extra_items) if extra_items else list(_STATIC_ITEMS)
 
         for item in self._items:
-            # Elementy statyczne mają etykiety oznaczone QT_TRANSLATE_NOOP – tłumaczymy tutaj.
-            # Elementy dynamiczne (callback) mają już gotowe, sformatowane etykiety.
+            # Static items have labels marked with QT_TRANSLATE_NOOP — we translate here.
+            # Dynamic items (callback) already have ready-formatted labels.
             label = (
                 "  " + QCoreApplication.translate("Kasual", item["label"])
                 if "action" in item
@@ -172,7 +172,7 @@ class HomeOverlay(QWidget):
             self._buttons_layout.addWidget(btn)
             self._buttons.append(btn)
 
-    # ── Handler pada ───────────────────────────────────────────────────────
+    # ── Gamepad handler ────────────────────────────────────────────────────
 
     def _handle_pad(self, event: str) -> None:
         if event == "up":
@@ -188,7 +188,7 @@ class HomeOverlay(QWidget):
         elif event in ("cancel", "close"):
             self._dismiss()
 
-    # ── Klawiatura ─────────────────────────────────────────────────────────
+    # ── Keyboard ───────────────────────────────────────────────────────────
 
     def keyPressEvent(self, event: QKeyEvent) -> None:
         key = event.key()
@@ -203,7 +203,7 @@ class HomeOverlay(QWidget):
         elif key in (Qt.Key.Key_Escape, Qt.Key.Key_F1):
             self._dismiss()
 
-    # ── Akcje ──────────────────────────────────────────────────────────────
+    # ── Actions ────────────────────────────────────────────────────────────
 
     def _activate(self, idx: int) -> None:
         item = self._items[idx]
@@ -240,7 +240,7 @@ class HomeOverlay(QWidget):
             gamepad=self._gamepad,
         )
 
-    # ── Styl ───────────────────────────────────────────────────────────────
+    # ── Style ──────────────────────────────────────────────────────────────
 
     def _refresh_buttons(self) -> None:
         for i, btn in enumerate(self._buttons):
