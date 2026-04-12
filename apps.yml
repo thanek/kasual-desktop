@@ -14,7 +14,7 @@ apps:
     color: "#c0392b"
 
   - name: YouTube
-    command: /home/xis/stuff/yt/yt.sh
+    command: apps/yt/yt.sh
     args: []
     icon: fa5b.youtube
     color: "#c0392b"

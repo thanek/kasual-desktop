@@ -19,9 +19,9 @@ logger = logging.getLogger(__name__)
 
 
 def _setup_logging() -> Path:
-    log_dir  = Path.home() / ".local" / "share" / "console-desktop"
+    log_dir  = Path.home() / ".local" / "cache" / "kasual"
     log_dir.mkdir(parents=True, exist_ok=True)
-    log_file = log_dir / "console-desktop.log"
+    log_file = log_dir / "kasual.log"
 
     fmt = logging.Formatter(
         "%(asctime)s  [%(name)-22s]  %(levelname)-8s  %(message)s",
@@ -45,13 +45,13 @@ def _load_apps() -> list[dict]:
 
 def main() -> None:
     log_file = _setup_logging()
-    logger.info("Uruchamiam Console Desktop")
+    logger.info("Uruchamiam Kasual")
 
     apps = _load_apps()
     logger.info("Załadowano %d aplikacji", len(apps))
 
     app = QApplication(sys.argv)
-    app.setApplicationName("Console Desktop")
+    app.setApplicationName("Kasual")
     app.setQuitOnLastWindowClosed(False)
 
     gamepad = GamepadWatcher()

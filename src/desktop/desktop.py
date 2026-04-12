@@ -75,7 +75,7 @@ class Desktop(QWidget):
         # Aktualnie aktywne okno dynamiczne (ustawione po kliknięciu kafla spoza apps.yml)
         self._dyn_active:     tuple[str, str] | None         = None  # (win_id, title)
 
-        self.setWindowTitle("Console Desktop")
+        self.setWindowTitle("Kasual")
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint)
         self.setAttribute(Qt.WidgetAttribute.WA_OpaquePaintEvent)
 

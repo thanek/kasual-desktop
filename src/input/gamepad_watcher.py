@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 STICK_THRESHOLD = 10000   # zakres osi analogowej: -32768..32767
 STICK_RESET     = 6000    # histereza – poniżej tej wartości oś jest "w centrum"
 
-VIRTUAL_DEVICE_NAME = "console-desktop-vpad"
+VIRTUAL_DEVICE_NAME = "kasual-vpad"
 
 
 class GamepadWatcher(QObject):

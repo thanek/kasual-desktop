@@ -56,7 +56,7 @@ _LIST_SCRIPT = """\
         }
     }
     callDBus('org.consoledesktop.WindowList', '/WindowList',
-             'local._WindowListHost', 'receive',
+             '', 'receive',
              JSON.stringify(out));
 })();
 """

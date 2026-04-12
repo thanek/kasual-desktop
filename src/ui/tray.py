@@ -22,7 +22,7 @@ class SystemTray:
         on_quit:  Callable[[], None],
     ) -> None:
         self._tray = QSystemTrayIcon(_make_icon(connected=False))
-        self._tray.setToolTip("Console Desktop")
+        self._tray.setToolTip("Kasual")
 
         menu = QMenu()
         show_action = menu.addAction("Pokaż pulpit")
