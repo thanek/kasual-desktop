@@ -3,13 +3,13 @@ import sys
 from pathlib import Path
 
 import yaml
-from PyQt6.QtWidgets import QApplication
 from PyQt6.QtCore import QTimer
+from PyQt6.QtWidgets import QApplication
 
 from app import Application
 from audio import sound_player
-from input.gamepad_watcher import GamepadWatcher
 from desktop import Desktop
+from input.gamepad_watcher import GamepadWatcher
 from overlays.home_overlay import HomeOverlay
 from system.window_manager import KWinWindowManager
 from ui.log_viewer import LogViewer

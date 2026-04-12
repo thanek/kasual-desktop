@@ -10,7 +10,7 @@ from PyQt6.QtGui import QColor, QKeyEvent
 
 from input.gamepad_watcher import GamepadWatcher
 from .base_overlay import BaseOverlay
-from ui.styles import Styles
+from ui import styles
 from audio import sound_player
 
 logger = logging.getLogger(__name__)
@@ -133,8 +133,8 @@ class ConfirmDialog(BaseOverlay):
 
     def _refresh_buttons(self) -> None:
         self._btn_yes.setStyleSheet(
-            Styles.dialog_focused() if self._focus_yes else Styles.dialog_idle()
+            styles.dialog_focused() if self._focus_yes else styles.dialog_idle()
         )
         self._btn_no.setStyleSheet(
-            Styles.dialog_idle() if self._focus_yes else Styles.dialog_focused()
+            styles.dialog_idle() if self._focus_yes else styles.dialog_focused()
         )

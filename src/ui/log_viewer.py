@@ -1,11 +1,11 @@
 import logging
 import os
 
+from PyQt6.QtCore import QTimer
+from PyQt6.QtGui import QFont
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QPlainTextEdit, QLabel,
 )
-from PyQt6.QtCore import Qt, QTimer
-from PyQt6.QtGui import QFont
 
 logger = logging.getLogger(__name__)
 

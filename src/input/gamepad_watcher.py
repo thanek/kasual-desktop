@@ -170,6 +170,9 @@ class GamepadWatcher(QObject):
                 held.discard(ev.code)
 
         elif ev.type == ecodes.EV_ABS:
+            # D-pad (HAT0X/Y) ma tylko trzy wartości: -1, 0, 1 — nie potrzebuje histerezy.
+            # Gałka analogowa (ABS_X/Y) ma zakres -32768..32767 — obsługiwana przez
+            # _handle_stick_axis z progiem i histerezą. Asymetria jest celowa.
             if ev.code == ecodes.ABS_HAT0X:
                 if ev.value == -1:
                     stick["x"] = "left";  pending.append("left")

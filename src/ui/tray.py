@@ -3,8 +3,8 @@
 from collections.abc import Callable
 
 import qtawesome as qta
-from PyQt6.QtWidgets import QSystemTrayIcon, QMenu
 from PyQt6.QtGui import QIcon
+from PyQt6.QtWidgets import QSystemTrayIcon, QMenu
 
 
 def _make_icon(connected: bool) -> QIcon:

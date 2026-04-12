@@ -19,7 +19,7 @@ from overlays.base_overlay import BaseOverlay
 from overlays.confirm_dialog import ConfirmDialog
 from overlays.volume_overlay import VolumeOverlay
 from system.window_manager import KWinWindowManager
-from ui.styles import Styles
+from ui import styles
 from system.system_actions import SYSTEM_ACTION_SPECS
 from .wallpaper import load_kde_wallpaper
 from .window_icons import resolve_window_name, resolve_window_icon
@@ -252,7 +252,7 @@ class Desktop(QWidget):
             btn.setFixedSize(BTN_SIZE, BTN_SIZE)
             btn.setIcon(qta.icon(action["icon"], color="white"))
             btn.setIconSize(QSize(24, 24))
-            btn.setStyleSheet(Styles.topbar_normal(action["color"]))
+            btn.setStyleSheet(styles.topbar_normal(action["color"]))
             btn.clicked.connect(lambda _, idx=i: self._topbar_action(idx))
             btn_layout.addWidget(btn)
             self._topbar_buttons.append(btn)
@@ -430,9 +430,9 @@ class Desktop(QWidget):
 
         for i, btn in enumerate(self._topbar_buttons):
             if self._focus_mode == "topbar" and i == self._topbar_index:
-                btn.setStyleSheet(Styles.topbar_selected())
+                btn.setStyleSheet(styles.topbar_selected())
             else:
-                btn.setStyleSheet(Styles.topbar_normal(TOPBAR_ACTIONS[i]["color"]))
+                btn.setStyleSheet(styles.topbar_normal(TOPBAR_ACTIONS[i]["color"]))
 
         if in_tiles:
             all_tiles: list[AppTile] = self._tiles + [t for _, _, t in self._dynamic_tiles]

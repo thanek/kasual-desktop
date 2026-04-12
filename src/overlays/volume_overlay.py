@@ -1,18 +1,17 @@
 import logging
 import subprocess
 
+import qtawesome as qta
+from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtGui import QColor, QKeyEvent
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QSlider,
     QGraphicsDropShadowEffect,
 )
-from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtGui import QColor, QKeyEvent
 
-import qtawesome as qta
-
+from audio import sound_player
 from input.gamepad_watcher import GamepadWatcher
 from .base_overlay import BaseOverlay
-from audio import sound_player
 
 logger = logging.getLogger(__name__)
 

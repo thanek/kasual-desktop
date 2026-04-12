@@ -1,6 +1,6 @@
 import logging
 import subprocess
-from typing import Callable
+from typing import Callable, NotRequired, TypedDict
 
 from PyQt6.QtWidgets import (
     QWidget, QPushButton, QVBoxLayout, QLabel,
@@ -13,18 +13,26 @@ import qtawesome as qta
 
 from input.gamepad_watcher import GamepadWatcher
 from .confirm_dialog import ConfirmDialog
-from ui.styles import Styles
+from ui import styles
 from system.system_actions import SYSTEM_ACTION_SPECS
 from audio import sound_player
 
 logger = logging.getLogger(__name__)
 
-_STATIC_ITEMS = [
-    {"label": "  Powrót do Pulpitu",    "icon": "fa5s.times",     "action": "cancel"},
+
+class MenuItem(TypedDict):
+    label: str
+    icon:  str
+    action:   NotRequired[str]       # dla pozycji statycznych (_STATIC_ITEMS)
+    callback: NotRequired[Callable]  # dla pozycji dynamicznych (extra_items)
+
+
+_STATIC_ITEMS: list[MenuItem] = [
+    {"label": "  Powrót do Pulpitu",    "icon": "fa5s.times",          "action": "cancel"},
     {"label": "  Minimalizuj Pulpit",   "icon": "fa5s.window-minimize", "action": "hide_desktop"},
-    {"label": "  Uśpij system",         "icon": "fa5s.moon",      "action": "sleep"},
-    {"label": "  Zrestartuj komputer",  "icon": "fa5s.redo-alt",  "action": "restart"},
-    {"label": "  Zamknij system",       "icon": "fa5s.power-off", "action": "shutdown"}
+    {"label": "  Uśpij system",         "icon": "fa5s.moon",            "action": "sleep"},
+    {"label": "  Zrestartuj komputer",  "icon": "fa5s.redo-alt",        "action": "restart"},
+    {"label": "  Zamknij system",       "icon": "fa5s.power-off",       "action": "shutdown"},
 ]
 
 
@@ -46,7 +54,7 @@ class HomeOverlay(QWidget):
         self._gamepad          = gamepad
         self._on_hide_desktop  = on_hide_desktop
         self._index            = 0
-        self._items:     list[dict]       = []
+        self._items:     list[MenuItem]    = []
         self._buttons:   list[QPushButton] = []
         self._on_cancel  = None
 
@@ -77,6 +85,13 @@ class HomeOverlay(QWidget):
         )
         self._card_layout.addWidget(title)
 
+        self._buttons_container = QWidget()
+        self._buttons_container.setStyleSheet("background: transparent;")
+        self._buttons_layout = QVBoxLayout(self._buttons_container)
+        self._buttons_layout.setContentsMargins(0, 0, 0, 0)
+        self._buttons_layout.setSpacing(8)
+        self._card_layout.addWidget(self._buttons_container)
+
         shadow = QGraphicsDropShadowEffect(self._card)
         shadow.setOffset(0, 10)
         shadow.setColor(QColor(0, 0, 0, 220))
@@ -95,7 +110,7 @@ class HomeOverlay(QWidget):
 
     def show_overlay(
         self,
-        extra_items: list[dict] | None = None,
+        extra_items: list[MenuItem] | None = None,
         on_cancel=None,
     ) -> None:
         """
@@ -132,10 +147,9 @@ class HomeOverlay(QWidget):
 
     # ── Budowanie menu ─────────────────────────────────────────────────────
 
-    def _rebuild_buttons(self, extra_items: list[dict]) -> None:
-        # Usuń stare przyciski i separatory (zostaw tylko tytuł = item 0)
-        while self._card_layout.count() > 1:
-            item = self._card_layout.takeAt(1)
+    def _rebuild_buttons(self, extra_items: list[MenuItem]) -> None:
+        while self._buttons_layout.count():
+            item = self._buttons_layout.takeAt(0)
             if item.widget():
                 item.widget().deleteLater()
         self._buttons.clear()
@@ -147,7 +161,7 @@ class HomeOverlay(QWidget):
             btn.setMinimumHeight(62)
             btn.setIcon(qta.icon(item["icon"], color="white"))
             btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-            self._card_layout.addWidget(btn)
+            self._buttons_layout.addWidget(btn)
             self._buttons.append(btn)
 
     # ── Handler pada ───────────────────────────────────────────────────────
@@ -222,6 +236,6 @@ class HomeOverlay(QWidget):
     def _refresh_buttons(self) -> None:
         for i, btn in enumerate(self._buttons):
             btn.setStyleSheet(
-                Styles.home_menu_item_selected() if i == self._index
-                else Styles.home_menu_item_normal()
+                styles.home_menu_item_selected() if i == self._index
+                else styles.home_menu_item_normal()
             )

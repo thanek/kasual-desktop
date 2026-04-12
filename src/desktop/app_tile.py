@@ -1,12 +1,11 @@
 """Kafel pojedynczej aplikacji wyświetlany na pasku kafli pulpitu."""
 
-from PyQt6.QtWidgets import QWidget, QToolButton, QLabel, QGraphicsDropShadowEffect
+import qtawesome as qta
 from PyQt6.QtCore import Qt, QSize, pyqtSignal
 from PyQt6.QtGui import QColor
+from PyQt6.QtWidgets import QWidget, QToolButton, QLabel, QGraphicsDropShadowEffect
 
-import qtawesome as qta
-
-from ui.styles import Styles
+from ui import styles
 
 TILE_W = 180
 TILE_H = 200
@@ -34,7 +33,7 @@ class AppTile(QWidget):
             except Exception:
                 self._btn.setIcon(qta.icon("fa5s.desktop", color="white"))
         self._btn.setText(name)
-        self._btn.setStyleSheet(Styles.tile_normal(color))
+        self._btn.setStyleSheet(styles.tile_normal(color))
         self._btn.clicked.connect(self.clicked)
 
         self._dot = QLabel(self)
@@ -53,14 +52,14 @@ class AppTile(QWidget):
 
     def set_selected(self, selected: bool) -> None:
         if selected:
-            self._btn.setStyleSheet(Styles.tile_selected())
+            self._btn.setStyleSheet(styles.tile_selected())
             effect = QGraphicsDropShadowEffect(self._btn)
             effect.setOffset(0, 0)
             effect.setColor(QColor("#88c0d0"))
             effect.setBlurRadius(36)
             self._btn.setGraphicsEffect(effect)
         else:
-            self._btn.setStyleSheet(Styles.tile_normal(self._color))
+            self._btn.setStyleSheet(styles.tile_normal(self._color))
             shadow = QGraphicsDropShadowEffect(self._btn)
             shadow.setOffset(4, 6)
             shadow.setColor(QColor(0, 0, 0, 160))

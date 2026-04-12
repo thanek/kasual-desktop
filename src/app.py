@@ -2,10 +2,9 @@
 
 import logging
 
-from audio import sound_player
-from input.gamepad_watcher import GamepadWatcher
 from desktop import Desktop
-from overlays.home_overlay import HomeOverlay
+from input.gamepad_watcher import GamepadWatcher
+from overlays.home_overlay import HomeOverlay, MenuItem
 from system.window_manager import KWinWindowManager
 from ui.tray import SystemTray
 
@@ -65,22 +64,10 @@ class Application:
             cancel_cb = self._desktop.restore_dynamic_window
 
         label = title if len(title) <= 22 else title[:21] + '…'
-        extra = [
-            {
-                "label":    f"  Powrót do {label}",
-                "icon":     "fa5s.times",
-                "callback": cancel_cb,
-            },
-            {
-                "label":    f"  Zamknij {label}",
-                "icon":     "fa5s.times-circle",
-                "callback": close_cb,
-            },
-            {
-                "label":    "  Powrót do Pulpitu",
-                "icon":     "fa5s.home",
-                "callback": self._desktop.show_desktop,
-            },
+        extra: list[MenuItem] = [
+            {"label": f"  Powrót do {label}",  "icon": "fa5s.times",        "callback": cancel_cb},
+            {"label": f"  Zamknij {label}",     "icon": "fa5s.times-circle", "callback": close_cb},
+            {"label":  "  Powrót do Pulpitu",  "icon": "fa5s.home",         "callback": self._desktop.show_desktop},
         ]
         self._overlay.show_overlay(extra_items=extra)
 
