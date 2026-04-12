@@ -626,7 +626,7 @@ class Desktop(QWidget):
         if action_type not in SYSTEM_ACTION_SPECS:
             return
         if action_type == "hide_desktop":
-            self.hide()
+            self.pause()
             return
         question_src, cmd = SYSTEM_ACTION_SPECS[action_type]
         question = QCoreApplication.translate("Kasual", question_src)
