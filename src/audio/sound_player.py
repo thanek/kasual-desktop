@@ -21,7 +21,7 @@ from PyQt6.QtMultimedia import QAudio, QAudioFormat, QAudioSink
 
 logger = logging.getLogger(__name__)
 
-_SOUNDS_DIR = Path(__file__).parent.parent / "sounds"
+_SOUNDS_DIR = Path(__file__).parent.parent.parent / "sounds"
 _SOUND_NAMES = ("cursor", "exit", "popup_open", "popup_close", "select", "start")
 
 # name → (QAudioFormat, bytes)
