@@ -339,6 +339,11 @@ class Desktop(QWidget):
         self.showFullScreen()
         self.activateWindow()
 
+    def pause(self) -> None:
+        """Ukryj Desktop bez odłączania pada (minimalizacja do tray)."""
+        self._gamepad.pop_handler(self._handle_pad)
+        self.hide()
+
     def resume(self) -> None:
         """Przywróć Desktop po ponownym podłączeniu pada — bez resetowania stanu."""
         self._gamepad.push_handler(self._handle_pad)
