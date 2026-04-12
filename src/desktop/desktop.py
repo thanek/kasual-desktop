@@ -16,6 +16,7 @@ from audio import sound_player
 from input.gamepad_watcher import GamepadWatcher
 from overlays.base_overlay import BaseOverlay
 from overlays.confirm_dialog import ConfirmDialog
+from overlays.info_dialog import InfoDialog
 from overlays.volume_overlay import VolumeOverlay
 from system.app_manager import AppManager
 from system.system_actions import SYSTEM_ACTION_SPECS
@@ -84,6 +85,7 @@ class Desktop(QWidget):
         self._wallpaper: 'QPixmap | None' = load_kde_wallpaper()
 
         self._app_manager.app_finished.connect(self._on_app_finished)
+        self._app_manager.app_launch_failed.connect(self._on_app_launch_failed)
         self._wm.windows_updated.connect(self._rebuild_dynamic_tiles)
 
         QApplication.instance().installEventFilter(self)
@@ -522,6 +524,15 @@ class Desktop(QWidget):
             if dyn_idx < len(self._dynamic_tiles):
                 win_id, _, _ = self._dynamic_tiles[dyn_idx]
                 self._on_dynamic_tile_clicked(win_id)
+
+    def _on_app_launch_failed(self, idx: int, error: str) -> None:
+        logger.warning("Application %d failed to launch: %s", idx, error)
+        self._gamepad.push_handler(self._handle_pad)
+        InfoDialog(
+            message=self.tr("Failed to launch application:\n{0}").format(error),
+            on_confirmed=lambda: None,
+            gamepad=self._gamepad,
+        )
 
     def _on_app_finished(self, idx: int) -> None:
         logger.info("Application %d finished – returning to desktop", idx)

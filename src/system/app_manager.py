@@ -13,8 +13,9 @@ logger = logging.getLogger(__name__)
 class AppManager(QObject):
     """Manages a single running application."""
 
-    app_started  = pyqtSignal(int)   # idx
-    app_finished = pyqtSignal(int)   # idx
+    app_started      = pyqtSignal(int)        # idx
+    app_finished     = pyqtSignal(int)        # idx
+    app_launch_failed = pyqtSignal(int, str)  # idx, error message
 
     # Internal signal: monitor thread → main Qt thread
     _proc_ended = pyqtSignal(int, int)   # idx, exit_code
@@ -39,10 +40,22 @@ class AppManager(QObject):
         args    = [str(a) for a in app.get("args", [])]
         logger.info("Launching [%d] %s %s", idx, command, args)
 
-        self._process = subprocess.Popen(
-            [command] + args,
-            start_new_session=True,   # new session → separate process group
-        )
+        try:
+            self._process = subprocess.Popen(
+                [command] + args,
+                start_new_session=True,   # new session → separate process group
+            )
+        except FileNotFoundError:
+            msg = f"Command not found: {command}"
+            logger.error(msg)
+            self.app_launch_failed.emit(idx, msg)
+            return
+        except PermissionError:
+            msg = f"Permission denied: {command}"
+            logger.error(msg)
+            self.app_launch_failed.emit(idx, msg)
+            return
+
         self._running_idx = idx
         threading.Thread(
             target=self._monitor, args=(idx,), daemon=True
