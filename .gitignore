@@ -5,3 +5,4 @@ venv
 btn_mode_daemon
 .idea
 deploy.sh
+apps/*/tools

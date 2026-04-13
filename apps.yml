@@ -19,6 +19,12 @@ apps:
     icon: fa5b.youtube
     color: "#c0392b"
 
+  - name: Pliki
+    command: apps/file_browser/file_browser.sh
+    args: []
+    icon: fa5s.folder-open
+    color: "#5e81ac"
+
   - name: Firefox
     command: firefox
     args:
