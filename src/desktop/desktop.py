@@ -16,6 +16,7 @@ from input.gamepad_watcher import GamepadWatcher
 from overlays.base_overlay import BaseOverlay
 from overlays.confirm_dialog import ConfirmDialog
 from overlays.info_dialog import InfoDialog
+from overlays.tile_popover import TilePopoverMenu
 from overlays.volume_overlay import VolumeOverlay
 from system.app_manager import AppManager
 from system.system_actions import execute_action, ACTION_DEFS
@@ -471,7 +472,7 @@ class Desktop(QWidget):
             elif event == "select":
                 self._on_tile_clicked(self._tile_index)
             elif event == "close":
-                self._close_focused_tile()
+                self._show_tile_close_popover()
 
         elif self._focus_mode == "topbar":
             if event == "left":
@@ -539,6 +540,30 @@ class Desktop(QWidget):
         self.activateWindow()
 
     # ── Closing an application ─────────────────────────────────────────────
+
+    def _show_tile_close_popover(self) -> None:
+        """Show a popover with close options above the focused tile."""
+        idx = self._tile_index
+        n_static = len(self._tiles)
+
+        # Only show when the tile has something closeable
+        if idx < n_static:
+            if self._app_manager.running_idx() != idx:
+                return
+        else:
+            dyn_idx = idx - n_static
+            if dyn_idx >= len(self._dynamic_tiles):
+                return
+
+        all_tiles: list[AppTile] = self._tiles + [t for _, _, t in self._dynamic_tiles]
+        tile = all_tiles[idx]
+
+        popover = TilePopoverMenu(
+            options=[(self.tr("Close"), self._close_focused_tile)],
+            gamepad=self._gamepad,
+            parent=self,
+        )
+        popover.show_above(tile)
 
     def _close_focused_tile(self) -> None:
         """Close the application represented by the currently focused tile."""

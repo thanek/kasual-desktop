@@ -650,7 +650,6 @@ def main() -> None:
             print(f"Warning: gamepad not found — {exc}", file=sys.stderr)
 
     threading.Thread(target=_start_pad, daemon=True).start()
-
     sys.exit(app.exec())
 
 

@@ -29,6 +29,11 @@
 {0}</source>
         <translation type="unfinished" />
     </message>
+    <message>
+        <location filename="../src/desktop/desktop.py" line="556" />
+        <source>Close</source>
+        <translation>Zamknij</translation>
+    </message>
 </context><context>
     <name>HomeOverlay</name>
     <message>
