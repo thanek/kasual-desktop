@@ -282,3 +282,34 @@ class TestIsGamepad:
         d = MagicMock()
         d.capabilities.side_effect = OSError("brak uprawnień")
         assert GamepadWatcher._is_gamepad(d) is False
+
+
+# ── BTN_MODE — logika triggera ─────────────────────────────────────────────────
+
+class TestBtnModeLogic:
+    """
+    Testujemy _on_btn_mode_long i set_app_btn_mode_trigger.
+
+    Właściwa decyzja press/timer siedzi w _loop (nie uruchamia się w testach),
+    ale możemy przetestować setter i callback timera bezpośrednio.
+    """
+
+    def test_set_app_btn_mode_trigger_stores_value(self, mock_gamepad):
+        mock_gamepad.set_app_btn_mode_trigger("BTN_MODE_HOLD_1S")
+        assert mock_gamepad._app_btn_mode_trigger == "BTN_MODE_HOLD_1S"
+
+    def test_set_app_btn_mode_trigger_default_is_click(self, mock_gamepad):
+        assert mock_gamepad._app_btn_mode_trigger == "BTN_MODE_CLICK"
+
+    def test_on_btn_mode_long_emits_signal(self, mock_gamepad):
+        fired = []
+        mock_gamepad.btn_mode_pressed.connect(lambda: fired.append(True))
+        mock_gamepad._on_btn_mode_long()
+        assert fired == [True]
+
+    def test_on_btn_mode_long_sets_flag(self, mock_gamepad):
+        mock_gamepad._on_btn_mode_long()
+        assert mock_gamepad._btn_mode_long is True
+
+    def test_btn_mode_long_flag_false_initially(self, mock_gamepad):
+        assert mock_gamepad._btn_mode_long is False
