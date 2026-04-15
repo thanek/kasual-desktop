@@ -18,32 +18,6 @@ logger = logging.getLogger(__name__)
 STEP = 5   # % na jeden krok
 
 
-def _get_volume() -> int:
-    try:
-        out = subprocess.check_output(
-            ["pactl", "get-sink-volume", "@DEFAULT_SINK@"],
-            text=True, stderr=subprocess.DEVNULL,
-        )
-        # np. "Volume: front-left: 52428 / 80% / ..."
-        for part in out.split():
-            if part.endswith("%"):
-                return int(part.rstrip("%"))
-    except Exception:
-        pass
-    return 50
-
-
-def _set_volume(pct: int) -> None:
-    pct = max(0, min(100, pct))
-    try:
-        subprocess.Popen(
-            ["pactl", "set-sink-volume", "@DEFAULT_SINK@", f"{pct}%"],
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-        )
-    except Exception as e:
-        logger.error("Error during volume setting: %s", e)
-
-
 class VolumeOverlay(BaseOverlay):
     """Fullscreen overlay with a volume slider."""
 
@@ -51,7 +25,7 @@ class VolumeOverlay(BaseOverlay):
 
     def __init__(self, gamepad: GamepadWatcher, parent: QWidget | None = None):
         super().__init__(gamepad, self._handle_pad, parent)
-        self._volume = _get_volume()
+        self._volume = self._get_volume()
 
         outer = QVBoxLayout(self)
         outer.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -117,6 +91,34 @@ class VolumeOverlay(BaseOverlay):
         sound_player.play("popup_open")
         self._show()
 
+    # ── Volume control ─────────────────────────────────────────────────────
+
+    @staticmethod
+    def _get_volume() -> int:
+        try:
+            out = subprocess.check_output(
+                ["pactl", "get-sink-volume", "@DEFAULT_SINK@"],
+                text=True, stderr=subprocess.DEVNULL,
+            )
+            # np. "Volume: front-left: 52428 / 80% / ..."
+            for part in out.split():
+                if part.endswith("%"):
+                    return int(part.rstrip("%"))
+        except Exception:
+            pass
+        return 50
+
+    @staticmethod
+    def _set_volume(pct: int) -> None:
+        pct = max(0, min(100, pct))
+        try:
+            subprocess.Popen(
+                ["pactl", "set-sink-volume", "@DEFAULT_SINK@", f"{pct}%"],
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            )
+        except Exception as e:
+            logger.error("Error during volume setting: %s", e)
+
     # ── Gamepad handler ────────────────────────────────────────────────────
 
     def _handle_pad(self, event: str) -> None:
@@ -131,7 +133,7 @@ class VolumeOverlay(BaseOverlay):
         self._volume = max(0, min(100, self._volume + delta))
         self._slider.setValue(self._volume)
         self._value_lbl.setText(f"{self._volume}%")
-        _set_volume(self._volume)
+        self._set_volume(self._volume)
         sound_player.play("cursor")
 
     # ── Keyboard ───────────────────────────────────────────────────────────
@@ -154,3 +156,4 @@ class VolumeOverlay(BaseOverlay):
         self.hide()
         self.deleteLater()
         self.closed.emit()
+

@@ -11,7 +11,7 @@ from PyQt6.QtWidgets import (
 
 from audio import sound_player
 from input.gamepad_watcher import GamepadWatcher
-from system.system_actions import ACTIONS, ActionDeps, run_action
+from system.system_actions import ACTIONS, ActionDeps, ActionRunner
 from ui import styles
 from .confirm_dialog import ConfirmDialog
 
@@ -23,22 +23,6 @@ class MenuItem(TypedDict):
     icon:  str
     action:   NotRequired[str]       # for static items (_STATIC_ITEMS)
     callback: NotRequired[Callable]  # for dynamic items (extra_items)
-
-
-_CANCEL_ITEM: MenuItem = {
-    "label": QT_TRANSLATE_NOOP("Kasual", "Return to Desktop"),
-    "icon":  "fa5s.times",
-    "action": "cancel",
-}
-
-def _build_static_items() -> list[MenuItem]:
-    volume_item = {"label": ACTIONS["volume"]["label"], "icon": ACTIONS["volume"]["icon"], "action": "volume"}
-    rest = [
-        {"label": spec["label"], "icon": spec["icon"], "action": action_type}
-        for action_type, spec in ACTIONS.items()
-        if action_type != "volume"
-    ]
-    return [volume_item, _CANCEL_ITEM] + rest
 
 
 class HomeOverlay(QWidget):
@@ -54,11 +38,35 @@ class HomeOverlay(QWidget):
         overlay.hide_overlay()                    # hide
     """
 
+    _CANCEL_ITEM: MenuItem = {
+        "label": QT_TRANSLATE_NOOP("Kasual", "Return to Desktop"),
+        "icon":  "fa5s.times",
+        "action": "cancel",
+    }
+
+    @staticmethod
+    def _build_static_items() -> list[MenuItem]:
+        volume_item = {"label": ACTIONS["volume"]["label"], "icon": ACTIONS["volume"]["icon"], "action": "volume"}
+        rest = [
+            {"label": spec["label"], "icon": spec["icon"], "action": action_type}
+            for action_type, spec in ACTIONS.items()
+            if action_type != "volume"
+        ]
+        return [volume_item, HomeOverlay._CANCEL_ITEM] + rest
+
     def __init__(self, gamepad: GamepadWatcher, action_deps: ActionDeps | None = None, parent=None):
         super().__init__(parent)
-        self._gamepad      = gamepad
-        self._action_deps  = action_deps
-        self._index        = 0
+        self._gamepad = gamepad
+        self._index   = 0
+        self._action_runner = ActionRunner(
+            action_deps,
+            lambda q, cb: ConfirmDialog(
+                question=q,
+                on_confirmed=cb,
+                on_cancelled=lambda: None,
+                gamepad=self._gamepad,
+            ),
+        ) if action_deps is not None else None
         self._items:     list[MenuItem]    = []
         self._buttons:   list[QPushButton] = []
         self._on_cancel  = None
@@ -159,7 +167,7 @@ class HomeOverlay(QWidget):
                 item.widget().deleteLater()
         self._buttons.clear()
 
-        self._items = list(extra_items) if extra_items else _build_static_items()
+        self._items = list(extra_items) if extra_items else self._build_static_items()
 
         for item in self._items:
             # Static items have labels marked with QT_TRANSLATE_NOOP — we translate here.
@@ -227,16 +235,8 @@ class HomeOverlay(QWidget):
             return
 
         self.hide_overlay()
-        run_action(
-            action,
-            self._action_deps,
-            show_confirm=lambda q, cb: ConfirmDialog(
-                question=q,
-                on_confirmed=cb,
-                on_cancelled=lambda: None,
-                gamepad=self._gamepad,
-            ),
-        )
+        if self._action_runner is not None:
+            self._action_runner.run(action)
 
     # ── Style ──────────────────────────────────────────────────────────────
 

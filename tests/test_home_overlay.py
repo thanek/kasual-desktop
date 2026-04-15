@@ -12,7 +12,7 @@ Testujemy:
 import pytest
 from unittest.mock import MagicMock, patch
 
-from overlays.home_overlay import HomeOverlay, _build_static_items
+from overlays.home_overlay import HomeOverlay
 from system.system_actions import ActionDeps
 
 
@@ -57,7 +57,7 @@ class TestShowHide:
 class TestItemBuilding:
     def test_default_items_are_static(self, mock_gamepad):
         overlay = _shown(mock_gamepad)
-        assert overlay._items == _build_static_items()
+        assert overlay._items == HomeOverlay._build_static_items()
         overlay.hide_overlay()
 
     def test_extra_items_replace_static(self, mock_gamepad):
@@ -155,7 +155,7 @@ class TestActivate:
 
     @pytest.mark.parametrize("action", ["sleep", "restart", "shutdown"])
     def test_system_action_calls_ask_confirmation(self, action, mock_gamepad):
-        overlay = _shown(mock_gamepad)
+        overlay = _shown(mock_gamepad, action_deps=ActionDeps(desktop=MagicMock()))
         action_idx = next(i for i, it in enumerate(overlay._items) if it.get("action") == action)
         overlay._index = action_idx
         with patch("overlays.home_overlay.ConfirmDialog") as mock_dlg:
@@ -164,7 +164,7 @@ class TestActivate:
 
     @pytest.mark.parametrize("action", ["sleep", "restart", "shutdown"])
     def test_system_action_hides_overlay_before_confirming(self, action, mock_gamepad):
-        overlay = _shown(mock_gamepad)
+        overlay = _shown(mock_gamepad, action_deps=ActionDeps(desktop=MagicMock()))
         action_idx = next(i for i, it in enumerate(overlay._items) if it.get("action") == action)
         overlay._index = action_idx
         with patch("overlays.home_overlay.ConfirmDialog"):

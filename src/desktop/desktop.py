@@ -19,12 +19,12 @@ from overlays.info_dialog import InfoDialog
 from overlays.tile_popover import TilePopoverMenu
 from overlays.volume_overlay import VolumeOverlay
 from system.app_manager import AppManager
-from system.system_actions import ACTIONS, ActionDeps, run_action
+from system.system_actions import ACTIONS, ActionDeps, ActionRunner
 from system.window_manager import KWinWindowManager
 from ui import styles
 from .app_tile import AppTile, TILE_H
-from .wallpaper import load_kde_wallpaper
-from .window_icons import resolve_window_name, resolve_window_icon
+from .wallpaper import KdeWallpaperLoader
+from .window_icons import WindowIconResolver
 
 logger = logging.getLogger(__name__)
 
@@ -75,7 +75,13 @@ class Desktop(QWidget):
         self._status_timer.timeout.connect(self._refresh_tile_status)
         self._status_timer.start(500)
 
-        self._wallpaper: 'QPixmap | None' = load_kde_wallpaper()
+        self._wallpaper: 'QPixmap | None' = KdeWallpaperLoader().load()
+        self._icon_resolver = WindowIconResolver()
+
+        self._action_runner = ActionRunner(
+            ActionDeps(desktop=self),
+            lambda q, cb: self._show_confirm(question=q, on_confirmed=cb),
+        )
 
         self._app_manager.app_finished.connect(self._on_app_finished)
         self._app_manager.app_launch_failed.connect(self._on_app_launch_failed)
@@ -359,7 +365,7 @@ class Desktop(QWidget):
 
         for w in extern_windows:
             full_title = w['title']
-            app_name   = resolve_window_name(
+            app_name   = self._icon_resolver.resolve_name(
                 w.get('desktopFile', ''), w.get('resourceClass', '')
             )
             if app_name and app_name != full_title:
@@ -368,7 +374,7 @@ class Desktop(QWidget):
                 combined = app_name or full_title
             display_title = (combined[:_DYN_TILE_MAX_TITLE - 1] + '…'
                              if len(combined) > _DYN_TILE_MAX_TITLE else combined)
-            app_icon = resolve_window_icon(
+            app_icon = self._icon_resolver.resolve_icon(
                 w.get('desktopFile', ''),
                 w.get('resourceClass', ''),
             )
@@ -659,11 +665,7 @@ class Desktop(QWidget):
     # ── Top bar actions ────────────────────────────────────────────────────
 
     def _topbar_action(self, action_type: str) -> None:
-        run_action(
-            action_type,
-            ActionDeps(desktop=self),
-            show_confirm=lambda q, cb: self._show_confirm(question=q, on_confirmed=cb),
-        )
+        self._action_runner.run(action_type)
 
     def _open_volume_overlay(self) -> None:
         overlay = VolumeOverlay(self._gamepad)

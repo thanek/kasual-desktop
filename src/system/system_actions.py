@@ -55,21 +55,22 @@ ACTIONS: dict[str, dict] = {
 }
 
 
-def run_action(
-        action_type: str,
-        d: ActionDeps,
-        show_confirm: Callable[[str, Callable[[], None]], None],
-) -> None:
-    """Execute a system action.
+class ActionRunner:
+    """Executes system actions for a given context (deps + confirmation UI)."""
 
-    If the action has a confirmation string, show_confirm is called with the
-    translated question and a callback that performs the action on confirmation.
-    Otherwise the action is executed immediately.
-    """
-    spec = ACTIONS[action_type]
-    execute = lambda: spec["action"](d)
-    if spec["confirmation"] is not None:
-        question = QCoreApplication.translate("Kasual", spec["confirmation"])
-        show_confirm(question, execute)
-    else:
-        execute()
+    def __init__(
+            self,
+            deps: ActionDeps,
+            show_confirm: Callable[[str, Callable[[], None]], None],
+    ) -> None:
+        self._deps         = deps
+        self._show_confirm = show_confirm
+
+    def run(self, action_type: str) -> None:
+        spec = ACTIONS[action_type]
+        execute = lambda: spec["action"](self._deps)
+        if spec["confirmation"] is not None:
+            question = QCoreApplication.translate("Kasual", spec["confirmation"])
+            self._show_confirm(question, execute)
+        else:
+            execute()
