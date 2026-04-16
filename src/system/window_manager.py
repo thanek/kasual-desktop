@@ -89,7 +89,59 @@ _CLOSE_SCRIPT = """\
 }})();
 """
 
+# Batch minimize / activate by PID list.
+# {pids} is replaced with a JSON array of integer PIDs (including all process descendants).
+# No skipTaskbar filter — works for fullscreen / kiosk apps invisible to our normal window list.
+_MINIMIZE_BY_PIDS_SCRIPT = """\
+(function () {{
+    var pids = {pids};
+    var ws = workspace.windowList();
+    for (var i = 0; i < ws.length; i++) {{
+        if (pids.indexOf(parseInt(ws[i].pid)) !== -1) {{
+            ws[i].minimized = true;
+        }}
+    }}
+}})();
+"""
+
+_ACTIVATE_BY_PIDS_SCRIPT = """\
+(function () {{
+    var pids = {pids};
+    var ws = workspace.windowList();
+    for (var i = 0; i < ws.length; i++) {{
+        if (pids.indexOf(parseInt(ws[i].pid)) !== -1) {{
+            ws[i].minimized = false;
+            workspace.activeWindow = ws[i];
+        }}
+    }}
+}})();
+"""
+
 _SCRIPT_TIMEOUT_MS = 5_000
+
+
+def _expand_pid_tree(root_pids: set[int]) -> set[int]:
+    """Return *root_pids* expanded with all their descendant PIDs.
+
+    Uses /proc/<pid>/task/<pid>/children (Linux-specific, available on all
+    modern kernels with CONFIG_PROC_CHILDREN=y). Silently skips processes that
+    have already exited.
+    """
+    result: set[int] = set()
+    queue = list(root_pids)
+    while queue:
+        pid = queue.pop()
+        if pid in result:
+            continue
+        result.add(pid)
+        try:
+            with open(f'/proc/{pid}/task/{pid}/children') as f:
+                for child in f.read().split():
+                    if child.strip():
+                        queue.append(int(child))
+        except (OSError, ValueError):
+            pass
+    return result
 
 
 class _WindowListHost(QObject):
@@ -209,6 +261,24 @@ class KWinWindowManager(QObject):
         """Closes a window via a one-shot KWin script (closeWindow())."""
         script = _CLOSE_SCRIPT.format(uuid=window_id.replace("'", "\\'"))
         self._run_fire_and_forget(script, tag='close')
+
+    def minimize_windows_for_pids(self, pids: set[int]) -> None:
+        """Minimize all windows belonging to *pids* or their descendants.
+
+        Does not rely on the internal window cache — works for fullscreen /
+        kiosk-mode apps that are not visible in the normal window list.
+        """
+        all_pids = _expand_pid_tree(pids)
+        if all_pids:
+            script = _MINIMIZE_BY_PIDS_SCRIPT.format(pids=json.dumps(sorted(all_pids)))
+            self._run_fire_and_forget(script, tag='minimize')
+
+    def activate_windows_for_pids(self, pids: set[int]) -> None:
+        """Unminimize and bring to front windows belonging to *pids* or their descendants."""
+        all_pids = _expand_pid_tree(pids)
+        if all_pids:
+            script = _ACTIVATE_BY_PIDS_SCRIPT.format(pids=json.dumps(sorted(all_pids)))
+            self._run_fire_and_forget(script, tag='activate_pids')
 
     def window_exists(self, window_id: str) -> bool:
         return window_id in self._cache

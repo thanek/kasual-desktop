@@ -36,6 +36,10 @@ class PadListener(threading.Thread):
     """
     Thread that translates evdev gamepad → virtual UInput keys.
 
+    Only forwards events when *window* is the active window — prevents double
+    navigation when multiple Kasual apps run simultaneously and all share the
+    same kasual-vpad virtual device.
+
     Mapping:
         A (BTN_SOUTH)  → Enter
         B (BTN_EAST)   → Escape
@@ -46,12 +50,15 @@ class PadListener(threading.Thread):
         D-pad          → arrows
     """
 
-    def __init__(self, gamepad: InputDevice):
+    def __init__(self, gamepad: InputDevice, window=None):
         super().__init__(daemon=True)
         self._gamepad = gamepad
+        self._window = window
 
     def run(self) -> None:
         for ev in self._gamepad.read_loop():
+            if self._window is not None and not self._window.isActiveWindow():
+                continue
             if ev.type == ecodes.EV_KEY and ev.value == 1:
                 match ev.code:
                     case ecodes.BTN_SOUTH: _press(e.KEY_ENTER)

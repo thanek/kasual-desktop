@@ -645,7 +645,7 @@ def main() -> None:
     def _start_pad():
         try:
             pad = find_pad([VIRTUAL_DEVICE_NAME, PHYSICAL_DEVICE_NAME])
-            PadListener(pad).start()
+            PadListener(pad, window=window).start()
         except RuntimeError as exc:
             print(f"Warning: gamepad not found — {exc}", file=sys.stderr)
 

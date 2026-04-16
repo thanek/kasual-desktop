@@ -43,12 +43,15 @@ def press(key):
 
 
 class PadListener(threading.Thread):
-    def __init__(self, gamepad: InputDevice):
+    def __init__(self, gamepad: InputDevice, window=None):
         super().__init__(daemon=True)
         self._gamepad = gamepad
+        self._window = window
 
     def run(self):
         for ev in self._gamepad.read_loop():
+            if self._window is not None and not self._window.isActiveWindow():
+                continue
             if ev.type == ecodes.EV_KEY:
                 if ev.value == 1:   # wciśnięcie
                     if ecodes.BTN_SOUTH == ev.code:
@@ -105,7 +108,7 @@ def main() -> None:
     def _start_pad():
         try:
             gamepad = find_pad([VIRTUAL_DEVICE_NAME, PHYSICAL_DEVICE_NAME])
-            PadListener(gamepad).start()
+            PadListener(gamepad, window=window).start()
         except RuntimeError as exc:
             print(f"Warning: gamepad not found — {exc}", file=sys.stderr)
 
