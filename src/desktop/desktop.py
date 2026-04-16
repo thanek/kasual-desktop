@@ -141,45 +141,80 @@ class Desktop(QWidget):
         """Returns (win_id, title) of the active dynamic window, or None."""
         return self._dyn_active
 
-    def restore_dynamic_window(self) -> None:
-        """Return to the active dynamic window (activate it in KWin)."""
-        if self._dyn_active:
-            self._wm.activate_window(self._dyn_active[0])
+    def current_app(self):
+        running_idx = self._app_manager.running_idx()
+        dyn = self.active_dynamic_window
 
-    def request_close_dynamic_window(self) -> None:
-        """Show the close dialog for the active dynamic window."""
-        if self._dyn_active:
-            win_id, title = self._dyn_active
-            self._request_close_kwin_window(win_id, title)
+        if not running_idx and not dyn:
+            return None
 
-    def restore_app(self) -> None:
-        """Return to the running application — hide Desktop and release gamepad to the app."""
-        running = self._app_manager.running_idx()
-        if running is not None:
-            trigger = self._apps[running].get("recall_menu_trigger", "BTN_MODE_CLICK")
+        if running_idx:
+            app = {
+                'type': 'app',
+                'id': running_idx,
+                'name': self._apps[running_idx]['name']
+            }
+        else:
+            app_id, name = dyn
+            app = {
+                'type': 'dyn',
+                'id': app_id,
+                'name': name
+            }
+        return app
+
+    def restore_app(self, app) -> None:
+        if app['type'] == 'app':
+            trigger = self._apps[app['id']].get("recall_menu_trigger", "BTN_MODE_CLICK")
             self._gamepad.set_app_btn_mode_trigger(trigger)
+        else:
+            self._wm.activate_window(app['id'])
         self._gamepad.pop_handler(self._handle_pad)
         self.hide()
 
-    def request_close_running_app(self) -> None:
-        """Show the confirmation dialog for closing the running application."""
-        running = self._app_manager.running_idx()
-        if running is None:
-            return
-        name = self._apps[running]["name"]
+    def request_close_app(self, app):
+        if app['type'] == 'app':
+            self._request_close_running_app(app)
+        else:
+            self._request_close_dynamic_window(app)
+
+    def _request_close_running_app(self, app) -> None:
+        app_id = app['id']
+        app_name = app['name']
 
         def _confirmed() -> None:
-            if running is not None:
-                self._tiles[running].set_closing()
+            if app_id is not None:
+                self._tiles[app_id].set_closing()
             self._gamepad.push_handler(self._handle_pad)
             self.showFullScreen()
             self.activateWindow()
             self._app_manager.terminate()
 
         self._show_confirm(
-            question=self.tr('Are you sure you want to close\n"{0}"?').format(name),
+            question=self.tr('Are you sure you want to close\n"{0}"?').format(app_name),
             on_confirmed=_confirmed,
         )
+
+    def _request_close_dynamic_window(self, app) -> None:
+        title = app['name']
+        win_id = app['id']
+
+        print("title:", title)
+        print("win_id:", win_id)
+
+        def _do_close_kwin_window(win_id: str) -> None:
+            self._dyn_active = None
+            self._wm.close_window(win_id)
+            QTimer.singleShot(1000, self._wm.refresh_now)
+            self._restore_desktop_view()
+
+        display = title if len(title) <= 40 else title[:39] + '…'
+        self._show_confirm(
+            question=self.tr('Are you sure you want to close\n"{0}"?').format(display),
+            on_confirmed=lambda: _do_close_kwin_window(win_id),
+            on_cancelled=self._restore_desktop_view,
+        )
+
 
     def paintEvent(self, _) -> None:
         painter = QPainter(self)
@@ -521,7 +556,8 @@ class Desktop(QWidget):
             if running == idx:
                 logger.info("Restoring application %d", idx)
                 sound_player.play("select")
-                self.restore_app()
+                app = self.current_app()
+                self.restore_app(app)
             elif running is not None:
                 logger.info("Another application (%d) is already running – ignoring", running)
             else:
@@ -602,29 +638,22 @@ class Desktop(QWidget):
         n_static = len(self._tiles)
 
         if idx < n_static:
-            # Static tile: close only if this particular application is running
-            if self._app_manager.running_idx() == idx:
-                self.request_close_running_app()
+            app = {
+                'type': 'app',
+                'id': idx,
+                'name': self._apps[idx]['name']
+            }
         else:
-            # Dynamic tile (KDE window)
             dyn_idx = idx - n_static
-            if dyn_idx < len(self._dynamic_tiles):
-                win_id, title, _ = self._dynamic_tiles[dyn_idx]
-                self._request_close_kwin_window(win_id, title)
+            win_id, title, _ = self._dynamic_tiles[dyn_idx]
 
-    def _request_close_kwin_window(self, win_id: str, title: str) -> None:
-        display = title if len(title) <= 40 else title[:39] + '…'
-        self._show_confirm(
-            question=self.tr('Are you sure you want to close\n"{0}"?').format(display),
-            on_confirmed=lambda: self._do_close_kwin_window(win_id),
-            on_cancelled=self._restore_desktop_view,
-        )
+            app = {
+                'type': 'dyn',
+                'id': win_id,
+                'name': title
+            }
 
-    def _do_close_kwin_window(self, win_id: str) -> None:
-        self._dyn_active = None
-        self._wm.close_window(win_id)
-        QTimer.singleShot(1000, self._wm.refresh_now)
-        self._restore_desktop_view()
+        self.request_close_app(app)
 
     def _restore_desktop_view(self) -> None:
         self._gamepad.push_handler(self._handle_pad)

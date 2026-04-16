@@ -22,14 +22,12 @@ class Application:
 
     def __init__(
         self,
-        apps:    list[dict],
         gamepad: GamepadWatcher,
         desktop: Desktop,
         overlay: HomeOverlay,
         tray:    SystemTray,
         wm:      KWinWindowManager,
     ) -> None:
-        self._apps    = apps
         self._gamepad = gamepad
         self._desktop = desktop
         self._overlay = overlay
@@ -47,31 +45,23 @@ class Application:
 
     def _on_btn_mode(self) -> None:
         """BTN_MODE: shows overlay with menu adapted to the current context."""
-        running_idx = self._desktop.app_manager.running_idx()
-        dyn         = self._desktop.active_dynamic_window
+        running_app = self._desktop.current_app()
 
-        if running_idx is None and dyn is None:
+        if running_app is None:
             # On the desktop → system menu with return to desktop
             self._overlay.show_overlay(on_cancel=self._desktop.show_desktop)
-            return
-
-        # Application or dynamic window is active → context menu
-        if running_idx is not None:
-            title     = self._apps[running_idx]["name"]
-            close_cb  = self._desktop.request_close_running_app
-            cancel_cb = self._desktop.restore_dynamic_window
         else:
-            _, title  = dyn
-            close_cb  = self._desktop.request_close_dynamic_window
-            cancel_cb = self._desktop.restore_dynamic_window
+            title     = running_app['name']
+            close_cb  = lambda app=running_app: self._desktop.request_close_app(app)
+            cancel_cb = lambda app=running_app: self._desktop.restore_app(app)
 
-        label = title if len(title) <= 22 else title[:21] + '…'
-        extra: list[MenuItem] = [
-            {"label": "  " + QCoreApplication.translate("Kasual", "Return to {0}").format(label),  "icon": "fa5s.times",        "callback": cancel_cb},
-            {"label": "  " + QCoreApplication.translate("Kasual", "Close {0}").format(label),      "icon": "fa5s.times-circle", "callback": close_cb},
-            {"label": "  " + QCoreApplication.translate("Kasual", "Return to Desktop"),            "icon": "fa5s.home",         "callback": self._desktop.show_desktop},
-        ]
-        self._overlay.show_overlay(extra_items=extra)
+            label = title if len(title) <= 22 else title[:21] + '…'
+            extra: list[MenuItem] = [
+                {"label": "  " + QCoreApplication.translate("Kasual", "Return to {0}").format(label),  "icon": "fa5s.times",        "callback": cancel_cb},
+                {"label": "  " + QCoreApplication.translate("Kasual", "Close {0}").format(label),      "icon": "fa5s.times-circle", "callback": close_cb},
+                {"label": "  " + QCoreApplication.translate("Kasual", "Return to Desktop"),            "icon": "fa5s.home",         "callback": self._desktop.show_desktop},
+            ]
+            self._overlay.show_overlay(extra_items=extra)
 
     def _on_connected_changed(self, connected: bool) -> None:
         """Gamepad connected / disconnected: synchronizes all components."""

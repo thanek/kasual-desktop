@@ -76,9 +76,11 @@ def main() -> None:
     )
 
     controller = Application(
-        apps=apps, gamepad=gamepad,
-        desktop=desktop, overlay=overlay,
-        tray=tray, wm=wm,
+        gamepad=gamepad,
+        desktop=desktop,
+        overlay=overlay,
+        tray=tray,
+        wm=wm,
     )
     controller.start()
 
