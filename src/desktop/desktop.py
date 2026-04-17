@@ -142,6 +142,7 @@ class Desktop(QWidget):
         return self._active_context
 
     def restore_app(self, app) -> None:
+        sound_player.play("select")
         if app['type'] == 'app':
             idx = app['id']
             trigger = self._apps[idx].get("recall_menu_trigger", "BTN_MODE_CLICK")
@@ -154,47 +155,27 @@ class Desktop(QWidget):
             if other_pids:
                 self._wm.minimize_windows_for_pids(other_pids)
         else:
+            self._gamepad.set_app_btn_mode_trigger("BTN_MODE_CLICK")
             self._wm.activate_window(app['id'])
         self._gamepad.pop_handler(self._handle_pad)
         self.hide()
 
-    def request_close_app(self, app):
-        if app['type'] == 'app':
-            self._request_close_running_app(app)
-        else:
-            self._request_close_dynamic_window(app)
-
-    def _request_close_running_app(self, app) -> None:
-        app_id = app['id']
-        app_name = app['name']
+    def request_close_app(self, app) -> None:
+        display = app['name'][:39] + '…' if len(app['name']) > 40 else app['name']
 
         def _confirmed() -> None:
-            if app_id is not None:
-                self._tiles[app_id].set_closing()
-            self._gamepad.push_handler(self._handle_pad)
-            self.showFullScreen()
-            self.activateWindow()
-            self._app_manager.terminate(app_id)
-
-        self._show_confirm(
-            question=self.tr('Are you sure you want to close\n"{0}"?').format(app_name),
-            on_confirmed=_confirmed,
-        )
-
-    def _request_close_dynamic_window(self, app) -> None:
-        title = app['name']
-        win_id = app['id']
-
-        def _do_close_kwin_window(win_id: str) -> None:
-            self._active_context = None
-            self._wm.close_window(win_id)
-            QTimer.singleShot(1000, self._wm.refresh_now)
             self._restore_desktop_view()
+            if app['type'] == 'app':
+                self._tiles[app['id']].set_closing()
+                self._app_manager.terminate(app['id'])
+            else:
+                self._active_context = None
+                self._wm.close_window(app['id'])
+                QTimer.singleShot(1000, self._wm.refresh_now)
 
-        display = title if len(title) <= 40 else title[:39] + '…'
         self._show_confirm(
             question=self.tr('Are you sure you want to close\n"{0}"?').format(display),
-            on_confirmed=lambda: _do_close_kwin_window(win_id),
+            on_confirmed=_confirmed,
             on_cancelled=self._restore_desktop_view,
         )
 
@@ -425,11 +406,7 @@ class Desktop(QWidget):
     def _on_dynamic_tile_clicked(self, window_id: str) -> None:
         title = next((t for wid, t, _ in self._dynamic_tiles if wid == window_id), window_id)
         self._active_context = {'type': 'dyn', 'id': window_id, 'name': title}
-        self._wm.activate_window(window_id)
-        sound_player.play("select")
-        self._gamepad.set_app_btn_mode_trigger("BTN_MODE_CLICK")
-        self._gamepad.pop_handler(self._handle_pad)
-        self.hide()
+        self.restore_app(self._active_context)
 
     # ── Focus and style ────────────────────────────────────────────────────
 
@@ -537,7 +514,6 @@ class Desktop(QWidget):
             self._active_context = {'type': 'app', 'id': idx, 'name': self._apps[idx]['name']}
             if self._app_manager.is_running(idx):
                 logger.info("Restoring application %d", idx)
-                sound_player.play("select")
                 self.restore_app(self._active_context)
             else:
                 logger.info("Launching application %d", idx)
@@ -605,7 +581,7 @@ class Desktop(QWidget):
             if dyn_idx >= len(self._dynamic_tiles):
                 return
             win_id, _, _ = self._dynamic_tiles[dyn_idx]
-            options.append((self.tr("Restore"), lambda: self._on_dynamic_tile_clicked(win_id)))
+            options.append((self.tr("Restore"), lambda: self._on_tile_clicked(idx)))
             options.append((self.tr("Close"),   self._close_focused_tile))
 
         all_tiles: list[AppTile] = self._tiles + [t for _, _, t in self._dynamic_tiles]
