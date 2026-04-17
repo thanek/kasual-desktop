@@ -12,6 +12,7 @@ from desktop import Desktop
 from input.gamepad_watcher import GamepadWatcher
 from overlays.home_overlay import HomeOverlay
 from system.window_manager import KWinWindowManager
+from system.system_actions import ActionDeps
 from ui.log_viewer import LogViewer
 from ui.tray import SystemTray
 
@@ -45,13 +46,13 @@ def _load_apps() -> list[dict]:
 
 def main() -> None:
     log_file = _setup_logging()
-    logger.info("Running Kasual")
+    logger.info("Running Kasual Desktop")
 
     apps = _load_apps()
     logger.info("Loaded %d apps", len(apps))
 
     app = QApplication(sys.argv)
-    app.setApplicationName("Kasual")
+    app.setApplicationName("Kasual Desktop")
     app.setQuitOnLastWindowClosed(False)
 
     locale_dir = str(Path(__file__).parent.parent / "locale")
@@ -65,7 +66,6 @@ def main() -> None:
     gamepad = GamepadWatcher()
     wm = KWinWindowManager()
     desktop = Desktop(apps=apps, gamepad=gamepad, window_manager=wm)
-    from system.system_actions import ActionDeps
     overlay = HomeOverlay(gamepad=gamepad, action_deps=ActionDeps(desktop=desktop))
 
     log_viewer = LogViewer(str(log_file))

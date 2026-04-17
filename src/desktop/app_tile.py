@@ -48,6 +48,9 @@ class AppTile(QWidget):
         shadow.setBlurRadius(18)
         self._btn.setGraphicsEffect(shadow)
 
+    def click(self) -> None:
+        self._btn.click()
+
     def set_selected(self, selected: bool) -> None:
         if selected:
             self._btn.setStyleSheet(styles.tile_selected())

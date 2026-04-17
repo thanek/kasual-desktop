@@ -18,7 +18,7 @@ class SystemTray:
         on_quit:  Callable[[], None],
     ) -> None:
         self._tray = QSystemTrayIcon(self._make_icon(connected=False))
-        self._tray.setToolTip("Kasual")
+        self._tray.setToolTip("Kasual Desktop")
 
         menu = QMenu()
         show_action = menu.addAction(QCoreApplication.translate("Kasual", "Show Desktop"))

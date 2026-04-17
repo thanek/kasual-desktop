@@ -1,6 +1,6 @@
-# Kasual 🎮
+# Kasual Desktop 🎮
 
-Kasual is an interactive, graphical "launcher/desktop" interface, designed to be operated using a controller (gamepad). The project combines application management, system overlays, and advanced input handling to create a cohesive "console-like" environment for Linux systems. It is specifically designed to run within the **KDE Plasma 6** environment.
+Kasual Desktop is an interactive, graphical "launcher/desktop" interface, designed to be operated using a controller (gamepad). The project combines application management, system overlays, and advanced input handling to create a cohesive "console-like" environment for Linux systems. It is specifically designed to run within the **KDE Plasma 6** environment.
 
 ## ✨ Key Features
 
@@ -43,7 +43,7 @@ Kasual is an interactive, graphical "launcher/desktop" interface, designed to be
 
 ### Gamepad permissions
 
-Kasual reads gamepad input directly via `evdev`, which requires access to `/dev/input/*` devices. Without this, the application will not detect any controller.
+Kasual Desktop reads gamepad input directly via `evdev`, which requires access to `/dev/input/*` devices. Without this, the application will not detect any controller.
 
 Add your user to the `input` group:
 
@@ -60,7 +60,7 @@ groups | grep input
 Alternatively, you can create a udev rule for a more targeted approach:
 
 ```bash
-echo 'SUBSYSTEM=="input", GROUP="input", MODE="0664"' | sudo tee /etc/udev/rules.d/99-kasual.rules
+echo 'SUBSYSTEM=="input", GROUP="input", MODE="0664"' | sudo tee /etc/udev/rules.d/99-kasual-desktop.rules
 sudo udevadm control --reload-rules && sudo udevadm trigger
 ```
 
@@ -104,7 +104,7 @@ apps:
 
 ## 📜 License
 
-Kasual is free software licensed under the **GNU General Public License v3.0 or later**. See [LICENSE](LICENSE) for details.
+Kasual Desktop is free software licensed under the **GNU General Public License v3.0 or later**. See [LICENSE](LICENSE) for details.
 
 ## 🎵 Credits
 

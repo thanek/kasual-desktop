@@ -22,6 +22,7 @@ from PyQt6.QtWidgets import (
 )
 import qtawesome as qta
 
+import sound_player
 from breadcrumb import BreadcrumbBar
 from gamepad import find_pad, PadListener
 from info_dialog import InfoDialog
@@ -549,14 +550,18 @@ class FileBrowserWindow(QMainWindow):
             if key == Qt.Key.Key_Left:
                 self._topbar_idx = (self._topbar_idx - 1) % len(self._topbar_buttons)
                 self._update_focus()
+                sound_player.play("cursor")
             elif key == Qt.Key.Key_Right:
                 self._topbar_idx = (self._topbar_idx + 1) % len(self._topbar_buttons)
                 self._update_focus()
+                sound_player.play("cursor")
             elif key in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
                 self._topbar_buttons[self._topbar_idx].click()
+                sound_player.play("select")
             elif key in (Qt.Key.Key_Down, Qt.Key.Key_Escape):
                 self._focus = "main"
                 self._update_focus()
+                sound_player.play("cursor")
 
         elif self._focus == "sidebar":
             if key == Qt.Key.Key_Up:
@@ -565,30 +570,39 @@ class FileBrowserWindow(QMainWindow):
                     self._update_focus()
                     _, _, path = BOOKMARKS[self._sidebar_idx]
                     self._navigate(path)
+                    sound_player.play("cursor")
                 else:
                     self._focus = "topbar"
                     self._topbar_idx = 0
                     self._update_focus()
+                    sound_player.play("cursor")
             elif key == Qt.Key.Key_Down:
                 if self._sidebar_idx < len(self._sidebar_buttons) - 1:
                     self._sidebar_idx += 1
                     self._update_focus()
                     _, _, path = BOOKMARKS[self._sidebar_idx]
                     self._navigate(path)
+                    sound_player.play("cursor")
             elif key in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
                 self._focus = "main"
                 self._update_focus()
+                sound_player.play("cursor")
             elif key == Qt.Key.Key_Right:
                 self._focus = "main"
                 self._update_focus()
+                sound_player.play("cursor")
             elif key in (Qt.Key.Key_Escape, Qt.Key.Key_U):
                 self.go_up()
+                sound_player.play("select")
             elif key == Qt.Key.Key_H:
                 self.go_home()
+                sound_player.play("select")
             elif key == Qt.Key.Key_Backspace:
                 self.go_back()
+                sound_player.play("select")
             elif key == Qt.Key.Key_F:
                 self.go_forward()
+                sound_player.play("select")
 
         elif self._focus == "main":
             step = self._icon_cols() if self._icon_mode else 1
@@ -596,35 +610,46 @@ class FileBrowserWindow(QMainWindow):
                 if self._main_idx >= step:
                     self._main_idx -= step
                     self._file_list.setCurrentRow(self._main_idx)
+                    sound_player.play("cursor")
                 elif not self._icon_mode:
                     self._focus = "topbar"
                     self._topbar_idx = 0
                     self._update_focus()
+                    sound_player.play("cursor")
             elif key == Qt.Key.Key_Down:
                 if self._main_idx + step < self._file_list.count():
                     self._main_idx += step
                     self._file_list.setCurrentRow(self._main_idx)
+                    sound_player.play("cursor")
             elif key == Qt.Key.Key_Left:
                 if self._icon_mode and self._main_idx > 0:
                     self._main_idx -= 1
                     self._file_list.setCurrentRow(self._main_idx)
+                    sound_player.play("cursor")
                 else:
                     self._focus = "sidebar"
                     self._update_focus()
+                    sound_player.play("cursor")
             elif key == Qt.Key.Key_Right:
                 if self._icon_mode and self._main_idx < self._file_list.count() - 1:
                     self._main_idx += 1
                     self._file_list.setCurrentRow(self._main_idx)
+                    sound_player.play("cursor")
             elif key in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
                 self._activate_current_item()
+                sound_player.play("select")
             elif key in (Qt.Key.Key_Escape, Qt.Key.Key_U):
                 self.go_up()
+                sound_player.play("select")
             elif key == Qt.Key.Key_H:
                 self.go_home()
+                sound_player.play("select")
             elif key == Qt.Key.Key_Backspace:
                 self.go_back()
+                sound_player.play("select")
             elif key == Qt.Key.Key_F:
                 self.go_forward()
+                sound_player.play("select")
 
         super().keyPressEvent(event)
 
@@ -633,6 +658,7 @@ class FileBrowserWindow(QMainWindow):
 
 def main() -> None:
     app = QApplication(sys.argv)
+    sound_player.init()
 
     locale_dir = str(Path(__file__).parent.parent / "locale")
     translator = QTranslator(app)

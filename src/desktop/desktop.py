@@ -61,7 +61,7 @@ class Desktop(QWidget):
         # {'type': 'app', 'id': idx, 'name': ...} or {'type': 'dyn', 'id': win_id, 'name': ...}
         self._active_context: dict | None                    = None
 
-        self.setWindowTitle("Kasual")
+        self.setWindowTitle("Kasual Desktop")
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint)
         self.setAttribute(Qt.WidgetAttribute.WA_OpaquePaintEvent)
 
@@ -502,7 +502,7 @@ class Desktop(QWidget):
                 self._update_focus()
                 sound_player.play("cursor")
             elif event == "select":
-                self._topbar_action(self._topbar_index)
+                self._topbar_buttons[self._topbar_index].click()
 
     # ── Tile actions ───────────────────────────────────────────────────────
 
