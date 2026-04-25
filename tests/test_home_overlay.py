@@ -3,7 +3,7 @@ Testy jednostkowe dla HomeOverlay.
 
 Testujemy:
   - show_overlay / hide_overlay: rejestracja handlera, idempotentność
-  - budowanie listy pozycji (extra_items vs. _STATIC_ITEMS)
+  - budowanie listy pozycji (items vs. _STATIC_ITEMS)
   - nawigacja padem: up/down (z zawijaniem), cancel/close
   - resetowanie indeksu przy każdym show_overlay
   - _activate: wywołanie callbacku, akcja cancel, akcja systemowa
@@ -12,7 +12,7 @@ Testujemy:
 import pytest
 from unittest.mock import MagicMock, patch
 
-from overlays.home_overlay import HomeOverlay
+from overlays.home_overlay import HomeOverlay, MenuItem
 from system.system_actions import ActionDeps
 
 
@@ -20,10 +20,10 @@ def _make_overlay(mock_gamepad, action_deps=None):
     return HomeOverlay(gamepad=mock_gamepad, action_deps=action_deps)
 
 
-def _shown(mock_gamepad, extra_items=None, on_cancel=None, action_deps=None):
+def _shown(mock_gamepad, items=None, on_cancel=None, action_deps=None):
     """Zwraca overlay w stanie pokazanym (show_overlay wywołane)."""
     overlay = _make_overlay(mock_gamepad, action_deps=action_deps)
-    overlay.show_overlay(extra_items=extra_items, on_cancel=on_cancel)
+    overlay.show_overlay(items=items, on_cancel=on_cancel)
     return overlay
 
 
@@ -57,13 +57,7 @@ class TestShowHide:
 class TestItemBuilding:
     def test_default_items_are_static(self, mock_gamepad):
         overlay = _shown(mock_gamepad)
-        assert overlay._items == HomeOverlay._build_static_items()
-        overlay.hide_overlay()
-
-    def test_extra_items_replace_static(self, mock_gamepad):
-        extra = [{"label": "X", "icon": "fa5s.times", "callback": lambda: None}]
-        overlay = _shown(mock_gamepad, extra_items=extra)
-        assert overlay._items == extra
+        assert overlay._items == HomeOverlay.static_items()
         overlay.hide_overlay()
 
     def test_buttons_count_matches_items(self, mock_gamepad):
@@ -74,8 +68,8 @@ class TestItemBuilding:
     def test_buttons_rebuilt_on_second_show(self, mock_gamepad):
         overlay = _shown(mock_gamepad)
         overlay.hide_overlay()
-        extra = [{"label": "A", "icon": "fa5s.times", "callback": lambda: None}]
-        overlay.show_overlay(extra_items=extra)
+        items = [MenuItem(label="A", icon="fa5s.times", callback=lambda: None)]
+        overlay.show_overlay(items=items)
         assert len(overlay._buttons) == 1
         overlay.hide_overlay()
 
@@ -127,14 +121,14 @@ class TestNavigation:
 class TestActivate:
     def test_callback_item_called_on_select(self, mock_gamepad):
         called = []
-        extra = [{"label": "X", "icon": "fa5s.times", "callback": lambda: called.append(True)}]
-        overlay = _shown(mock_gamepad, extra_items=extra)
+        items = [MenuItem(label="X", icon="fa5s.times", callback=lambda: called.append(True))]
+        overlay = _shown(mock_gamepad, items=items)
         overlay._handle_pad("select")
         assert called == [True]
 
     def test_callback_item_hides_overlay(self, mock_gamepad):
-        extra = [{"label": "X", "icon": "fa5s.times", "callback": lambda: None}]
-        overlay = _shown(mock_gamepad, extra_items=extra)
+        items = [MenuItem(label="A", icon="fa5s.times", callback=lambda: None)]
+        overlay = _shown(mock_gamepad, items=items)
         overlay._handle_pad("select")
         assert not overlay.isVisible()
 

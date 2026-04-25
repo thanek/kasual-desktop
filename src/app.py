@@ -48,20 +48,19 @@ class Application:
         running_app = self._desktop.current_app()
 
         if running_app is None:
-            # On the desktop → system menu with return to desktop
-            self._overlay.show_overlay(on_cancel=self._desktop.show_desktop)
+            items = self._overlay.static_items()
         else:
             title     = running_app['name']
             close_cb  = lambda app=running_app: self._desktop.request_close_app(app)
             cancel_cb = lambda app=running_app: self._desktop.restore_app(app)
 
             label = title if len(title) <= 22 else title[:21] + '…'
-            extra: list[MenuItem] = [
+            items: list[MenuItem] = [
                 {"label": "  " + QCoreApplication.translate("Kasual", "Return to {0}").format(label),  "icon": "fa5s.times",        "callback": cancel_cb},
                 {"label": "  " + QCoreApplication.translate("Kasual", "Close {0}").format(label),      "icon": "fa5s.times-circle", "callback": close_cb},
                 {"label": "  " + QCoreApplication.translate("Kasual", "Return to Desktop"),            "icon": "fa5s.home",         "callback": self._desktop.show_desktop},
             ]
-            self._overlay.show_overlay(extra_items=extra)
+        self._overlay.show_overlay(items=items, on_cancel=self._desktop.show_desktop)
 
     def _on_connected_changed(self, connected: bool) -> None:
         """Gamepad connected / disconnected: synchronizes all components."""

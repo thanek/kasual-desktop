@@ -477,6 +477,9 @@ class FileBrowserWindow(QMainWindow):
         path: Path = item.data(Qt.ItemDataRole.UserRole)
         if path.is_dir():
             self._navigate(path)
+        elif is_image(path):
+            _viewer = Path(__file__).parents[2] / "image_viewer" / "image_viewer.sh"
+            subprocess.Popen([str(_viewer), str(path)])
         else:
             subprocess.Popen(["xdg-open", str(path)])
 

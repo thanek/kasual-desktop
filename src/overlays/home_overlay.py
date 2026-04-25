@@ -38,21 +38,21 @@ class HomeOverlay(QWidget):
         overlay.hide_overlay()                    # hide
     """
 
-    _CANCEL_ITEM: MenuItem = {
-        "label": QT_TRANSLATE_NOOP("Kasual", "Return to Desktop"),
-        "icon":  "fa5s.times",
-        "action": "cancel",
-    }
 
     @staticmethod
-    def _build_static_items() -> list[MenuItem]:
+    def static_items() -> list[MenuItem]:
         volume_item = {"label": ACTIONS["volume"]["label"], "icon": ACTIONS["volume"]["icon"], "action": "volume"}
         rest = [
             {"label": spec["label"], "icon": spec["icon"], "action": action_type}
             for action_type, spec in ACTIONS.items()
             if action_type != "volume"
         ]
-        return [volume_item, HomeOverlay._CANCEL_ITEM] + rest
+        cancel_item: MenuItem = {
+            "label": QT_TRANSLATE_NOOP("Kasual", "Return to Desktop"),
+            "icon": "fa5s.times",
+            "action": "cancel",
+        }
+        return [volume_item, cancel_item] + rest
 
     def __init__(self, gamepad: GamepadWatcher, action_deps: ActionDeps | None = None, parent=None):
         super().__init__(parent)
@@ -123,7 +123,7 @@ class HomeOverlay(QWidget):
 
     def show_overlay(
         self,
-        extra_items: list[MenuItem] | None = None,
+        items: list[MenuItem] | None = None,
         on_cancel=None,
     ) -> None:
         """
@@ -136,7 +136,7 @@ class HomeOverlay(QWidget):
         if self.isVisible():
             return
         self._on_cancel = on_cancel
-        self._rebuild_buttons(extra_items or [])
+        self._rebuild_buttons(items or [])
         self._index = 0
         self._refresh_buttons()
         self._gamepad.push_handler(self._handle_pad)
@@ -160,14 +160,14 @@ class HomeOverlay(QWidget):
 
     # ── Building menu ──────────────────────────────────────────────────────
 
-    def _rebuild_buttons(self, extra_items: list[MenuItem]) -> None:
+    def _rebuild_buttons(self, items: list[MenuItem]) -> None:
         while self._buttons_layout.count():
             item = self._buttons_layout.takeAt(0)
             if item.widget():
                 item.widget().deleteLater()
         self._buttons.clear()
 
-        self._items = list(extra_items) if extra_items else self._build_static_items()
+        self._items = list(items) if items else self.static_items()
 
         for item in self._items:
             # Static items have labels marked with QT_TRANSLATE_NOOP — we translate here.
