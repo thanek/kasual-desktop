@@ -18,15 +18,18 @@ from PyQt6.QtGui import QKeyEvent, QIcon, QPixmap
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QHBoxLayout, QVBoxLayout,
     QListWidget, QListWidgetItem, QListView, QLabel, QToolButton, QScrollArea,
-    QSizePolicy,
+    QSizePolicy, QStackedWidget,
 )
 import qtawesome as qta
 
 import sound_player
 from breadcrumb import BreadcrumbBar
 from gamepad import find_pad, PadListener
+from image_mode import ImageMode
 from info_dialog import InfoDialog
+from info_mode import InfoMode
 from thumbnails import Thumbnailer, find_thumbnail, is_image
+from video_mode import VideoMode
 
 # ── Stałe ─────────────────────────────────────────────────────────────────────
 
@@ -69,6 +72,15 @@ FOLDER_CLR = "#ebcb8b"
 FILE_CLR = "#81a1c1"
 
 
+def _media_mode_for(path: Path):
+    mime = mimetypes.guess_type(str(path))[0] or ""
+    if mime.startswith("image/"):
+        return ImageMode(path)
+    if mime.startswith("video/"):
+        return VideoMode(path)
+    return InfoMode(path)
+
+
 # ── Main window ───────────────────────────────────────────────────────────────
 
 class FileBrowserWindow(QMainWindow):
@@ -92,6 +104,11 @@ class FileBrowserWindow(QMainWindow):
         self._main_idx = 0
         self._icon_mode = True
 
+        # Media viewer state
+        self._listener = None
+        self._media_mode = None
+        self._media_file_idx = 0
+
         # Thumbnails: URI → number of row in the current listing
         self._pending_thumbs: dict[str, int] = {}
         self._thumbnailer = Thumbnailer(self)
@@ -99,7 +116,9 @@ class FileBrowserWindow(QMainWindow):
 
         central = QWidget()
         central.setStyleSheet(f"background-color: {BG};")
-        self.setCentralWidget(central)
+        self._stack = QStackedWidget()
+        self._stack.addWidget(central)
+        self.setCentralWidget(self._stack)
 
         root = QVBoxLayout(central)
         root.setContentsMargins(0, 0, 0, 0)
@@ -477,15 +496,63 @@ class FileBrowserWindow(QMainWindow):
         path: Path = item.data(Qt.ItemDataRole.UserRole)
         if path.is_dir():
             self._navigate(path)
-        elif is_image(path):
-            _viewer = Path(__file__).parents[2] / "image_viewer" / "image_viewer.sh"
-            subprocess.Popen([str(_viewer), str(path)])
         else:
-            subprocess.Popen(["xdg-open", str(path)])
+            self._media_file_idx = self._main_idx
+            self._open_media(path)
 
     def _on_selection_changed(self, row: int) -> None:
         self._main_idx = max(0, row)
         self._update_statusbar()
+
+    # ── Media viewer (embedded) ────────────────────────────────────────────
+
+    def set_listener(self, listener) -> None:
+        self._listener = listener
+
+    def _open_media(self, path: Path) -> None:
+        if self._stack.count() > 1:
+            old = self._stack.widget(1)
+            if isinstance(old, VideoMode):
+                old.stop()
+            self._stack.removeWidget(old)
+            old.deleteLater()
+        mode = _media_mode_for(path)
+        if self._listener:
+            mode.set_listener(self._listener)
+        self._media_mode = mode
+        self._stack.addWidget(mode)
+        self._stack.setCurrentIndex(1)
+        if self._listener:
+            self._listener.set_mode('media')
+
+    def _close_media(self) -> None:
+        if self._stack.count() > 1:
+            old = self._stack.widget(1)
+            if isinstance(old, VideoMode):
+                old.stop()
+            self._stack.removeWidget(old)
+            old.deleteLater()
+            self._media_mode = None
+        self._stack.setCurrentIndex(0)
+        if self._listener:
+            self._listener.set_mode('browse')
+        self.setFocus()
+
+    def _media_navigate(self, delta: int) -> None:
+        idx = self._media_file_idx
+        count = self._file_list.count()
+        while True:
+            idx += delta
+            if not (0 <= idx < count):
+                return
+            item = self._file_list.item(idx)
+            path: Path = item.data(Qt.ItemDataRole.UserRole)
+            if not path.is_dir():
+                self._media_file_idx = idx
+                self._main_idx = idx
+                self._file_list.setCurrentRow(idx)
+                self._open_media(path)
+                return
 
     def _icon_cols(self) -> int:
         viewport_w = self._file_list.viewport().width()
@@ -547,6 +614,18 @@ class FileBrowserWindow(QMainWindow):
     # ── Keyboard support (UInput → PyQt6) ──────────────────────────────────
 
     def keyPressEvent(self, event: QKeyEvent) -> None:
+        if self._stack.currentIndex() == 1:
+            key = event.key()
+            if self._media_mode and self._media_mode.handle_key(key):
+                return
+            if key == Qt.Key.Key_Escape:
+                self._close_media()
+            elif key == Qt.Key.Key_PageDown:
+                self._media_navigate(+1)
+            elif key == Qt.Key.Key_PageUp:
+                self._media_navigate(-1)
+            return
+
         key = event.key()
 
         if self._focus == "topbar":
@@ -674,7 +753,9 @@ def main() -> None:
     def _start_pad():
         try:
             pad = find_pad([VIRTUAL_DEVICE_NAME, PHYSICAL_DEVICE_NAME])
-            PadListener(pad, window=window).start()
+            listener = PadListener(pad, window=window)
+            listener.start()
+            window.set_listener(listener)
         except RuntimeError as exc:
             print(f"Warning: gamepad not found — {exc}", file=sys.stderr)
 
