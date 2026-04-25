@@ -148,12 +148,16 @@ class PadListener(threading.Thread):
             else:  # media mode
                 if ev.type == ecodes.EV_KEY and ev.value == 1:
                     match ev.code:
+                        case ecodes.BTN_SOUTH: _press(e.KEY_ENTER)
                         case ecodes.BTN_EAST:  _press(e.KEY_ESC)
                         case ecodes.BTN_WEST:  _press(e.KEY_R)
                         case ecodes.BTN_TL:    _press(e.KEY_PAGEUP)
                         case ecodes.BTN_TR:    _press(e.KEY_PAGEDOWN)
                 elif ev.type == ecodes.EV_ABS:
                     match ev.code:
+                        case ecodes.ABS_HAT0X:
+                            if ev.value < 0:   _press(e.KEY_LEFT)
+                            elif ev.value > 0: _press(e.KEY_RIGHT)
                         case e.ABS_RX:
                             self._stick_x = _normalize(ev.value, self._rx_info)
                         case e.ABS_RY:
