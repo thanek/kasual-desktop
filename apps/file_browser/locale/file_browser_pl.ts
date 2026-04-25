@@ -39,6 +39,11 @@
         <source>Downloads</source>
         <translation>Pobrane</translation>
     </message>
+    <message>
+        <location filename="../src/file_browser.py" line="63" />
+        <source>Network</source>
+        <translation>Sieć</translation>
+    </message>
 </context><context>
     <name>FileBrowserWindow</name>
     <message>
@@ -102,6 +107,30 @@
         <location filename="../src/file_browser.py" line="514" />
         <source>File  ·  {name} ({type})  ·  {size}  ·  Modified: {mtime}</source>
         <translation>Plik  · {name} ({type})  ·  {size}  ·  Modyfikacja: {mtime}</translation>
+    </message>
+    <message>
+        <source>Searching for DLNA servers...</source>
+        <translation>Szukam serwerów DLNA...</translation>
+    </message>
+    <message>
+        <source>No DLNA servers found on your network</source>
+        <translation>Nie znaleziono serwerów DLNA w Twojej sieci</translation>
+    </message>
+    <message>
+        <source>DLNA  ·  {n} server(s) found</source>
+        <translation>DLNA  ·  Znaleziono serwery: {n}</translation>
+    </message>
+    <message>
+        <source>Loading...</source>
+        <translation>Ładowanie...</translation>
+    </message>
+    <message>
+        <source>Cannot connect to server</source>
+        <translation>Nie można połączyć z serwerem</translation>
+    </message>
+    <message>
+        <source>DLNA  ·  {n} item(s)</source>
+        <translation>DLNA  ·  Elementów: {n}</translation>
     </message>
 </context><context>
     <name>InfoDialog</name>

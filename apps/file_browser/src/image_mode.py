@@ -1,9 +1,11 @@
 """IMAGE mode — fullscreen image display with zoom, pan and rotation."""
 
+import threading
 from pathlib import Path
+from urllib.request import urlopen
 
-from PyQt6.QtCore import Qt, QTimer
-from PyQt6.QtGui import QPainter, QPixmap, QTransform
+from PyQt6.QtCore import Qt, QTimer, pyqtSignal
+from PyQt6.QtGui import QColor, QFont, QPainter, QPixmap, QTransform
 from PyQt6.QtWidgets import QApplication, QWidget
 
 
@@ -13,15 +15,56 @@ _ZOOM_SPEED = 0.015
 
 class ImageMode(QWidget):
     _ZOOM_STEP = 1.2
+    _image_ready = pyqtSignal(bytes)
 
-    def __init__(self, path: Path):
+    def __init__(self, source: 'Path | str'):
         super().__init__()
         self._listener = None
-        self._load_pixmap(path)
+        self._loading = False
+
+        if isinstance(source, Path):
+            self._load_pixmap(source)
+        else:
+            self._pixmap = QPixmap()
+            self._scaled = QPixmap()
+            self._zoom = 1.0
+            self._initial_zoom = 1.0
+            self._offset_x = 0.0
+            self._offset_y = 0.0
+            self._loading = True
+            self._image_ready.connect(self._on_image_data)
+            threading.Thread(target=self._fetch_url, args=(source,), daemon=True).start()
 
         self._timer = QTimer(self)
         self._timer.timeout.connect(self._tick)
         self._timer.start(16)
+
+    def _fetch_url(self, url: str) -> None:
+        try:
+            with urlopen(url, timeout=15) as resp:
+                data = resp.read()
+            self._image_ready.emit(data)
+        except Exception:
+            self._image_ready.emit(b"")
+
+    def _on_image_data(self, data: bytes) -> None:
+        self._loading = False
+        if data:
+            pix = QPixmap()
+            pix.loadFromData(data)
+            if not pix.isNull():
+                self._pixmap = pix
+                screen = QApplication.primaryScreen().size()
+                w, h = pix.width(), pix.height()
+                if w > screen.width() or h > screen.height():
+                    self._zoom = min(screen.width() / w, screen.height() / h)
+                else:
+                    self._zoom = 1.0
+                self._initial_zoom = self._zoom
+                self._offset_x = 0.0
+                self._offset_y = 0.0
+                self._rebuild_scaled()
+        self.update()
 
     def set_listener(self, listener) -> None:
         self._listener = listener
@@ -93,6 +136,9 @@ class ImageMode(QWidget):
         self.update()
 
     def _rebuild_scaled(self) -> None:
+        if self._pixmap.isNull():
+            self._scaled = QPixmap()
+            return
         self._scaled = self._pixmap.scaled(
             int(self._pixmap.width() * self._zoom),
             int(self._pixmap.height() * self._zoom),
@@ -107,7 +153,7 @@ class ImageMode(QWidget):
         self._offset_y = max(-max_y, min(max_y, self._offset_y))
 
     def _tick(self) -> None:
-        if self._listener is None:
+        if self._listener is None or self._loading:
             return
         sx, sy = self._listener.stick
         ly = self._listener.left_y
@@ -128,6 +174,13 @@ class ImageMode(QWidget):
     def paintEvent(self, event) -> None:
         painter = QPainter(self)
         painter.fillRect(self.rect(), Qt.GlobalColor.black)
+        if self._loading:
+            painter.setPen(QColor(100, 100, 100))
+            f = QFont()
+            f.setPointSize(20)
+            painter.setFont(f)
+            painter.drawText(self.rect(), Qt.AlignmentFlag.AlignCenter, "…")
+            return
         if self._pixmap.isNull():
             return
         x = (self.width() - self._scaled.width()) // 2 + int(self._offset_x)

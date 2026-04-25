@@ -3,6 +3,7 @@
 from pathlib import Path
 
 from PyQt6.QtCore import Qt, QUrl
+
 from PyQt6.QtGui import QColor, QPainter, QPalette
 from PyQt6.QtMultimedia import QAudioOutput, QMediaPlayer
 from PyQt6.QtMultimediaWidgets import QVideoWidget
@@ -10,7 +11,7 @@ from PyQt6.QtWidgets import QVBoxLayout, QWidget
 
 
 class VideoMode(QWidget):
-    def __init__(self, path: Path):
+    def __init__(self, source: 'Path | str'):
         super().__init__()
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -27,7 +28,11 @@ class VideoMode(QWidget):
         self._player = QMediaPlayer(self)
         self._player.setAudioOutput(self._audio)
         self._player.setVideoOutput(self._video)
-        self._player.setSource(QUrl.fromLocalFile(str(path.resolve())))
+        if isinstance(source, Path):
+            qurl = QUrl.fromLocalFile(str(source.resolve()))
+        else:
+            qurl = QUrl(source)
+        self._player.setSource(qurl)
         self._player.play()
 
     def paintEvent(self, event) -> None:

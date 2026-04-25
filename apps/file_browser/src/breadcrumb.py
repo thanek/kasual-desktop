@@ -69,3 +69,16 @@ class BreadcrumbBar(QWidget):
                 self._layout.addWidget(sep)
 
         self._layout.addStretch()
+
+    def set_label(self, text: str) -> None:
+        while self._layout.count():
+            item = self._layout.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+        lbl = QLabel(text)
+        lbl.setStyleSheet(
+            "color: #eceff4; background: transparent;"
+            "font-size: 14px; font-weight: 600; padding: 0 3px;"
+        )
+        self._layout.addWidget(lbl)
+        self._layout.addStretch()

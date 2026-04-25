@@ -5,6 +5,7 @@ Gamepad navigation: D-pad = moving in different directions, A = confirm/enter, B
 Y = Home folder, X = folder up, L1 = back, R1 = forward.
 """
 
+import dataclasses
 import datetime
 import mimetypes
 import os
@@ -13,8 +14,8 @@ import sys
 import threading
 from pathlib import Path
 
-from PyQt6.QtCore import Qt, QSize, QCoreApplication, QLocale, QTranslator, QT_TRANSLATE_NOOP
-from PyQt6.QtGui import QKeyEvent, QIcon, QPixmap
+from PyQt6.QtCore import Qt, QSize, QCoreApplication, QLocale, QObject, QTranslator, QT_TRANSLATE_NOOP, pyqtSignal
+from PyQt6.QtGui import QColor, QKeyEvent, QIcon, QPixmap
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QHBoxLayout, QVBoxLayout,
     QListWidget, QListWidgetItem, QListView, QLabel, QToolButton, QScrollArea,
@@ -22,7 +23,9 @@ from PyQt6.QtWidgets import (
 )
 import qtawesome as qta
 
+import dlna as dlna_mod
 import sound_player
+import ssdp
 from breadcrumb import BreadcrumbBar
 from gamepad import find_pad, PadListener
 from image_mode import ImageMode
@@ -37,6 +40,7 @@ VIRTUAL_DEVICE_NAME = "kasual-vpad"
 PHYSICAL_DEVICE_NAME = "8BitDo Ultimate Wireless / Pro 2 Wired Controller"
 
 HOME = Path.home()
+_DLNA = object()  # sentinel for the "Network / DLNA" virtual location
 
 
 def _xdg_dir(key: str) -> Path:
@@ -59,6 +63,7 @@ BOOKMARKS = [
     (QT_TRANSLATE_NOOP("FileBrowser", "Pictures"), "fa5s.image", _xdg_dir("XDG_PICTURES_DIR")),
     (QT_TRANSLATE_NOOP("FileBrowser", "Videos"), "fa5s.film", _xdg_dir("XDG_VIDEOS_DIR")),
     (QT_TRANSLATE_NOOP("FileBrowser", "Downloads"), "fa5s.download", _xdg_dir("XDG_DOWNLOAD_DIR")),
+    (QT_TRANSLATE_NOOP("FileBrowser", "Network"), "fa5s.network-wired", _DLNA),
 ]
 
 # Color palette (Nord-like, consistent with Kasual)
@@ -79,6 +84,29 @@ def _media_mode_for(path: Path):
     if mime.startswith("video/"):
         return VideoMode(path)
     return InfoMode(path)
+
+
+@dataclasses.dataclass
+class DlnaServer:
+    name: str
+    location: str  # device descriptor URL
+
+
+@dataclasses.dataclass
+class DlnaLocation:
+    server_name: str
+    control_url: str
+    container_id: str
+    title: str
+    parent: 'DlnaLocation | None'
+
+
+class _DlnaSignal(QObject):
+    results = pyqtSignal(list)
+
+
+class _AsyncResult(QObject):
+    ready = pyqtSignal(object)
 
 
 # ── Main window ───────────────────────────────────────────────────────────────
@@ -250,7 +278,10 @@ class FileBrowserWindow(QMainWindow):
         for i, (_, _, path) in enumerate(BOOKMARKS):
             btn = self._sidebar_buttons[i]
             focused = (self._focus == "sidebar" and i == self._sidebar_idx)
-            active = (self._current == path)
+            if path is _DLNA:
+                active = self._current is _DLNA or isinstance(self._current, DlnaLocation)
+            else:
+                active = (self._current == path)
             if focused:
                 btn.setStyleSheet(f"""
                     QToolButton {{
@@ -390,7 +421,13 @@ class FileBrowserWindow(QMainWindow):
 
     # ── Navigation ─────────────────────────────────────────────────────────────
 
-    def _navigate(self, path: Path, add_to_history: bool = True) -> None:
+    def _navigate(self, path, add_to_history: bool = True) -> None:
+        if path is _DLNA:
+            self._browse_dlna(add_to_history)
+            return
+        if isinstance(path, DlnaLocation):
+            self._enter_dlna_container(path, add_to_history)
+            return
         if not path.exists() or not path.is_dir():
             return
         if not os.access(path, os.R_OK | os.X_OK):
@@ -469,7 +506,13 @@ class FileBrowserWindow(QMainWindow):
     def _refresh_nav_button_state(self) -> None:
         self._topbar_buttons[1].setEnabled(bool(self._history))
         self._topbar_buttons[2].setEnabled(bool(self._future))
-        self._topbar_buttons[3].setEnabled(self._current != Path("/"))
+        if self._current is _DLNA:
+            up_ok = False
+        elif isinstance(self._current, DlnaLocation):
+            up_ok = True
+        else:
+            up_ok = self._current != Path("/")
+        self._topbar_buttons[3].setEnabled(up_ok)
 
     def go_home(self) -> None:
         self._navigate(HOME)
@@ -485,6 +528,14 @@ class FileBrowserWindow(QMainWindow):
             self._navigate(self._future.pop(), add_to_history=False)
 
     def go_up(self) -> None:
+        if self._current is _DLNA:
+            return
+        if isinstance(self._current, DlnaLocation):
+            if self._current.parent is not None:
+                self._navigate(self._current.parent)
+            else:
+                self._navigate(_DLNA)
+            return
         parent = self._current.parent
         if parent != self._current:
             self._navigate(parent)
@@ -493,12 +544,22 @@ class FileBrowserWindow(QMainWindow):
         item = self._file_list.currentItem()
         if item is None:
             return
-        path: Path = item.data(Qt.ItemDataRole.UserRole)
-        if path.is_dir():
-            self._navigate(path)
-        else:
+        data = item.data(Qt.ItemDataRole.UserRole)
+        if data is None:
+            return
+        if isinstance(data, Path):
+            if data.is_dir():
+                self._navigate(data)
+            else:
+                self._media_file_idx = self._main_idx
+                self._open_media(data)
+        elif isinstance(data, DlnaServer):
+            self._enter_dlna_server(data)
+        elif isinstance(data, DlnaLocation):
+            self._navigate(data)
+        elif isinstance(data, dlna_mod.DlnaEntry):
             self._media_file_idx = self._main_idx
-            self._open_media(path)
+            self._open_dlna_item(data)
 
     def _on_selection_changed(self, row: int) -> None:
         self._main_idx = max(0, row)
@@ -510,13 +571,27 @@ class FileBrowserWindow(QMainWindow):
         self._listener = listener
 
     def _open_media(self, path: Path) -> None:
+        self._open_media_mode(_media_mode_for(path))
+
+    def _open_dlna_item(self, entry) -> None:
+        if not entry.resource_url:
+            return
+        mime = entry.mime_type
+        if mime.startswith("image/"):
+            mode = ImageMode(entry.resource_url)
+        elif mime.startswith("video/") or mime.startswith("audio/"):
+            mode = VideoMode(entry.resource_url)
+        else:
+            return
+        self._open_media_mode(mode)
+
+    def _open_media_mode(self, mode) -> None:
         if self._stack.count() > 1:
             old = self._stack.widget(1)
             if isinstance(old, VideoMode):
                 old.stop()
             self._stack.removeWidget(old)
             old.deleteLater()
-        mode = _media_mode_for(path)
         if self._listener:
             mode.set_listener(self._listener)
         self._media_mode = mode
@@ -546,13 +621,199 @@ class FileBrowserWindow(QMainWindow):
             if not (0 <= idx < count):
                 return
             item = self._file_list.item(idx)
-            path: Path = item.data(Qt.ItemDataRole.UserRole)
-            if not path.is_dir():
+            data = item.data(Qt.ItemDataRole.UserRole)
+            if isinstance(data, Path) and not data.is_dir():
                 self._media_file_idx = idx
                 self._main_idx = idx
                 self._file_list.setCurrentRow(idx)
-                self._open_media(path)
+                self._open_media(data)
                 return
+            if (isinstance(data, dlna_mod.DlnaEntry)
+                    and not data.is_container and data.resource_url):
+                self._media_file_idx = idx
+                self._main_idx = idx
+                self._file_list.setCurrentRow(idx)
+                self._open_dlna_item(data)
+                return
+
+    # ── DLNA discovery ────────────────────────────────────────────────────
+
+    def _browse_dlna(self, add_to_history: bool = True) -> None:
+        if add_to_history and self._current is not _DLNA:
+            self._history.append(self._current)
+            self._future.clear()
+        self._current = _DLNA
+        self._pending_thumbs.clear()
+        self._breadcrumb.set_label(
+            QCoreApplication.translate("FileBrowser", "Network")
+        )
+        self._refresh_nav_button_state()
+        self._refresh_sidebar_style()
+
+        self._file_list.clear()
+        searching = QListWidgetItem(self.tr("Searching for DLNA servers..."))
+        searching.setFlags(searching.flags() & ~Qt.ItemFlag.ItemIsSelectable)
+        searching.setForeground(QColor(MUTED))
+        self._file_list.addItem(searching)
+        self._status_lbl.setText(self.tr("Searching for DLNA servers..."))
+
+        sig = _DlnaSignal()
+        sig.results.connect(self._on_dlna_results)
+        self._dlna_signal = sig
+        threading.Thread(
+            target=lambda: sig.results.emit(ssdp.discover()),
+            daemon=True,
+        ).start()
+
+    def _on_dlna_results(self, servers: list) -> None:
+        if self._current is not _DLNA:
+            return
+        self._file_list.clear()
+        if not servers:
+            item = QListWidgetItem(
+                self.tr("No DLNA servers found on your network")
+            )
+            item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsSelectable)
+            item.setForeground(QColor(MUTED))
+            self._file_list.addItem(item)
+            self._status_lbl.setText(
+                self.tr("No DLNA servers found on your network")
+            )
+        else:
+            for server in servers:
+                icon = qta.icon("fa5s.server", color=ACCENT)
+                item = QListWidgetItem(icon, server["name"])
+                item.setData(Qt.ItemDataRole.UserRole,
+                             DlnaServer(name=server["name"], location=server["location"]))
+                self._file_list.addItem(item)
+            n = len(servers)
+            self._status_lbl.setText(
+                self.tr("DLNA  ·  {n} server(s) found").format(n=n)
+            )
+
+    def _enter_dlna_server(self, server: DlnaServer) -> None:
+        self._history.append(self._current)
+        self._future.clear()
+
+        # Placeholder location — control_url filled in by background thread
+        placeholder = DlnaLocation(
+            server_name=server.name,
+            control_url="",
+            container_id="0",
+            title="",
+            parent=None,
+        )
+        self._current = placeholder
+        self._pending_thumbs.clear()
+        self._breadcrumb.set_label(server.name)
+        self._refresh_nav_button_state()
+        self._refresh_sidebar_style()
+
+        self._file_list.clear()
+        loading = QListWidgetItem(self.tr("Loading..."))
+        loading.setFlags(loading.flags() & ~Qt.ItemFlag.ItemIsSelectable)
+        loading.setForeground(QColor(MUTED))
+        self._file_list.addItem(loading)
+        self._status_lbl.setText(server.name)
+
+        sig = _AsyncResult()
+        sig.ready.connect(lambda result: self._on_dlna_container_ready(placeholder, result))
+        self._async_sig = sig
+
+        def _fetch():
+            ctrl = dlna_mod.get_control_url(server.location)
+            if not ctrl:
+                sig.ready.emit(None)
+                return
+            placeholder.control_url = ctrl
+            sig.ready.emit(dlna_mod.browse(ctrl, "0"))
+
+        threading.Thread(target=_fetch, daemon=True).start()
+
+    def _enter_dlna_container(self, loc: DlnaLocation, add_to_history: bool = True) -> None:
+        if add_to_history and self._current is not loc:
+            self._history.append(self._current)
+            self._future.clear()
+        self._current = loc
+        self._pending_thumbs.clear()
+        self._breadcrumb.set_label(self._dlna_breadcrumb(loc))
+        self._refresh_nav_button_state()
+        self._refresh_sidebar_style()
+
+        self._file_list.clear()
+        loading = QListWidgetItem(self.tr("Loading..."))
+        loading.setFlags(loading.flags() & ~Qt.ItemFlag.ItemIsSelectable)
+        loading.setForeground(QColor(MUTED))
+        self._file_list.addItem(loading)
+        self._status_lbl.setText(loc.title or loc.server_name)
+
+        sig = _AsyncResult()
+        sig.ready.connect(lambda result: self._on_dlna_container_ready(loc, result))
+        self._async_sig = sig
+        threading.Thread(
+            target=lambda: sig.ready.emit(
+                dlna_mod.browse(loc.control_url, loc.container_id)
+            ),
+            daemon=True,
+        ).start()
+
+    def _on_dlna_container_ready(self, expected_loc: DlnaLocation, result) -> None:
+        if self._current is not expected_loc:
+            return
+        self._file_list.clear()
+        if result is None:
+            err = QListWidgetItem(self.tr("Cannot connect to server"))
+            err.setFlags(err.flags() & ~Qt.ItemFlag.ItemIsSelectable)
+            err.setForeground(QColor(MUTED))
+            self._file_list.addItem(err)
+            self._status_lbl.setText(self.tr("Cannot connect to server"))
+            return
+        entries: list = result
+        for entry in entries:
+            if entry.is_container:
+                icon = qta.icon("fa5s.folder", color=FOLDER_CLR)
+                child_loc = DlnaLocation(
+                    server_name=expected_loc.server_name,
+                    control_url=expected_loc.control_url,
+                    container_id=entry.id,
+                    title=entry.title,
+                    parent=expected_loc,
+                )
+                item = QListWidgetItem(icon, entry.title)
+                item.setData(Qt.ItemDataRole.UserRole, child_loc)
+            else:
+                mime = entry.mime_type
+                if mime.startswith("image/"):
+                    icon = qta.icon("fa5s.file-image", color=FILE_CLR)
+                elif mime.startswith("video/"):
+                    icon = qta.icon("fa5s.file-video", color=FILE_CLR)
+                elif mime.startswith("audio/"):
+                    icon = qta.icon("fa5s.file-audio", color=FILE_CLR)
+                else:
+                    icon = qta.icon("fa5s.file-alt", color=FILE_CLR)
+                item = QListWidgetItem(icon, entry.title)
+                item.setData(Qt.ItemDataRole.UserRole, entry)
+            self._file_list.addItem(item)
+
+        self._main_idx = 0
+        if self._file_list.count() > 0:
+            self._file_list.setCurrentRow(0)
+        n = len(entries)
+        self._status_lbl.setText(
+            self.tr("DLNA  ·  {n} item(s)").format(n=n) if n else self.tr("Empty directory")
+        )
+
+    @staticmethod
+    def _dlna_breadcrumb(loc: DlnaLocation) -> str:
+        parts: list[str] = []
+        cur: DlnaLocation | None = loc
+        while cur is not None:
+            if cur.container_id != "0":
+                parts.insert(0, cur.title)
+            cur = cur.parent
+        return " › ".join([loc.server_name] + parts)
+
+    # ─────────────────────────────────────────────────────────────────────
 
     def _icon_cols(self) -> int:
         viewport_w = self._file_list.viewport().width()
@@ -566,9 +827,10 @@ class FileBrowserWindow(QMainWindow):
             self._status_lbl.setText(msg)
             return
 
-        path: Path = item.data(Qt.ItemDataRole.UserRole)
-        if path is None:
+        data = item.data(Qt.ItemDataRole.UserRole)
+        if not isinstance(data, Path):
             return
+        path: Path = data
 
         try:
             st = path.stat()
