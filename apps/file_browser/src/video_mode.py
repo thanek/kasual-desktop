@@ -6,7 +6,7 @@ from urllib.request import urlopen
 
 import qtawesome as qta
 from PyQt6.QtCore import Qt, QRect, QTimer, QUrl, pyqtSignal
-from PyQt6.QtGui import QColor, QFont, QPainter, QPixmap
+from PyQt6.QtGui import QColor, QFont, QFontMetrics, QPainter, QPixmap
 from PyQt6.QtMultimedia import QAudioOutput, QMediaPlayer
 from PyQt6.QtMultimediaWidgets import QGraphicsVideoItem
 from PyQt6.QtWidgets import QFrame, QGraphicsScene, QGraphicsView, QVBoxLayout, QWidget
@@ -18,6 +18,9 @@ _BAR_H = 90
 _MARGIN = 64
 _AUDIO_CIRCLE_COLOR = QColor(70, 70, 70)
 _AUDIO_ICON_COLOR = QColor(25, 25, 25)
+_TITLE_BAR_H = 58
+_TITLE_BG = QColor(0, 0, 0, 170)
+_TITLE_FG = QColor(236, 239, 244)
 
 
 def _fmt_time(ms: int) -> str:
@@ -29,6 +32,39 @@ def _fmt_time(ms: int) -> str:
     return f"{m}:{s:02d}"
 
 
+_TITLE_PAD_X = 28
+_TITLE_PAD_Y = 12
+_TITLE_RADIUS = 24
+_CTRL_ICON_SIZE = 28
+_CTRL_ICON_CLR = "#eceff4"
+_ctrl_icon_cache: dict = {}
+
+
+def _ctrl_icon(name: str):
+    if name not in _ctrl_icon_cache:
+        _ctrl_icon_cache[name] = qta.icon(name, color=_CTRL_ICON_CLR)
+    return _ctrl_icon_cache[name]
+
+
+def _paint_title(painter: QPainter, w: int, text: str) -> None:
+    f = QFont()
+    f.setPointSize(15)
+    painter.setFont(f)
+    fm = QFontMetrics(f)
+    text_w = fm.horizontalAdvance(text)
+    text_h = fm.height()
+    box_w = text_w + 2 * _TITLE_PAD_X
+    box_h = text_h + 2 * _TITLE_PAD_Y
+    x = (w - box_w) // 2
+    y = _TITLE_PAD_Y
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+    painter.setBrush(_TITLE_BG)
+    painter.setPen(Qt.PenStyle.NoPen)
+    painter.drawRoundedRect(x, y, box_w, box_h, _TITLE_RADIUS, _TITLE_RADIUS)
+    painter.setPen(_TITLE_FG)
+    painter.drawText(QRect(x, y, box_w, box_h), Qt.AlignmentFlag.AlignCenter, text)
+
+
 def _paint_controls(painter: QPainter, w: int, h: int,
                     player: QMediaPlayer, audio: QAudioOutput) -> None:
     muted = audio.isMuted()
@@ -36,33 +72,37 @@ def _paint_controls(painter: QPainter, w: int, h: int,
     position = player.position()
     is_playing = player.playbackState() == QMediaPlayer.PlaybackState.PlayingState
 
-    bar_y = h - _BAR_H
-    painter.fillRect(QRect(0, bar_y, w, _BAR_H), _BAR_COLOR)
+    box_w = w // 2
+    box_x = (w - box_w) // 2
+    box_y = h - _BAR_H - _TITLE_PAD_Y
 
-    prog_y = bar_y + 14
-    prog_w = w - 2 * _MARGIN
-    painter.fillRect(QRect(_MARGIN, prog_y, prog_w, 5), QColor(255, 255, 255, 50))
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+    painter.setBrush(_BAR_COLOR)
+    painter.setPen(Qt.PenStyle.NoPen)
+    painter.drawRoundedRect(box_x, box_y, box_w, _BAR_H, _TITLE_RADIUS, _TITLE_RADIUS)
+
+    prog_x = box_x + _MARGIN
+    prog_y = box_y + 14
+    prog_w = box_w - 2 * _MARGIN
+    painter.fillRect(QRect(prog_x, prog_y, prog_w, 5), QColor(255, 255, 255, 50))
     if duration > 0:
         filled = int(prog_w * position / duration)
-        painter.fillRect(QRect(_MARGIN, prog_y, filled, 5), _ACCENT)
+        painter.fillRect(QRect(prog_x, prog_y, filled, 5), _ACCENT)
 
     f = QFont()
     f.setPointSize(14)
     painter.setFont(f)
     painter.setPen(QColor(236, 239, 244))
-    painter.drawText(QRect(_MARGIN, prog_y + 12, prog_w, 32),
+    painter.drawText(QRect(prog_x, prog_y + 12, prog_w, 32),
                      Qt.AlignmentFlag.AlignCenter,
                      f"{_fmt_time(position)}  /  {_fmt_time(duration)}")
 
-    f2 = QFont()
-    f2.setPointSize(22)
-    painter.setFont(f2)
-    painter.drawText(QRect(0, bar_y, _MARGIN, _BAR_H),
-                     Qt.AlignmentFlag.AlignCenter,
-                     "⏸" if is_playing else "▶")
-    painter.drawText(QRect(w - _MARGIN, bar_y, _MARGIN, _BAR_H),
-                     Qt.AlignmentFlag.AlignCenter,
-                     "🔇" if muted else "🔊")
+    s = _CTRL_ICON_SIZE
+    iy = box_y + (_BAR_H - s) // 2
+    _ctrl_icon("fa5s.pause" if is_playing else "fa5s.play").paint(
+        painter, QRect(box_x + (_MARGIN - s) // 2, iy, s, s))
+    _ctrl_icon("fa5s.volume-mute" if muted else "fa5s.volume-up").paint(
+        painter, QRect(box_x + box_w - _MARGIN + (_MARGIN - s) // 2, iy, s, s))
 
 
 class _VideoView(QGraphicsView):
@@ -72,6 +112,8 @@ class _VideoView(QGraphicsView):
         self._player = player
         self._audio = audio
         self._controls_visible = False
+        self._title_text = ""
+        self._title_visible = False
         self._is_audio = is_audio
         self._audio_pixmap: QPixmap | None = None
         if is_audio:
@@ -132,6 +174,8 @@ class _VideoView(QGraphicsView):
         painter.resetTransform()
         if self._is_audio:
             self._draw_audio_bg(painter)
+        if self._title_visible and self._title_text:
+            _paint_title(painter, self.viewport().width(), self._title_text)
         if self._controls_visible:
             _paint_controls(painter, self.viewport().width(), self.viewport().height(),
                             self._player, self._audio)
@@ -161,10 +205,16 @@ class VideoMode(QWidget):
         self._player.setSource(qurl)
         self._player.play()
 
+        self._title = ""
         self._hide_timer = QTimer(self)
         self._hide_timer.setSingleShot(True)
         self._hide_timer.setInterval(3000)
         self._hide_timer.timeout.connect(self._hide_controls)
+
+        self._title_timer = QTimer(self)
+        self._title_timer.setSingleShot(True)
+        self._title_timer.setInterval(3000)
+        self._title_timer.timeout.connect(self._hide_title)
 
         self._player.positionChanged.connect(
             lambda _: self._view.viewport().update() if self._view._controls_visible else None
@@ -241,6 +291,7 @@ class VideoMode(QWidget):
             self._player.pause()
             self._show_controls()
             self._hide_timer.stop()
+            self.show_title("")
         else:
             self._player.play()
             self._show_controls()
@@ -256,6 +307,18 @@ class VideoMode(QWidget):
         self._player.setPosition(pos)
         self._show_controls()
         self._restart_hide_timer_if_playing()
+
+    def show_title(self, name: str) -> None:
+        if name:
+            self._title = name
+        self._view._title_text = self._title
+        self._view._title_visible = True
+        self._view.viewport().update()
+        self._title_timer.start()
+
+    def _hide_title(self) -> None:
+        self._view._title_visible = False
+        self._view.viewport().update()
 
     def _show_controls(self) -> None:
         self._view._controls_visible = True

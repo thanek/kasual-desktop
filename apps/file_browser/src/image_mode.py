@@ -4,13 +4,18 @@ import threading
 from pathlib import Path
 from urllib.request import urlopen
 
-from PyQt6.QtCore import Qt, QBuffer, QIODeviceBase, QTimer, pyqtSignal
-from PyQt6.QtGui import QColor, QFont, QImageReader, QPainter, QPixmap, QTransform
+from PyQt6.QtCore import Qt, QBuffer, QIODeviceBase, QRect, QTimer, pyqtSignal
+from PyQt6.QtGui import QColor, QFont, QFontMetrics, QImageReader, QPainter, QPixmap, QTransform
 from PyQt6.QtWidgets import QApplication, QWidget
 
 
 _PAN_SPEED = 12.0
 _ZOOM_SPEED = 0.015
+_TITLE_BG = QColor(0, 0, 0, 170)
+_TITLE_FG = QColor(236, 239, 244)
+_TITLE_PAD_X = 28
+_TITLE_PAD_Y = 12
+_TITLE_RADIUS = 24
 
 
 class ImageMode(QWidget):
@@ -34,6 +39,13 @@ class ImageMode(QWidget):
             self._loading = True
             self._image_ready.connect(self._on_image_data)
             threading.Thread(target=self._fetch_url, args=(source,), daemon=True).start()
+
+        self._title_text = ""
+        self._title_visible = False
+        self._title_timer = QTimer(self)
+        self._title_timer.setSingleShot(True)
+        self._title_timer.setInterval(3000)
+        self._title_timer.timeout.connect(self._hide_title)
 
         self._timer = QTimer(self)
         self._timer.timeout.connect(self._tick)
@@ -68,6 +80,17 @@ class ImageMode(QWidget):
                 self._offset_x = 0.0
                 self._offset_y = 0.0
                 self._rebuild_scaled()
+        self.update()
+
+    def show_title(self, name: str) -> None:
+        if name:
+            self._title_text = name
+        self._title_visible = True
+        self.update()
+        self._title_timer.start()
+
+    def _hide_title(self) -> None:
+        self._title_visible = False
         self.update()
 
     def set_listener(self, listener) -> None:
@@ -192,3 +215,21 @@ class ImageMode(QWidget):
         x = (self.width() - self._scaled.width()) // 2 + int(self._offset_x)
         y = (self.height() - self._scaled.height()) // 2 + int(self._offset_y)
         painter.drawPixmap(x, y, self._scaled)
+        if self._title_visible and self._title_text:
+            f = QFont()
+            f.setPointSize(15)
+            painter.setFont(f)
+            fm = QFontMetrics(f)
+            text_w = fm.horizontalAdvance(self._title_text)
+            text_h = fm.height()
+            box_w = text_w + 2 * _TITLE_PAD_X
+            box_h = text_h + 2 * _TITLE_PAD_Y
+            x = (self.width() - box_w) // 2
+            y = _TITLE_PAD_Y
+            painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+            painter.setBrush(_TITLE_BG)
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.drawRoundedRect(x, y, box_w, box_h, _TITLE_RADIUS, _TITLE_RADIUS)
+            painter.setPen(_TITLE_FG)
+            painter.drawText(QRect(x, y, box_w, box_h), Qt.AlignmentFlag.AlignCenter,
+                             self._title_text)

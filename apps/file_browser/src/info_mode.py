@@ -106,3 +106,6 @@ class InfoMode(QWidget):
 
     def set_listener(self, listener) -> None:
         pass
+
+    def show_title(self, name: str) -> None:
+        pass

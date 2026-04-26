@@ -92,6 +92,27 @@ FOLDER_CLR = "#ebcb8b"
 FILE_CLR = "#81a1c1"
 
 
+_ICON_PX = 128
+
+
+def _dlna_file_icon(mime: str) -> QIcon:
+    if mime.startswith("image/"):
+        return qta.icon("fa5s.file-image", color=FILE_CLR)
+    if mime.startswith("video/"):
+        return qta.icon("fa5s.file-video", color=FILE_CLR)
+    if mime.startswith("audio/"):
+        return qta.icon("fa5s.file-audio", color=FILE_CLR)
+    return qta.icon("fa5s.file-alt", color=FILE_CLR)
+
+
+def _make_thumb_icon(pix: QPixmap) -> QIcon:
+    if pix.width() > _ICON_PX or pix.height() > _ICON_PX:
+        pix = pix.scaled(_ICON_PX, _ICON_PX,
+                         Qt.AspectRatioMode.KeepAspectRatio,
+                         Qt.TransformationMode.SmoothTransformation)
+    return QIcon(pix)
+
+
 def _sort_entries(entries: list, sort_key: str, folders_first: bool) -> list:
     dirs = [e for e in entries if e.is_dir()]
     files = [e for e in entries if not e.is_dir()]
@@ -164,6 +185,14 @@ def _load_sort_settings() -> tuple[dict, tuple[str, bool]]:
         return path_settings, dlna_sort
     except Exception:
         return {}, (SORT_NAME_ASC, True)
+
+
+def _fmt_size(size: float) -> str:
+    for unit in ("B", "KB", "MB", "GB", "TB"):
+        if size < 1024:
+            return f"{size:.1f} {unit}"
+        size /= 1024
+    return f"{size:.1f} PB"
 
 
 def _save_sort_settings(path_settings: dict, dlna_sort: tuple[str, bool]) -> None:
@@ -518,7 +547,7 @@ class FileBrowserWindow(QMainWindow):
         self._file_list.setGridSize(QSize(280, 240))
         self._file_list.setWrapping(True)
         self._file_list.setWordWrap(True)
-        self._file_list.setUniformItemSizes(True)
+        self._file_list.setUniformItemSizes(False)
         self._file_list.setStyleSheet(self._stylesheet_icon())
 
     def _apply_list_mode(self) -> None:
@@ -723,7 +752,7 @@ class FileBrowserWindow(QMainWindow):
             elif is_image(entry):
                 thumb = find_thumbnail(entry)
                 if thumb:
-                    icon = QIcon(QPixmap(str(thumb)))
+                    icon = _make_thumb_icon(QPixmap(str(thumb)))
                 else:
                     icon = qta.icon("fa5s.file-image", color=FILE_CLR)
                     mime, _ = mimetypes.guess_type(str(entry))
@@ -741,10 +770,7 @@ class FileBrowserWindow(QMainWindow):
             self._pending_thumbs = {u: r for u, _, r in needs_thumb}
             self._thumbnailer.request(uris, mimes)
 
-        self._main_idx = 0
-        if self._file_list.count() > 0:
-            self._file_list.setCurrentRow(0)
-        self._apply_focus_after(lambda d: isinstance(d, Path) and d.name == self._focus_after)
+        self._finalize_listing(lambda d: isinstance(d, Path) and d.name == self._focus_after)
         self._update_statusbar()
 
     def _apply_focus_after(self, predicate) -> None:
@@ -757,6 +783,37 @@ class FileBrowserWindow(QMainWindow):
                 self._file_list.setCurrentRow(row)
                 break
         self._focus_after = None
+
+    def _finalize_listing(self, predicate) -> None:
+        self._main_idx = 0
+        if self._file_list.count() > 0:
+            self._file_list.setCurrentRow(0)
+        self._apply_focus_after(predicate)
+
+    def _add_placeholder_item(self, text: str) -> None:
+        item = QListWidgetItem(text)
+        item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsSelectable)
+        item.setForeground(QColor(MUTED))
+        self._file_list.addItem(item)
+
+    def _remove_media_widget(self) -> None:
+        if self._stack.count() > 1:
+            old = self._stack.widget(1)
+            if isinstance(old, VideoMode):
+                old.stop()
+            self._stack.removeWidget(old)
+            old.deleteLater()
+
+    def _begin_dlna_browse(self, loc: DlnaLocation, breadcrumb_text: str,
+                           status_text: str) -> None:
+        self._current = loc
+        self._pending_thumbs.clear()
+        self._breadcrumb.set_label(breadcrumb_text)
+        self._refresh_nav_button_state()
+        self._refresh_sidebar_style()
+        self._file_list.clear()
+        self._add_placeholder_item(self.tr("Loading..."))
+        self._status_lbl.setText(status_text)
 
     def _on_thumbnails_ready(self, uris: list) -> None:
         for uri in uris:
@@ -771,7 +828,7 @@ class FileBrowserWindow(QMainWindow):
                 continue
             thumb = find_thumbnail(path)
             if thumb:
-                item.setIcon(QIcon(QPixmap(str(thumb))))
+                item.setIcon(_make_thumb_icon(QPixmap(str(thumb))))
 
     def _refresh_nav_button_state(self) -> None:
         self._topbar_buttons[1].setEnabled(bool(self._history))
@@ -844,7 +901,7 @@ class FileBrowserWindow(QMainWindow):
         self._listener = listener
 
     def _open_media(self, path: Path) -> None:
-        self._open_media_mode(_media_mode_for(path))
+        self._open_media_mode(_media_mode_for(path), path.name)
 
     def _open_dlna_item(self, entry) -> None:
         if not entry.resource_url:
@@ -859,31 +916,23 @@ class FileBrowserWindow(QMainWindow):
                              thumbnail=entry.thumbnail_url or None)
         else:
             return
-        self._open_media_mode(mode)
+        self._open_media_mode(mode, entry.title)
 
-    def _open_media_mode(self, mode) -> None:
-        if self._stack.count() > 1:
-            old = self._stack.widget(1)
-            if isinstance(old, VideoMode):
-                old.stop()
-            self._stack.removeWidget(old)
-            old.deleteLater()
+    def _open_media_mode(self, mode, title: str = "") -> None:
+        self._remove_media_widget()
         if self._listener:
             mode.set_listener(self._listener)
         self._media_mode = mode
         self._stack.addWidget(mode)
         self._stack.setCurrentIndex(1)
+        if title:
+            mode.show_title(title)
         if self._listener:
             self._listener.set_mode('media')
 
     def _close_media(self) -> None:
-        if self._stack.count() > 1:
-            old = self._stack.widget(1)
-            if isinstance(old, VideoMode):
-                old.stop()
-            self._stack.removeWidget(old)
-            old.deleteLater()
-            self._media_mode = None
+        self._remove_media_widget()
+        self._media_mode = None
         self._stack.setCurrentIndex(0)
         if self._listener:
             self._listener.set_mode('browse')
@@ -937,10 +986,7 @@ class FileBrowserWindow(QMainWindow):
                 return
             self._status_lbl.setText(self.tr("DLNA  ·  Refreshing…"))
         else:
-            searching = QListWidgetItem(self.tr("Searching for DLNA servers..."))
-            searching.setFlags(searching.flags() & ~Qt.ItemFlag.ItemIsSelectable)
-            searching.setForeground(QColor(MUTED))
-            self._file_list.addItem(searching)
+            self._add_placeholder_item(self.tr("Searching for DLNA servers..."))
             self._status_lbl.setText(self.tr("Searching for DLNA servers..."))
 
         sig = _DlnaSignal()
@@ -971,14 +1017,8 @@ class FileBrowserWindow(QMainWindow):
                     daemon=True,
                 ).start()
 
-        n = len(servers)
-        self._status_lbl.setText(self.tr("DLNA  ·  {n} server(s) found").format(n=n))
-        if n > 0:
-            self._main_idx = 0
-            self._file_list.setCurrentRow(0)
-            self._apply_focus_after(
-                lambda d: isinstance(d, DlnaServer) and d.name == self._focus_after
-            )
+        self._status_lbl.setText(self.tr("DLNA  ·  {n} server(s) found").format(n=len(servers)))
+        self._finalize_listing(lambda d: isinstance(d, DlnaServer) and d.name == self._focus_after)
 
     def _on_server_icon(self, row: int, data: bytes) -> None:
         if self._current is not _DLNA or not data:
@@ -989,11 +1029,8 @@ class FileBrowserWindow(QMainWindow):
         pix = QPixmap()
         if not pix.loadFromData(data):
             return
-        if pix.width() > 128 or pix.height() > 128:
-            pix = pix.scaled(128, 128,
-                             Qt.AspectRatioMode.KeepAspectRatio,
-                             Qt.TransformationMode.SmoothTransformation)
-        item.setIcon(QIcon(pix))
+        item.setIcon(_make_thumb_icon(pix))
+        self._file_list.viewport().update()
 
     def _on_dlna_results(self, servers: list) -> None:
         if self._current is not _DLNA:
@@ -1001,42 +1038,18 @@ class FileBrowserWindow(QMainWindow):
         _save_dlna_cache(servers)
         self._file_list.clear()
         if not servers:
-            item = QListWidgetItem(
-                self.tr("No DLNA servers found on your network")
-            )
-            item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsSelectable)
-            item.setForeground(QColor(MUTED))
-            self._file_list.addItem(item)
-            self._status_lbl.setText(
-                self.tr("No DLNA servers found on your network")
-            )
+            self._add_placeholder_item(self.tr("No DLNA servers found on your network"))
+            self._status_lbl.setText(self.tr("No DLNA servers found on your network"))
         else:
             self._populate_dlna_server_list(servers)
 
     def _enter_dlna_server(self, server: DlnaServer) -> None:
         self._history.append(self._current)
         self._future.clear()
-
-        # Placeholder location — control_url filled in by background thread
         placeholder = DlnaLocation(
-            server_name=server.name,
-            control_url="",
-            container_id="0",
-            title="",
-            parent=None,
+            server_name=server.name, control_url="", container_id="0", title="", parent=None,
         )
-        self._current = placeholder
-        self._pending_thumbs.clear()
-        self._breadcrumb.set_label(server.name)
-        self._refresh_nav_button_state()
-        self._refresh_sidebar_style()
-
-        self._file_list.clear()
-        loading = QListWidgetItem(self.tr("Loading..."))
-        loading.setFlags(loading.flags() & ~Qt.ItemFlag.ItemIsSelectable)
-        loading.setForeground(QColor(MUTED))
-        self._file_list.addItem(loading)
-        self._status_lbl.setText(server.name)
+        self._begin_dlna_browse(placeholder, server.name, server.name)
 
         sig = _AsyncResult()
         sig.ready.connect(lambda result: self._on_dlna_container_ready(placeholder, result))
@@ -1058,18 +1071,7 @@ class FileBrowserWindow(QMainWindow):
         if add_to_history and self._current is not loc:
             self._history.append(self._current)
             self._future.clear()
-        self._current = loc
-        self._pending_thumbs.clear()
-        self._breadcrumb.set_label(self._dlna_breadcrumb(loc))
-        self._refresh_nav_button_state()
-        self._refresh_sidebar_style()
-
-        self._file_list.clear()
-        loading = QListWidgetItem(self.tr("Loading..."))
-        loading.setFlags(loading.flags() & ~Qt.ItemFlag.ItemIsSelectable)
-        loading.setForeground(QColor(MUTED))
-        self._file_list.addItem(loading)
-        self._status_lbl.setText(loc.title or loc.server_name)
+        self._begin_dlna_browse(loc, self._dlna_breadcrumb(loc), loc.title or loc.server_name)
 
         sig = _AsyncResult()
         sig.ready.connect(lambda result: self._on_dlna_container_ready(loc, result))
@@ -1087,10 +1089,7 @@ class FileBrowserWindow(QMainWindow):
             return
         self._file_list.clear()
         if result is None:
-            err = QListWidgetItem(self.tr("Cannot connect to server"))
-            err.setFlags(err.flags() & ~Qt.ItemFlag.ItemIsSelectable)
-            err.setForeground(QColor(MUTED))
-            self._file_list.addItem(err)
+            self._add_placeholder_item(self.tr("Cannot connect to server"))
             self._status_lbl.setText(self.tr("Cannot connect to server"))
             return
         self._dlna_browse_gen += 1
@@ -1119,16 +1118,7 @@ class FileBrowserWindow(QMainWindow):
                 item = QListWidgetItem(icon, entry.title)
                 item.setData(Qt.ItemDataRole.UserRole, child_loc)
             else:
-                mime = entry.mime_type
-                if mime.startswith("image/"):
-                    icon = qta.icon("fa5s.file-image", color=FILE_CLR)
-                elif mime.startswith("video/"):
-                    icon = qta.icon("fa5s.file-video", color=FILE_CLR)
-                elif mime.startswith("audio/"):
-                    icon = qta.icon("fa5s.file-audio", color=FILE_CLR)
-                else:
-                    icon = qta.icon("fa5s.file-alt", color=FILE_CLR)
-                item = QListWidgetItem(icon, entry.title)
+                item = QListWidgetItem(_dlna_file_icon(entry.mime_type), entry.title)
                 item.setData(Qt.ItemDataRole.UserRole, entry)
             self._file_list.addItem(item)
             if entry.thumbnail_url:
@@ -1138,10 +1128,7 @@ class FileBrowserWindow(QMainWindow):
                     daemon=True,
                 ).start()
 
-        self._main_idx = 0
-        if self._file_list.count() > 0:
-            self._file_list.setCurrentRow(0)
-        self._apply_focus_after(
+        self._finalize_listing(
             lambda d: isinstance(d, DlnaLocation) and d.container_id == self._focus_after
         )
         n = len(entries)
@@ -1158,11 +1145,8 @@ class FileBrowserWindow(QMainWindow):
         pix = QPixmap()
         if not pix.loadFromData(data):
             return
-        if pix.width() > 256 or pix.height() > 256:
-            pix = pix.scaled(256, 256,
-                             Qt.AspectRatioMode.KeepAspectRatio,
-                             Qt.TransformationMode.SmoothTransformation)
-        item.setIcon(QIcon(pix))
+        item.setIcon(_make_thumb_icon(pix))
+        self._file_list.viewport().update()
 
     @staticmethod
     def _dlna_breadcrumb(loc: DlnaLocation) -> str:
@@ -1202,7 +1186,7 @@ class FileBrowserWindow(QMainWindow):
             else:
                 mime, _ = mimetypes.guess_type(str(path))
                 type_str = mime or self.tr("unknown type")
-                size_str = self._fmt_size(st.st_size)
+                size_str = _fmt_size(st.st_size)
                 mtime = datetime.datetime.fromtimestamp(st.st_mtime).strftime("%d.%m.%Y  %H:%M")
                 self._status_lbl.setText(
                     self.tr("File  ·  {name} ({type})  ·  {size}  ·  Modified: {mtime}").format(
@@ -1211,14 +1195,6 @@ class FileBrowserWindow(QMainWindow):
                 )
         except OSError:
             self._status_lbl.setText(path.name)
-
-    @staticmethod
-    def _fmt_size(size: float) -> str:
-        for unit in ("B", "KB", "MB", "GB", "TB"):
-            if size < 1024:
-                return f"{size:.1f} {unit}"
-            size /= 1024
-        return f"{size:.1f} PB"
 
     # ── Focus ─────────────────────────────────────────────────────────────────
 
@@ -1236,6 +1212,128 @@ class FileBrowserWindow(QMainWindow):
 
     # ── Keyboard support (UInput → PyQt6) ──────────────────────────────────
 
+    def _handle_key_sort_overlay(self, key: int) -> None:
+        if key == Qt.Key.Key_Up:
+            if self._sort_overlay_idx > 0:
+                self._sort_overlay_idx -= 1
+                self._refresh_sort_overlay_style()
+                sound_player.play("cursor")
+        elif key == Qt.Key.Key_Down:
+            if self._sort_overlay_idx < len(self._sort_overlay_items) - 1:
+                self._sort_overlay_idx += 1
+                self._refresh_sort_overlay_style()
+                sound_player.play("cursor")
+        elif key in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
+            self._activate_sort_overlay_item()
+            sound_player.play("select")
+        elif key in (Qt.Key.Key_Escape, Qt.Key.Key_Left):
+            self._hide_sort_overlay()
+            sound_player.play("cursor")
+
+    def _handle_key_topbar(self, key: int) -> None:
+        if key == Qt.Key.Key_Left:
+            self._topbar_idx = (self._topbar_idx - 1) % len(self._topbar_buttons)
+            self._update_focus()
+            sound_player.play("cursor")
+        elif key == Qt.Key.Key_Right:
+            self._topbar_idx = (self._topbar_idx + 1) % len(self._topbar_buttons)
+            self._update_focus()
+            sound_player.play("cursor")
+        elif key in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
+            self._topbar_buttons[self._topbar_idx].click()
+            sound_player.play("select")
+        elif key in (Qt.Key.Key_Down, Qt.Key.Key_Escape):
+            self._focus = "main"
+            self._update_focus()
+            sound_player.play("cursor")
+
+    def _handle_key_sidebar(self, key: int) -> None:
+        if key == Qt.Key.Key_Up:
+            if self._sidebar_idx > 0:
+                self._sidebar_idx -= 1
+                self._update_focus()
+                _, _, path = BOOKMARKS[self._sidebar_idx]
+                self._navigate(path)
+                sound_player.play("cursor")
+            else:
+                self._focus = "topbar"
+                self._topbar_idx = 0
+                self._update_focus()
+                sound_player.play("cursor")
+        elif key == Qt.Key.Key_Down:
+            if self._sidebar_idx < len(self._sidebar_buttons) - 1:
+                self._sidebar_idx += 1
+                self._update_focus()
+                _, _, path = BOOKMARKS[self._sidebar_idx]
+                self._navigate(path)
+                sound_player.play("cursor")
+        elif key in (Qt.Key.Key_Return, Qt.Key.Key_Enter, Qt.Key.Key_Right):
+            self._focus = "main"
+            self._update_focus()
+            sound_player.play("cursor")
+        elif key in (Qt.Key.Key_Escape, Qt.Key.Key_U):
+            self.go_up()
+            sound_player.play("select")
+        elif key == Qt.Key.Key_H:
+            self.go_home()
+            sound_player.play("select")
+        elif key == Qt.Key.Key_Backspace:
+            self.go_back()
+            sound_player.play("select")
+        elif key == Qt.Key.Key_F:
+            self.go_forward()
+            sound_player.play("select")
+
+    def _handle_key_main(self, key: int) -> None:
+        step = self._icon_cols() if self._icon_mode else 1
+        if key == Qt.Key.Key_Up:
+            if self._main_idx >= step:
+                self._main_idx -= step
+                self._file_list.setCurrentRow(self._main_idx)
+                sound_player.play("cursor")
+            else:
+                self._focus = "topbar"
+                self._topbar_idx = 0
+                self._update_focus()
+                sound_player.play("cursor")
+        elif key == Qt.Key.Key_Down:
+            if self._main_idx + step < self._file_list.count():
+                self._main_idx += step
+                self._file_list.setCurrentRow(self._main_idx)
+                sound_player.play("cursor")
+        elif key == Qt.Key.Key_Left:
+            if self._icon_mode and self._main_idx > 0 and self._main_idx % step != 0:
+                self._main_idx -= 1
+                self._file_list.setCurrentRow(self._main_idx)
+                sound_player.play("cursor")
+            else:
+                self._focus = "sidebar"
+                self._update_focus()
+                sound_player.play("cursor")
+        elif key == Qt.Key.Key_Right:
+            if self._icon_mode and self._main_idx < self._file_list.count() - 1:
+                self._main_idx += 1
+                self._file_list.setCurrentRow(self._main_idx)
+                sound_player.play("cursor")
+        elif key in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
+            self._activate_current_item()
+            sound_player.play("select")
+        elif key == Qt.Key.Key_S:
+            self._show_sort_overlay()
+            sound_player.play("cursor")
+        elif key in (Qt.Key.Key_Escape, Qt.Key.Key_U):
+            self.go_up()
+            sound_player.play("select")
+        elif key == Qt.Key.Key_H:
+            self.go_home()
+            sound_player.play("select")
+        elif key == Qt.Key.Key_Backspace:
+            self.go_back()
+            sound_player.play("select")
+        elif key == Qt.Key.Key_F:
+            self.go_forward()
+            sound_player.play("select")
+
     def keyPressEvent(self, event: QKeyEvent) -> None:
         if self._stack.currentIndex() == 1:
             key = event.key()
@@ -1250,134 +1348,14 @@ class FileBrowserWindow(QMainWindow):
             return
 
         key = event.key()
-
         if self._focus == "sort_overlay":
-            if key == Qt.Key.Key_Up:
-                if self._sort_overlay_idx > 0:
-                    self._sort_overlay_idx -= 1
-                    self._refresh_sort_overlay_style()
-                    sound_player.play("cursor")
-            elif key == Qt.Key.Key_Down:
-                if self._sort_overlay_idx < len(self._sort_overlay_items) - 1:
-                    self._sort_overlay_idx += 1
-                    self._refresh_sort_overlay_style()
-                    sound_player.play("cursor")
-            elif key in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
-                self._activate_sort_overlay_item()
-                sound_player.play("select")
-            elif key in (Qt.Key.Key_Escape, Qt.Key.Key_Left):
-                self._hide_sort_overlay()
-                sound_player.play("cursor")
-            return
-
-        if self._focus == "topbar":
-            if key == Qt.Key.Key_Left:
-                self._topbar_idx = (self._topbar_idx - 1) % len(self._topbar_buttons)
-                self._update_focus()
-                sound_player.play("cursor")
-            elif key == Qt.Key.Key_Right:
-                self._topbar_idx = (self._topbar_idx + 1) % len(self._topbar_buttons)
-                self._update_focus()
-                sound_player.play("cursor")
-            elif key in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
-                self._topbar_buttons[self._topbar_idx].click()
-                sound_player.play("select")
-            elif key in (Qt.Key.Key_Down, Qt.Key.Key_Escape):
-                self._focus = "main"
-                self._update_focus()
-                sound_player.play("cursor")
-
+            self._handle_key_sort_overlay(key)
+        elif self._focus == "topbar":
+            self._handle_key_topbar(key)
         elif self._focus == "sidebar":
-            if key == Qt.Key.Key_Up:
-                if self._sidebar_idx > 0:
-                    self._sidebar_idx -= 1
-                    self._update_focus()
-                    _, _, path = BOOKMARKS[self._sidebar_idx]
-                    self._navigate(path)
-                    sound_player.play("cursor")
-                else:
-                    self._focus = "topbar"
-                    self._topbar_idx = 0
-                    self._update_focus()
-                    sound_player.play("cursor")
-            elif key == Qt.Key.Key_Down:
-                if self._sidebar_idx < len(self._sidebar_buttons) - 1:
-                    self._sidebar_idx += 1
-                    self._update_focus()
-                    _, _, path = BOOKMARKS[self._sidebar_idx]
-                    self._navigate(path)
-                    sound_player.play("cursor")
-            elif key in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
-                self._focus = "main"
-                self._update_focus()
-                sound_player.play("cursor")
-            elif key == Qt.Key.Key_Right:
-                self._focus = "main"
-                self._update_focus()
-                sound_player.play("cursor")
-            elif key in (Qt.Key.Key_Escape, Qt.Key.Key_U):
-                self.go_up()
-                sound_player.play("select")
-            elif key == Qt.Key.Key_H:
-                self.go_home()
-                sound_player.play("select")
-            elif key == Qt.Key.Key_Backspace:
-                self.go_back()
-                sound_player.play("select")
-            elif key == Qt.Key.Key_F:
-                self.go_forward()
-                sound_player.play("select")
-
+            self._handle_key_sidebar(key)
         elif self._focus == "main":
-            step = self._icon_cols() if self._icon_mode else 1
-            if key == Qt.Key.Key_Up:
-                if self._main_idx >= step:
-                    self._main_idx -= step
-                    self._file_list.setCurrentRow(self._main_idx)
-                    sound_player.play("cursor")
-                else:
-                    self._focus = "topbar"
-                    self._topbar_idx = 0
-                    self._update_focus()
-                    sound_player.play("cursor")
-            elif key == Qt.Key.Key_Down:
-                if self._main_idx + step < self._file_list.count():
-                    self._main_idx += step
-                    self._file_list.setCurrentRow(self._main_idx)
-                    sound_player.play("cursor")
-            elif key == Qt.Key.Key_Left:
-                if self._icon_mode and self._main_idx > 0 and self._main_idx % step != 0:
-                    self._main_idx -= 1
-                    self._file_list.setCurrentRow(self._main_idx)
-                    sound_player.play("cursor")
-                else:
-                    self._focus = "sidebar"
-                    self._update_focus()
-                    sound_player.play("cursor")
-            elif key == Qt.Key.Key_Right:
-                if self._icon_mode and self._main_idx < self._file_list.count() - 1:
-                    self._main_idx += 1
-                    self._file_list.setCurrentRow(self._main_idx)
-                    sound_player.play("cursor")
-            elif key in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
-                self._activate_current_item()
-                sound_player.play("select")
-            elif key == Qt.Key.Key_S:
-                self._show_sort_overlay()
-                sound_player.play("cursor")
-            elif key in (Qt.Key.Key_Escape, Qt.Key.Key_U):
-                self.go_up()
-                sound_player.play("select")
-            elif key == Qt.Key.Key_H:
-                self.go_home()
-                sound_player.play("select")
-            elif key == Qt.Key.Key_Backspace:
-                self.go_back()
-                sound_player.play("select")
-            elif key == Qt.Key.Key_F:
-                self.go_forward()
-                sound_player.play("select")
-
+            self._handle_key_main(key)
         super().keyPressEvent(event)
 
 
