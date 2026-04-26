@@ -789,6 +789,8 @@ class FileBrowserWindow(QMainWindow):
         if self._file_list.count() > 0:
             self._file_list.setCurrentRow(0)
         self._apply_focus_after(predicate)
+        if self._focus != "main":
+            self._file_list.clearSelection()
 
     def _add_placeholder_item(self, text: str) -> None:
         item = QListWidgetItem(text)

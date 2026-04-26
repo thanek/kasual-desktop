@@ -65,7 +65,6 @@ class InfoMode(QWidget):
         card.setStyleSheet("""
             QFrame {
                 background-color: #161616;
-                border: 1px solid #2a2a2a;
                 border-radius: 10px;
             }
         """)
@@ -80,6 +79,7 @@ class InfoMode(QWidget):
             (self.tr("Modified:"), mtime),
         ):
             row = QWidget()
+            row.setStyleSheet("background-color: #161616;")
             row_layout = QHBoxLayout(row)
             row_layout.setContentsMargins(0, 0, 0, 0)
             lbl = QLabel(label)
