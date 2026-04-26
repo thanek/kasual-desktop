@@ -110,6 +110,14 @@ def _make_thumb_icon(pix: QPixmap) -> QIcon:
         pix = pix.scaled(_ICON_PX, _ICON_PX,
                          Qt.AspectRatioMode.KeepAspectRatio,
                          Qt.TransformationMode.SmoothTransformation)
+    if pix.width() != _ICON_PX or pix.height() != _ICON_PX:
+        canvas = QPixmap(_ICON_PX, _ICON_PX)
+        canvas.fill(Qt.GlobalColor.transparent)
+        from PyQt6.QtGui import QPainter
+        p = QPainter(canvas)
+        p.drawPixmap((_ICON_PX - pix.width()) // 2, _ICON_PX - pix.height(), pix)
+        p.end()
+        pix = canvas
     return QIcon(pix)
 
 

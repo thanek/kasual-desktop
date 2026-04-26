@@ -1,8 +1,28 @@
 """VIDEO mode — fullscreen video playback."""
 
+import json
+import os
 import threading
 from pathlib import Path
 from urllib.request import urlopen
+
+_CACHE_DIR = Path(os.environ.get("XDG_CACHE_HOME", Path.home() / ".cache")) / "kasual"
+_VIDEO_SETTINGS_FILE = _CACHE_DIR / "file_browser_video_settings.json"
+
+
+def _load_video_settings() -> dict:
+    try:
+        return json.loads(_VIDEO_SETTINGS_FILE.read_text())
+    except Exception:
+        return {}
+
+
+def _save_video_settings(settings: dict) -> None:
+    try:
+        _CACHE_DIR.mkdir(parents=True, exist_ok=True)
+        _VIDEO_SETTINGS_FILE.write_text(json.dumps(settings))
+    except Exception:
+        pass
 
 import qtawesome as qta
 from PyQt6.QtCore import Qt, QRect, QTimer, QUrl, pyqtSignal
@@ -194,6 +214,7 @@ class VideoMode(QWidget):
         self._audio = QAudioOutput(self)
         self._player = QMediaPlayer(self)
         self._player.setAudioOutput(self._audio)
+        self._audio.setMuted(_load_video_settings().get("muted", False))
 
         self._view = _VideoView(self._player, self._audio, self, is_audio=is_audio)
         layout.addWidget(self._view)
@@ -299,6 +320,7 @@ class VideoMode(QWidget):
 
     def _toggle_mute(self) -> None:
         self._audio.setMuted(not self._audio.isMuted())
+        _save_video_settings({"muted": self._audio.isMuted()})
         self._show_controls()
         self._restart_hide_timer_if_playing()
 
