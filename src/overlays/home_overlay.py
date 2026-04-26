@@ -6,7 +6,6 @@ from PyQt6.QtCore import Qt, QCoreApplication, QT_TRANSLATE_NOOP
 from PyQt6.QtGui import QColor, QPainter, QKeyEvent
 from PyQt6.QtWidgets import (
     QWidget, QPushButton, QVBoxLayout, QLabel,
-    QGraphicsDropShadowEffect,
 )
 
 from audio import sound_player
@@ -105,11 +104,7 @@ class HomeOverlay(QWidget):
         self._buttons_layout.setSpacing(8)
         self._card_layout.addWidget(self._buttons_container)
 
-        shadow = QGraphicsDropShadowEffect(self._card)
-        shadow.setOffset(0, 10)
-        shadow.setColor(QColor(0, 0, 0, 220))
-        shadow.setBlurRadius(50)
-        self._card.setGraphicsEffect(shadow)
+        styles.apply_card_shadow(self._card, offset_y=10, blur=50, alpha=220)
 
         outer.addWidget(self._card)
 

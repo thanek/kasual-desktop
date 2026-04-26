@@ -2,10 +2,9 @@ import logging
 from typing import Callable
 
 from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QColor, QKeyEvent
+from PyQt6.QtGui import QKeyEvent
 from PyQt6.QtWidgets import (
-    QPushButton, QLabel, QHBoxLayout, QVBoxLayout,
-    QGraphicsDropShadowEffect, QWidget,
+    QPushButton, QLabel, QHBoxLayout, QVBoxLayout, QWidget,
 )
 
 from audio import sound_player
@@ -39,7 +38,9 @@ class ConfirmDialog(BaseOverlay):
         outer.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         card = QWidget()
-        card.setStyleSheet("background-color: #2e3440; border-radius: 12px;")
+        card.setStyleSheet(
+            f"background-color: {styles.COLOR_CARD_BG}; border-radius: {styles.CARD_RADIUS_PX}px;"
+        )
         card.setFixedWidth(680)
 
         layout = QVBoxLayout(card)
@@ -65,11 +66,7 @@ class ConfirmDialog(BaseOverlay):
         btn_row.addWidget(self._btn_no)
         layout.addLayout(btn_row)
 
-        shadow = QGraphicsDropShadowEffect(card)
-        shadow.setOffset(0, 8)
-        shadow.setColor(QColor(0, 0, 0, 200))
-        shadow.setBlurRadius(40)
-        card.setGraphicsEffect(shadow)
+        styles.apply_card_shadow(card)
 
         outer.addWidget(card)
         self._refresh_buttons()

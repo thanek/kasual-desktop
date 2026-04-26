@@ -2,8 +2,7 @@
 Testy jednostkowe dla WindowIconResolver (desktop/window_icons.py).
 
 Testujemy:
-  - _icon_name_from_desktop: parsowanie pola Icon= z pliku .desktop
-  - resolve_name:            wyszukiwanie Name= w katalogu XDG
+  - resolve_name: wyszukiwanie Name= w katalogu XDG
 """
 
 import os
@@ -19,41 +18,6 @@ def _write_desktop(dir_path: str, filename: str, content: str) -> str:
     with open(path, "w", encoding="utf-8") as f:
         f.write(textwrap.dedent(content))
     return path
-
-
-# ── _icon_name_from_desktop ───────────────────────────────────────────────────
-
-class TestIconNameFromDesktop:
-    def test_returns_icon_value(self, tmp_path):
-        p = _write_desktop(str(tmp_path), "app.desktop", """\
-            [Desktop Entry]
-            Name=MyApp
-            Icon=myapp-icon
-        """)
-        assert WindowIconResolver._icon_name_from_desktop(p) == "myapp-icon"
-
-    def test_returns_absolute_path_icon(self, tmp_path):
-        p = _write_desktop(str(tmp_path), "snap.desktop", """\
-            [Desktop Entry]
-            Name=SnapApp
-            Icon=/snap/myapp/current/icon.png
-        """)
-        assert WindowIconResolver._icon_name_from_desktop(p) == "/snap/myapp/current/icon.png"
-
-    def test_returns_none_when_no_icon_key(self, tmp_path):
-        p = _write_desktop(str(tmp_path), "noicon.desktop", """\
-            [Desktop Entry]
-            Name=NoIcon
-        """)
-        assert WindowIconResolver._icon_name_from_desktop(p) is None
-
-    def test_returns_none_for_nonexistent_file(self):
-        assert WindowIconResolver._icon_name_from_desktop("/nonexistent/path/app.desktop") is None
-
-    def test_returns_none_for_empty_file(self, tmp_path):
-        p = str(tmp_path / "empty.desktop")
-        open(p, "w").close()
-        assert WindowIconResolver._icon_name_from_desktop(p) is None
 
 
 # ── resolve_name ──────────────────────────────────────────────────────────────

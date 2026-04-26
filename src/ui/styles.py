@@ -3,6 +3,31 @@ COLOR_BG_DARK  = "#0b140e"
 COLOR_TEXT     = "white"
 COLOR_TOPBAR   = "rgba(15, 17, 25, 210)"
 COLOR_RUNNING  = "#a3be8c"
+COLOR_CARD_BG  = "#2e3440"
+CARD_RADIUS_PX = 12
+
+
+def truncate(text: str, max_len: int) -> str:
+    return text[:max_len - 1] + '…' if len(text) > max_len else text
+
+
+def apply_card_shadow(
+    widget,
+    *,
+    offset_x: int = 0,
+    offset_y: int = 8,
+    blur: int = 40,
+    alpha: int = 200,
+    color: str | None = None,
+) -> None:
+    from PyQt6.QtGui import QColor
+    from PyQt6.QtWidgets import QGraphicsDropShadowEffect
+
+    effect = QGraphicsDropShadowEffect(widget)
+    effect.setOffset(offset_x, offset_y)
+    effect.setColor(QColor(color) if color is not None else QColor(0, 0, 0, alpha))
+    effect.setBlurRadius(blur)
+    widget.setGraphicsEffect(effect)
 
 
 def tile_normal(color: str) -> str:

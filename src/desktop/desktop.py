@@ -12,7 +12,7 @@ from PyQt6.QtWidgets import (
 )
 
 from audio import sound_player
-from input.gamepad_watcher import GamepadWatcher
+from input.gamepad_watcher import GamepadWatcher, BTN_MODE_CLICK
 from overlays.base_overlay import BaseOverlay
 from overlays.confirm_dialog import ConfirmDialog
 from overlays.info_dialog import InfoDialog
@@ -145,23 +145,17 @@ class Desktop(QWidget):
         sound_player.play("select")
         if app['type'] == 'app':
             idx = app['id']
-            trigger = self._apps[idx].get("recall_menu_trigger", "BTN_MODE_CLICK")
+            trigger = self._apps[idx].get("recall_menu_trigger", BTN_MODE_CLICK)
             self._gamepad.set_app_btn_mode_trigger(trigger)
-            pid = self._app_manager.running_pid(idx)
-            all_pids = set(self._app_manager.all_running_pids())
-            if pid:
-                self._wm.activate_windows_for_pids({pid})
-            other_pids = all_pids - ({pid} if pid else set())
-            if other_pids:
-                self._wm.minimize_windows_for_pids(other_pids)
+            self._arrange_windows(self._app_manager.running_pid(idx))
         else:
-            self._gamepad.set_app_btn_mode_trigger("BTN_MODE_CLICK")
+            self._gamepad.set_app_btn_mode_trigger(BTN_MODE_CLICK)
             self._wm.activate_window(app['id'])
         self._gamepad.pop_handler(self._handle_pad)
         self.hide()
 
     def request_close_app(self, app) -> None:
-        display = app['name'][:39] + '…' if len(app['name']) > 40 else app['name']
+        display = styles.truncate(app['name'], 40)
 
         def _confirmed() -> None:
             self._restore_desktop_view()
@@ -316,22 +310,34 @@ class Desktop(QWidget):
 
     # ── Dynamic tiles (currently open windows) ─────────────────────────────
 
+    def _clear_dynamic_tiles(self) -> None:
+        for _, _, tile in self._dynamic_tiles:
+            self._tile_layout.removeWidget(tile)
+            tile.deleteLater()
+        self._dynamic_tiles.clear()
+        if self._dyn_separator is not None:
+            self._tile_layout.removeWidget(self._dyn_separator)
+            self._dyn_separator.deleteLater()
+            self._dyn_separator = None
+
+    def _check_active_dyn_gone(self) -> None:
+        """If the active dynamic window disappeared (closed by the app) → show desktop."""
+        if self._active_context is not None and self._active_context.get('type') == 'dyn':
+            active_ids = {wid for wid, _, _ in self._dynamic_tiles}
+            if self._active_context['id'] not in active_ids:
+                self._active_context = None
+                if not self.isVisible():
+                    self._gamepad.push_handler(self._handle_pad)
+                    self.showFullScreen()
+                    self.activateWindow()
+
     def _rebuild_dynamic_tiles(self, windows: list[dict]) -> None:
         """Rebuilds the dynamic tile section based on the list from KWin.
 
         Filters out windows belonging to the application launched by AppManager —
         they are already represented by a static tile.
         """
-        # Remove old dynamic tiles and separator
-        for _, _, tile in self._dynamic_tiles:
-            self._tile_layout.removeWidget(tile)
-            tile.deleteLater()
-        self._dynamic_tiles.clear()
-
-        if self._dyn_separator is not None:
-            self._tile_layout.removeWidget(self._dyn_separator)
-            self._dyn_separator.deleteLater()
-            self._dyn_separator = None
+        self._clear_dynamic_tiles()
 
         # Exclude windows belonging to any process group of our running applications.
         # start_new_session=True → child's pgid == its pid, so all
@@ -371,8 +377,7 @@ class Desktop(QWidget):
                 combined = f"{app_name} ({full_title})"
             else:
                 combined = app_name or full_title
-            display_title = (combined[:_DYN_TILE_MAX_TITLE - 1] + '…'
-                             if len(combined) > _DYN_TILE_MAX_TITLE else combined)
+            display_title = styles.truncate(combined, _DYN_TILE_MAX_TITLE)
             app_icon = self._icon_resolver.resolve_icon(
                 w.get('desktopFile', ''),
                 w.get('resourceClass', ''),
@@ -392,16 +397,7 @@ class Desktop(QWidget):
         self._clamp_tile_index()
         self._update_focus()
         logger.debug('Dynamic tiles: %d', len(self._dynamic_tiles))
-
-        # If the active dynamic window disappeared (closed by the application itself) → Desktop
-        if self._active_context is not None and self._active_context.get('type') == 'dyn':
-            active_ids = {wid for wid, _, _ in self._dynamic_tiles}
-            if self._active_context['id'] not in active_ids:
-                self._active_context = None
-                if not self.isVisible():
-                    self._gamepad.push_handler(self._handle_pad)
-                    self.showFullScreen()
-                    self.activateWindow()
+        self._check_active_dyn_gone()
 
     def _on_dynamic_tile_clicked(self, window_id: str) -> None:
         title = next((t for wid, t, _ in self._dynamic_tiles if wid == window_id), window_id)
@@ -519,10 +515,8 @@ class Desktop(QWidget):
                 logger.info("Launching application %d", idx)
                 sound_player.play("select")
                 # Minimize other already-running apps to prevent virtual pad interference
-                other_pids = set(self._app_manager.all_running_pids())
-                if other_pids:
-                    self._wm.minimize_windows_for_pids(other_pids)
-                trigger = self._apps[idx].get("recall_menu_trigger", "BTN_MODE_CLICK")
+                self._arrange_windows()
+                trigger = self._apps[idx].get("recall_menu_trigger", BTN_MODE_CLICK)
                 self._gamepad.set_app_btn_mode_trigger(trigger)
                 self._gamepad.pop_handler(self._handle_pad)
                 self._app_manager.launch(idx, self._apps[idx])
@@ -545,10 +539,7 @@ class Desktop(QWidget):
 
     def _on_app_finished(self, idx: int) -> None:
         logger.info("Application %d finished – returning to desktop", idx)
-        if self._confirm_dialog is not None:
-            logger.warning("Dialog window still active after app ending – forcing to close")
-            self._confirm_dialog.force_close()
-            self._confirm_dialog = None
+        self._close_active_dialog()
         self._refresh_tile_status()
         self._wm.refresh_now()
         # Clear active context if it was this app
@@ -619,6 +610,21 @@ class Desktop(QWidget):
         self._gamepad.push_handler(self._handle_pad)
         self.showFullScreen()
         self.activateWindow()
+
+    def _arrange_windows(self, activate_pid: int | None = None) -> None:
+        """Activate windows for activate_pid and minimize all other running apps."""
+        all_pids = set(self._app_manager.all_running_pids())
+        if activate_pid:
+            self._wm.activate_windows_for_pids({activate_pid})
+        other_pids = all_pids - ({activate_pid} if activate_pid else set())
+        if other_pids:
+            self._wm.minimize_windows_for_pids(other_pids)
+
+    def _close_active_dialog(self) -> None:
+        if self._confirm_dialog is not None:
+            logger.warning("Dialog window still active after app ending – forcing to close")
+            self._confirm_dialog.force_close()
+            self._confirm_dialog = None
 
     # ── Confirmation dialogs ───────────────────────────────────────────────
 

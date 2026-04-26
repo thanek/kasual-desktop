@@ -2,8 +2,7 @@
 
 import qtawesome as qta
 from PyQt6.QtCore import Qt, QSize, pyqtSignal
-from PyQt6.QtGui import QColor
-from PyQt6.QtWidgets import QWidget, QToolButton, QLabel, QGraphicsDropShadowEffect
+from PyQt6.QtWidgets import QWidget, QToolButton, QLabel
 
 from ui import styles
 
@@ -42,11 +41,7 @@ class AppTile(QWidget):
         self._dot.move(TILE_W - 22, 8)
         self._dot.hide()
 
-        shadow = QGraphicsDropShadowEffect(self._btn)
-        shadow.setOffset(4, 6)
-        shadow.setColor(QColor(0, 0, 0, 160))
-        shadow.setBlurRadius(18)
-        self._btn.setGraphicsEffect(shadow)
+        styles.apply_card_shadow(self._btn, offset_x=4, offset_y=6, blur=18, alpha=160)
 
     def click(self) -> None:
         self._btn.click()
@@ -54,18 +49,10 @@ class AppTile(QWidget):
     def set_selected(self, selected: bool) -> None:
         if selected:
             self._btn.setStyleSheet(styles.tile_selected())
-            effect = QGraphicsDropShadowEffect(self._btn)
-            effect.setOffset(0, 0)
-            effect.setColor(QColor("#88c0d0"))
-            effect.setBlurRadius(36)
-            self._btn.setGraphicsEffect(effect)
+            styles.apply_card_shadow(self._btn, blur=36, color=styles.COLOR_ACCENT)
         else:
             self._btn.setStyleSheet(styles.tile_normal(self._color))
-            shadow = QGraphicsDropShadowEffect(self._btn)
-            shadow.setOffset(4, 6)
-            shadow.setColor(QColor(0, 0, 0, 160))
-            shadow.setBlurRadius(18)
-            self._btn.setGraphicsEffect(shadow)
+            styles.apply_card_shadow(self._btn, offset_x=4, offset_y=6, blur=18, alpha=160)
 
     def set_running(self, running: bool) -> None:
         if not running:

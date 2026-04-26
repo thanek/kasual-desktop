@@ -2,10 +2,9 @@ import logging
 from typing import Callable
 
 from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QColor, QKeyEvent
+from PyQt6.QtGui import QKeyEvent
 from PyQt6.QtWidgets import (
-    QPushButton, QLabel, QVBoxLayout,
-    QGraphicsDropShadowEffect, QWidget,
+    QPushButton, QLabel, QVBoxLayout, QWidget,
 )
 
 from audio import sound_player
@@ -35,7 +34,9 @@ class InfoDialog(BaseOverlay):
         outer.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         card = QWidget()
-        card.setStyleSheet("background-color: #2e3440; border-radius: 12px;")
+        card.setStyleSheet(
+            f"background-color: {styles.COLOR_CARD_BG}; border-radius: {styles.CARD_RADIUS_PX}px;"
+        )
         card.setFixedWidth(680)
 
         layout = QVBoxLayout(card)
@@ -55,11 +56,7 @@ class InfoDialog(BaseOverlay):
         self._btn_ok.clicked.connect(self._confirm)
         layout.addWidget(self._btn_ok, alignment=Qt.AlignmentFlag.AlignCenter)
 
-        shadow = QGraphicsDropShadowEffect(card)
-        shadow.setOffset(0, 8)
-        shadow.setColor(QColor(0, 0, 0, 200))
-        shadow.setBlurRadius(40)
-        card.setGraphicsEffect(shadow)
+        styles.apply_card_shadow(card)
 
         outer.addWidget(card)
 

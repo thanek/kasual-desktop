@@ -85,12 +85,12 @@ def init() -> None:
             logger.debug("Loaded sound: %s", name)
 
 
-def play(name: str) -> None:
-    """Plays a previously loaded sound."""
+def play(name: str) -> bool:
+    """Plays a previously loaded sound. Returns True if playback started."""
     entry = _loaded.get(name)
     if entry is None:
         logger.warning("Unknown sound or no init(): %s", name)
-        return
+        return False
 
     # Remove finished sinks
     _active[:] = [
@@ -106,3 +106,4 @@ def play(name: str) -> None:
     sink = QAudioSink(fmt)
     sink.start(buf)
     _active.append((sink, buf))
+    return True

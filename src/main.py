@@ -18,16 +18,16 @@ from ui.tray import SystemTray
 
 logger = logging.getLogger(__name__)
 
+_LOG_FMT      = "%(asctime)s  [%(name)-22s]  %(levelname)-8s  %(message)s"
+_LOG_DATE_FMT = "%Y-%m-%d %H:%M:%S"
+
 
 def _setup_logging() -> Path:
     log_dir = Path.home() / ".local" / "cache" / "kasual"
     log_dir.mkdir(parents=True, exist_ok=True)
     log_file = log_dir / "kasual.log"
 
-    fmt = logging.Formatter(
-        "%(asctime)s  [%(name)-22s]  %(levelname)-8s  %(message)s",
-        datefmt="%Y-%m-%d %H:%M:%S",
-    )
+    fmt = logging.Formatter(_LOG_FMT, datefmt=_LOG_DATE_FMT)
     stream_handler = logging.StreamHandler()
     stream_handler.setFormatter(fmt)
     file_handler = logging.FileHandler(log_file, encoding="utf-8")

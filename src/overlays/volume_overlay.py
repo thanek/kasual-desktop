@@ -3,14 +3,14 @@ import subprocess
 
 import qtawesome as qta
 from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtGui import QColor, QKeyEvent
+from PyQt6.QtGui import QKeyEvent
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QSlider,
-    QGraphicsDropShadowEffect,
 )
 
 from audio import sound_player
 from input.gamepad_watcher import GamepadWatcher
+from ui import styles
 from .base_overlay import BaseOverlay
 
 logger = logging.getLogger(__name__)
@@ -32,7 +32,9 @@ class VolumeOverlay(BaseOverlay):
 
         card = QWidget()
         card.setFixedWidth(500)
-        card.setStyleSheet("background-color: #2e3440; border-radius: 12px;")
+        card.setStyleSheet(
+            f"background-color: {styles.COLOR_CARD_BG}; border-radius: {styles.CARD_RADIUS_PX}px;"
+        )
 
         layout = QVBoxLayout(card)
         layout.setContentsMargins(40, 36, 40, 36)
@@ -80,11 +82,7 @@ class VolumeOverlay(BaseOverlay):
         hint.setStyleSheet("font-size: 14px; color: #888; background: transparent;")
         layout.addWidget(hint)
 
-        shadow = QGraphicsDropShadowEffect(card)
-        shadow.setOffset(0, 8)
-        shadow.setColor(QColor(0, 0, 0, 200))
-        shadow.setBlurRadius(40)
-        card.setGraphicsEffect(shadow)
+        styles.apply_card_shadow(card)
 
         outer.addWidget(card)
 

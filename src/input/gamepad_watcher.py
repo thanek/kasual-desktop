@@ -4,7 +4,7 @@ import time
 from typing import Callable
 
 from PyQt6.QtCore import pyqtSignal, QObject
-from evdev import InputDevice, UInput, ecodes, list_devices
+from evdev import InputDevice, InputEvent, UInput, ecodes, list_devices
 
 logger = logging.getLogger(__name__)
 
@@ -13,6 +13,9 @@ STICK_RESET     = 6000    # hysteresis — below this value the axis is "centere
 
 VIRTUAL_DEVICE_NAME   = "kasual-vpad"
 BTN_MODE_HOLD_SECONDS = 1.0   # how long BTN_MODE must be held to trigger the menu
+
+BTN_MODE_CLICK   = "BTN_MODE_CLICK"    # trigger immediately on press
+BTN_MODE_HOLD_1S = "BTN_MODE_HOLD_1S"  # require BTN_MODE_HOLD_SECONDS hold
 
 
 class GamepadWatcher(QObject):
@@ -74,8 +77,8 @@ class GamepadWatcher(QObject):
     def set_app_btn_mode_trigger(self, trigger: str) -> None:
         """Set the BTN_MODE recall trigger for the currently active app.
 
-        trigger: "BTN_MODE_CLICK" — fire immediately on press (default)
-                 "BTN_MODE_HOLD_1S" — require BTN_MODE_HOLD_SECONDS hold
+        trigger: BTN_MODE_CLICK   — fire immediately on press (default)
+                 BTN_MODE_HOLD_1S — require BTN_MODE_HOLD_SECONDS hold
         """
         with self._lock:
             self._app_btn_mode_trigger = trigger
@@ -159,7 +162,7 @@ class GamepadWatcher(QObject):
                                 with self._lock:
                                     kasual_active = self._suppress_uinput
                                     trigger       = self._app_btn_mode_trigger
-                                if kasual_active or trigger == "BTN_MODE_CLICK":
+                                if kasual_active or trigger == BTN_MODE_CLICK:
                                     self._on_btn_mode_long()
                                 else:
                                     # BTN_MODE_HOLD_1S — wait for hold threshold
@@ -202,43 +205,48 @@ class GamepadWatcher(QObject):
             else:
                 time.sleep(1)
 
-    def _translate(self, ev, held: set[int], stick: dict, pending: list) -> None:
+    def _translate(self, ev: InputEvent, held: set[int], stick: dict, pending: list) -> None:
         if ev.type == ecodes.EV_KEY:
-            if ev.value == 1:
-                held.add(ev.code)
-                if ev.code == ecodes.BTN_SOUTH:
-                    self._raw.emit("select")
-                elif ev.code == ecodes.BTN_EAST:
-                    self._raw.emit("cancel")
-                elif ev.code == ecodes.BTN_WEST:
-                    self._raw.emit("close")
-                elif ev.code == ecodes.BTN_START and ecodes.BTN_SELECT in held:
-                    self.btn_mode_pressed.emit()
-            elif ev.value == 0:
-                held.discard(ev.code)
-
+            self._translate_key(ev, held, pending)
         elif ev.type == ecodes.EV_ABS:
-            # D-pad (HAT0X/Y) has only three values: -1, 0, 1 — no hysteresis needed.
-            # Analog stick (ABS_X/Y) has range -32768..32767 — handled by
-            # _handle_stick_axis with threshold and hysteresis. The asymmetry is intentional.
-            if ev.code == ecodes.ABS_HAT0X:
-                if ev.value == -1:
-                    stick["x"] = "left";  pending.append("left")
-                elif ev.value == 1:
-                    stick["x"] = "right"; pending.append("right")
-                else:
-                    stick["x"] = None
-            elif ev.code == ecodes.ABS_HAT0Y:
-                if ev.value == -1:
-                    stick["y"] = "up";    pending.append("up")
-                elif ev.value == 1:
-                    stick["y"] = "down";  pending.append("down")
-                else:
-                    stick["y"] = None
-            elif ev.code == ecodes.ABS_X:
-                self._handle_stick_axis(ev.value, "x", "left", "right", stick, pending)
-            elif ev.code == ecodes.ABS_Y:
-                self._handle_stick_axis(ev.value, "y", "up", "down", stick, pending)
+            self._translate_axis(ev, stick, pending)
+
+    def _translate_key(self, ev: InputEvent, held: set[int], pending: list) -> None:
+        if ev.value == 1:
+            held.add(ev.code)
+            if ev.code == ecodes.BTN_SOUTH:
+                self._raw.emit("select")
+            elif ev.code == ecodes.BTN_EAST:
+                self._raw.emit("cancel")
+            elif ev.code == ecodes.BTN_WEST:
+                self._raw.emit("close")
+            elif ev.code == ecodes.BTN_START and ecodes.BTN_SELECT in held:
+                self.btn_mode_pressed.emit()
+        elif ev.value == 0:
+            held.discard(ev.code)
+
+    def _translate_axis(self, ev: InputEvent, stick: dict, pending: list) -> None:
+        # D-pad (HAT0X/Y) has only three values: -1, 0, 1 — no hysteresis needed.
+        # Analog stick (ABS_X/Y) has range -32768..32767 — handled by
+        # _handle_stick_axis with threshold and hysteresis. The asymmetry is intentional.
+        if ev.code == ecodes.ABS_HAT0X:
+            if ev.value == -1:
+                stick["x"] = "left";  pending.append("left")
+            elif ev.value == 1:
+                stick["x"] = "right"; pending.append("right")
+            else:
+                stick["x"] = None
+        elif ev.code == ecodes.ABS_HAT0Y:
+            if ev.value == -1:
+                stick["y"] = "up";    pending.append("up")
+            elif ev.value == 1:
+                stick["y"] = "down";  pending.append("down")
+            else:
+                stick["y"] = None
+        elif ev.code == ecodes.ABS_X:
+            self._handle_stick_axis(ev.value, "x", "left", "right", stick, pending)
+        elif ev.code == ecodes.ABS_Y:
+            self._handle_stick_axis(ev.value, "y", "up", "down", stick, pending)
 
     def _handle_stick_axis(
         self,

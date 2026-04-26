@@ -8,6 +8,7 @@ from desktop import Desktop
 from input.gamepad_watcher import GamepadWatcher
 from overlays.home_overlay import HomeOverlay, MenuItem
 from system.window_manager import KWinWindowManager
+from ui import styles
 from ui.tray import SystemTray
 
 logger = logging.getLogger(__name__)
@@ -54,7 +55,7 @@ class Application:
             close_cb  = lambda app=running_app: self._desktop.request_close_app(app)
             cancel_cb = lambda app=running_app: self._desktop.restore_app(app)
 
-            label = title if len(title) <= 22 else title[:21] + '…'
+            label = styles.truncate(title, 22)
             items: list[MenuItem] = [
                 {"label": "  " + QCoreApplication.translate("Kasual", "Return to {0}").format(label),  "icon": "fa5s.times",        "callback": cancel_cb},
                 {"label": "  " + QCoreApplication.translate("Kasual", "Close {0}").format(label),      "icon": "fa5s.times-circle", "callback": close_cb},

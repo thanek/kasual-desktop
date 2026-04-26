@@ -76,11 +76,3 @@ class WindowIconResolver:
         ]
         return [os.path.join(d, 'applications') for d in [home] + system + extra]
 
-    @staticmethod
-    def _icon_name_from_desktop(path: str) -> str | None:
-        try:
-            cp = configparser.RawConfigParser()
-            cp.read(path, encoding='utf-8')
-            return cp.get('Desktop Entry', 'Icon', fallback=None)
-        except Exception:
-            return None
