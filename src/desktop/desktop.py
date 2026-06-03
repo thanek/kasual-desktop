@@ -22,7 +22,7 @@ from system.app_manager import AppManager
 from system.system_actions import ACTIONS, ActionDeps, ActionRunner
 from system.window_manager import KWinWindowManager
 from ui import styles
-from .app_tile import AppTile, TILE_H
+from .app_tile import AppTile, TILE_H, TILE_SEL_H
 from .wallpaper import KdeWallpaperLoader
 from .window_icons import WindowIconResolver
 
@@ -91,6 +91,7 @@ class Desktop(QWidget):
         main.addWidget(self._topbar)
         main.addStretch(1)
         main.addWidget(self._build_tile_bar())
+        main.addStretch(1)
 
         self._status_timer = QTimer(self)
         self._status_timer.timeout.connect(self._refresh_tile_status)
@@ -208,6 +209,15 @@ class Desktop(QWidget):
         )
 
 
+    def showEvent(self, event) -> None:
+        super().showEvent(event)
+        QTimer.singleShot(0, self._center_focused_tile)
+
+    def resizeEvent(self, event) -> None:
+        super().resizeEvent(event)
+        if hasattr(self, '_scroll'):
+            QTimer.singleShot(0, self._center_focused_tile)
+
     def paintEvent(self, _) -> None:
         painter = QPainter(self)
         if self._wallpaper and not self._wallpaper.isNull():
@@ -312,7 +322,7 @@ class Desktop(QWidget):
 
     def _build_tile_bar(self) -> QScrollArea:
         scroll = QScrollArea()
-        scroll.setFixedHeight(TILE_H + 40)
+        scroll.setFixedHeight(TILE_SEL_H + 40)
         scroll.setWidgetResizable(True)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
@@ -321,7 +331,9 @@ class Desktop(QWidget):
         container = QWidget()
         container.setStyleSheet("background: transparent;")
         self._tile_layout = QHBoxLayout(container)
-        self._tile_layout.setContentsMargins(40, 20, 40, 20)
+        # Half-screen padding on each side so any tile can be scrolled to center.
+        screen_half = QApplication.primaryScreen().size().width() // 2
+        self._tile_layout.setContentsMargins(screen_half, 20, screen_half, 20)
         self._tile_layout.setSpacing(30)
 
         self._tiles: list[AppTile] = []
@@ -335,7 +347,6 @@ class Desktop(QWidget):
             self._tile_layout.addWidget(tile)
             self._tiles.append(tile)
 
-        self._tile_layout.addStretch()
         scroll.setWidget(container)
         self._scroll = scroll
 
@@ -436,8 +447,7 @@ class Desktop(QWidget):
         sep = QWidget()
         sep.setFixedSize(2, TILE_H - 24)
         sep.setStyleSheet("background: #3b4252;")
-        insert_pos = self._tile_layout.count() - 1
-        self._tile_layout.insertWidget(insert_pos, sep)
+        self._tile_layout.addWidget(sep)
         self._dyn_separator = sep
 
         for w in extern_windows:
@@ -463,7 +473,7 @@ class Desktop(QWidget):
             tile.set_running(True)   # window exists → application is running
             win_id = w['id']
             tile.clicked.connect(lambda wid=win_id: self._on_dynamic_tile_clicked(wid))
-            self._tile_layout.insertWidget(self._tile_layout.count() - 1, tile)
+            self._tile_layout.addWidget(tile)
             self._dynamic_tiles.append((win_id, full_title, tile))
             self._dynamic_pids[win_id] = w.get('pid', 0)
 
@@ -508,9 +518,19 @@ class Desktop(QWidget):
                 btn.setStyleSheet(styles.topbar_normal(list(ACTIONS.values())[i]["color"]))
 
         if in_tiles:
-            all_tiles: list[AppTile] = self._tiles + [t for _, _, t in self._dynamic_tiles]
-            if 0 <= self._tile_index < len(all_tiles):
-                self._scroll.ensureWidgetVisible(all_tiles[self._tile_index])
+            QTimer.singleShot(0, self._center_focused_tile)
+
+    def _center_focused_tile(self) -> None:
+        if self._focus_mode != "tiles":
+            return
+        all_tiles: list[AppTile] = self._tiles + [t for _, _, t in self._dynamic_tiles]
+        if not (0 <= self._tile_index < len(all_tiles)):
+            return
+        tile = all_tiles[self._tile_index]
+        vp_w = self._scroll.viewport().width()
+        # tile.x() is relative to the container; center it in the viewport.
+        target = tile.x() + tile.width() // 2 - vp_w // 2
+        self._scroll.horizontalScrollBar().setValue(max(0, target))
 
     def _refresh_tile_status(self) -> None:
         for i, tile in enumerate(self._tiles):

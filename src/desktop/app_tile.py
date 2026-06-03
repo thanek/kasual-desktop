@@ -6,8 +6,10 @@ from PyQt6.QtWidgets import QWidget, QToolButton, QLabel
 
 from ui import styles
 
-TILE_W = 180
-TILE_H = 200
+TILE_W     = 180
+TILE_H     = 200
+TILE_SEL_W = round(TILE_W * 1.20)   # 216
+TILE_SEL_H = round(TILE_H * 1.20)   # 240
 
 
 class AppTile(QWidget):
@@ -48,9 +50,17 @@ class AppTile(QWidget):
 
     def set_selected(self, selected: bool) -> None:
         if selected:
+            self.setFixedSize(TILE_SEL_W, TILE_SEL_H)
+            self._btn.setFixedSize(TILE_SEL_W, TILE_SEL_H)
+            self._btn.setIconSize(QSize(round(72 * 1.20), round(72 * 1.20)))
+            self._dot.move(TILE_SEL_W - 22, 8)
             self._btn.setStyleSheet(styles.tile_selected())
             styles.apply_card_shadow(self._btn, blur=36, color=styles.COLOR_ACCENT)
         else:
+            self.setFixedSize(TILE_W, TILE_H)
+            self._btn.setFixedSize(TILE_W, TILE_H)
+            self._btn.setIconSize(QSize(72, 72))
+            self._dot.move(TILE_W - 22, 8)
             self._btn.setStyleSheet(styles.tile_normal(self._color))
             styles.apply_card_shadow(self._btn, offset_x=4, offset_y=6, blur=18, alpha=160)
 
