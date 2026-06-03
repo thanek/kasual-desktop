@@ -75,4 +75,3 @@ class WindowIconResolver:
             os.path.expanduser('~/.local/share/flatpak/exports/share'),
         ]
         return [os.path.join(d, 'applications') for d in [home] + system + extra]
-

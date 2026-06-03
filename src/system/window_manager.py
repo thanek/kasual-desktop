@@ -137,7 +137,7 @@ _RAISE_BY_PIDS_SCRIPT = """\
 _SCRIPT_TIMEOUT_MS = 5_000
 
 
-def _expand_pid_tree(root_pids: set[int]) -> set[int]:
+def expand_pid_tree(root_pids: set[int]) -> set[int]:
     """Return *root_pids* expanded with all their descendant PIDs.
 
     Uses /proc/<pid>/task/<pid>/children (Linux-specific, available on all
@@ -285,14 +285,14 @@ class KWinWindowManager(QObject):
         Does not rely on the internal window cache — works for fullscreen /
         kiosk-mode apps that are not visible in the normal window list.
         """
-        all_pids = _expand_pid_tree(pids)
+        all_pids = expand_pid_tree(pids)
         if all_pids:
             script = _MINIMIZE_BY_PIDS_SCRIPT.format(pids=json.dumps(sorted(all_pids)))
             self._run_fire_and_forget(script, tag='minimize')
 
     def activate_windows_for_pids(self, pids: set[int]) -> None:
         """Unminimize and bring to front windows belonging to *pids* or their descendants."""
-        all_pids = _expand_pid_tree(pids)
+        all_pids = expand_pid_tree(pids)
         if all_pids:
             script = _ACTIVATE_BY_PIDS_SCRIPT.format(pids=json.dumps(sorted(all_pids)))
             self._run_fire_and_forget(script, tag='activate_pids')

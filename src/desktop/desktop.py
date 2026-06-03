@@ -12,7 +12,7 @@ from PyQt6.QtWidgets import (
 )
 
 from audio import sound_player
-from input.gamepad_watcher import GamepadWatcher, BTN_MODE_CLICK
+from input.gamepad_watcher import GamepadWatcher, BTN_MODE_CLICK, BTN_MODE_HOLD_1S
 from overlays.base_overlay import BaseOverlay
 from overlays.confirm_dialog import ConfirmDialog
 from overlays.info_dialog import InfoDialog
@@ -28,9 +28,19 @@ from .window_icons import WindowIconResolver
 
 logger = logging.getLogger(__name__)
 
-
-
 _DYN_TILE_MAX_TITLE = 22   # Maximum length of a dynamic tile title
+
+
+def _get_ppid(pid: int) -> int | None:
+    """Return the parent PID of *pid* by reading /proc, or None on failure."""
+    try:
+        with open(f'/proc/{pid}/status') as f:
+            for line in f:
+                if line.startswith('PPid:'):
+                    return int(line.split()[1])
+    except (OSError, ValueError):
+        pass
+    return None
 
 
 class Desktop(QWidget):
@@ -61,8 +71,13 @@ class Desktop(QWidget):
         # Dynamic tiles: list of (window_id, title, AppTile)
         self._dynamic_tiles:  list[tuple[str, str, AppTile]] = []
         self._dyn_separator:  QWidget | None                 = None
+        # window_id → pid for dynamic tiles (used for trigger inheritance)
+        self._dynamic_pids:   dict[str, int]                 = {}
+        # Last window list from KWin — used for window-presence running checks
+        self._last_windows:   list[dict]                     = []
         # Currently active app/window — what BTN_MODE context menu will target
         # {'type': 'app', 'id': idx, 'name': ...} or {'type': 'dyn', 'id': win_id, 'name': ...}
+        # dyn contexts also carry 'trigger' (BTN_MODE_CLICK / BTN_MODE_HOLD_1S)
         self._active_context: dict | None                    = None
 
         self.setWindowTitle("Kasual Desktop")
@@ -168,7 +183,7 @@ class Desktop(QWidget):
             self._gamepad.set_app_btn_mode_trigger(trigger)
             self._arrange_windows(self._app_manager.running_pid(idx))
         else:
-            self._gamepad.set_app_btn_mode_trigger(BTN_MODE_CLICK)
+            self._gamepad.set_app_btn_mode_trigger(app.get('trigger', BTN_MODE_CLICK))
             self._wm.activate_window(app['id'])
         self._gamepad.pop_handler(self._handle_pad)
         self.hide()
@@ -334,6 +349,7 @@ class Desktop(QWidget):
             self._tile_layout.removeWidget(tile)
             tile.deleteLater()
         self._dynamic_tiles.clear()
+        self._dynamic_pids.clear()
         if self._dyn_separator is not None:
             self._tile_layout.removeWidget(self._dyn_separator)
             self._dyn_separator.deleteLater()
@@ -350,6 +366,33 @@ class Desktop(QWidget):
                     self.showFullScreen()
                     self.activateWindow()
 
+    def _find_trigger_for_pid(self, pid: int) -> str:
+        """Return the recall_menu_trigger of the static app that owns *pid*.
+
+        Walks the ppid chain upward looking for any PID tracked by AppManager.
+        Needed so that games launched by Steam inherit Steam's BTN_MODE_HOLD_1S
+        rather than using the dynamic-tile default (BTN_MODE_CLICK).
+        """
+        if pid == 0:
+            return BTN_MODE_CLICK
+        pid_to_idx = {
+            self._app_manager.running_pid(i): i
+            for i in self._app_manager.running_idxs()
+            if self._app_manager.running_pid(i) is not None
+        }
+        visited: set[int] = set()
+        current = pid
+        while current > 1 and current not in visited:
+            visited.add(current)
+            if current in pid_to_idx:
+                idx = pid_to_idx[current]
+                return self._apps[idx].get('recall_menu_trigger', BTN_MODE_CLICK)
+            ppid = _get_ppid(current)
+            if ppid is None:
+                break
+            current = ppid
+        return BTN_MODE_CLICK
+
     def _rebuild_dynamic_tiles(self, windows: list[dict]) -> None:
         """Rebuilds the dynamic tile section based on the list from KWin.
 
@@ -357,22 +400,32 @@ class Desktop(QWidget):
         they are already represented by a static tile.
         """
         self._clear_dynamic_tiles()
+        self._last_windows = windows
 
-        # Exclude windows belonging to any process group of our running applications.
-        # start_new_session=True → child's pgid == its pid, so all
-        # child processes (e.g. browser launched by a script) share
-        # the same pgid and are also filtered out.
-        running_pids = set(self._app_manager.all_running_pids())
+        # Exclude windows belonging to any of our static applications.
+        # Two complementary checks — each handles cases the other misses:
+        #   1. pgid match: works for apps (Heroic, Firefox) that stay in the
+        #      same process group as the launcher.
+        #   2. resourceClass/desktopFile match: works for apps (Steam) that
+        #      self-relaunch in a new process group, losing the pgid link.
+        #      Uses all *defined* apps so filtering survives a Steam restart.
+        running_pids  = set(self._app_manager.all_running_pids())
+        defined_cmds  = {os.path.basename(a['command']).lower() for a in self._apps}
 
-        def _in_running_group(pid: int) -> bool:
-            if not running_pids or pid == 0:
+        def _is_managed_window(w: dict) -> bool:
+            pid = w.get('pid', 0)
+            if pid == 0:
                 return False
             try:
-                return os.getpgid(pid) in running_pids
+                if running_pids and os.getpgid(pid) in running_pids:
+                    return True
             except OSError:
-                return False
+                pass
+            rc = w.get('resourceClass', '').lower()
+            df = os.path.splitext(w.get('desktopFile', '').lower())[0]
+            return rc in defined_cmds or df in defined_cmds
 
-        extern_windows = [w for w in windows if not _in_running_group(w.get('pid', 0))]
+        extern_windows = [w for w in windows if not _is_managed_window(w)]
 
         if not extern_windows:
             self._clamp_tile_index()
@@ -412,6 +465,7 @@ class Desktop(QWidget):
             tile.clicked.connect(lambda wid=win_id: self._on_dynamic_tile_clicked(wid))
             self._tile_layout.insertWidget(self._tile_layout.count() - 1, tile)
             self._dynamic_tiles.append((win_id, full_title, tile))
+            self._dynamic_pids[win_id] = w.get('pid', 0)
 
         self._clamp_tile_index()
         self._update_focus()
@@ -419,8 +473,10 @@ class Desktop(QWidget):
         self._check_active_dyn_gone()
 
     def _on_dynamic_tile_clicked(self, window_id: str) -> None:
-        title = next((t for wid, t, _ in self._dynamic_tiles if wid == window_id), window_id)
-        self._active_context = {'type': 'dyn', 'id': window_id, 'name': title}
+        title   = next((t for wid, t, _ in self._dynamic_tiles if wid == window_id), window_id)
+        pid     = self._dynamic_pids.get(window_id, 0)
+        trigger = self._find_trigger_for_pid(pid)
+        self._active_context = {'type': 'dyn', 'id': window_id, 'name': title, 'trigger': trigger}
         self.restore_app(self._active_context)
 
     # ── Focus and style ────────────────────────────────────────────────────
@@ -458,7 +514,18 @@ class Desktop(QWidget):
 
     def _refresh_tile_status(self) -> None:
         for i, tile in enumerate(self._tiles):
-            tile.set_running(self._app_manager.is_running(i))
+            is_running = self._app_manager.is_running(i)
+            if not is_running and self._last_windows:
+                # AppManager may have lost track after a self-relaunch (e.g. Steam
+                # updates itself and restarts in a new process group). Keep the
+                # tile marked as running as long as a matching window is visible.
+                cmd = os.path.basename(self._apps[i]['command']).lower()
+                is_running = any(
+                    w.get('resourceClass', '').lower() == cmd or
+                    os.path.splitext(w.get('desktopFile', '').lower())[0] == cmd
+                    for w in self._last_windows
+                )
+            tile.set_running(is_running)
 
     # ── Gamepad handler ────────────────────────────────────────────────────
 
