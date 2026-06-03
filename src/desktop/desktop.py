@@ -578,6 +578,10 @@ class Desktop(QWidget):
             self._gamepad.push_handler(self._handle_pad)
             self.showFullScreen()
             self.activateWindow()
+        # Some apps (notably Steam) re-enumerate the gamepad on exit,
+        # leaving our evdev fd pointing at a dead device with no error.
+        # Delay long enough for the kernel to surface the replacement.
+        QTimer.singleShot(1000, self._gamepad.refresh)
 
     # ── Closing an application ─────────────────────────────────────────────
 

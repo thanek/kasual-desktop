@@ -1,4 +1,5 @@
 import logging
+import select
 import threading
 import time
 from typing import Callable
@@ -52,6 +53,8 @@ class GamepadWatcher(QObject):
         self._btn_mode_timer:   threading.Timer | None = None
         self._btn_mode_long:    bool                  = False   # True once hold threshold passed
         self._app_btn_mode_trigger: str               = "BTN_MODE_CLICK"
+        self._device: InputDevice | None              = None
+        self._refresh_requested: bool                 = False
         self._raw.connect(self._dispatch)
         threading.Thread(target=self._loop, daemon=True, name="gamepad-watcher").start()
 
@@ -83,6 +86,19 @@ class GamepadWatcher(QObject):
         with self._lock:
             self._app_btn_mode_trigger = trigger
 
+    def refresh(self) -> None:
+        """Force the watcher thread to drop the current device and rescan.
+
+        Some apps (notably Steam) re-enumerate gamepads when they exit:
+        the kernel replaces /dev/input/eventX without our blocking read
+        ever seeing an error, so the watcher silently stops receiving
+        events. Calling refresh() after such an app quits forces a
+        clean rebind without surfacing a fake disconnect to the UI.
+        """
+        with self._lock:
+            if self._device is not None:
+                self._refresh_requested = True
+
 
     # ── Internal ───────────────────────────────────────────────────────────
 
@@ -103,6 +119,12 @@ class GamepadWatcher(QObject):
         was_connected = False
         held: set[int] = set()
         stick = {"x": None, "y": None}
+        # Set when a refresh is in progress; if no new device is found
+        # within REFRESH_GRACE_SECONDS we fall back to a real disconnect.
+        refresh_started_at: float | None = None
+
+        REFRESH_GRACE_SECONDS = 3.0
+        SELECT_TIMEOUT        = 0.25
 
         while True:
             # ── Search for gamepad ────────────────────────────────────────
@@ -117,6 +139,7 @@ class GamepadWatcher(QObject):
                         pass
                     uinput = None
 
+                found = False
                 for path in list_devices():
                     try:
                         d = InputDevice(path)
@@ -126,6 +149,10 @@ class GamepadWatcher(QObject):
                         d.grab()
                         uinput = UInput.from_device(d, name=VIRTUAL_DEVICE_NAME)
                         device = d
+                        with self._lock:
+                            self._device = d
+                            self._refresh_requested = False
+                        found = True
                         logger.info(
                             "Grabbed: %s  →  virtual: %s",
                             device.name, uinput.device.path,
@@ -133,65 +160,106 @@ class GamepadWatcher(QObject):
                         if not was_connected:
                             was_connected = True
                             self.connected_changed.emit(True)
+                        refresh_started_at = None
                         break
                     except Exception as exc:
                         logger.debug("Ommitted device: %s", exc)
+
+                if not found and refresh_started_at is not None and was_connected:
+                    # Refresh in progress but no device showed up — give up
+                    # the optimistic "still connected" state after a grace period.
+                    if time.monotonic() - refresh_started_at > REFRESH_GRACE_SECONDS:
+                        logger.info("Gamepad refresh — no device after %.1fs, signalling disconnect",
+                                    REFRESH_GRACE_SECONDS)
+                        was_connected = False
+                        self.connected_changed.emit(False)
+                        refresh_started_at = None
 
             # ── Read events ───────────────────────────────────────────────
             if device:
                 try:
                     pending: list[str] = []
-                    for ev in device.read_loop():
-                        if ev.type == ecodes.EV_SYN:
-                            # End of batch — emit unique navigation events
-                            seen: set[str] = set()
-                            for nav in pending:
-                                if nav not in seen:
-                                    seen.add(nav)
-                                    self._raw.emit(nav)
-                            pending.clear()
-                            if uinput:
-                                uinput.syn()
+                    while True:
+                        # Honour refresh requests from other threads.
+                        with self._lock:
+                            if self._refresh_requested:
+                                self._refresh_requested = False
+                                refresh_now = True
+                            else:
+                                refresh_now = False
+                        if refresh_now:
+                            logger.info("Gamepad refresh — closing %s and rescanning", device.path)
+                            if self._btn_mode_timer is not None:
+                                self._btn_mode_timer.cancel()
+                                self._btn_mode_timer = None
+                            self._btn_mode_long = False
+                            refresh_started_at = time.monotonic()
+                            try:
+                                device.close()
+                            except Exception:
+                                pass
+                            device = None
+                            with self._lock:
+                                self._device = None
+                            break
 
-                        elif ev.type == ecodes.EV_KEY and ev.code == ecodes.BTN_MODE:
-                            # BTN_MODE is never forwarded to virtual gamepad in real-time.
-                            # Short press  → synthetic press+release sent on release (Steam reacts).
-                            # Long press   → btn_mode_pressed signal (Kasual menu); nothing to Steam.
-                            if ev.value == 1:
-                                self._btn_mode_long = False
-                                with self._lock:
-                                    kasual_active = self._suppress_uinput
-                                    trigger       = self._app_btn_mode_trigger
-                                if kasual_active or trigger == BTN_MODE_CLICK:
-                                    self._on_btn_mode_long()
-                                else:
-                                    # BTN_MODE_HOLD_1S — wait for hold threshold
-                                    self._btn_mode_timer = threading.Timer(
-                                        BTN_MODE_HOLD_SECONDS, self._on_btn_mode_long
-                                    )
-                                    self._btn_mode_timer.start()
-                            elif ev.value == 0:
-                                if self._btn_mode_timer is not None:
-                                    self._btn_mode_timer.cancel()
-                                    self._btn_mode_timer = None
-                                if not self._btn_mode_long and uinput:
-                                    # Short press — forward to virtual gamepad now
+                        # Block on the fd but wake periodically so the refresh
+                        # flag is observable. read_loop() would block forever.
+                        r, _, _ = select.select([device.fd], [], [], SELECT_TIMEOUT)
+                        if not r:
+                            continue
+
+                        for ev in device.read():
+                            if ev.type == ecodes.EV_SYN:
+                                # End of batch — emit unique navigation events
+                                seen: set[str] = set()
+                                for nav in pending:
+                                    if nav not in seen:
+                                        seen.add(nav)
+                                        self._raw.emit(nav)
+                                pending.clear()
+                                if uinput:
+                                    uinput.syn()
+
+                            elif ev.type == ecodes.EV_KEY and ev.code == ecodes.BTN_MODE:
+                                # BTN_MODE is never forwarded to virtual gamepad in real-time.
+                                # Short press  → synthetic press+release sent on release (Steam reacts).
+                                # Long press   → btn_mode_pressed signal (Kasual menu); nothing to Steam.
+                                if ev.value == 1:
+                                    self._btn_mode_long = False
+                                    with self._lock:
+                                        kasual_active = self._suppress_uinput
+                                        trigger       = self._app_btn_mode_trigger
+                                    if kasual_active or trigger == BTN_MODE_CLICK:
+                                        self._on_btn_mode_long()
+                                    else:
+                                        # BTN_MODE_HOLD_1S — wait for hold threshold
+                                        self._btn_mode_timer = threading.Timer(
+                                            BTN_MODE_HOLD_SECONDS, self._on_btn_mode_long
+                                        )
+                                        self._btn_mode_timer.start()
+                                elif ev.value == 0:
+                                    if self._btn_mode_timer is not None:
+                                        self._btn_mode_timer.cancel()
+                                        self._btn_mode_timer = None
+                                    if not self._btn_mode_long and uinput:
+                                        # Short press — forward to virtual gamepad now
+                                        with self._lock:
+                                            suppress_now = self._suppress_uinput
+                                        if not suppress_now:
+                                            uinput.write(ecodes.EV_KEY, ecodes.BTN_MODE, 1)
+                                            uinput.syn()
+                                            uinput.write(ecodes.EV_KEY, ecodes.BTN_MODE, 0)
+                                            uinput.syn()
+
+                            else:
+                                # Forward to virtual gamepad (unless our UI is active)
+                                if uinput:
                                     with self._lock:
                                         suppress_now = self._suppress_uinput
                                     if not suppress_now:
-                                        uinput.write(ecodes.EV_KEY, ecodes.BTN_MODE, 1)
-                                        uinput.syn()
-                                        uinput.write(ecodes.EV_KEY, ecodes.BTN_MODE, 0)
-                                        uinput.syn()
-
-                        else:
-                            # Forward to virtual gamepad (unless our UI is active)
-                            if uinput:
-                                with self._lock:
-                                    suppress_now = self._suppress_uinput
-                                if not suppress_now:
-                                    uinput.write(ev.type, ev.code, ev.value)
-                            self._translate(ev, held, stick, pending)
+                                        uinput.write(ev.type, ev.code, ev.value)
+                                self._translate(ev, held, stick, pending)
 
                 except OSError:
                     if self._btn_mode_timer is not None:
@@ -200,7 +268,11 @@ class GamepadWatcher(QObject):
                     self._btn_mode_long = False
                     logger.info("Gamepad disconnected")
                     device = None
+                    with self._lock:
+                        self._device = None
+                        self._refresh_requested = False
                     was_connected = False
+                    refresh_started_at = None
                     self.connected_changed.emit(False)
             else:
                 time.sleep(1)
