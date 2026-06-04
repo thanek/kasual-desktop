@@ -175,8 +175,15 @@ class Desktop(QWidget):
         def _confirmed() -> None:
             self._restore_desktop_view()
             if app['type'] == 'app':
-                self._tilebar.set_static_closing(app['id'])
-                self._app_manager.terminate(app['id'])
+                idx = app['id']
+                self._tilebar.set_static_closing(idx)
+                if self._app_manager.is_running(idx):
+                    self._app_manager.terminate(idx)
+                else:
+                    # App was launched via a forwarder (e.g. `steam steam://...`)
+                    # whose launcher process has already exited — AppManager has
+                    # no live process to kill. Close matching KWin windows instead.
+                    self._close_app_windows(idx)
             else:
                 self._active_context = None
                 self._wm.close_window(app['id'])
@@ -187,6 +194,24 @@ class Desktop(QWidget):
             on_confirmed=_confirmed,
             on_cancelled=self._restore_desktop_view,
         )
+
+    def _close_app_windows(self, idx: int) -> None:
+        """Close all KWin windows belonging to a static app matched by command name.
+
+        Used when AppManager has no live process for the app — e.g. apps started
+        via a one-shot forwarder (steam://...) whose launcher exits immediately
+        while the real process continues under a different PID.
+        """
+        cmd = os.path.basename(self._apps[idx]['command']).lower()
+        matched = [
+            w['id'] for w in self._wm.cached_windows()
+            if w.get('resourceClass', '').lower() == cmd
+            or os.path.splitext(w.get('desktopFile', '').lower())[0] == cmd
+        ]
+        logger.info("Closing app %d via KWin windows %s (cmd=%s)", idx, matched, cmd)
+        for win_id in matched:
+            self._wm.close_window(win_id)
+        QTimer.singleShot(1500, self._wm.refresh_now)
 
 
     def showEvent(self, event) -> None:
