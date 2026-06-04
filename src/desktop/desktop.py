@@ -212,6 +212,19 @@ class Desktop(QWidget):
         else:
             painter.fillRect(self.rect(), QColor("#0b140e"))
 
+    def changeEvent(self, event) -> None:
+        super().changeEvent(event)
+        if event.type() == QEvent.Type.ActivationChange:
+            # When KWin gives us focus back (e.g. the app we ceded the pad to
+            # has closed) and nobody owns the handler stack, reclaim pad control.
+            # Edge-triggered on focus gain, so it never fires while an app is
+            # foreground (we are not active then). This covers apps launched via
+            # a forwarder — e.g. `steam steam://...`, whose launcher process
+            # exits immediately, so the normal app_finished path runs too early.
+            if self.isActiveWindow() and self._active_context is None \
+                    and self._gamepad.top_handler() is None:
+                self._reactivate_desktop()
+
     # ── Tile bar coordination ───────────────────────────────────────────────
 
     def _check_active_dyn_gone(self) -> None:
@@ -220,8 +233,19 @@ class Desktop(QWidget):
         if ctx is not None and ctx.get('type') == 'dyn':
             if not self._tilebar.has_dynamic_window(ctx['id']):
                 self._active_context = None
-                if not self.isVisible():
+                # Re-establish gamepad control even when the Desktop window is
+                # already visible: restore_app() popped our handler, so a bare
+                # visible window would leave the pad unresponsive. Only seize
+                # input if nobody else owns it (an open HomeOverlay sits on top
+                # of the handler stack and must keep receiving events).
+                top = self._gamepad.top_handler()
+                if top is None or top is self._handle_pad:
                     self._reactivate_desktop()
+                # Some apps (notably Steam) re-enumerate the gamepad when they
+                # exit, silently invalidating our evdev fd. Externally-launched
+                # (dyn) apps don't go through _on_app_finished, so force the
+                # rebind here too — same delay as the AppManager path.
+                QTimer.singleShot(1000, self._gamepad.refresh)
 
     def _render_focus(self) -> None:
         """Repaint the focus highlight across the tile bar and top bar."""
@@ -391,9 +415,17 @@ class Desktop(QWidget):
             self.request_close_app(app)
 
     def _reactivate_desktop(self) -> None:
-        """Push our gamepad handler and bring the fullscreen Desktop to the front."""
+        """Restore Desktop input control and bring it to the front.
+
+        Idempotent: push_handler() moves our handler to the top if it is already
+        present, and the window is only re-shown when actually hidden. The
+        BTN_MODE trigger is reset to the Desktop default so no app-specific
+        HOLD_1S setting lingers after the app is gone.
+        """
+        self._gamepad.set_app_btn_mode_trigger(BTN_MODE_CLICK)
         self._gamepad.push_handler(self._handle_pad)
-        self.showFullScreen()
+        if not self.isVisible():
+            self.showFullScreen()
         self.activateWindow()
 
     def _restore_desktop_view(self) -> None:

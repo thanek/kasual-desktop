@@ -77,6 +77,11 @@ class GamepadWatcher(QObject):
         """Inject a navigation event (e.g. from keyboard) into the active handler."""
         self._dispatch(event)
 
+    def top_handler(self) -> Callable[[str], None] | None:
+        """Return the handler currently receiving events, or None if the stack is empty."""
+        with self._lock:
+            return self._handlers[-1] if self._handlers else None
+
     def set_app_btn_mode_trigger(self, trigger: str) -> None:
         """Set the BTN_MODE recall trigger for the currently active app.
 
