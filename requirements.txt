@@ -2,6 +2,7 @@ PyQt6
 qtawesome
 PyYAML
 evdev
+python-xlib
 pytest
 pytest-qt
 pyqt6-webengine

@@ -236,6 +236,7 @@ class TileBar(QScrollArea):
             app_icon = self._icon_resolver.resolve_icon(
                 w.get('desktopFile', ''),
                 w.get('resourceClass', ''),
+                w.get('pid', 0),
             )
             tile = AppTile(
                 name=display_title,
