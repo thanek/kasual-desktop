@@ -25,7 +25,9 @@ def apply_card_shadow(
 
     effect = QGraphicsDropShadowEffect(widget)
     effect.setOffset(offset_x, offset_y)
-    effect.setColor(QColor(color) if color is not None else QColor(0, 0, 0, alpha))
+    c = QColor(color) if color is not None else QColor(0, 0, 0)
+    c.setAlpha(alpha)
+    effect.setColor(c)
     effect.setBlurRadius(blur)
     widget.setGraphicsEffect(effect)
 

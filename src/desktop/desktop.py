@@ -322,7 +322,7 @@ class Desktop(QWidget):
 
     def _build_tile_bar(self) -> QScrollArea:
         scroll = QScrollArea()
-        scroll.setFixedHeight(TILE_SEL_H + 40)
+        scroll.setFixedHeight(TILE_SEL_H + 100)
         scroll.setWidgetResizable(True)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
@@ -333,8 +333,8 @@ class Desktop(QWidget):
         self._tile_layout = QHBoxLayout(container)
         # Half-screen padding on each side so any tile can be scrolled to center.
         screen_half = QApplication.primaryScreen().size().width() // 2
-        self._tile_layout.setContentsMargins(screen_half, 20, screen_half, 20)
-        self._tile_layout.setSpacing(30)
+        self._tile_layout.setContentsMargins(screen_half, 50, screen_half, 50)
+        self._tile_layout.setSpacing(60)
 
         self._tiles: list[AppTile] = []
         for i, app in enumerate(self._apps):

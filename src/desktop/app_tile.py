@@ -43,7 +43,7 @@ class AppTile(QWidget):
         self._dot.move(TILE_W - 22, 8)
         self._dot.hide()
 
-        styles.apply_card_shadow(self._btn, offset_x=4, offset_y=6, blur=18, alpha=160)
+        styles.apply_card_shadow(self, offset_x=4, offset_y=6, blur=32, alpha=180)
 
     def click(self) -> None:
         self._btn.click()
@@ -55,14 +55,14 @@ class AppTile(QWidget):
             self._btn.setIconSize(QSize(round(72 * 1.20), round(72 * 1.20)))
             self._dot.move(TILE_SEL_W - 22, 8)
             self._btn.setStyleSheet(styles.tile_selected())
-            styles.apply_card_shadow(self._btn, blur=36, color=styles.COLOR_ACCENT)
+            styles.apply_card_shadow(self, offset_x=0, offset_y=0, blur=90, alpha=180, color=styles.COLOR_ACCENT)
         else:
             self.setFixedSize(TILE_W, TILE_H)
             self._btn.setFixedSize(TILE_W, TILE_H)
             self._btn.setIconSize(QSize(72, 72))
             self._dot.move(TILE_W - 22, 8)
             self._btn.setStyleSheet(styles.tile_normal(self._color))
-            styles.apply_card_shadow(self._btn, offset_x=4, offset_y=6, blur=18, alpha=160)
+            styles.apply_card_shadow(self, offset_x=4, offset_y=6, blur=32, alpha=180)
 
     def set_running(self, running: bool) -> None:
         if not running:
