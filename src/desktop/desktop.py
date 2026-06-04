@@ -264,7 +264,7 @@ class Desktop(QWidget):
                 # input if nobody else owns it (an open HomeOverlay sits on top
                 # of the handler stack and must keep receiving events).
                 top = self._gamepad.top_handler()
-                if top is None or top is self._handle_pad:
+                if top is None or top == self._handle_pad:
                     self._reactivate_desktop()
                 # Some apps (notably Steam) re-enumerate the gamepad when they
                 # exit, silently invalidating our evdev fd. Externally-launched
@@ -299,7 +299,16 @@ class Desktop(QWidget):
     def eventFilter(self, obj, event) -> bool:
         if event.type() != QEvent.Type.KeyPress or not self.isActiveWindow():
             return False
-        mapped = self._KEY_MAP.get(event.key())
+        key = event.key()
+        # Escape in tiles mode with no overlay open → open Home Overlay (same
+        # signal as BTN_MODE short press). In topbar mode Escape still falls
+        # through to the _KEY_MAP and injects "cancel" to return to tiles.
+        if (key == Qt.Key.Key_Escape
+                and self._focus_mode == "tiles"
+                and self._gamepad.top_handler() == self._handle_pad):
+            self._gamepad.btn_mode_pressed.emit()
+            return True
+        mapped = self._KEY_MAP.get(key)
         if mapped:
             self._gamepad.inject(mapped)
             return True
