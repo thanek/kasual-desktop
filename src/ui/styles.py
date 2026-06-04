@@ -40,7 +40,7 @@ def tile_normal(color: str) -> str:
             color: white;
             background-color: {color};
             border: none;
-            border-radius: 8px;
+            border-radius: 32px;
             padding: 12px 8px 16px 8px;
         }}
     """
@@ -54,7 +54,7 @@ def tile_selected() -> str:
             color: black;
             background-color: {COLOR_ACCENT};
             border: 3px solid white;
-            border-radius: 8px;
+            border-radius: 38px;
             padding: 12px 8px 16px 8px;
         }}
     """
@@ -66,7 +66,7 @@ def topbar_normal(color: str) -> str:
             background-color: {color};
             color: white;
             border: none;
-            border-radius: 30px;
+            border-radius: 13px;
         }}
     """
 
@@ -77,7 +77,7 @@ def topbar_selected() -> str:
             background-color: {COLOR_ACCENT};
             color: black;
             border: 3px solid white;
-            border-radius: 30px;
+            border-radius: 13px;
         }}
     """
 

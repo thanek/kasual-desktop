@@ -75,6 +75,10 @@ class Desktop(QWidget):
         self._dynamic_pids:   dict[str, int]                 = {}
         # Last window list from KWin — used for window-presence running checks
         self._last_windows:   list[dict]                     = []
+        # Signature of the currently displayed dynamic tiles — lets a periodic
+        # KWin refresh skip the teardown/rebuild when nothing visible changed,
+        # so an in-progress tile marquee animation is not restarted.
+        self._dyn_signature:  tuple | None                   = None
         # Currently active app/window — what BTN_MODE context menu will target
         # {'type': 'app', 'id': idx, 'name': ...} or {'type': 'dyn', 'id': win_id, 'name': ...}
         # dyn contexts also carry 'trigger' (BTN_MODE_CLICK / BTN_MODE_HOLD_1S)
@@ -235,9 +239,23 @@ class Desktop(QWidget):
     # ── Top bar ────────────────────────────────────────────────────────────
 
     def _build_topbar(self) -> QWidget:
+        wrapper = QWidget()
+        wrapper.setStyleSheet("background: transparent;")
+        _outer = QVBoxLayout(wrapper)
+        _outer.setContentsMargins(16, 10, 16, 0)
+        _outer.setSpacing(0)
+
         bar = QWidget()
+        bar.setObjectName("topbar")
         bar.setFixedHeight(80)
-        bar.setStyleSheet("background-color: rgba(15, 17, 25, 210);")
+        bar.setStyleSheet(
+            "#topbar {"
+            "  background-color: rgba(15, 17, 25, 210);"
+            "  border: 1px solid black;"
+            "  border-radius: 12px;"
+            "}"
+        )
+        _outer.addWidget(bar)
 
         layout = QHBoxLayout(bar)
         layout.setContentsMargins(24, 0, 24, 0)
@@ -304,7 +322,7 @@ class Desktop(QWidget):
         clock_timer.timeout.connect(self._update_clock)
         clock_timer.start(1000)
 
-        return bar
+        return wrapper
 
     def _update_clock(self) -> None:
         from datetime import datetime
@@ -373,9 +391,7 @@ class Desktop(QWidget):
             if self._active_context['id'] not in active_ids:
                 self._active_context = None
                 if not self.isVisible():
-                    self._gamepad.push_handler(self._handle_pad)
-                    self.showFullScreen()
-                    self.activateWindow()
+                    self._reactivate_desktop()
 
     def _find_trigger_for_pid(self, pid: int) -> str:
         """Return the recall_menu_trigger of the static app that owns *pid*.
@@ -410,7 +426,6 @@ class Desktop(QWidget):
         Filters out windows belonging to the application launched by AppManager —
         they are already represented by a static tile.
         """
-        self._clear_dynamic_tiles()
         self._last_windows = windows
 
         # Exclude windows belonging to any of our static applications.
@@ -437,6 +452,19 @@ class Desktop(QWidget):
             return rc in defined_cmds or df in defined_cmds
 
         extern_windows = [w for w in windows if not _is_managed_window(w)]
+
+        # The window list is refreshed periodically (every few seconds). When the
+        # visible dynamic tiles are unchanged, skip the teardown/rebuild entirely —
+        # recreating the AppTiles would restart any in-progress marquee animation.
+        signature = tuple(
+            (w['id'], w['title'], w.get('desktopFile', ''), w.get('resourceClass', ''))
+            for w in extern_windows
+        )
+        if signature == self._dyn_signature:
+            return
+        self._dyn_signature = signature
+
+        self._clear_dynamic_tiles()
 
         if not extern_windows:
             self._clamp_tile_index()
@@ -469,6 +497,7 @@ class Desktop(QWidget):
                 icon_name='fa5s.window-maximize',
                 color='#2e3440',
                 qicon=app_icon,
+                full_name=combined,
             )
             tile.set_running(True)   # window exists → application is running
             win_id = w['id']
@@ -494,6 +523,10 @@ class Desktop(QWidget):
     def _total_tiles(self) -> int:
         return len(self._tiles) + len(self._dynamic_tiles)
 
+    def _all_tiles(self) -> list[AppTile]:
+        """Static tiles followed by dynamic (open-window) tiles, in display order."""
+        return self._tiles + [t for _, _, t in self._dynamic_tiles]
+
     def _clamp_tile_index(self) -> None:
         total = self._total_tiles()
         if total == 0:
@@ -511,19 +544,25 @@ class Desktop(QWidget):
         for i, (_, _, tile) in enumerate(self._dynamic_tiles):
             tile.set_selected(in_tiles and (n_static + i) == self._tile_index)
 
+        action_colors = [a["color"] for a in ACTIONS.values()]
         for i, btn in enumerate(self._topbar_buttons):
             if self._focus_mode == "topbar" and i == self._topbar_index:
                 btn.setStyleSheet(styles.topbar_selected())
             else:
-                btn.setStyleSheet(styles.topbar_normal(list(ACTIONS.values())[i]["color"]))
+                btn.setStyleSheet(styles.topbar_normal(action_colors[i]))
 
         if in_tiles:
             QTimer.singleShot(0, self._center_focused_tile)
 
+    def _focus_moved(self) -> None:
+        """Repaint focus highlight and play the cursor-move sound."""
+        self._update_focus()
+        sound_player.play("cursor")
+
     def _center_focused_tile(self) -> None:
         if self._focus_mode != "tiles":
             return
-        all_tiles: list[AppTile] = self._tiles + [t for _, _, t in self._dynamic_tiles]
+        all_tiles = self._all_tiles()
         if not (0 <= self._tile_index < len(all_tiles)):
             return
         tile = all_tiles[self._tile_index]
@@ -574,17 +613,14 @@ class Desktop(QWidget):
             max_idx = self._total_tiles() - 1
             if event == "left" and self._tile_index > 0:
                 self._tile_index -= 1
-                self._update_focus()
-                sound_player.play("cursor")
+                self._focus_moved()
             elif event == "right" and self._tile_index < max_idx:
                 self._tile_index += 1
-                self._update_focus()
-                sound_player.play("cursor")
+                self._focus_moved()
             elif event == "up" and self._topbar_buttons:
                 self._focus_mode = "topbar"
                 self._topbar_index = 0
-                self._update_focus()
-                sound_player.play("cursor")
+                self._focus_moved()
             elif event == "select":
                 self._on_tile_clicked(self._tile_index)
             elif event == "close":
@@ -593,16 +629,13 @@ class Desktop(QWidget):
         elif self._focus_mode == "topbar":
             if event == "left":
                 self._topbar_index = (self._topbar_index - 1) % len(self._topbar_buttons)
-                self._update_focus()
-                sound_player.play("cursor")
+                self._focus_moved()
             elif event == "right":
                 self._topbar_index = (self._topbar_index + 1) % len(self._topbar_buttons)
-                self._update_focus()
-                sound_player.play("cursor")
+                self._focus_moved()
             elif event in ("down", "cancel"):
                 self._focus_mode = "tiles"
-                self._update_focus()
-                sound_player.play("cursor")
+                self._focus_moved()
             elif event == "select":
                 self._topbar_buttons[self._topbar_index].click()
 
@@ -662,9 +695,7 @@ class Desktop(QWidget):
             self._active_context = None
         if not self.isVisible():
             # App exited on its own (crash / self-close) — show desktop now
-            self._gamepad.push_handler(self._handle_pad)
-            self.showFullScreen()
-            self.activateWindow()
+            self._reactivate_desktop()
         # Some apps (notably Steam) re-enumerate the gamepad on exit,
         # leaving our evdev fd pointing at a dead device with no error.
         # Delay long enough for the kernel to surface the replacement.
@@ -692,7 +723,7 @@ class Desktop(QWidget):
             options.append((self.tr("Restore"), lambda: self._on_tile_clicked(idx)))
             options.append((self.tr("Close"),   self._close_focused_tile))
 
-        all_tiles: list[AppTile] = self._tiles + [t for _, _, t in self._dynamic_tiles]
+        all_tiles = self._all_tiles()
         popover = TilePopoverMenu(
             options=options,
             gamepad=self._gamepad,
@@ -700,33 +731,31 @@ class Desktop(QWidget):
         )
         popover.show_above(all_tiles[idx])
 
+    def _context_for_index(self, idx: int) -> dict | None:
+        """Resolve a tile index to an app/window context dict, or None if out of range."""
+        n_static = len(self._tiles)
+        if idx < n_static:
+            return {'type': 'app', 'id': idx, 'name': self._apps[idx]['name']}
+        dyn_idx = idx - n_static
+        if dyn_idx >= len(self._dynamic_tiles):
+            return None
+        win_id, title, _ = self._dynamic_tiles[dyn_idx]
+        return {'type': 'dyn', 'id': win_id, 'name': title}
+
     def _close_focused_tile(self) -> None:
         """Close the application represented by the currently focused tile."""
-        idx = self._tile_index
-        n_static = len(self._tiles)
+        app = self._context_for_index(self._tile_index)
+        if app is not None:
+            self.request_close_app(app)
 
-        if idx < n_static:
-            app = {
-                'type': 'app',
-                'id': idx,
-                'name': self._apps[idx]['name']
-            }
-        else:
-            dyn_idx = idx - n_static
-            win_id, title, _ = self._dynamic_tiles[dyn_idx]
-
-            app = {
-                'type': 'dyn',
-                'id': win_id,
-                'name': title
-            }
-
-        self.request_close_app(app)
-
-    def _restore_desktop_view(self) -> None:
+    def _reactivate_desktop(self) -> None:
+        """Push our gamepad handler and bring the fullscreen Desktop to the front."""
         self._gamepad.push_handler(self._handle_pad)
         self.showFullScreen()
         self.activateWindow()
+
+    def _restore_desktop_view(self) -> None:
+        self._reactivate_desktop()
         # Wayland focus-stealing prevention can ignore Qt's activateWindow
         # when another app (still dying) holds focus. Force Desktop to the
         # top of the stack via KWin scripting.

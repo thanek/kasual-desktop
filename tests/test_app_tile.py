@@ -1,5 +1,5 @@
 """
-Testy AppTile — maszyna stanów kropki (running / closing).
+Testy AppTile — maszyna stanów paska statusu (running / closing).
 """
 
 import sys
@@ -18,15 +18,15 @@ def tile(qapp):
 class TestDotRunning:
     def test_set_running_true_shows_dot(self, tile):
         tile.set_running(True)
-        assert not tile._dot.isHidden()
+        assert not tile._status_bar.isHidden()
 
     def test_set_running_false_hides_dot(self, tile):
         tile.set_running(True)
         tile.set_running(False)
-        assert tile._dot.isHidden()
+        assert tile._status_bar.isHidden()
 
     def test_dot_hidden_by_default(self, tile):
-        assert tile._dot.isHidden()
+        assert tile._status_bar.isHidden()
 
     def test_set_running_false_resets_closing_flag(self, tile):
         tile.set_closing()
@@ -37,7 +37,7 @@ class TestDotRunning:
 class TestDotClosing:
     def test_set_closing_shows_dot(self, tile):
         tile.set_closing()
-        assert not tile._dot.isHidden()
+        assert not tile._status_bar.isHidden()
 
     def test_set_closing_sets_flag(self, tile):
         tile.set_closing()
@@ -46,7 +46,7 @@ class TestDotClosing:
     def test_set_running_true_after_closing_keeps_dot_visible(self, tile):
         tile.set_closing()
         tile.set_running(True)   # _refresh_tile_status wywołuje to co 500 ms
-        assert not tile._dot.isHidden()
+        assert not tile._status_bar.isHidden()
 
     def test_set_running_true_after_closing_does_not_reset_flag(self, tile):
         tile.set_closing()
@@ -56,11 +56,11 @@ class TestDotClosing:
     def test_set_running_false_after_closing_hides_dot(self, tile):
         tile.set_closing()
         tile.set_running(False)  # proces zakończył działanie
-        assert tile._dot.isHidden()
+        assert tile._status_bar.isHidden()
 
     def test_closing_dot_color_differs_from_running(self, tile):
         tile.set_running(True)
-        green_style = tile._dot.styleSheet()
+        green_style = tile._status_bar.styleSheet()
         tile.set_closing()
-        orange_style = tile._dot.styleSheet()
+        orange_style = tile._status_bar.styleSheet()
         assert green_style != orange_style
