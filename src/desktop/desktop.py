@@ -42,6 +42,7 @@ class Desktop(QWidget):
         self._topbar_index   = 0
         self._confirm_dialog = None
         self._volume_overlay = None
+        self._tile_popover   = None
         self._is_paused      = False
         # Reference-counted "minimal mode" — when >0, topbar and tile bar are
         # hidden so the only thing showing through an overlay's translucent
@@ -62,11 +63,14 @@ class Desktop(QWidget):
         main.setSpacing(0)
         self._topbar = TopBar()
         self._topbar.action_triggered.connect(self._topbar_action)
+        self._topbar.button_hovered.connect(self._on_topbar_hovered)
         main.addWidget(self._topbar)
         main.addStretch(1)
         self._tilebar = TileBar(self._apps, self._app_manager)
         self._tilebar.activated.connect(self._on_tile_activated)
         self._tilebar.windows_changed.connect(self._check_active_dyn_gone)
+        self._tilebar.tile_hovered.connect(self._on_tile_hovered)
+        self._tilebar.tile_context_menu.connect(self._on_tile_context_menu)
         main.addWidget(self._tilebar)
         main.addStretch(1)
 
@@ -284,6 +288,26 @@ class Desktop(QWidget):
 
     # ── Tile actions ───────────────────────────────────────────────────────
 
+    def _on_tile_hovered(self, _idx: int) -> None:
+        if self._tile_popover is not None:
+            return
+        if self._focus_mode != "tiles":
+            self._focus_mode = "tiles"
+            self._topbar.set_selected(None)
+            self._tilebar.set_focused(True, scroll=False)
+        sound_player.play("cursor")
+
+    def _on_topbar_hovered(self, idx: int) -> None:
+        changed = self._focus_mode != "topbar" or self._topbar_index != idx
+        if changed:
+            self._focus_mode = "topbar"
+            self._topbar_index = idx
+            self._focus_moved()
+
+    def _on_tile_context_menu(self) -> None:
+        self._focus_mode = "tiles"
+        self._show_tile_popover()
+
     def _on_tile_activated(self, context: dict) -> None:
         """A tile (static app or open window) was chosen via gamepad or click."""
         self._active_context = context
@@ -353,7 +377,12 @@ class Desktop(QWidget):
             gamepad=self._gamepad,
             parent=self,
         )
+        self._tile_popover = popover
+        popover.closed.connect(self._on_tile_popover_closed)
         popover.show_above(self._tilebar.current_tile())
+
+    def _on_tile_popover_closed(self) -> None:
+        self._tile_popover = None
 
     def _close_focused_tile(self) -> None:
         """Close the application represented by the currently focused tile."""

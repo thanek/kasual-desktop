@@ -40,8 +40,10 @@ class TileBar(QScrollArea):
       * ``windows_changed()``     — the dynamic-tile set was rebuilt
     """
 
-    activated       = pyqtSignal(dict)
-    windows_changed = pyqtSignal()
+    activated        = pyqtSignal(dict)
+    windows_changed  = pyqtSignal()
+    tile_hovered     = pyqtSignal(int)
+    tile_context_menu = pyqtSignal()
 
     def __init__(self, apps: list[dict], app_manager: AppManager, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -86,6 +88,8 @@ class TileBar(QScrollArea):
                 color=app.get("color", "#2e3440"),
             )
             tile.clicked.connect(lambda idx=i: self._activate_index(idx))
+            tile.hovered.connect(lambda idx=i: self._on_tile_hovered(idx))
+            tile.right_clicked.connect(lambda idx=i: self._on_tile_right_clicked(idx))
             self._tile_layout.addWidget(tile)
             self._tiles.append(tile)
 
@@ -103,10 +107,10 @@ class TileBar(QScrollArea):
         self._render_tiles()
         return True
 
-    def set_focused(self, focused: bool) -> None:
+    def set_focused(self, focused: bool, scroll: bool = True) -> None:
         """Whether the tile bar (vs the top bar) owns the focus highlight."""
         self._focused = focused
-        self._render_tiles()
+        self._render_tiles(scroll=scroll)
 
     def select_current(self) -> None:
         """Activate the focused tile (as if it were clicked)."""
@@ -242,7 +246,10 @@ class TileBar(QScrollArea):
             )
             tile.set_running(True)   # window exists → application is running
             win_id = w['id']
+            abs_idx = len(self._tiles) + len(self._dynamic_tiles)
             tile.clicked.connect(lambda wid=win_id: self._on_dynamic_clicked(wid))
+            tile.hovered.connect(lambda i=abs_idx: self._on_tile_hovered(i))
+            tile.right_clicked.connect(lambda i=abs_idx: self._on_tile_right_clicked(i))
             self._tile_layout.addWidget(tile)
             self._dynamic_tiles.append((win_id, full_title, tile))
             self._dynamic_pids[win_id] = w.get('pid', 0)
@@ -268,13 +275,13 @@ class TileBar(QScrollArea):
         elif self._tile_index >= total:
             self._tile_index = total - 1
 
-    def _render_tiles(self) -> None:
+    def _render_tiles(self, scroll: bool = True) -> None:
         n_static = len(self._tiles)
         for i, tile in enumerate(self._tiles):
             tile.set_selected(self._focused and i == self._tile_index)
         for i, (_, _, tile) in enumerate(self._dynamic_tiles):
             tile.set_selected(self._focused and (n_static + i) == self._tile_index)
-        if self._focused:
+        if self._focused and scroll:
             QTimer.singleShot(0, self.center_current)
 
     def _clear_dynamic_tiles(self) -> None:
@@ -298,6 +305,24 @@ class TileBar(QScrollArea):
         ctx = self._context_for_index(idx)
         if ctx is not None:
             self.activated.emit(ctx)
+
+    def _on_tile_hovered(self, idx: int) -> None:
+        changed = self._tile_index != idx or not self._focused
+        self._tile_index = idx
+        self._render_tiles(scroll=False)
+        QTimer.singleShot(0, self._ensure_tile_visible)
+        if changed:
+            self.tile_hovered.emit(idx)
+
+    def _ensure_tile_visible(self) -> None:
+        tiles = self._all_tiles()
+        if 0 <= self._tile_index < len(tiles):
+            self.ensureWidgetVisible(tiles[self._tile_index], xMargin=60, yMargin=0)
+
+    def _on_tile_right_clicked(self, idx: int) -> None:
+        self._tile_index = idx
+        self._render_tiles(scroll=False)
+        self.tile_context_menu.emit()
 
     def _on_dynamic_clicked(self, win_id: str) -> None:
         n_static = len(self._tiles)

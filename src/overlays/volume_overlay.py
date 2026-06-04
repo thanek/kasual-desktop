@@ -30,7 +30,8 @@ class VolumeOverlay(BaseOverlay):
         outer = QVBoxLayout(self)
         outer.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
-        card = QWidget()
+        self._card = QWidget()
+        card = self._card
         card.setFixedWidth(500)
         card.setStyleSheet(
             f"background-color: {styles.COLOR_CARD_BG}; border-radius: {styles.CARD_RADIUS_PX}px;"
@@ -135,6 +136,12 @@ class VolumeOverlay(BaseOverlay):
         sound_player.play("cursor")
 
     # ── Keyboard ───────────────────────────────────────────────────────────
+
+    def mousePressEvent(self, event) -> None:
+        if not self._card.geometry().contains(event.pos()):
+            self._close()
+        else:
+            super().mousePressEvent(event)
 
     def keyPressEvent(self, event: QKeyEvent) -> None:
         key = event.key()

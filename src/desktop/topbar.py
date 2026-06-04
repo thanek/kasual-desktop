@@ -23,6 +23,7 @@ class TopBar(QWidget):
     """
 
     action_triggered = pyqtSignal(str)   # emits the action_type of the clicked button
+    button_hovered   = pyqtSignal(int)   # emits the index of the hovered button
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -66,13 +67,21 @@ class TopBar(QWidget):
         btn_layout = QHBoxLayout(btn_area)
         btn_layout.setContentsMargins(0, 0, 0, 0)
         btn_layout.setSpacing(BTN_SPACING)
-        for action_type, action in ACTIONS.items():
+
+        def _bind_hover(btn: QPushButton, idx: int) -> None:
+            def _enter(event) -> None:
+                QPushButton.enterEvent(btn, event)
+                self.button_hovered.emit(idx)
+            btn.enterEvent = _enter
+
+        for i, (action_type, action) in enumerate(ACTIONS.items()):
             btn = QPushButton()
             btn.setFixedSize(BTN_SIZE, BTN_SIZE)
             btn.setIcon(qta.icon(action["icon"], color="white"))
             btn.setIconSize(QSize(24, 24))
             btn.setStyleSheet(styles.topbar_normal(action["color"]))
             btn.clicked.connect(lambda _, t=action_type: self.action_triggered.emit(t))
+            _bind_hover(btn, i)
             btn_layout.addWidget(btn)
             self._buttons.append(btn)
         layout.addWidget(btn_area)

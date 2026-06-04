@@ -32,7 +32,9 @@ BTN_OFFSET_Y = (TILE_SEL_H - TILE_H) // 2   # 20
 class AppTile(QWidget):
     """Single application tile."""
 
-    clicked = pyqtSignal()
+    clicked       = pyqtSignal()
+    hovered       = pyqtSignal()
+    right_clicked = pyqtSignal()
 
     def __init__(self, name: str, icon_name: str, color: str, qicon=None, full_name: str | None = None, parent=None):
         super().__init__(parent)
@@ -72,6 +74,16 @@ class AppTile(QWidget):
 
     def click(self) -> None:
         self._btn.click()
+
+    def enterEvent(self, event) -> None:
+        super().enterEvent(event)
+        self.hovered.emit()
+
+    def mousePressEvent(self, event) -> None:
+        if event.button() == Qt.MouseButton.RightButton:
+            self.right_clicked.emit()
+        else:
+            super().mousePressEvent(event)
 
     def set_selected(self, selected: bool) -> None:
         if selected == self._is_selected:

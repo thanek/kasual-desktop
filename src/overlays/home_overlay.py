@@ -202,7 +202,13 @@ class HomeOverlay(QWidget):
 
         self._items = list(items) if items else self.static_items()
 
-        for item in self._items:
+        def _bind_hover(btn: QPushButton, idx: int) -> None:
+            def _enter(event) -> None:
+                QPushButton.enterEvent(btn, event)
+                self._on_hover(idx)
+            btn.enterEvent = _enter
+
+        for i, item in enumerate(self._items):
             # Static items have labels marked with QT_TRANSLATE_NOOP — we translate here.
             # Dynamic items (callback) already have ready-formatted labels.
             label = (
@@ -214,6 +220,8 @@ class HomeOverlay(QWidget):
             btn.setMinimumHeight(62)
             btn.setIcon(qta.icon(item["icon"], color="white"))
             btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+            btn.clicked.connect(lambda checked=False, idx=i: self._activate(idx))
+            _bind_hover(btn, i)
             self._buttons_layout.addWidget(btn)
             self._buttons.append(btn)
 
@@ -272,6 +280,18 @@ class HomeOverlay(QWidget):
             self._action_runner.run(action)
 
     # ── Style ──────────────────────────────────────────────────────────────
+
+    def mousePressEvent(self, event) -> None:
+        if not self._card.geometry().contains(event.pos()):
+            self._dismiss()
+        else:
+            super().mousePressEvent(event)
+
+    def _on_hover(self, idx: int) -> None:
+        if self._index != idx:
+            self._index = idx
+            self._refresh_buttons()
+            sound_player.play("cursor")
 
     def _refresh_buttons(self) -> None:
         for i, btn in enumerate(self._buttons):
