@@ -366,7 +366,7 @@ class Desktop(QWidget):
             return
         options: list[tuple[str, object]] = []
 
-        if ctx['type'] == 'app' and not self._app_manager.is_running(ctx['id']):
+        if ctx['type'] == 'app' and not self._tilebar.is_tile_running(ctx['id']):
             options.append((self.tr("Launch"), self._tilebar.select_current))
         else:
             options.append((self.tr("Restore"), self._tilebar.select_current))

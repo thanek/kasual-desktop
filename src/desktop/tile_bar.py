@@ -144,20 +144,24 @@ class TileBar(QScrollArea):
 
     # ── Status refresh ──────────────────────────────────────────────────────
 
+    def is_tile_running(self, idx: int) -> bool:
+        """True if the static tile at *idx* is running — either via AppManager
+        (launched by Kasual) or via a visible KWin window (launched externally
+        or after a self-relaunch that lost the process-group link)."""
+        if self._app_manager.is_running(idx):
+            return True
+        if self._last_windows and idx < len(self._apps):
+            cmd = os.path.basename(self._apps[idx]['command']).lower()
+            return any(
+                w.get('resourceClass', '').lower() == cmd or
+                os.path.splitext(w.get('desktopFile', '').lower())[0] == cmd
+                for w in self._last_windows
+            )
+        return False
+
     def refresh_status(self) -> None:
         for i, tile in enumerate(self._tiles):
-            is_running = self._app_manager.is_running(i)
-            if not is_running and self._last_windows:
-                # AppManager may have lost track after a self-relaunch (e.g. Steam
-                # updates itself and restarts in a new process group). Keep the
-                # tile marked as running as long as a matching window is visible.
-                cmd = os.path.basename(self._apps[i]['command']).lower()
-                is_running = any(
-                    w.get('resourceClass', '').lower() == cmd or
-                    os.path.splitext(w.get('desktopFile', '').lower())[0] == cmd
-                    for w in self._last_windows
-                )
-            tile.set_running(is_running)
+            tile.set_running(self.is_tile_running(i))
 
     # ── Dynamic tiles (currently open windows) ─────────────────────────────
 
