@@ -22,6 +22,12 @@ BAR_MARGIN    = 12
 MARQUEE_MS_PER_PX = 30    # scroll speed
 MARQUEE_PAUSE_MS  = 900   # hold at each end before reversing
 
+# Centering offset of the normal button within the always-fixed TILE_SEL_* slot.
+# When selected the button fills the slot (offset 0,0); when not selected it sits
+# centred with these margins, so activating a tile doesn't shift its neighbours.
+BTN_OFFSET_X = (TILE_SEL_W - TILE_W) // 2   # 18
+BTN_OFFSET_Y = (TILE_SEL_H - TILE_H) // 2   # 20
+
 
 class AppTile(QWidget):
     """Single application tile."""
@@ -58,6 +64,7 @@ class AppTile(QWidget):
         self._status_bar = QLabel(self)
         self._status_bar.hide()
 
+        self.setFixedSize(TILE_SEL_W, TILE_SEL_H)
         self._refit(TILE_W, TILE_H, ICON_SIZE)
         self._apply_shadow(selected=False)
 
@@ -109,13 +116,15 @@ class AppTile(QWidget):
             styles.apply_card_shadow(self, offset_x=4, offset_y=6, blur=32, alpha=180)
 
     def _refit(self, w: int, h: int, icon: int) -> None:
-        """Resize tile, button, icon and reposition the status bar."""
-        self.setFixedSize(w, h)
+        """Position and resize the button within the fixed TILE_SEL_W × TILE_SEL_H slot."""
+        ox = (TILE_SEL_W - w) // 2
+        oy = (TILE_SEL_H - h) // 2
+        self._btn.move(ox, oy)
         self._btn.setFixedSize(w, h)
         self._btn.setIconSize(QSize(icon, icon))
         bar_w = round(w * BAR_W_RATIO)
         self._status_bar.setFixedSize(bar_w, BAR_H)
-        self._status_bar.move((w - bar_w) // 2, h - BAR_H - BAR_MARGIN)
+        self._status_bar.move(ox + (w - bar_w) // 2, oy + h - BAR_H - BAR_MARGIN)
 
     def _show_status_bar(self, color: str) -> None:
         self._status_bar.setStyleSheet(

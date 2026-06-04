@@ -1,0 +1,346 @@
+"""Horizontal, scrollable bar of application tiles (static + open-window)."""
+
+import logging
+import os
+
+from PyQt6.QtCore import Qt, QTimer, pyqtSignal
+from PyQt6.QtWidgets import QWidget, QHBoxLayout, QScrollArea, QApplication
+
+from input.gamepad_watcher import BTN_MODE_CLICK
+from system.app_manager import AppManager
+from ui import styles
+from .app_tile import AppTile, TILE_H, TILE_SEL_H
+from .window_icons import WindowIconResolver
+
+logger = logging.getLogger(__name__)
+
+_DYN_TILE_MAX_TITLE = 22   # Maximum length of a dynamic tile title
+
+
+def _get_ppid(pid: int) -> int | None:
+    """Return the parent PID of *pid* by reading /proc, or None on failure."""
+    try:
+        with open(f'/proc/{pid}/status') as f:
+            for line in f:
+                if line.startswith('PPid:'):
+                    return int(line.split()[1])
+    except (OSError, ValueError):
+        pass
+    return None
+
+
+class TileBar(QScrollArea):
+    """Scrollable row of tiles: configured apps first, then open-window tiles.
+
+    Navigation between the tile bar and the top bar lives in the Desktop
+    coordinator; this widget only renders the highlight it is told to own via
+    :meth:`set_focused` and reports user intent through its signals:
+
+      * ``activated(dict)``       — a tile was chosen (app/window context dict)
+      * ``windows_changed()``     — the dynamic-tile set was rebuilt
+    """
+
+    activated       = pyqtSignal(dict)
+    windows_changed = pyqtSignal()
+
+    def __init__(self, apps: list[dict], app_manager: AppManager, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self._apps          = apps
+        self._app_manager   = app_manager
+        self._icon_resolver = WindowIconResolver()
+
+        self._tile_index = 0
+        self._focused    = True   # tiles own focus at startup
+
+        # Dynamic tiles: list of (window_id, title, AppTile)
+        self._dynamic_tiles: list[tuple[str, str, AppTile]] = []
+        self._dyn_separator: QWidget | None                 = None
+        # window_id → pid for dynamic tiles (used for trigger inheritance)
+        self._dynamic_pids:  dict[str, int]                 = {}
+        # Last window list from KWin — used for window-presence running checks
+        self._last_windows:  list[dict]                     = []
+        # Signature of the currently displayed dynamic tiles — lets a periodic
+        # KWin refresh skip the teardown/rebuild when nothing visible changed,
+        # so an in-progress tile marquee animation is not restarted.
+        self._dyn_signature: tuple | None                   = None
+
+        self.setFixedHeight(TILE_SEL_H + 100)
+        self.setWidgetResizable(True)
+        self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.setStyleSheet("QScrollArea { border: none; background: transparent; }")
+
+        container = QWidget()
+        container.setStyleSheet("background: transparent;")
+        self._tile_layout = QHBoxLayout(container)
+        # Half-screen padding on each side so any tile can be scrolled to center.
+        screen_half = QApplication.primaryScreen().size().width() // 2
+        self._tile_layout.setContentsMargins(screen_half, 50, screen_half, 50)
+        self._tile_layout.setSpacing(24)
+
+        self._tiles: list[AppTile] = []
+        for i, app in enumerate(self._apps):
+            tile = AppTile(
+                name=app["name"],
+                icon_name=app.get("icon", "fa5s.desktop"),
+                color=app.get("color", "#2e3440"),
+            )
+            tile.clicked.connect(lambda idx=i: self._activate_index(idx))
+            self._tile_layout.addWidget(tile)
+            self._tiles.append(tile)
+
+        self.setWidget(container)
+        self._render_tiles()
+
+    # ── Navigation / focus ──────────────────────────────────────────────────
+
+    def move(self, delta: int) -> bool:
+        """Shift focus by *delta* within bounds. Returns True if it moved."""
+        new = self._tile_index + delta
+        if not (0 <= new <= self._total() - 1):
+            return False
+        self._tile_index = new
+        self._render_tiles()
+        return True
+
+    def set_focused(self, focused: bool) -> None:
+        """Whether the tile bar (vs the top bar) owns the focus highlight."""
+        self._focused = focused
+        self._render_tiles()
+
+    def select_current(self) -> None:
+        """Activate the focused tile (as if it were clicked)."""
+        self._activate_index(self._tile_index)
+
+    def current_context(self) -> dict | None:
+        """Context dict for the focused tile, or None if out of range."""
+        return self._context_for_index(self._tile_index)
+
+    def current_tile(self) -> AppTile | None:
+        tiles = self._all_tiles()
+        return tiles[self._tile_index] if 0 <= self._tile_index < len(tiles) else None
+
+    def center_current(self) -> None:
+        if not self._focused:
+            return
+        tiles = self._all_tiles()
+        if not (0 <= self._tile_index < len(tiles)):
+            return
+        tile = tiles[self._tile_index]
+        vp_w = self.viewport().width()
+        # tile.x() is relative to the container; center it in the viewport.
+        target = tile.x() + tile.width() // 2 - vp_w // 2
+        self.horizontalScrollBar().setValue(max(0, target))
+
+    def set_static_closing(self, idx: int) -> None:
+        self._tiles[idx].set_closing()
+
+    def has_dynamic_window(self, win_id: str) -> bool:
+        return any(wid == win_id for wid, _, _ in self._dynamic_tiles)
+
+    # ── Status refresh ──────────────────────────────────────────────────────
+
+    def refresh_status(self) -> None:
+        for i, tile in enumerate(self._tiles):
+            is_running = self._app_manager.is_running(i)
+            if not is_running and self._last_windows:
+                # AppManager may have lost track after a self-relaunch (e.g. Steam
+                # updates itself and restarts in a new process group). Keep the
+                # tile marked as running as long as a matching window is visible.
+                cmd = os.path.basename(self._apps[i]['command']).lower()
+                is_running = any(
+                    w.get('resourceClass', '').lower() == cmd or
+                    os.path.splitext(w.get('desktopFile', '').lower())[0] == cmd
+                    for w in self._last_windows
+                )
+            tile.set_running(is_running)
+
+    # ── Dynamic tiles (currently open windows) ─────────────────────────────
+
+    def update_windows(self, windows: list[dict]) -> None:
+        """Rebuild the dynamic tile section from the KWin window list.
+
+        Filters out windows belonging to an application launched by AppManager —
+        they are already represented by a static tile. Emits ``windows_changed``
+        whenever the tile set is actually rebuilt (including down to empty) so the
+        coordinator can re-check active state — e.g. reactivate the desktop when
+        the last open window closes.
+        """
+        self._last_windows = windows
+
+        # Exclude windows belonging to any of our static applications.
+        # Two complementary checks — each handles cases the other misses:
+        #   1. pgid match: works for apps (Heroic, Firefox) that stay in the
+        #      same process group as the launcher.
+        #   2. resourceClass/desktopFile match: works for apps (Steam) that
+        #      self-relaunch in a new process group, losing the pgid link.
+        #      Uses all *defined* apps so filtering survives a Steam restart.
+        running_pids  = set(self._app_manager.all_running_pids())
+        defined_cmds  = {os.path.basename(a['command']).lower() for a in self._apps}
+
+        def _is_managed_window(w: dict) -> bool:
+            pid = w.get('pid', 0)
+            if pid == 0:
+                return False
+            try:
+                if running_pids and os.getpgid(pid) in running_pids:
+                    return True
+            except OSError:
+                pass
+            rc = w.get('resourceClass', '').lower()
+            df = os.path.splitext(w.get('desktopFile', '').lower())[0]
+            return rc in defined_cmds or df in defined_cmds
+
+        extern_windows = [w for w in windows if not _is_managed_window(w)]
+
+        # The window list is refreshed periodically (every few seconds). When the
+        # visible dynamic tiles are unchanged, skip the teardown/rebuild entirely —
+        # recreating the AppTiles would restart any in-progress marquee animation.
+        signature = tuple(
+            (w['id'], w['title'], w.get('desktopFile', ''), w.get('resourceClass', ''))
+            for w in extern_windows
+        )
+        if signature == self._dyn_signature:
+            return
+        self._dyn_signature = signature
+
+        self._clear_dynamic_tiles()
+
+        if not extern_windows:
+            self._clamp_index()
+            self._render_tiles()
+            self.windows_changed.emit()
+            return
+
+        # Visual separator between static and dynamic tiles
+        sep = QWidget()
+        sep.setFixedSize(2, TILE_H - 24)
+        sep.setStyleSheet("background: #3b4252;")
+        self._tile_layout.addWidget(sep)
+        self._dyn_separator = sep
+
+        for w in extern_windows:
+            full_title = w['title']
+            app_name   = self._icon_resolver.resolve_name(
+                w.get('desktopFile', ''), w.get('resourceClass', '')
+            )
+            if app_name and app_name != full_title:
+                combined = f"{app_name} ({full_title})"
+            else:
+                combined = app_name or full_title
+            display_title = styles.truncate(combined, _DYN_TILE_MAX_TITLE)
+            app_icon = self._icon_resolver.resolve_icon(
+                w.get('desktopFile', ''),
+                w.get('resourceClass', ''),
+            )
+            tile = AppTile(
+                name=display_title,
+                icon_name='fa5s.window-maximize',
+                color='#2e3440',
+                qicon=app_icon,
+                full_name=combined,
+            )
+            tile.set_running(True)   # window exists → application is running
+            win_id = w['id']
+            tile.clicked.connect(lambda wid=win_id: self._on_dynamic_clicked(wid))
+            self._tile_layout.addWidget(tile)
+            self._dynamic_tiles.append((win_id, full_title, tile))
+            self._dynamic_pids[win_id] = w.get('pid', 0)
+
+        self._clamp_index()
+        self._render_tiles()
+        logger.debug('Dynamic tiles: %d', len(self._dynamic_tiles))
+        self.windows_changed.emit()
+
+    # ── Private helpers ─────────────────────────────────────────────────────
+
+    def _total(self) -> int:
+        return len(self._tiles) + len(self._dynamic_tiles)
+
+    def _all_tiles(self) -> list[AppTile]:
+        """Static tiles followed by dynamic (open-window) tiles, in display order."""
+        return self._tiles + [t for _, _, t in self._dynamic_tiles]
+
+    def _clamp_index(self) -> None:
+        total = self._total()
+        if total == 0:
+            self._tile_index = 0
+        elif self._tile_index >= total:
+            self._tile_index = total - 1
+
+    def _render_tiles(self) -> None:
+        n_static = len(self._tiles)
+        for i, tile in enumerate(self._tiles):
+            tile.set_selected(self._focused and i == self._tile_index)
+        for i, (_, _, tile) in enumerate(self._dynamic_tiles):
+            tile.set_selected(self._focused and (n_static + i) == self._tile_index)
+        if self._focused:
+            QTimer.singleShot(0, self.center_current)
+
+    def _clear_dynamic_tiles(self) -> None:
+        for _, _, tile in self._dynamic_tiles:
+            self._tile_layout.removeWidget(tile)
+            tile.deleteLater()
+        self._dynamic_tiles.clear()
+        self._dynamic_pids.clear()
+        if self._dyn_separator is not None:
+            self._tile_layout.removeWidget(self._dyn_separator)
+            self._dyn_separator.deleteLater()
+            self._dyn_separator = None
+
+    def _activate_index(self, idx: int) -> None:
+        n_static = len(self._tiles)
+        # Ignore activation while a static app is shutting down — proc.poll() still
+        # reports it as running, so a restore would hide the Desktop and try to
+        # activate a window that's about to disappear.
+        if idx < n_static and self._tiles[idx].is_closing():
+            return
+        ctx = self._context_for_index(idx)
+        if ctx is not None:
+            self.activated.emit(ctx)
+
+    def _on_dynamic_clicked(self, win_id: str) -> None:
+        n_static = len(self._tiles)
+        for j, (wid, _, _) in enumerate(self._dynamic_tiles):
+            if wid == win_id:
+                self._activate_index(n_static + j)
+                return
+
+    def _context_for_index(self, idx: int) -> dict | None:
+        """Resolve a tile index to an app/window context dict, or None if out of range."""
+        n_static = len(self._tiles)
+        if idx < n_static:
+            return {'type': 'app', 'id': idx, 'name': self._apps[idx]['name']}
+        dyn_idx = idx - n_static
+        if dyn_idx >= len(self._dynamic_tiles):
+            return None
+        win_id, title, _ = self._dynamic_tiles[dyn_idx]
+        trigger = self._find_trigger_for_pid(self._dynamic_pids.get(win_id, 0))
+        return {'type': 'dyn', 'id': win_id, 'name': title, 'trigger': trigger}
+
+    def _find_trigger_for_pid(self, pid: int) -> str:
+        """Return the recall_menu_trigger of the static app that owns *pid*.
+
+        Walks the ppid chain upward looking for any PID tracked by AppManager.
+        Needed so that games launched by Steam inherit Steam's BTN_MODE_HOLD_1S
+        rather than using the dynamic-tile default (BTN_MODE_CLICK).
+        """
+        if pid == 0:
+            return BTN_MODE_CLICK
+        pid_to_idx = {
+            self._app_manager.running_pid(i): i
+            for i in self._app_manager.running_idxs()
+            if self._app_manager.running_pid(i) is not None
+        }
+        visited: set[int] = set()
+        current = pid
+        while current > 1 and current not in visited:
+            visited.add(current)
+            if current in pid_to_idx:
+                idx = pid_to_idx[current]
+                return self._apps[idx].get('recall_menu_trigger', BTN_MODE_CLICK)
+            ppid = _get_ppid(current)
+            if ppid is None:
+                break
+            current = ppid
+        return BTN_MODE_CLICK

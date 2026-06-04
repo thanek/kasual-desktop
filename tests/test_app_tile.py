@@ -45,7 +45,7 @@ class TestDotClosing:
 
     def test_set_running_true_after_closing_keeps_dot_visible(self, tile):
         tile.set_closing()
-        tile.set_running(True)   # _refresh_tile_status wywołuje to co 500 ms
+        tile.set_running(True)   # TileBar.refresh_status wywołuje to co 500 ms
         assert not tile._status_bar.isHidden()
 
     def test_set_running_true_after_closing_does_not_reset_flag(self, tile):
