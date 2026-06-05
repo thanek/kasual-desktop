@@ -397,11 +397,17 @@ class Desktop(QWidget):
             trigger = self._apps[idx].get("recall_menu_trigger", BTN_MODE_CLICK)
             self._gamepad.set_app_btn_mode_trigger(trigger)
             self._gamepad.pop_handler(self._handle_pad)
+            # Hide the KD surface so the launching app is visible. The Desktop is
+            # a top-layer surface, so a windowed app would otherwise stay behind
+            # it (matches restore_app, which already hides). Re-shown by
+            # _on_app_finished / _on_app_launch_failed.
+            self.hide()
             self._app_manager.launch(idx, self._apps[idx])
 
     def _on_app_launch_failed(self, idx: int, error: str) -> None:
         logger.warning("Application %d failed to launch: %s", idx, error)
-        self._gamepad.push_handler(self._handle_pad)
+        # We hid the Desktop when launching — bring it back for the error dialog.
+        self._reactivate_desktop()
         InfoDialog(
             message=self.tr("Failed to launch application:\n{0}").format(error),
             on_confirmed=lambda: None,
