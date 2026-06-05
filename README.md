@@ -21,25 +21,29 @@ Kasual Desktop is an interactive, graphical "launcher/desktop" interface, design
 
 ### Prerequisites
 
-- **KDE Plasma 6** (Wayland or X11)
-- **Python 3.10+**
-- **pip** and **venv** (usually bundled with Python)
-- System libraries required by PyQt6:
+- **KDE Plasma 6 on Wayland.** Kasual Desktop renders its UI as `wlr-layer-shell`
+  surfaces (overlays that sit above applications, including fullscreen games).
+  This requires a compositor that supports the protocol — **KWin (KDE) or another
+  wlroots-based compositor**. GNOME/Mutter does **not** support `wlr-layer-shell`.
+- **Python 3.10+** with `venv`.
+- **System Qt + PyQt6 (not pip's bundled PyQt6).** The layer-shell integration
+  plugin is version-locked to the system Qt build, so Kasual Desktop must run against the
+  distribution's PyQt6 — pip's self-contained Qt cannot load it.
 
   On **Debian/Ubuntu**:
   ```bash
-  sudo apt install python3-venv python3-dev libgl1 libegl1 libxcb-cursor0
-  ```
-
-  On **Fedora**:
-  ```bash
-  sudo dnf install python3-devel mesa-libGL mesa-libEGL libxcb
+  sudo apt install python3-venv python3-dev \
+      python3-pyqt6 python3-pyqt6.sip python3-pyqt6.qtmultimedia \
+      layer-shell-qt qt6-wayland
   ```
 
   On **Arch Linux**:
   ```bash
-  sudo pacman -S python mesa libxcb
+  sudo pacman -S python python-pyqt6 layer-shell-qt qt6-wayland
   ```
+
+  Other distros: install the equivalent of `python3-pyqt6` (incl. its
+  `QtMultimedia` module), `layer-shell-qt` (LayerShellQt) and `qt6-wayland`.
 
 ### Gamepad permissions
 
@@ -68,25 +72,28 @@ sudo udevadm control --reload-rules && sudo udevadm trigger
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/thanek/kasual.git
-   cd kasual
+   git clone https://github.com/thanek/kasual-desktop.git
+   cd kasual-desktop
    ```
 
-2. Create and activate a virtual environment:
+2. Create a virtual environment **with access to the system PyQt6**:
    ```bash
-   python3 -m venv venv
+   python3 -m venv --system-site-packages venv
    source venv/bin/activate
    ```
 
-3. Install Python dependencies:
+3. Install the remaining (pure-Python) dependencies:
    ```bash
    pip install -r requirements.txt
    ```
 
 4. Run the application:
    ```bash
-   python src/main.py
+   ./kasual.sh
    ```
+   `kasual.sh` selects the Wayland platform and the layer-shell integration and
+   forces the system PyQt6 (`QT_QPA_PLATFORM=wayland`,
+   `QT_WAYLAND_SHELL_INTEGRATION=layer-shell`, `PYTHONNOUSERSITE=1`).
 
 ## ⚙️ Configuration
 

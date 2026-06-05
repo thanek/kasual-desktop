@@ -67,10 +67,10 @@ start gry → ukryj Desktop; BTN_MODE → pokaż Home Overlay; z Home Overlay �
 - [x] testy zielone (185+54+10) + smoke start pod layer-shell bez wyjątków
 - [x] **walidacja na żywo (user):** dialog „Zamknij…" nad grą JEST na wierzchu ✓; VolumeOverlay ✓; TilePopover ✓ (InfoDialog założony OK — dzieli `BaseOverlay`)
 
-### Faza 4 — Dystrybucja
-- [ ] `requirements.txt` tylko czyste-pythonowe
-- [ ] udokumentować deps systemowe (Debian/Ubuntu: `python3-pyqt6 python3-pyqt6.sip layer-shell-qt qt6-wayland`; Arch: `python-pyqt6 layer-shell-qt`)
-- [ ] opcjonalnie `.deb`/PKGBUILD
+### Faza 4 — Dystrybucja  ✅ GOTOWE (docs); packaging opcjonalny/odłożony
+- [x] `requirements.txt` tylko czyste-pythonowe (od Fazy 0) + udokumentowane deps systemowe
+- [x] README: Prerequisites + Installation pod layer-shell/systemowe Qt (venv `--system-site-packages`, `python3-pyqt6.*`, `layer-shell-qt`, `qt6-wayland`, uruchamianie przez `./kasual.sh`)
+- [ ] (opcjonalnie, przyszłość) `.deb`/PKGBUILD jako natywna paczka
 
 ## Ryzyka / pytania otwarte
 1. PyQt6 6.9 vs 6.11 + pytest-qt — walidacja w Fazie 0.
