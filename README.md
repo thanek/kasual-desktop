@@ -34,16 +34,17 @@ Kasual Desktop is an interactive, graphical "launcher/desktop" interface, design
   ```bash
   sudo apt install python3-venv python3-dev \
       python3-pyqt6 python3-pyqt6.sip python3-pyqt6.qtmultimedia \
-      layer-shell-qt qt6-wayland
+      python3-pyqt6.qtwebengine layer-shell-qt qt6-wayland
   ```
 
   On **Arch Linux**:
   ```bash
-  sudo pacman -S python python-pyqt6 layer-shell-qt qt6-wayland
+  sudo pacman -S python python-pyqt6 python-pyqt6-webengine layer-shell-qt qt6-wayland
   ```
 
   Other distros: install the equivalent of `python3-pyqt6` (incl. its
-  `QtMultimedia` module), `layer-shell-qt` (LayerShellQt) and `qt6-wayland`.
+  `QtMultimedia` and `QtWebEngine` modules), `layer-shell-qt` (LayerShellQt)
+  and `qt6-wayland`. `QtWebEngine` is required by the bundled YouTube app.
 
 ### Gamepad permissions
 

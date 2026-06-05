@@ -1,5 +1,6 @@
 import logging
 import os
+import signal
 import sys
 from pathlib import Path
 
@@ -51,6 +52,11 @@ def _load_apps() -> list[dict]:
 
 
 def main() -> None:
+    # Restore default Ctrl+C handling: Qt's Wayland event loop swallows SIGINT
+    # (Python's handler never runs while app.exec() blocks), leaving the app
+    # unkillable from the terminal. SIG_DFL lets the OS terminate it directly.
+    signal.signal(signal.SIGINT, signal.SIG_DFL)
+
     log_file = _setup_logging()
     logger.info("Running Kasual Desktop")
 
