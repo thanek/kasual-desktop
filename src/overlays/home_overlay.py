@@ -3,9 +3,9 @@ from typing import Callable, NotRequired, TypedDict
 
 import qtawesome as qta
 from PyQt6.QtCore import Qt, QCoreApplication, QT_TRANSLATE_NOOP, pyqtSignal
-from PyQt6.QtGui import QColor, QPainter, QKeyEvent
+from PyQt6.QtGui import QColor, QPainter, QKeyEvent, QPixmap
 from PyQt6.QtWidgets import (
-    QWidget, QPushButton, QVBoxLayout, QLabel,
+    QWidget, QPushButton, QVBoxLayout, QHBoxLayout, QLabel, QSizePolicy,
 )
 
 from audio import sound_player
@@ -78,6 +78,7 @@ class HomeOverlay(QWidget):
         self._items:     list[MenuItem]    = []
         self._buttons:   list[QPushButton] = []
         self._on_cancel  = None
+        self._background: QPixmap | None   = None
         self._is_child   = parent is not None
 
         if self._is_child:
@@ -92,16 +93,24 @@ class HomeOverlay(QWidget):
             self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, False)
 
-        outer = QVBoxLayout(self)
-        outer.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        outer = QHBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.setSpacing(0)
+        outer.addStretch()
 
         self._card = QWidget()
         self._card.setFixedWidth(500)
-        self._card.setStyleSheet("background-color: #1e2430; border-radius: 14px;")
+        self._card.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Expanding)
+        self._card.setStyleSheet(
+            "background-color: #1e2430;"
+            "border-top-left-radius: 14px;"
+            "border-bottom-left-radius: 14px;"
+        )
 
         self._card_layout = QVBoxLayout(self._card)
         self._card_layout.setContentsMargins(32, 32, 32, 32)
         self._card_layout.setSpacing(8)
+        self._card_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
 
         title = QLabel(self.tr("Menu"))
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -118,7 +127,7 @@ class HomeOverlay(QWidget):
         self._buttons_layout.setSpacing(8)
         self._card_layout.addWidget(self._buttons_container)
 
-        styles.apply_card_shadow(self._card, offset_y=10, blur=50, alpha=220)
+        styles.apply_card_shadow(self._card, offset_x=-10, offset_y=0, blur=50, alpha=220)
 
         outer.addWidget(self._card)
 
@@ -126,7 +135,14 @@ class HomeOverlay(QWidget):
 
     def paintEvent(self, _) -> None:
         painter = QPainter(self)
-        painter.fillRect(self.rect(), QColor(0, 0, 0, 170))
+        if self._background is not None and not self._background.isNull():
+            # Still of whatever was on screen when the overlay opened, with a
+            # light dim so the sidepanel and selection still read clearly.
+            painter.drawPixmap(self.rect(), self._background)
+            painter.fillRect(self.rect(), QColor(0, 0, 0, 110))
+        else:
+            # No capture available — fall back to a plain dark backdrop.
+            painter.fillRect(self.rect(), QColor(0, 0, 0, 170))
 
     # ── Public API ─────────────────────────────────────────────────────────
 
@@ -134,6 +150,7 @@ class HomeOverlay(QWidget):
         self,
         items: list[MenuItem] | None = None,
         on_cancel=None,
+        background: QPixmap | None = None,
     ) -> None:
         """
         Show overlay with a dynamic menu.
@@ -141,10 +158,12 @@ class HomeOverlay(QWidget):
         extra_items — list of dicts with keys: label, icon, callback.
         Inserted at the top of the list before system options.
         on_cancel — callback invoked when "Cancel" is chosen in desktop mode.
+        background — still of the current screen, painted behind the menu.
         """
         if self.isVisible():
             return
         self._on_cancel = on_cancel
+        self._background = background
         self._rebuild_buttons(items or [])
         self._index = 0
         self._refresh_buttons()

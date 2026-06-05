@@ -8,6 +8,7 @@ from PyQt6.QtCore import QCoreApplication
 from desktop import Desktop
 from input.gamepad_watcher import GamepadWatcher
 from overlays.home_overlay import HomeOverlay, MenuItem
+from system.screen_capture import capture_screen
 from system.system_actions import ActionDeps
 from system.window_manager import KWinWindowManager
 from ui import styles
@@ -61,6 +62,11 @@ class Application:
             self._overlay.deleteLater()
             self._overlay = None
 
+        # Grab a still of the live screen *before* we minimize the running app
+        # and raise the Desktop — the overlay paints it as its background so the
+        # user sees whatever they were looking at (game, app, or desktop).
+        background = capture_screen()
+
         running_app = self._desktop.current_app()
         if running_app is not None or not self._desktop.isVisible():
             if not self._desktop.isVisible():
@@ -97,7 +103,7 @@ class Application:
                 {"label": "  " + QCoreApplication.translate("Kasual", "Return to Desktop"),            "icon": "fa5s.home",         "callback": self._desktop.show_desktop},
             ]
             on_cancel = cancel_cb
-        self._overlay.show_overlay(items=items, on_cancel=on_cancel)
+        self._overlay.show_overlay(items=items, on_cancel=on_cancel, background=background)
 
     def _on_connected_changed(self, connected: bool) -> None:
         """Gamepad connected / disconnected: synchronizes all components."""
