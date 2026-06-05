@@ -3,6 +3,8 @@
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$SCRIPT_DIR"
 source venv/bin/activate
+# Use the SYSTEM PyQt6 (Qt 6.9), not ~/.local pip PyQt6 (Qt 6.11).
+export PYTHONNOUSERSITE=1
 overall=0
 
 echo "=== Kasual Desktop (core) ==="

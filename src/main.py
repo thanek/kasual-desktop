@@ -1,6 +1,13 @@
 import logging
+import os
 import sys
 from pathlib import Path
+
+# Layer-shell requires the native Wayland platform plus KDE's layer-shell shell
+# integration; both must be selected before QApplication is created. setdefault
+# lets the environment override (e.g. tests force offscreen).
+os.environ.setdefault("QT_QPA_PLATFORM", "wayland")
+os.environ.setdefault("QT_WAYLAND_SHELL_INTEGRATION", "layer-shell")
 
 import yaml
 from PyQt6.QtCore import QLocale, QTimer, QTranslator

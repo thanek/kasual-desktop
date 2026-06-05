@@ -1,8 +1,15 @@
-PyQt6
+# PyQt6 is provided by the SYSTEM Qt (distro python3-pyqt6 + python3-pyqt6.sip),
+# NOT pip: pip's bundled Qt cannot load KDE's layer-shell integration plugin.
+# Create the venv with --system-site-packages so the system PyQt6 shows through.
+# System deps (Debian/Ubuntu):
+#   sudo apt install python3-pyqt6 python3-pyqt6.sip python3-pyqt6.qtmultimedia \
+#                    layer-shell-qt qt6-wayland
+# (Arch: python-pyqt6 layer-shell-qt)
+# Run via kasual.sh / test.sh — they export PYTHONNOUSERSITE=1 so the system
+# PyQt6 (Qt 6.9) is used instead of any ~/.local pip PyQt6 (Qt 6.11).
 qtawesome
 PyYAML
 evdev
 python-xlib
 pytest
 pytest-qt
-pyqt6-webengine
