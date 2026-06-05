@@ -3,7 +3,7 @@ from typing import Callable, NotRequired, TypedDict
 
 import qtawesome as qta
 from PyQt6.QtCore import Qt, QCoreApplication, QT_TRANSLATE_NOOP, pyqtSignal
-from PyQt6.QtGui import QColor, QPainter, QKeyEvent, QPixmap
+from PyQt6.QtGui import QColor, QPainter, QKeyEvent
 from PyQt6.QtWidgets import (
     QWidget, QPushButton, QVBoxLayout, QHBoxLayout, QLabel, QSizePolicy,
 )
@@ -12,6 +12,7 @@ from audio import sound_player
 from input.gamepad_watcher import GamepadWatcher
 from system.system_actions import ACTIONS, ActionDeps, ActionRunner
 from ui import styles
+from ui.layer_shell import make_layer_surface, Layer, Anchor, Keyboard
 from .confirm_dialog import ConfirmDialog
 
 logger = logging.getLogger(__name__)
@@ -26,17 +27,15 @@ class MenuItem(TypedDict):
 
 class HomeOverlay(QWidget):
     """
-    Fullscreen overlay shown when BTN_MODE is pressed.
+    Full-screen menu overlay shown when BTN_MODE is pressed.
 
-    Two modes, depending on `parent`:
-      - parent=None  → top-level window with WindowStaysOnTopHint, used when an
-        application is running (Desktop is hidden) so the overlay covers it.
-      - parent=Desktop → rendered inside Desktop's Wayland surface (no new
-        xdg_toplevel). Required so KDE Plasma panels cannot slip between the
-        Desktop and the overlay.
+    A standalone wlr-layer-shell surface in the `overlay` layer, so it sits
+    above everything — the KD Desktop, normal windows, and fullscreen games —
+    without touching what is underneath. Its translucent backdrop lets the live
+    screen show through; the menu card is anchored to the right edge (sidebar).
 
     Usage:
-        overlay = HomeOverlay(gamepad, action_deps, parent=desktop_or_none)
+        overlay = HomeOverlay(gamepad, action_deps)
         overlay.show_overlay(items=[...])         # show with context
         overlay.hide_overlay()                    # hide
     """
@@ -60,12 +59,10 @@ class HomeOverlay(QWidget):
         self,
         gamepad: GamepadWatcher,
         action_deps: ActionDeps | None = None,
-        parent=None,
     ):
-        super().__init__(parent)
+        super().__init__()
         self._gamepad = gamepad
         self._index   = 0
-        self._chrome_hidden = False
         self._action_runner = ActionRunner(
             action_deps,
             lambda q, cb: ConfirmDialog(
@@ -78,20 +75,21 @@ class HomeOverlay(QWidget):
         self._items:     list[MenuItem]    = []
         self._buttons:   list[QPushButton] = []
         self._on_cancel  = None
-        self._background: QPixmap | None   = None
-        self._is_child   = parent is not None
 
-        if self._is_child:
-            # Render inside the parent's Wayland surface — no new xdg_toplevel.
-            self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
-        else:
-            self.setWindowFlags(
-                Qt.WindowType.FramelessWindowHint
-                | Qt.WindowType.WindowStaysOnTopHint
-                | Qt.WindowType.Tool          # does not appear on the taskbar
-            )
-            self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        self.setWindowFlags(Qt.WindowType.FramelessWindowHint)
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, False)
+        # Standalone layer-shell surface: full-screen backdrop (anchored to all
+        # edges) in the overlay layer, so it covers even fullscreen games.
+        # keyboard=ON_DEMAND — gamepad (evdev) drives navigation regardless of
+        # Wayland focus, so we stay unobtrusive to whatever is underneath.
+        make_layer_surface(
+            self,
+            layer=Layer.OVERLAY,
+            anchors=Anchor.ALL,
+            exclusive_zone=-1,
+            keyboard=Keyboard.ON_DEMAND,
+        )
 
         outer = QHBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
@@ -134,15 +132,10 @@ class HomeOverlay(QWidget):
     # ── Background ─────────────────────────────────────────────────────────
 
     def paintEvent(self, _) -> None:
+        # Translucent dim over the live screen showing through the layer surface
+        # — light enough to still see the game/desktop behind the sidebar.
         painter = QPainter(self)
-        if self._background is not None and not self._background.isNull():
-            # Still of whatever was on screen when the overlay opened, with a
-            # light dim so the sidepanel and selection still read clearly.
-            painter.drawPixmap(self.rect(), self._background)
-            painter.fillRect(self.rect(), QColor(0, 0, 0, 110))
-        else:
-            # No capture available — fall back to a plain dark backdrop.
-            painter.fillRect(self.rect(), QColor(0, 0, 0, 170))
+        painter.fillRect(self.rect(), QColor(0, 0, 0, 130))
 
     # ── Public API ─────────────────────────────────────────────────────────
 
@@ -150,58 +143,31 @@ class HomeOverlay(QWidget):
         self,
         items: list[MenuItem] | None = None,
         on_cancel=None,
-        background: QPixmap | None = None,
     ) -> None:
         """
         Show overlay with a dynamic menu.
 
-        extra_items — list of dicts with keys: label, icon, callback.
-        Inserted at the top of the list before system options.
-        on_cancel — callback invoked when "Cancel" is chosen in desktop mode.
-        background — still of the current screen, painted behind the menu.
+        items — list of MenuItem; the static system menu is used when omitted.
+        on_cancel — callback invoked when the overlay is dismissed.
         """
         if self.isVisible():
             return
         self._on_cancel = on_cancel
-        self._background = background
         self._rebuild_buttons(items or [])
         self._index = 0
         self._refresh_buttons()
         self._gamepad.push_handler(self._handle_pad)
         sound_player.play("popup_open")
-        if self._is_child:
-            self._notify_opened()
-            self.setGeometry(self.parent().rect())
-            self.show()
-            self.raise_()
-        else:
-            self.showFullScreen()
-            self.raise_()
+        self.showFullScreen()
+        self.raise_()
         self.activateWindow()
 
     def hide_overlay(self) -> None:
         if not self.isVisible():
             return
         self._gamepad.pop_handler(self._handle_pad)
-        self._notify_closed()
         self.hide()
         self.closed.emit()
-
-    def _notify_opened(self) -> None:
-        if self._chrome_hidden:
-            return
-        parent = self.parent()
-        if hasattr(parent, "enter_overlay_mode"):
-            parent.enter_overlay_mode()
-            self._chrome_hidden = True
-
-    def _notify_closed(self) -> None:
-        if not self._chrome_hidden:
-            return
-        parent = self.parent()
-        if hasattr(parent, "exit_overlay_mode"):
-            parent.exit_overlay_mode()
-        self._chrome_hidden = False
 
     def _dismiss(self) -> None:
         """Close the overlay and restore the previous context (on_cancel)."""

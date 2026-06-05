@@ -8,7 +8,6 @@ from PyQt6.QtCore import QCoreApplication
 from desktop import Desktop
 from input.gamepad_watcher import GamepadWatcher
 from overlays.home_overlay import HomeOverlay, MenuItem
-from system.screen_capture import capture_screen
 from system.system_actions import ActionDeps
 from system.window_manager import KWinWindowManager
 from ui import styles
@@ -49,12 +48,11 @@ class Application:
     # ── Event handling ─────────────────────────────────────────────────────
 
     def _on_btn_mode(self) -> None:
-        """BTN_MODE: shows overlay with menu adapted to the current context.
+        """BTN_MODE: show the Home Overlay over whatever is on screen.
 
-        Overlay is always parented to Desktop so it renders inside Desktop's
-        Wayland surface — this keeps KDE Plasma panels from bleeding through
-        a translucent top-level utility window. When an app is running or
-        Desktop is paused, Desktop is first brought to the foreground.
+        The overlay is a layer-shell surface in the `overlay` layer, so it
+        floats above the live app/game without minimizing it or touching the
+        Desktop. Leaving to the Desktop is handled by _return_to_desktop.
         """
         if self._overlay is not None:
             if self._overlay.isVisible():
@@ -62,30 +60,9 @@ class Application:
             self._overlay.deleteLater()
             self._overlay = None
 
-        # Grab a still of the live screen *before* we minimize the running app
-        # and raise the Desktop — the overlay paints it as its background so the
-        # user sees whatever they were looking at (game, app, or desktop).
-        background = capture_screen()
-
         running_app = self._desktop.current_app()
-        if running_app is not None or not self._desktop.isVisible():
-            if not self._desktop.isVisible():
-                self._desktop.showFullScreen()
 
-            # Minimize the foreground app — KWin then auto-promotes Desktop
-            # to the top with no window-activation animation. raise alone
-            # is unreliable when the app holds the topmost slot (e.g. after
-            # entering a folder in Pliki the surface becomes fullscreen and
-            # KWin refuses to stack anything above it).
-            if running_app is not None and running_app['type'] == 'app':
-                pid = self._desktop.app_manager.running_pid(running_app['id'])
-                if pid is not None:
-                    self._wm.minimize_windows_for_pids({pid})
-
-            # Fallback for 'dyn' windows / pause resume: raise our window.
-            self._wm.raise_windows_for_pid_exact(os.getpid())
-
-        self._overlay = HomeOverlay(self._gamepad, self._action_deps, parent=self._desktop)
+        self._overlay = HomeOverlay(self._gamepad, self._action_deps)
         self._overlay.closed.connect(self._on_overlay_closed)
 
         if running_app is None:
@@ -100,10 +77,26 @@ class Application:
             items: list[MenuItem] = [
                 {"label": "  " + QCoreApplication.translate("Kasual", "Return to {0}").format(label),  "icon": "fa5s.times",        "callback": cancel_cb},
                 {"label": "  " + QCoreApplication.translate("Kasual", "Close {0}").format(label),      "icon": "fa5s.times-circle", "callback": close_cb},
-                {"label": "  " + QCoreApplication.translate("Kasual", "Return to Desktop"),            "icon": "fa5s.home",         "callback": self._desktop.show_desktop},
+                {"label": "  " + QCoreApplication.translate("Kasual", "Return to Desktop"),            "icon": "fa5s.home",         "callback": self._return_to_desktop},
             ]
             on_cancel = cancel_cb
-        self._overlay.show_overlay(items=items, on_cancel=on_cancel, background=background)
+        self._overlay.show_overlay(items=items, on_cancel=on_cancel)
+
+    def _return_to_desktop(self) -> None:
+        """Leave the running app and surface the Desktop.
+
+        Phase 1 safety net: the Desktop is a `top`-layer surface, which is not
+        guaranteed to stack above an exclusive-fullscreen game, so we still
+        minimize the foreground app and raise ourselves via KWin. To be
+        revisited in Phase 2 once the Desktop's show/hide model lands.
+        """
+        running_app = self._desktop.current_app()
+        if running_app is not None and running_app['type'] == 'app':
+            pid = self._desktop.app_manager.running_pid(running_app['id'])
+            if pid is not None:
+                self._wm.minimize_windows_for_pids({pid})
+        self._wm.raise_windows_for_pid_exact(os.getpid())
+        self._desktop.show_desktop()
 
     def _on_connected_changed(self, connected: bool) -> None:
         """Gamepad connected / disconnected: synchronizes all components."""

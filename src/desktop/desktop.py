@@ -17,6 +17,7 @@ from system.app_manager import AppManager
 from system.system_actions import ActionDeps, ActionRunner
 from system.window_manager import KWinWindowManager
 from ui import styles
+from ui.layer_shell import make_layer_surface, Layer, Anchor, Keyboard
 from .tile_bar import TileBar
 from .topbar import TopBar
 from .wallpaper import KdeWallpaperLoader
@@ -57,6 +58,17 @@ class Desktop(QWidget):
         self.setWindowTitle("Kasual Desktop")
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint)
         self.setAttribute(Qt.WidgetAttribute.WA_OpaquePaintEvent)
+        # Layer-shell surface (Phase 1): keep the Desktop full-screen and above
+        # the DE panels under the global layer-shell integration. The Home
+        # Overlay (overlay layer) still renders above this. The show/hide state
+        # machine rework lands in Phase 2.
+        make_layer_surface(
+            self,
+            layer=Layer.TOP,
+            anchors=Anchor.ALL,
+            exclusive_zone=-1,
+            keyboard=Keyboard.ON_DEMAND,
+        )
 
         main = QVBoxLayout(self)
         main.setContentsMargins(0, 0, 0, 0)

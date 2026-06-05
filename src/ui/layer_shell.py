@@ -28,6 +28,7 @@ import enum
 import logging
 
 from PyQt6 import sip
+from PyQt6.QtGui import QGuiApplication
 from PyQt6.QtWidgets import QWidget
 
 logger = logging.getLogger(__name__)
@@ -106,8 +107,12 @@ def make_layer_surface(
     """Configure `widget`'s top-level window as a layer-shell surface.
 
     Must be called before widget.show(). Returns True on success, False if
-    LayerShellQt is unavailable or the window handle could not be created.
+    not on Wayland, LayerShellQt is unavailable, or the handle creation failed.
     """
+    if QGuiApplication.platformName() != "wayland":
+        # offscreen (tests), xcb, etc. — leave the widget as an ordinary window.
+        return False
+
     lib = _load()
     if lib is None:
         return False
