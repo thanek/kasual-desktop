@@ -122,7 +122,6 @@ class ConfirmDialog(BaseOverlay):
         logger.info("ConfirmDialog._close() – hiding the dialog")
         self._closed = True
         self._gamepad.pop_handler(self._handler)
-        self._notify_closed()
         self.hide()
         self.deleteLater()
         return True
@@ -133,7 +132,6 @@ class ConfirmDialog(BaseOverlay):
         if not self._closed:
             self._closed = True
             self._gamepad.pop_handler(self._handler)
-        self._notify_closed()
         self.hide()
         self.deleteLater()
 

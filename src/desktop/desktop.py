@@ -45,10 +45,6 @@ class Desktop(QWidget):
         self._volume_overlay = None
         self._tile_popover   = None
         self._is_paused      = False
-        # Reference-counted "minimal mode" — when >0, topbar and tile bar are
-        # hidden so the only thing showing through an overlay's translucent
-        # background is the wallpaper.
-        self._overlay_depth  = 0
 
         # Currently active app/window — what BTN_MODE context menu will target
         # {'type': 'app', 'id': idx, 'name': ...} or {'type': 'dyn', 'id': win_id, 'name': ...}
@@ -119,20 +115,6 @@ class Desktop(QWidget):
         self.showFullScreen()
         self._restore_overlays()
         self.activateWindow()
-
-    def enter_overlay_mode(self) -> None:
-        """Hide topbar and tile bar so an overlay shows only the wallpaper."""
-        self._overlay_depth += 1
-        if self._overlay_depth == 1:
-            self._topbar.hide()
-            self._tilebar.hide()
-
-    def exit_overlay_mode(self) -> None:
-        """Restore topbar and tile bar when the last overlay closes."""
-        self._overlay_depth = max(0, self._overlay_depth - 1)
-        if self._overlay_depth == 0:
-            self._topbar.show()
-            self._tilebar.show()
 
     @property
     def _active_overlays(self) -> list[BaseOverlay]:
