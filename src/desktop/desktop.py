@@ -15,7 +15,7 @@ from overlays.tile_popover import TilePopoverMenu
 from overlays.volume_overlay import VolumeOverlay
 from system.app_manager import AppManager
 from system.system_actions import ActionDeps, ActionRunner
-from system.window_manager import KWinWindowManager
+from system.window_manager import KWinWindowManager, expand_pid_tree
 from ui import styles
 from ui.layer_shell import make_layer_surface, Layer, Anchor, Keyboard
 from .tile_bar import TileBar
@@ -97,6 +97,20 @@ class Desktop(QWidget):
         self._app_manager.app_launch_failed.connect(self._on_app_launch_failed)
         self._wm.windows_updated.connect(self._tilebar.update_windows)
 
+        # Deferred-hide state: the Desktop stays on screen after launching an
+        # app until that app's window is actually mapped (see _arm_deferred_hide).
+        self._pending_hide_idx: int | None = None
+        self._pending_hide_grace_ms = 0
+        self._pending_hide_poll = QTimer(self)
+        self._pending_hide_poll.setInterval(150)
+        self._pending_hide_poll.timeout.connect(self._wm.refresh_now)
+        self._pending_hide_guard = QTimer(self)
+        self._pending_hide_guard.setSingleShot(True)
+        self._pending_hide_guard.timeout.connect(self._force_deferred_hide)
+        self._hide_grace = QTimer(self)
+        self._hide_grace.setSingleShot(True)
+        self._hide_grace.timeout.connect(self._do_deferred_hide)
+
         QApplication.instance().installEventFilter(self)
 
         # Desktop is not shown at startup — we wait for the connected_changed(True) signal
@@ -165,6 +179,10 @@ class Desktop(QWidget):
 
     def request_close_app(self, app) -> None:
         display = styles.truncate(app['name'], 40)
+        # Where the close was triggered from decides where Cancel returns to:
+        # the Desktop (tile menu, KD visible) or the running app (overlay opened
+        # over it, KD hidden). Captured now, before the dialog changes anything.
+        from_desktop = self.isVisible()
 
         def _confirmed() -> None:
             self._restore_desktop_view()
@@ -183,10 +201,18 @@ class Desktop(QWidget):
                 self._wm.close_window(app['id'])
                 QTimer.singleShot(1000, self._wm.refresh_now)
 
+        def _cancelled() -> None:
+            # Cancelling closes the dialog without consequences: return to the
+            # context the user came from rather than yanking up the Desktop.
+            if from_desktop:
+                self._restore_desktop_view()
+            else:
+                self.restore_app(app)
+
         self._show_confirm(
             question=self.tr('Are you sure you want to close\n"{0}"?').format(display),
             on_confirmed=_confirmed,
-            on_cancelled=self._restore_desktop_view,
+            on_cancelled=_cancelled,
         )
 
     def _close_app_windows(self, idx: int) -> None:
@@ -379,16 +405,101 @@ class Desktop(QWidget):
             trigger = self._apps[idx].get("recall_menu_trigger", BTN_MODE_CLICK)
             self._gamepad.set_app_btn_mode_trigger(trigger)
             self._gamepad.pop_handler(self._handle_pad)
-            # Hide the KD surface so the launching app is visible. The Desktop is
-            # a top-layer surface, so a windowed app would otherwise stay behind
-            # it (matches restore_app, which already hides). Re-shown by
-            # _on_app_finished / _on_app_launch_failed.
-            self.hide()
             self._app_manager.launch(idx, self._apps[idx])
+            # The Desktop is a top-layer surface and must be hidden for the
+            # windowed app to show — but we defer that until the app's window is
+            # actually mapped, so the DE desktop never flashes through the
+            # start-up gap. Re-shown by _on_app_finished / _on_app_launch_failed.
+            self._arm_deferred_hide(idx)
+
+    # ── Deferred hide on launch ─────────────────────────────────────────────
+
+    def _arm_deferred_hide(self, idx: int) -> None:
+        """Hide the Desktop only once the launched app has a mapped window.
+
+        The Desktop is a top-layer surface sitting above the windowed app, so it
+        must be hidden for the app to be visible. Hiding it the instant we launch
+        would expose the DE desktop underneath for as long as the app takes to
+        draw its first frame. Instead we keep the Desktop covering the screen and
+        hide it when KWin first reports a window belonging to the app, polling
+        the window list quickly meanwhile. A safety timeout hides it anyway, so a
+        slow or undetected window never strands us in front of the running app.
+        """
+        self._cancel_deferred_hide()
+        self._pending_hide_idx = idx
+        self._pending_hide_grace_ms = int(self._apps[idx].get("launch_hide_grace_ms", 0))
+        self._wm.windows_updated.connect(self._on_windows_pending_hide)
+        self._pending_hide_poll.start()
+        self._pending_hide_guard.start(5000)
+        self._wm.refresh_now()
+
+    def _on_windows_pending_hide(self, windows: list[dict]) -> None:
+        idx = self._pending_hide_idx
+        if idx is None or not self._app_window_present(idx, windows):
+            return
+        # The app's window is mapped. Stop watching, but give apps that show an
+        # intermediate window before their real one (e.g. Steam's bootstrap
+        # window vs. Big Picture) an optional grace period to settle, so we
+        # don't uncover a half-drawn frame.
+        self._stop_pending_watch()
+        if self._pending_hide_grace_ms > 0:
+            self._hide_grace.start(self._pending_hide_grace_ms)
+        else:
+            self._do_deferred_hide()
+
+    def _app_window_present(self, idx: int, windows: list[dict]) -> bool:
+        """True if `windows` contains a window belonging to launched app `idx`.
+
+        Matched by PID subtree (covers normal child windows), with a resource /
+        desktop-file fallback for forwarder launchers like `steam steam://...`
+        whose visible window runs under an unrelated PID.
+        """
+        pid  = self._app_manager.running_pid(idx)
+        pids = expand_pid_tree({pid}) if pid else set()
+        cmd  = os.path.basename(self._apps[idx]['command']).lower()
+        for w in windows:
+            wpid = w.get('pid')
+            if wpid and wpid in pids:
+                return True
+            rc = w.get('resourceClass', '').lower()
+            df = os.path.splitext(w.get('desktopFile', '').lower())[0]
+            if cmd and (rc == cmd or df == cmd):
+                return True
+        return False
+
+    def _force_deferred_hide(self) -> None:
+        """Safety-timeout path: hide the Desktop even if no window was detected."""
+        self._stop_pending_watch()
+        self._do_deferred_hide()
+
+    def _do_deferred_hide(self) -> None:
+        """Hide the Desktop to reveal the now-mapped app."""
+        self._pending_hide_idx = None
+        if self.isVisible():
+            self.hide()
+
+    def _stop_pending_watch(self) -> None:
+        """Stop the window poll/guard and disconnect (keeps a queued grace hide)."""
+        self._pending_hide_poll.stop()
+        self._pending_hide_guard.stop()
+        try:
+            self._wm.windows_updated.disconnect(self._on_windows_pending_hide)
+        except TypeError:
+            pass
+
+    def _cancel_deferred_hide(self) -> None:
+        """Tear down the deferred-hide watcher entirely without hiding the Desktop."""
+        if self._pending_hide_idx is None:
+            return
+        self._pending_hide_idx = None
+        self._stop_pending_watch()
+        self._hide_grace.stop()
 
     def _on_app_launch_failed(self, idx: int, error: str) -> None:
         logger.warning("Application %d failed to launch: %s", idx, error)
-        # We hid the Desktop when launching — bring it back for the error dialog.
+        # Launch failed before any window: drop the pending hide so the Desktop
+        # stays up for the error dialog instead of vanishing.
+        self._cancel_deferred_hide()
         self._reactivate_desktop()
         InfoDialog(
             message=self.tr("Failed to launch application:\n{0}").format(error),
@@ -399,6 +510,9 @@ class Desktop(QWidget):
 
     def _on_app_finished(self, idx: int) -> None:
         logger.info("Application %d finished – returning to desktop", idx)
+        # App exited (possibly before its window ever mapped) — stop waiting to
+        # hide the Desktop, otherwise we would hide onto a closed app.
+        self._cancel_deferred_hide()
         self._close_active_dialog()
         self._tilebar.refresh_status()
         self._wm.refresh_now()
@@ -485,6 +599,12 @@ class Desktop(QWidget):
             self._confirm_dialog = None
 
     # ── Confirmation dialogs ───────────────────────────────────────────────
+
+    def confirm(self, question: str, on_confirmed: Callable[[], None]) -> None:
+        """Public entry for confirmable actions triggered from outside the
+        Desktop (e.g. the Home Overlay's system actions), so the dialog is
+        tracked in self._confirm_dialog exactly like the topbar's."""
+        self._show_confirm(question=question, on_confirmed=on_confirmed)
 
     def _show_confirm(
         self,

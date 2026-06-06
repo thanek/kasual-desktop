@@ -3,7 +3,7 @@ from typing import Callable, NotRequired, TypedDict
 
 import qtawesome as qta
 from PyQt6.QtCore import Qt, QCoreApplication, QT_TRANSLATE_NOOP, pyqtSignal
-from PyQt6.QtGui import QColor, QPainter, QKeyEvent
+from PyQt6.QtGui import QKeyEvent
 from PyQt6.QtWidgets import (
     QWidget, QPushButton, QVBoxLayout, QHBoxLayout, QLabel, QSizePolicy,
 )
@@ -44,34 +44,46 @@ class HomeOverlay(QWidget):
 
 
     @staticmethod
+    def action_items() -> list[MenuItem]:
+        """System-action menu items (shutdown, minimize, etc.)."""
+        return [
+            {"label": spec["label"], "icon": spec["icon"], "action": action_type}
+            for action_type, spec in ACTIONS.items()
+        ]
+
+    @staticmethod
     def static_items() -> list[MenuItem]:
         cancel_item: MenuItem = {
             "label": QT_TRANSLATE_NOOP("Kasual", "Return to Desktop"),
             "icon": "fa5s.times",
             "action": "cancel",
         }
-        return [cancel_item] + [
-            {"label": spec["label"], "icon": spec["icon"], "action": action_type}
-            for action_type, spec in ACTIONS.items()
-        ]
+        return [cancel_item] + HomeOverlay.action_items()
 
     def __init__(
         self,
         gamepad: GamepadWatcher,
         action_deps: ActionDeps | None = None,
+        show_confirm: Callable[[str, Callable[[], None]], None] | None = None,
     ):
         super().__init__()
         self._gamepad = gamepad
         self._index   = 0
-        self._action_runner = ActionRunner(
-            action_deps,
+        # Confirmation UI: prefer an injected show_confirm (the Desktop's tracked
+        # dialog manager) so action dialogs are owned and cleaned up centrally.
+        # Falls back to a standalone ConfirmDialog when none is provided (e.g.
+        # tests, or standalone use without a Desktop).
+        confirm = show_confirm or (
             lambda q, cb: ConfirmDialog(
                 question=q,
                 on_confirmed=cb,
                 on_cancelled=lambda: None,
                 gamepad=self._gamepad,
-            ),
-        ) if action_deps is not None else None
+            )
+        )
+        self._action_runner = (
+            ActionRunner(action_deps, confirm) if action_deps is not None else None
+        )
         self._items:     list[MenuItem]    = []
         self._buttons:   list[QPushButton] = []
         self._on_cancel  = None
@@ -81,14 +93,16 @@ class HomeOverlay(QWidget):
         self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, False)
         # Standalone layer-shell surface: full-screen backdrop (anchored to all
         # edges) in the overlay layer, so it covers even fullscreen games.
-        # keyboard=ON_DEMAND — gamepad (evdev) drives navigation regardless of
-        # Wayland focus, so we stay unobtrusive to whatever is underneath.
+        # keyboard=NONE — taking any keyboard interactivity makes the compositor
+        # deactivate the fullscreen app underneath, which prompts KWin to reveal
+        # the panels it hides under fullscreen windows. Navigation is gamepad-
+        # driven (evdev) and independent of Wayland focus, so we don't need it.
         make_layer_surface(
             self,
             layer=Layer.OVERLAY,
             anchors=Anchor.ALL,
             exclusive_zone=-1,
-            keyboard=Keyboard.ON_DEMAND,
+            keyboard=Keyboard.NONE,
         )
 
         outer = QHBoxLayout(self)
@@ -99,18 +113,14 @@ class HomeOverlay(QWidget):
         self._card = QWidget()
         self._card.setFixedWidth(500)
         self._card.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Expanding)
-        self._card.setStyleSheet(
-            "background-color: #1e2430;"
-            "border-top-left-radius: 14px;"
-            "border-bottom-left-radius: 14px;"
-        )
+        self._card.setStyleSheet("background-color: #1e2430;")
 
         self._card_layout = QVBoxLayout(self._card)
         self._card_layout.setContentsMargins(32, 32, 32, 32)
         self._card_layout.setSpacing(8)
         self._card_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
 
-        title = QLabel(self.tr("Menu"))
+        title = QLabel(self.tr("Kasual Desktop"))
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         title.setStyleSheet(
             "font-size: 28px; color: #88c0d0; font-weight: bold;"
@@ -128,14 +138,6 @@ class HomeOverlay(QWidget):
         styles.apply_card_shadow(self._card, offset_x=-10, offset_y=0, blur=50, alpha=220)
 
         outer.addWidget(self._card)
-
-    # ── Background ─────────────────────────────────────────────────────────
-
-    def paintEvent(self, _) -> None:
-        # Translucent dim over the live screen showing through the layer surface
-        # — light enough to still see the game/desktop behind the sidebar.
-        painter = QPainter(self)
-        painter.fillRect(self.rect(), QColor(0, 0, 0, 130))
 
     # ── Public API ─────────────────────────────────────────────────────────
 
@@ -160,7 +162,11 @@ class HomeOverlay(QWidget):
         sound_player.play("popup_open")
         self.showFullScreen()
         self.raise_()
-        self.activateWindow()
+        # Deliberately NOT activateWindow(): grabbing Wayland activation would
+        # deactivate the fullscreen app underneath, prompting KWin to reveal the
+        # panels it hides under fullscreen windows. Navigation is gamepad-driven
+        # (evdev), so we don't need focus; keyboard nav still works on demand
+        # once the surface is clicked.
 
     def hide_overlay(self) -> None:
         if not self.isVisible():

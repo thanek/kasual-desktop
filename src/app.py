@@ -56,18 +56,30 @@ class Application:
         """
         if self._overlay is not None:
             if self._overlay.isVisible():
+                self._overlay.hide_overlay()
                 return
             self._overlay.deleteLater()
             self._overlay = None
 
         running_app = self._desktop.current_app()
 
-        self._overlay = HomeOverlay(self._gamepad, self._action_deps)
+        self._overlay = HomeOverlay(
+            self._gamepad, self._action_deps, show_confirm=self._desktop.confirm
+        )
         self._overlay.closed.connect(self._on_overlay_closed)
 
         if running_app is None:
-            items = HomeOverlay.static_items()
-            on_cancel = self._desktop.show_desktop
+            # "Return to Desktop" is an explicit callback that brings KD to the
+            # front (works whether KD is merely behind or minimized to the DE).
+            # on_cancel stays None so the B button just closes the overlay
+            # without yanking the user back to KD when they dismiss it.
+            return_item: MenuItem = {
+                "label": "  " + QCoreApplication.translate("Kasual", "Return to Desktop"),
+                "icon": "fa5s.home",
+                "callback": self._desktop.show_desktop,
+            }
+            items = [return_item] + HomeOverlay.action_items()
+            on_cancel = None
         else:
             title     = running_app['name']
             close_cb  = lambda app=running_app: self._desktop.request_close_app(app)

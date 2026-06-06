@@ -116,7 +116,6 @@ def home_menu_item_normal() -> str:
             background-color: #2e3440;
             color: white;
             border: 2px solid transparent;
-            border-radius: 6px;
             text-align: left;
         }
     """
@@ -130,7 +129,6 @@ def home_menu_item_selected() -> str:
             background-color: {COLOR_ACCENT};
             color: black;
             border: 2px solid white;
-            border-radius: 6px;
             text-align: left;
         }}
     """

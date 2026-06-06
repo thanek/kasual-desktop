@@ -44,12 +44,16 @@ class BaseOverlay(QWidget):
         self.setWindowTitle("Kasual Overlay")
         self.setStyleSheet("background-color: rgba(0, 0, 0, 150);")
         # Standalone layer-shell surface above everything (incl. fullscreen games).
+        # keyboard=NONE — taking keyboard interactivity deactivates the fullscreen
+        # app underneath, which makes KWin reveal the panels it hides under
+        # fullscreen windows. These overlays are gamepad-driven (evdev), so they
+        # don't need Wayland focus.
         make_layer_surface(
             self,
             layer=Layer.OVERLAY,
             anchors=Anchor.ALL,
             exclusive_zone=-1,
-            keyboard=Keyboard.ON_DEMAND,
+            keyboard=Keyboard.NONE,
         )
 
     def _show(self) -> None:
@@ -57,8 +61,8 @@ class BaseOverlay(QWidget):
         self._gamepad.push_handler(self._handler)
         self.showFullScreen()
         self.raise_()
-        self.activateWindow()
-        self.setFocus()
+        # No activateWindow()/setFocus(): see make_layer_surface above — grabbing
+        # Wayland activation would uncover the DE panels behind a fullscreen app.
 
     def pause(self) -> None:
         """Temporarily hide the overlay (e.g. when the Desktop is minimized)."""

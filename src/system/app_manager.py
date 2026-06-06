@@ -36,10 +36,19 @@ class AppManager(QObject):
         args    = [str(a) for a in app.get("args", [])]
         logger.info("Launching [%d] %s %s", idx, command, args)
 
+        # Don't leak our layer-shell integration into child apps: it is meant
+        # only for KD's own panels/overlays. A Qt child inheriting it would turn
+        # its top-level window into a layer-shell surface that respects panel
+        # struts (exclusive zone 0) instead of going truly full-screen, leaving
+        # cut-off bars top and bottom. Launch apps as ordinary Wayland clients.
+        env = os.environ.copy()
+        env.pop("QT_WAYLAND_SHELL_INTEGRATION", None)
+
         try:
             proc = subprocess.Popen(
                 [command] + args,
                 start_new_session=True,   # new session → separate process group
+                env=env,
             )
         except FileNotFoundError:
             msg = f"Command not found: {command}"
@@ -115,7 +124,7 @@ class AppManager(QObject):
                 os.killpg(pgid, 0)   # signal 0 = just check if it exists
             except (ProcessLookupError, PermissionError):
                 break
-            time.sleep(0.5)
+            time.sleep(0.2)
         self._proc_ended.emit(idx, proc.returncode)
 
     def _on_finished(self, idx: int, exit_code: int) -> None:

@@ -124,7 +124,11 @@ class TestLaunch:
     def test_creates_process_with_correct_command(self, qapp):
         am = _make_manager()
         popen, _ = self._launch(am, command="echo", args=["hello"])
-        popen.assert_called_once_with(["echo", "hello"], start_new_session=True)
+        args, kwargs = popen.call_args
+        assert args[0] == ["echo", "hello"]
+        assert kwargs["start_new_session"] is True
+        # Our layer-shell integration must not leak into launched apps.
+        assert "QT_WAYLAND_SHELL_INTEGRATION" not in kwargs["env"]
 
     def test_args_converted_to_strings(self, qapp):
         am = _make_manager()

@@ -6,6 +6,10 @@ apps:
     icon: fa5b.steam
     color: "#1b2838"
     recall_menu_trigger: BTN_MODE_HOLD_1S
+    # Steam maps a bootstrap window before Big Picture finishes its first
+    # frame; wait this long after detecting the window before hiding KD so we
+    # don't briefly uncover the half-drawn frame. Other apps default to 0.
+    launch_hide_grace_ms: 500
 
   - name: Heroic
     command: heroic
