@@ -21,7 +21,15 @@ jobs:
             libegl1 \
             libglib2.0-0 \
             libdbus-1-3 \
-            libpulse0
+            libpulse0 \
+            python3-venv \
+            python3-dev \
+            python3-pyqt6 \
+            python3-pyqt6.sip \
+            python3-pyqt6.qtmultimedia \
+            python3-pyqt6.qtwebengine \
+            layer-shell-qt \
+            qt6-wayland
 
       - name: Set up Python
         uses: actions/setup-python@v5
