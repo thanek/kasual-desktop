@@ -10,7 +10,6 @@ from PyQt6.QtWidgets import (
 
 from audio import sound_player
 from input.gamepad_watcher import GamepadWatcher
-from ui import styles
 from .base_overlay import BaseOverlay
 
 logger = logging.getLogger(__name__)
@@ -30,12 +29,7 @@ class VolumeOverlay(BaseOverlay):
         outer = QVBoxLayout(self)
         outer.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
-        self._card = QWidget()
-        card = self._card
-        card.setFixedWidth(500)
-        card.setStyleSheet(
-            f"background-color: {styles.COLOR_CARD_BG}; border-radius: {styles.CARD_RADIUS_PX}px;"
-        )
+        card = self.build_card(500)
 
         layout = QVBoxLayout(card)
         layout.setContentsMargins(40, 36, 40, 36)
@@ -82,8 +76,6 @@ class VolumeOverlay(BaseOverlay):
         hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
         hint.setStyleSheet("font-size: 14px; color: #888; background: transparent;")
         layout.addWidget(hint)
-
-        styles.apply_card_shadow(card)
 
         outer.addWidget(card)
 
@@ -137,11 +129,8 @@ class VolumeOverlay(BaseOverlay):
 
     # ── Keyboard ───────────────────────────────────────────────────────────
 
-    def mousePressEvent(self, event) -> None:
-        if not self._card.geometry().contains(event.pos()):
-            self._close()
-        else:
-            super().mousePressEvent(event)
+    def _on_outside_click(self) -> None:
+        self._close()
 
     def keyPressEvent(self, event: QKeyEvent) -> None:
         key = event.key()
@@ -155,10 +144,6 @@ class VolumeOverlay(BaseOverlay):
     # ── Closing ────────────────────────────────────────────────────────────
 
     def _close(self) -> None:
-        sound_player.play("popup_close")
-        self._closed = True
-        self._gamepad.pop_handler(self._handler)
-        self.hide()
-        self.deleteLater()
-        self.closed.emit()
+        if self._dismiss(sound="popup_close"):
+            self.closed.emit()
 

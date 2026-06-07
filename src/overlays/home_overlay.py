@@ -108,14 +108,10 @@ class HomeOverlay(QWidget):
         outer = QVBoxLayout(self)
         outer.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
-        self._card = QWidget()
-        self._card.setFixedWidth(500)
-        # Centred card that hugs its content vertically (Maximum), like the
-        # Confirm/Volume dialogs, instead of the old full-height right sidebar.
+        self._card = styles.make_card(500)
+        # Hug content vertically (Maximum), like the Confirm/Volume dialogs,
+        # instead of the old full-height right sidebar.
         self._card.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Maximum)
-        self._card.setStyleSheet(
-            f"background-color: {styles.COLOR_CARD_BG}; border-radius: {styles.CARD_RADIUS_PX}px;"
-        )
 
         self._card_layout = QVBoxLayout(self._card)
         self._card_layout.setContentsMargins(32, 32, 32, 32)
@@ -136,8 +132,6 @@ class HomeOverlay(QWidget):
         self._buttons_layout.setContentsMargins(0, 0, 0, 0)
         self._buttons_layout.setSpacing(8)
         self._card_layout.addWidget(self._buttons_container)
-
-        styles.apply_card_shadow(self._card)
 
         outer.addWidget(self._card)
 

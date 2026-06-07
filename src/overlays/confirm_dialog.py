@@ -1,4 +1,3 @@
-import logging
 from typing import Callable
 
 from PyQt6.QtCore import Qt
@@ -11,8 +10,6 @@ from audio import sound_player
 from input.gamepad_watcher import GamepadWatcher
 from ui import styles
 from .base_overlay import BaseOverlay
-
-logger = logging.getLogger(__name__)
 
 
 class ConfirmDialog(BaseOverlay):
@@ -37,12 +34,7 @@ class ConfirmDialog(BaseOverlay):
         outer = QVBoxLayout(self)
         outer.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
-        self._card = QWidget()
-        card = self._card
-        card.setStyleSheet(
-            f"background-color: {styles.COLOR_CARD_BG}; border-radius: {styles.CARD_RADIUS_PX}px;"
-        )
-        card.setFixedWidth(680)
+        card = self.build_card(680)
 
         layout = QVBoxLayout(card)
         layout.setContentsMargins(48, 48, 48, 48)
@@ -67,8 +59,6 @@ class ConfirmDialog(BaseOverlay):
         btn_row.addWidget(self._btn_no)
         layout.addLayout(btn_row)
 
-        styles.apply_card_shadow(card)
-
         outer.addWidget(card)
         self._refresh_buttons()
 
@@ -89,11 +79,8 @@ class ConfirmDialog(BaseOverlay):
 
     # ── Keyboard ───────────────────────────────────────────────────────────
 
-    def mousePressEvent(self, event) -> None:
-        if not self._card.geometry().contains(event.pos()):
-            self._cancel()
-        else:
-            super().mousePressEvent(event)
+    def _on_outside_click(self) -> None:
+        self._cancel()
 
     def keyPressEvent(self, event: QKeyEvent) -> None:
         if event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
@@ -107,33 +94,12 @@ class ConfirmDialog(BaseOverlay):
     # ── Actions ────────────────────────────────────────────────────────────
 
     def _confirm(self) -> None:
-        if self._close():
-            sound_player.play("select")
+        if self._dismiss(sound="select"):
             self._on_confirmed()
 
     def _cancel(self) -> None:
-        if self._close():
-            sound_player.play("popup_close")
+        if self._dismiss(sound="popup_close"):
             self._on_cancelled()
-
-    def _close(self) -> bool:
-        if self._closed:
-            return False
-        logger.info("ConfirmDialog._close() – hiding the dialog")
-        self._closed = True
-        self._gamepad.pop_handler(self._handler)
-        self.hide()
-        self.deleteLater()
-        return True
-
-    def force_close(self) -> None:
-        """Force close (e.g. when the application ended from outside)."""
-        logger.warning("ConfirmDialog.force_close() – forcing to close the dialog")
-        if not self._closed:
-            self._closed = True
-            self._gamepad.pop_handler(self._handler)
-        self.hide()
-        self.deleteLater()
 
     def _refresh_buttons(self) -> None:
         self._btn_yes.setStyleSheet(

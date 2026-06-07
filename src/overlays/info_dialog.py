@@ -1,4 +1,3 @@
-import logging
 from typing import Callable
 
 from PyQt6.QtCore import Qt
@@ -11,8 +10,6 @@ from audio import sound_player
 from input.gamepad_watcher import GamepadWatcher
 from ui import styles
 from .base_overlay import BaseOverlay
-
-logger = logging.getLogger(__name__)
 
 
 class InfoDialog(BaseOverlay):
@@ -33,11 +30,7 @@ class InfoDialog(BaseOverlay):
         outer = QVBoxLayout(self)
         outer.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
-        card = QWidget()
-        card.setStyleSheet(
-            f"background-color: {styles.COLOR_CARD_BG}; border-radius: {styles.CARD_RADIUS_PX}px;"
-        )
-        card.setFixedWidth(680)
+        card = self.build_card(680)
 
         layout = QVBoxLayout(card)
         layout.setContentsMargins(48, 48, 48, 48)
@@ -56,8 +49,6 @@ class InfoDialog(BaseOverlay):
         self._btn_ok.clicked.connect(self._confirm)
         layout.addWidget(self._btn_ok, alignment=Qt.AlignmentFlag.AlignCenter)
 
-        styles.apply_card_shadow(card)
-
         outer.addWidget(card)
 
         sound_player.play("popup_open")
@@ -72,23 +63,5 @@ class InfoDialog(BaseOverlay):
             self._confirm()
 
     def _confirm(self) -> None:
-        if self._close():
-            sound_player.play("select")
+        if self._dismiss(sound="select"):
             self._on_confirmed()
-
-    def _close(self) -> bool:
-        if self._closed:
-            return False
-        logger.info("InfoDialog._close()")
-        self._closed = True
-        self._gamepad.pop_handler(self._handler)
-        self.hide()
-        self.deleteLater()
-        return True
-
-    def force_close(self) -> None:
-        if not self._closed:
-            self._closed = True
-            self._gamepad.pop_handler(self._handler)
-        self.hide()
-        self.deleteLater()

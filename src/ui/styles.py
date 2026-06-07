@@ -32,6 +32,24 @@ def apply_card_shadow(
     widget.setGraphicsEffect(effect)
 
 
+def make_card(width: int):
+    """Build the standard centred dialog card: fixed width, dark rounded
+    background and a drop shadow. Callers add their own inner layout.
+
+    Shared by every centred overlay (Confirm/Info/Volume/Home) so the look stays
+    consistent in one place instead of being re-specified per dialog.
+    """
+    from PyQt6.QtWidgets import QWidget
+
+    card = QWidget()
+    card.setFixedWidth(width)
+    card.setStyleSheet(
+        f"background-color: {COLOR_CARD_BG}; border-radius: {CARD_RADIUS_PX}px;"
+    )
+    apply_card_shadow(card)
+    return card
+
+
 def tile_normal(color: str) -> str:
     return f"""
         QToolButton {{

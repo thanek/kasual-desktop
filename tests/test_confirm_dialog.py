@@ -156,3 +156,14 @@ class TestForceClose:
         dlg.force_close()
         dlg.force_close()   # nie powinno rzucać
         assert dlg._closed is True
+
+
+# ── Klik poza kartą ─────────────────────────────────────────────────────────────
+
+class TestOutsideClick:
+    def test_outside_click_cancels(self, mock_gamepad):
+        cancelled = []
+        dlg = _make_dialog(mock_gamepad, on_cancelled=lambda: cancelled.append(True))
+        dlg._on_outside_click()
+        assert cancelled == [True]
+        assert dlg._closed is True
