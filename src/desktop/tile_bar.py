@@ -56,11 +56,17 @@ class TileBar(QScrollArea):
 
         self._tile_index = 0
         self._focused    = True   # tiles own focus at startup
-        # When set, hover events are ignored until the cursor actually moves away
-        # from this position. Armed when the Desktop (re)appears so a tile sitting
+        # Hover suppression armed when the Desktop (re)appears, so a tile sitting
         # under a stationary cursor doesn't grab selection via the synthetic
         # enterEvent Qt delivers when the window maps under the pointer.
-        self._hover_block_pos: QPoint | None = None
+        #
+        # The anchor is latched on the FIRST hover (not at arm time): on Wayland
+        # QCursor.pos() is stale while the window is hidden, but it is reliable
+        # during an enterEvent. Subsequent hovers at the same point (e.g. the
+        # tile bar scrolling under a parked cursor) stay ignored; a genuine move
+        # to a different point lifts the block.
+        self._hover_blocked = False
+        self._hover_anchor: QPoint | None = None
 
         # Dynamic tiles: list of (window_id, title, AppTile)
         self._dynamic_tiles: list[tuple[str, str, AppTile]] = []
@@ -132,9 +138,11 @@ class TileBar(QScrollArea):
         window maps under whatever stationary position the cursor was left at,
         and Qt delivers a synthetic enterEvent to the tile underneath — without
         this guard that tile would steal selection even though the user never
-        moved the mouse onto it.
+        moved the mouse onto it. The reference position is latched on the first
+        hover (see __init__), since QCursor.pos() is unreliable here on Wayland.
         """
-        self._hover_block_pos = QCursor.pos()
+        self._hover_blocked = True
+        self._hover_anchor  = None
 
     def set_focused(self, focused: bool, scroll: bool = True) -> None:
         """Whether the tile bar (vs the top bar) owns the focus highlight."""
@@ -341,13 +349,20 @@ class TileBar(QScrollArea):
             self.activated.emit(ctx)
 
     def _on_tile_hovered(self, idx: int) -> None:
-        if self._hover_block_pos is not None:
-            if QCursor.pos() == self._hover_block_pos:
-                # Window appeared under a stationary cursor — not a real hover.
+        if self._hover_blocked:
+            pos = QCursor.pos()
+            if self._hover_anchor is None:
+                # First hover after the Desktop appeared: the synthetic enter
+                # under the parked cursor. Latch its (now-reliable) position and
+                # ignore it.
+                self._hover_anchor = pos
                 return
-            # The cursor has actually moved since the Desktop appeared; honour
-            # hovers again from now on.
-            self._hover_block_pos = None
+            if pos == self._hover_anchor:
+                # Same parked point (e.g. the bar scrolling under the cursor).
+                return
+            # The cursor genuinely moved → honour hovers again from now on.
+            self._hover_blocked = False
+            self._hover_anchor  = None
         changed = self._tile_index != idx or not self._focused
         self._tile_index = idx
         self._render_tiles(scroll=False)
