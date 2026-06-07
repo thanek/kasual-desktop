@@ -4,7 +4,7 @@ import qtawesome as qta
 from PyQt6.QtCore import (Qt, QSize, QPoint,
                           QPropertyAnimation, QSequentialAnimationGroup, QPauseAnimation,
                           pyqtSignal)
-from PyQt6.QtGui import QFont, QFontMetrics
+from PyQt6.QtGui import QCursor, QFont, QFontMetrics
 from PyQt6.QtWidgets import QWidget, QToolButton, QLabel
 
 from ui import styles
@@ -63,6 +63,11 @@ class AppTile(QWidget):
         self._marquee_lbl.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
 
         self._closing = False
+        # Global cursor position recorded when the pointer left this tile. Used to
+        # reject the synthetic enterEvent Qt delivers when a window above us (e.g.
+        # the Home Overlay) is hidden over a stationary cursor — without it the
+        # tile under the idle pointer would steal selection on overlay close.
+        self._pos_at_leave: QPoint | None = None
         self._status_bar = QLabel(self)
         self._status_bar.hide()
 
@@ -77,7 +82,19 @@ class AppTile(QWidget):
 
     def enterEvent(self, event) -> None:
         super().enterEvent(event)
-        self.hovered.emit()
+        pos = event.globalPosition().toPoint()
+        # Same position as the last leave → the pointer never moved; this enter
+        # was synthesised by a window above us hiding, not a real hover. Ignore it
+        # so gamepad-driven selection isn't yanked to whatever sits under the
+        # idle cursor (e.g. after dismissing the Home Overlay).
+        synthetic = pos == self._pos_at_leave
+        self._pos_at_leave = None
+        if not synthetic:
+            self.hovered.emit()
+
+    def leaveEvent(self, event) -> None:
+        super().leaveEvent(event)
+        self._pos_at_leave = QCursor.pos()
 
     def mousePressEvent(self, event) -> None:
         if event.button() == Qt.MouseButton.RightButton:

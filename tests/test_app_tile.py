@@ -7,12 +7,20 @@ import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 import pytest
+from PyQt6.QtCore import QEvent, QPoint, QPointF
+from PyQt6.QtGui import QEnterEvent
+
 from desktop.app_tile import AppTile
 
 
 @pytest.fixture
 def tile(qapp):
     return AppTile(name="Test", icon_name="fa5s.desktop", color="#2e3440")
+
+
+def _enter_at(pt: QPoint) -> QEnterEvent:
+    p = QPointF(pt)
+    return QEnterEvent(QPointF(0, 0), p, p)
 
 
 class TestDotRunning:
@@ -64,3 +72,41 @@ class TestDotClosing:
         tile.set_closing()
         orange_style = tile._status_bar.styleSheet()
         assert green_style != orange_style
+
+
+class TestHoverSuppression:
+    """A synthetic enterEvent (window above hidden, cursor stationary) must not
+    be reported as a hover — otherwise the tile under the idle pointer steals
+    selection when the Home Overlay is dismissed."""
+
+    def test_enter_emits_hover_without_prior_leave(self, tile):
+        seen = []
+        tile.hovered.connect(lambda: seen.append(True))
+        tile.enterEvent(_enter_at(QPoint(50, 50)))
+        assert seen == [True]
+
+    def test_enter_emits_hover_when_cursor_moved_since_leave(self, tile):
+        seen = []
+        tile.hovered.connect(lambda: seen.append(True))
+        tile._pos_at_leave = QPoint(10, 10)
+        tile.enterEvent(_enter_at(QPoint(50, 50)))   # cursor actually moved
+        assert seen == [True]
+
+    def test_enter_suppressed_when_cursor_unchanged_since_leave(self, tile):
+        seen = []
+        tile.hovered.connect(lambda: seen.append(True))
+        tile._pos_at_leave = QPoint(50, 50)
+        tile.enterEvent(_enter_at(QPoint(50, 50)))   # synthetic: same position
+        assert seen == []
+
+    def test_suppression_is_one_shot(self, tile):
+        seen = []
+        tile.hovered.connect(lambda: seen.append(True))
+        tile._pos_at_leave = QPoint(50, 50)
+        tile.enterEvent(_enter_at(QPoint(50, 50)))   # suppressed, clears state
+        tile.enterEvent(_enter_at(QPoint(50, 50)))   # no stale leave → real hover
+        assert seen == [True]
+
+    def test_leave_records_cursor_position(self, tile):
+        tile.leaveEvent(QEvent(QEvent.Type.Leave))
+        assert isinstance(tile._pos_at_leave, QPoint)

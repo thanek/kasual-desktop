@@ -27,10 +27,17 @@ class AppManager(QObject):
 
     # ── API ────────────────────────────────────────────────────────────────
 
-    def launch(self, idx: int, app: dict) -> None:
+    def launch(self, idx: int, app: dict) -> bool:
+        """Start app *idx*. Returns True if a new process was actually spawned.
+
+        Returns False when the app is already running or the command could not
+        be started (the failure is also reported via app_launch_failed). Callers
+        use the return value to decide whether to arm post-launch behaviour such
+        as the deferred hide — which must not run for a launch that never began.
+        """
         if self.is_running(idx):
             logger.warning("App %d is already running — ignoring", idx)
-            return
+            return False
 
         command = app["command"]
         args    = [str(a) for a in app.get("args", [])]
@@ -56,18 +63,19 @@ class AppManager(QObject):
             msg = f"Command not found: {command}"
             logger.error(msg)
             self.app_launch_failed.emit(idx, msg)
-            return
+            return False
         except PermissionError:
             msg = f"Permission denied: {command}"
             logger.error(msg)
             self.app_launch_failed.emit(idx, msg)
-            return
+            return False
 
         self._processes[idx] = proc
         threading.Thread(
             target=self._monitor, args=(idx,), daemon=True
         ).start()
         self.app_started.emit(idx)
+        return True
 
     def terminate(self, idx: int) -> None:
         if not self.is_running(idx):

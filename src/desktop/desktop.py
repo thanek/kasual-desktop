@@ -405,12 +405,18 @@ class Desktop(QWidget):
             trigger = self._apps[idx].get("recall_menu_trigger", BTN_MODE_CLICK)
             self._gamepad.set_app_btn_mode_trigger(trigger)
             self._gamepad.pop_handler(self._handle_pad)
-            self._app_manager.launch(idx, self._apps[idx])
-            # The Desktop is a top-layer surface and must be hidden for the
-            # windowed app to show — but we defer that until the app's window is
-            # actually mapped, so the DE desktop never flashes through the
-            # start-up gap. Re-shown by _on_app_finished / _on_app_launch_failed.
-            self._arm_deferred_hide(idx)
+            # launch() reports an immediate failure (e.g. command not found)
+            # synchronously via app_launch_failed — _on_app_launch_failed has
+            # already reactivated the Desktop and shown the error by the time
+            # this returns False. Only arm the deferred hide for a real launch;
+            # arming it for a failed one would strand a window-poll + 5 s guard
+            # that later hides the Desktop and churns the tile selection.
+            if self._app_manager.launch(idx, self._apps[idx]):
+                # The Desktop is a top-layer surface and must be hidden for the
+                # windowed app to show — but we defer that until the app's window
+                # is actually mapped, so the DE desktop never flashes through the
+                # start-up gap. Re-shown by _on_app_finished.
+                self._arm_deferred_hide(idx)
 
     # ── Deferred hide on launch ─────────────────────────────────────────────
 
@@ -500,6 +506,14 @@ class Desktop(QWidget):
         # Launch failed before any window: drop the pending hide so the Desktop
         # stays up for the error dialog instead of vanishing.
         self._cancel_deferred_hide()
+        # _on_tile_activated set the active context optimistically when the tile
+        # was chosen; the app never started, so clear it (if it is still ours).
+        # Otherwise BTN_MODE would target the never-launched app instead of
+        # opening the general Home Overlay.
+        if (self._active_context is not None
+                and self._active_context.get('type') == 'app'
+                and self._active_context.get('id') == idx):
+            self._active_context = None
         self._reactivate_desktop()
         InfoDialog(
             message=self.tr("Failed to launch application:\n{0}").format(error),

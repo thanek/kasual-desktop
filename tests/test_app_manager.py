@@ -182,6 +182,34 @@ class TestLaunch:
         mock_thread.assert_called_once()
         mock_thread.return_value.start.assert_called_once()
 
+    def test_returns_true_on_successful_launch(self, qapp):
+        am = _make_manager()
+        proc = _running_proc()
+        with patch("system.app_manager.subprocess.Popen", return_value=proc), \
+             patch("system.app_manager.threading.Thread"):
+            assert am.launch(0, {"command": "echo"}) is True
+
+    def test_returns_false_when_already_running(self, qapp):
+        am = _make_manager()
+        am._processes[0] = _running_proc()
+        with patch("system.app_manager.subprocess.Popen"):
+            assert am.launch(0, {"command": "echo"}) is False
+
+    def test_returns_false_and_emits_failed_on_missing_command(self, qapp):
+        am = _make_manager()
+        failed = []
+        am.app_launch_failed.connect(lambda idx, msg: failed.append((idx, msg)))
+        with patch("system.app_manager.subprocess.Popen", side_effect=FileNotFoundError):
+            assert am.launch(2, {"command": "/no/such/app"}) is False
+        assert failed and failed[0][0] == 2
+        # A failed launch must leave no process registered for that idx.
+        assert not am.is_running(2)
+
+    def test_returns_false_on_permission_error(self, qapp):
+        am = _make_manager()
+        with patch("system.app_manager.subprocess.Popen", side_effect=PermissionError):
+            assert am.launch(0, {"command": "/root/secret"}) is False
+
 
 # ── _on_finished ───────────────────────────────────────────────────────────────
 
