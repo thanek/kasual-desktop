@@ -5,7 +5,7 @@ Kasual Desktop is an interactive, graphical "launcher/desktop" interface, design
 ## ✨ Key Features
 
 - **Gamepad-First Interface**: Full controller navigation support (via `evdev` and `gamepad_watcher`).
-- **Dynamic Launcher**: Manage applications using a simple `apps.yaml` configuration file.
+- **Dynamic Launcher**: Manage applications with simple `.desktop` files in `~/.config/kasual-desktop/apps/`.
 - **Overlay System**: Advanced support for system overlays (e.g., notifications, menus) that run on top of application windows.
 - **System Integration**: Support for window management (KWin/Wayland) and integration with system notification services.
 - **Advanced Audio System**: Support for system sounds and audio feedback.
@@ -98,17 +98,53 @@ sudo udevadm control --reload-rules && sudo udevadm trigger
 
 ## ⚙️ Configuration
 
-The application is configured via a `apps.yaml` file located in the root directory. You can add or remove applications from your launcher by editing this file.
+Launcher tiles are defined by freedesktop **`.desktop`** files placed in:
 
-```yaml
-apps:
-  - name: "Browser"
-    command: "firefox"
-    icon: "browser_icon.png"
-  - name: "Terminal"
-    command: "konsole"
-    icon: "terminal_icon.png"
 ```
+~/.config/kasual-desktop/apps/        # or $XDG_CONFIG_HOME/kasual-desktop/apps/
+```
+
+One file per app. To get started, copy the bundled examples and edit them:
+
+```sh
+mkdir -p ~/.config/kasual-desktop/apps
+cp examples/apps/*.desktop ~/.config/kasual-desktop/apps/
+```
+
+Each file uses the standard `[Desktop Entry]` section plus a few `X-Kasual-*`
+extensions:
+
+```ini
+[Desktop Entry]
+Type=Application
+Name=Steam
+Exec=steam steam://open/bigpicture
+X-Kasual-Icon=fa5b.steam            # qtawesome glyph (preferred)
+X-Kasual-Color=#1b2838              # tile colour
+X-Kasual-RecallMenuTrigger=BTN_MODE_HOLD_1S   # or BTN_MODE_CLICK (default)
+X-Kasual-HideGraceMs=500            # delay before hiding KD after launch (ms)
+X-Kasual-Order=10                   # tile order (ascending; ties → filename)
+X-Kasual-Env=MANGOHUD=1;FOO=bar     # extra environment variables (optional)
+```
+
+| Key | Meaning |
+|---|---|
+| `Name` | Tile label (required) |
+| `Exec` | Command + arguments (required; `%`-field codes are stripped) |
+| `Icon` | Themed icon name, used when `X-Kasual-Icon` is absent |
+| `X-Kasual-Icon` | [qtawesome](https://github.com/spyder-ide/qtawesome) glyph name (takes precedence over `Icon`) |
+| `X-Kasual-Color` | Tile background colour (default `#2e3440`) |
+| `X-Kasual-RecallMenuTrigger` | `BTN_MODE_CLICK` (default) or `BTN_MODE_HOLD_1S` |
+| `X-Kasual-HideGraceMs` | Grace period before hiding the Desktop after launch (default `0`) |
+| `X-Kasual-Env` | `KEY=val;KEY2=val2` — merged into the launched process environment |
+| `X-Kasual-Order` | Integer sort key (default last; ties broken by filename) |
+
+`NoDisplay=true`, `Hidden=true` and non-`Application` entries are ignored.
+
+> **Bundled apps (`yt`, `file_browser`):** their launcher scripts live in the
+> cloned repo, so `Exec` must be an **absolute** path (e.g.
+> `/home/you/kasual/apps/yt/yt.sh`) — relative paths do not resolve from
+> `~/.config`. See `examples/apps/youtube.desktop` and `files.desktop`.
 
 ## 📜 License
 

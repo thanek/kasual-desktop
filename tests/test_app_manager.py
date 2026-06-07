@@ -130,6 +130,16 @@ class TestLaunch:
         # Our layer-shell integration must not leak into launched apps.
         assert "QT_WAYLAND_SHELL_INTEGRATION" not in kwargs["env"]
 
+    def test_env_merges_app_env(self, qapp):
+        am = _make_manager()
+        proc = _running_proc(pid=1234)
+        with patch("system.app_manager.subprocess.Popen", return_value=proc) as popen, \
+             patch("system.app_manager.threading.Thread"):
+            am.launch(0, {"command": "echo", "args": [], "env": {"FOO": "bar"}})
+        env = popen.call_args.kwargs["env"]
+        assert env["FOO"] == "bar"
+        assert "QT_WAYLAND_SHELL_INTEGRATION" not in env
+
     def test_args_converted_to_strings(self, qapp):
         am = _make_manager()
         popen, _ = self._launch(am, command="cmd", args=[1, 2, 3])

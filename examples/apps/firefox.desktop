@@ -1,0 +1,8 @@
+# Kasual Desktop app entry — copy to ~/.config/kasual-desktop/apps/
+[Desktop Entry]
+Type=Application
+Name=Firefox
+Exec=firefox --kiosk
+X-Kasual-Icon=fa5b.firefox-browser
+X-Kasual-Color=#e67e22
+X-Kasual-Order=50

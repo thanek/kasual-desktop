@@ -1,0 +1,10 @@
+# Kasual Desktop app entry — copy to ~/.config/kasual-desktop/apps/
+[Desktop Entry]
+Type=Application
+Name=Steam
+Exec=steam steam://open/bigpicture
+X-Kasual-Icon=fa5b.steam
+X-Kasual-Color=#1b2838
+X-Kasual-RecallMenuTrigger=BTN_MODE_HOLD_1S
+X-Kasual-HideGraceMs=500
+X-Kasual-Order=10

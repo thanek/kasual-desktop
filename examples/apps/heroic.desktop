@@ -1,0 +1,9 @@
+# Kasual Desktop app entry — copy to ~/.config/kasual-desktop/apps/
+[Desktop Entry]
+Type=Application
+Name=Heroic
+Exec=heroic --fullscreen
+X-Kasual-Icon=fa5s.gamepad
+X-Kasual-Color=#c0392b
+X-Kasual-RecallMenuTrigger=BTN_MODE_CLICK
+X-Kasual-Order=20

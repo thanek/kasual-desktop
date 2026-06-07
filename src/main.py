@@ -10,7 +10,6 @@ from pathlib import Path
 os.environ.setdefault("QT_QPA_PLATFORM", "wayland")
 os.environ.setdefault("QT_WAYLAND_SHELL_INTEGRATION", "layer-shell")
 
-import yaml
 from PyQt6.QtCore import QLocale, QTimer, QTranslator
 from PyQt6.QtWidgets import QApplication
 
@@ -18,6 +17,7 @@ from app import Application
 from audio import sound_player
 from desktop import Desktop
 from input.gamepad_watcher import GamepadWatcher
+from system.app_config import load_apps
 from system.window_manager import KWinWindowManager
 from system.system_actions import ActionDeps
 from ui.log_viewer import LogViewer
@@ -44,13 +44,6 @@ def _setup_logging() -> Path:
     return log_file
 
 
-def _load_apps() -> list[dict]:
-    cfg_path = Path(__file__).parent.parent / "apps.yml"
-    with open(cfg_path, encoding="utf-8") as f:
-        data = yaml.safe_load(f)
-    return data.get("apps", [])
-
-
 def main() -> None:
     # Restore default Ctrl+C handling: Qt's Wayland event loop swallows SIGINT
     # (Python's handler never runs while app.exec() blocks), leaving the app
@@ -60,7 +53,7 @@ def main() -> None:
     log_file = _setup_logging()
     logger.info("Running Kasual Desktop")
 
-    apps = _load_apps()
+    apps = load_apps()
     logger.info("Loaded %d apps", len(apps))
 
     app = QApplication(sys.argv)

@@ -4,6 +4,7 @@ import logging
 import os
 
 from PyQt6.QtCore import Qt, QTimer, pyqtSignal
+from PyQt6.QtGui import QIcon
 from PyQt6.QtWidgets import QWidget, QHBoxLayout, QScrollArea, QApplication
 
 from input.gamepad_watcher import BTN_MODE_CLICK
@@ -82,10 +83,20 @@ class TileBar(QScrollArea):
 
         self._tiles: list[AppTile] = []
         for i, app in enumerate(self._apps):
+            # Icon: prefer a qtawesome glyph (X-Kasual-Icon); otherwise fall back
+            # to the themed `Icon` name via QIcon.fromTheme. AppTile uses the
+            # QIcon when given (and non-null), else the qtawesome name.
+            qta_name = app.get("icon") or "fa5s.desktop"
+            qicon = None
+            if not app.get("icon") and app.get("icon_theme"):
+                themed = QIcon.fromTheme(app["icon_theme"])
+                if not themed.isNull():
+                    qicon = themed
             tile = AppTile(
                 name=app["name"],
-                icon_name=app.get("icon", "fa5s.desktop"),
+                icon_name=qta_name,
                 color=app.get("color", "#2e3440"),
+                qicon=qicon,
             )
             tile.clicked.connect(lambda idx=i: self._activate_index(idx))
             tile.hovered.connect(lambda idx=i: self._on_tile_hovered(idx))

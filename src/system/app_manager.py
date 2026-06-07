@@ -43,6 +43,8 @@ class AppManager(QObject):
         # cut-off bars top and bottom. Launch apps as ordinary Wayland clients.
         env = os.environ.copy()
         env.pop("QT_WAYLAND_SHELL_INTEGRATION", None)
+        # Per-app environment overrides (X-Kasual-Env in the .desktop file).
+        env.update(app.get("env", {}))
 
         try:
             proc = subprocess.Popen(
