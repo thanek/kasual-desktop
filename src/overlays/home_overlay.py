@@ -5,7 +5,7 @@ import qtawesome as qta
 from PyQt6.QtCore import Qt, QCoreApplication, QT_TRANSLATE_NOOP, pyqtSignal
 from PyQt6.QtGui import QKeyEvent
 from PyQt6.QtWidgets import (
-    QWidget, QPushButton, QVBoxLayout, QHBoxLayout, QLabel, QSizePolicy,
+    QWidget, QPushButton, QVBoxLayout, QLabel, QSizePolicy,
 )
 
 from audio import sound_player
@@ -105,15 +105,17 @@ class HomeOverlay(QWidget):
             keyboard=Keyboard.NONE,
         )
 
-        outer = QHBoxLayout(self)
-        outer.setContentsMargins(0, 0, 0, 0)
-        outer.setSpacing(0)
-        outer.addStretch()
+        outer = QVBoxLayout(self)
+        outer.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         self._card = QWidget()
         self._card.setFixedWidth(500)
-        self._card.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Expanding)
-        self._card.setStyleSheet("background-color: #1e2430;")
+        # Centred card that hugs its content vertically (Maximum), like the
+        # Confirm/Volume dialogs, instead of the old full-height right sidebar.
+        self._card.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Maximum)
+        self._card.setStyleSheet(
+            f"background-color: {styles.COLOR_CARD_BG}; border-radius: {styles.CARD_RADIUS_PX}px;"
+        )
 
         self._card_layout = QVBoxLayout(self._card)
         self._card_layout.setContentsMargins(32, 32, 32, 32)
@@ -135,7 +137,7 @@ class HomeOverlay(QWidget):
         self._buttons_layout.setSpacing(8)
         self._card_layout.addWidget(self._buttons_container)
 
-        styles.apply_card_shadow(self._card, offset_x=-10, offset_y=0, blur=50, alpha=220)
+        styles.apply_card_shadow(self._card)
 
         outer.addWidget(self._card)
 

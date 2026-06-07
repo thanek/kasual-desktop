@@ -80,10 +80,14 @@ class AppManager(QObject):
     def terminate(self, idx: int) -> None:
         if not self.is_running(idx):
             return
+        proc = self._processes[idx]
         logger.info("Ending app %d (SIGTERM)", idx)
-        self._killpg(idx, signal.SIGTERM)
-        # If the process does not terminate within 3 s — force SIGKILL
-        QTimer.singleShot(3000, lambda: self._force_kill(idx))
+        self._killpg(proc, signal.SIGTERM)
+        # If the process does not terminate within 3 s — force SIGKILL. Bind the
+        # timer to *this* process object, not just idx: a close+relaunch of the
+        # same idx within the grace window swaps in a new process, and a stale
+        # idx-keyed timer would SIGKILL that freshly launched one.
+        QTimer.singleShot(3000, lambda: self._force_kill(idx, proc))
 
     def is_running(self, idx: int | None = None) -> bool:
         """True if app *idx* is running, or if any app is running when idx is None."""
@@ -106,10 +110,7 @@ class AppManager(QObject):
 
     # ── Internal ───────────────────────────────────────────────────────────
 
-    def _killpg(self, idx: int, sig: signal.Signals) -> None:
-        proc = self._processes.get(idx)
-        if proc is None:
-            return
+    def _killpg(self, proc: subprocess.Popen, sig: signal.Signals) -> None:
         try:
             os.killpg(os.getpgid(proc.pid), sig)
         except ProcessLookupError:
@@ -117,10 +118,13 @@ class AppManager(QObject):
         except Exception as e:
             logger.error("killpg(%s) failed: %s", sig.name, e)
 
-    def _force_kill(self, idx: int) -> None:
-        if self.is_running(idx):
+    def _force_kill(self, idx: int, proc: subprocess.Popen) -> None:
+        # Only kill if this exact process is still the one registered for idx and
+        # is still alive — guards against killing a process that already exited or
+        # a different one that took idx's place after a relaunch.
+        if self._processes.get(idx) is proc and proc.poll() is None:
             logger.warning("Forcing SIGKILL for application %d", idx)
-            self._killpg(idx, signal.SIGKILL)
+            self._killpg(proc, signal.SIGKILL)
 
     def _monitor(self, idx: int) -> None:
         """Waits for the process to finish in a background thread, then signals the GUI."""

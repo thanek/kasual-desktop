@@ -8,7 +8,7 @@ Testujemy:
   - launch wielu różnych aplikacji jednocześnie
   - _on_finished (usuwa z _processes, emituje app_finished, inne procesy nienaruszone)
   - terminate(idx) — SIGTERM + harmonogram SIGKILL
-  - _force_kill(idx)
+  - _force_kill(idx, proc) — SIGKILL tylko gdy idx wciąż trzyma TEN proces
   - running_pid / all_running_pids / is_running
 
 Subprocess.Popen i threading.Thread są zawsze mockowane — testy nie
@@ -281,21 +281,37 @@ class TestTerminate:
 class TestForceKill:
     def test_sends_sigkill_when_still_running(self, qapp):
         am = _make_manager()
-        am._processes[0] = _running_proc(pid=5678)
+        proc = _running_proc(pid=5678)
+        am._processes[0] = proc
         with patch("system.app_manager.os.getpgid", return_value=5678), \
              patch("system.app_manager.os.killpg") as mock_killpg:
-            am._force_kill(0)
+            am._force_kill(0, proc)
         mock_killpg.assert_called_once_with(5678, signal.SIGKILL)
 
     def test_noop_when_process_exited(self, qapp):
         am = _make_manager()
-        am._processes[0] = _exited_proc()
+        proc = _exited_proc()
+        am._processes[0] = proc
         with patch("system.app_manager.os.killpg") as mock_killpg:
-            am._force_kill(0)
+            am._force_kill(0, proc)
         mock_killpg.assert_not_called()
 
     def test_noop_when_no_process(self, qapp):
         am = _make_manager()
+        proc = _running_proc()   # never registered under any idx
         with patch("system.app_manager.os.killpg") as mock_killpg:
-            am._force_kill(0)
+            am._force_kill(0, proc)
+        mock_killpg.assert_not_called()
+
+    def test_noop_when_idx_holds_a_different_process(self, qapp):
+        """Regression: a close+relaunch swaps in a new process under the same
+        idx; the stale force-kill timer scheduled by the previous terminate must
+        not SIGKILL the freshly launched one."""
+        am = _make_manager()
+        old = _exited_proc()             # what terminate() targeted, now gone
+        new = _running_proc(pid=4242)    # relaunched under the same idx
+        am._processes[0] = new
+        with patch("system.app_manager.os.getpgid", return_value=4242), \
+             patch("system.app_manager.os.killpg") as mock_killpg:
+            am._force_kill(0, old)       # stale timer fires
         mock_killpg.assert_not_called()
