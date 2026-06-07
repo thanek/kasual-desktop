@@ -3,8 +3,8 @@
 import logging
 import os
 
-from PyQt6.QtCore import Qt, QTimer, pyqtSignal
-from PyQt6.QtGui import QIcon
+from PyQt6.QtCore import Qt, QPoint, QTimer, pyqtSignal
+from PyQt6.QtGui import QCursor, QIcon
 from PyQt6.QtWidgets import QWidget, QHBoxLayout, QScrollArea, QApplication
 
 from input.gamepad_watcher import BTN_MODE_CLICK
@@ -54,6 +54,11 @@ class TileBar(QScrollArea):
 
         self._tile_index = 0
         self._focused    = True   # tiles own focus at startup
+        # When set, hover events are ignored until the cursor actually moves away
+        # from this position. Armed when the Desktop (re)appears so a tile sitting
+        # under a stationary cursor doesn't grab selection via the synthetic
+        # enterEvent Qt delivers when the window maps under the pointer.
+        self._hover_block_pos: QPoint | None = None
 
         # Dynamic tiles: list of (window_id, title, AppTile)
         self._dynamic_tiles: list[tuple[str, str, AppTile]] = []
@@ -117,6 +122,17 @@ class TileBar(QScrollArea):
         self._tile_index = new
         self._render_tiles()
         return True
+
+    def suppress_hover_until_move(self) -> None:
+        """Ignore tile hovers until the mouse genuinely moves.
+
+        Called when the Desktop becomes visible (e.g. after an app exits). The
+        window maps under whatever stationary position the cursor was left at,
+        and Qt delivers a synthetic enterEvent to the tile underneath — without
+        this guard that tile would steal selection even though the user never
+        moved the mouse onto it.
+        """
+        self._hover_block_pos = QCursor.pos()
 
     def set_focused(self, focused: bool, scroll: bool = True) -> None:
         """Whether the tile bar (vs the top bar) owns the focus highlight."""
@@ -323,6 +339,13 @@ class TileBar(QScrollArea):
             self.activated.emit(ctx)
 
     def _on_tile_hovered(self, idx: int) -> None:
+        if self._hover_block_pos is not None:
+            if QCursor.pos() == self._hover_block_pos:
+                # Window appeared under a stationary cursor — not a real hover.
+                return
+            # The cursor has actually moved since the Desktop appeared; honour
+            # hovers again from now on.
+            self._hover_block_pos = None
         changed = self._tile_index != idx or not self._focused
         self._tile_index = idx
         self._render_tiles(scroll=False)

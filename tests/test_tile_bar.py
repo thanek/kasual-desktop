@@ -8,7 +8,8 @@ import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 import pytest
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
+from PyQt6.QtCore import QPoint
 
 from desktop.tile_bar import TileBar
 
@@ -107,3 +108,36 @@ class TestWindowsChangedSignal:
         bar.update_windows([])
 
         assert bar._dynamic_tiles == []
+
+
+# ── Hover suppression on Desktop reappearance ───────────────────────────────────
+
+@pytest.fixture
+def bar_with_tiles(qapp, app_manager):
+    apps = [{"name": f"App {i}", "command": "x"} for i in range(3)]
+    return TileBar(apps=apps, app_manager=app_manager)
+
+
+class TestHoverSuppression:
+    def test_hover_ignored_when_cursor_stationary_after_show(self, bar_with_tiles):
+        bar = bar_with_tiles
+        bar.move(1)
+        assert bar._tile_index == 1
+        with patch("desktop.tile_bar.QCursor.pos", return_value=QPoint(100, 100)):
+            bar.suppress_hover_until_move()   # Desktop appeared, cursor at (100,100)
+            bar._on_tile_hovered(2)           # synthetic enter, cursor unchanged
+        assert bar._tile_index == 1           # selection untouched
+
+    def test_hover_honoured_after_cursor_moves(self, bar_with_tiles):
+        bar = bar_with_tiles
+        with patch("desktop.tile_bar.QCursor.pos", return_value=QPoint(100, 100)):
+            bar.suppress_hover_until_move()
+        with patch("desktop.tile_bar.QCursor.pos", return_value=QPoint(140, 100)):
+            bar._on_tile_hovered(2)           # cursor genuinely moved
+        assert bar._tile_index == 2
+        assert bar._hover_block_pos is None   # block lifted for subsequent hovers
+
+    def test_hover_works_normally_without_suppression(self, bar_with_tiles):
+        bar = bar_with_tiles
+        bar._on_tile_hovered(2)
+        assert bar._tile_index == 2

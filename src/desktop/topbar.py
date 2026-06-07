@@ -77,6 +77,12 @@ class TopBar(QWidget):
         for i, (action_type, action) in enumerate(ACTIONS.items()):
             btn = QPushButton()
             btn.setFixedSize(BTN_SIZE, BTN_SIZE)
+            # Navigation is gamepad/highlight-driven, so the buttons must not take
+            # Qt keyboard focus. Otherwise a clicked button (notably Volume, which
+            # reopens an overlay that hands focus back) keeps the platform focus
+            # frame — a sharp rectangle ignoring border-radius, so it looks like a
+            # square button with an extra border among the rounded ones.
+            btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
             btn.setIcon(qta.icon(action["icon"], color="white"))
             btn.setIconSize(QSize(24, 24))
             btn.setStyleSheet(styles.topbar_normal(action["color"]))

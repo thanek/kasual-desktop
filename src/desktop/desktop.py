@@ -236,6 +236,10 @@ class Desktop(QWidget):
 
     def showEvent(self, event) -> None:
         super().showEvent(event)
+        # The Desktop maps under wherever the cursor was left (e.g. after an app
+        # exits). Block tile hovers until the mouse actually moves, so a tile
+        # under the idle cursor doesn't hijack the selection on reappearance.
+        self._tilebar.suppress_hover_until_move()
         QTimer.singleShot(0, self._tilebar.center_current)
 
     def resizeEvent(self, event) -> None:
