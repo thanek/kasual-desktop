@@ -118,7 +118,7 @@ class TestLaunch:
         proc = _running_proc(pid=pid)
         with patch("system.app_manager.subprocess.Popen", return_value=proc) as popen, \
              patch("system.app_manager.threading.Thread"):
-            am.launch(idx, {"command": command, "args": args or []})
+            am.launch(idx, command, args or [])
         return popen, proc
 
     def test_creates_process_with_correct_command(self, qapp):
@@ -135,7 +135,7 @@ class TestLaunch:
         proc = _running_proc(pid=1234)
         with patch("system.app_manager.subprocess.Popen", return_value=proc) as popen, \
              patch("system.app_manager.threading.Thread"):
-            am.launch(0, {"command": "echo", "args": [], "env": {"FOO": "bar"}})
+            am.launch(0, "echo", [], {"FOO": "bar"})
         env = popen.call_args.kwargs["env"]
         assert env["FOO"] == "bar"
         assert "QT_WAYLAND_SHELL_INTEGRATION" not in env
@@ -150,7 +150,7 @@ class TestLaunch:
         proc = _running_proc()
         with patch("system.app_manager.subprocess.Popen", return_value=proc) as popen, \
              patch("system.app_manager.threading.Thread"):
-            am.launch(0, {"command": "cmd"})
+            am.launch(0, "cmd")
         assert popen.call_args[0][0] == ["cmd"]
 
     def test_emits_app_started(self, qapp):
@@ -164,7 +164,7 @@ class TestLaunch:
         am = _make_manager()
         am._processes[0] = _running_proc()
         with patch("system.app_manager.subprocess.Popen") as popen:
-            am.launch(0, {"command": "echo"})
+            am.launch(0, "echo")
         popen.assert_not_called()
 
     def test_allows_different_idxs_simultaneously(self, qapp):
@@ -178,7 +178,7 @@ class TestLaunch:
         proc = _running_proc()
         with patch("system.app_manager.subprocess.Popen", return_value=proc), \
              patch("system.app_manager.threading.Thread") as mock_thread:
-            am.launch(0, {"command": "echo"})
+            am.launch(0, "echo")
         mock_thread.assert_called_once()
         mock_thread.return_value.start.assert_called_once()
 
@@ -187,20 +187,20 @@ class TestLaunch:
         proc = _running_proc()
         with patch("system.app_manager.subprocess.Popen", return_value=proc), \
              patch("system.app_manager.threading.Thread"):
-            assert am.launch(0, {"command": "echo"}) is True
+            assert am.launch(0, "echo") is True
 
     def test_returns_false_when_already_running(self, qapp):
         am = _make_manager()
         am._processes[0] = _running_proc()
         with patch("system.app_manager.subprocess.Popen"):
-            assert am.launch(0, {"command": "echo"}) is False
+            assert am.launch(0, "echo") is False
 
     def test_returns_false_and_emits_failed_on_missing_command(self, qapp):
         am = _make_manager()
         failed = []
         am.app_launch_failed.connect(lambda idx, msg: failed.append((idx, msg)))
         with patch("system.app_manager.subprocess.Popen", side_effect=FileNotFoundError):
-            assert am.launch(2, {"command": "/no/such/app"}) is False
+            assert am.launch(2, "/no/such/app") is False
         assert failed and failed[0][0] == 2
         # A failed launch must leave no process registered for that idx.
         assert not am.is_running(2)
@@ -208,7 +208,7 @@ class TestLaunch:
     def test_returns_false_on_permission_error(self, qapp):
         am = _make_manager()
         with patch("system.app_manager.subprocess.Popen", side_effect=PermissionError):
-            assert am.launch(0, {"command": "/root/secret"}) is False
+            assert am.launch(0, "/root/secret") is False
 
 
 # ── _on_finished ───────────────────────────────────────────────────────────────

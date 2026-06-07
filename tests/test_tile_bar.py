@@ -12,6 +12,7 @@ from unittest.mock import MagicMock, patch
 from PyQt6.QtCore import QPoint
 
 from desktop.tile_bar import TileBar
+from domain.app import App
 
 
 def _win(id_: str, title: str = "App") -> dict:
@@ -114,7 +115,7 @@ class TestWindowsChangedSignal:
 
 @pytest.fixture
 def bar_with_tiles(qapp, app_manager):
-    apps = [{"name": f"App {i}", "command": "x"} for i in range(3)]
+    apps = [App(name=f"App {i}", command="x") for i in range(3)]
     return TileBar(apps=apps, app_manager=app_manager)
 
 

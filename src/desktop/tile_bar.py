@@ -7,6 +7,8 @@ from PyQt6.QtCore import Qt, QPoint, QTimer, pyqtSignal
 from PyQt6.QtGui import QCursor, QIcon
 from PyQt6.QtWidgets import QWidget, QHBoxLayout, QScrollArea, QApplication
 
+from domain.app import App
+from domain.target import AppTarget, Target, WindowTarget
 from input.gamepad_watcher import BTN_MODE_CLICK
 from system.app_manager import AppManager
 from ui import styles
@@ -41,12 +43,12 @@ class TileBar(QScrollArea):
       * ``windows_changed()``     — the dynamic-tile set was rebuilt
     """
 
-    activated        = pyqtSignal(dict)
+    activated        = pyqtSignal(object)   # Target (AppTarget | WindowTarget)
     windows_changed  = pyqtSignal()
     tile_hovered     = pyqtSignal(int)
     tile_context_menu = pyqtSignal()
 
-    def __init__(self, apps: list[dict], app_manager: AppManager, parent: QWidget | None = None) -> None:
+    def __init__(self, apps: list[App], app_manager: AppManager, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._apps          = apps
         self._app_manager   = app_manager
@@ -91,16 +93,16 @@ class TileBar(QScrollArea):
             # Icon: prefer a qtawesome glyph (X-Kasual-Icon); otherwise fall back
             # to the themed `Icon` name via QIcon.fromTheme. AppTile uses the
             # QIcon when given (and non-null), else the qtawesome name.
-            qta_name = app.get("icon") or "fa5s.desktop"
+            qta_name = app.icon or "fa5s.desktop"
             qicon = None
-            if not app.get("icon") and app.get("icon_theme"):
-                themed = QIcon.fromTheme(app["icon_theme"])
+            if not app.icon and app.icon_theme:
+                themed = QIcon.fromTheme(app.icon_theme)
                 if not themed.isNull():
                     qicon = themed
             tile = AppTile(
-                name=app["name"],
+                name=app.name,
                 icon_name=qta_name,
-                color=app.get("color", "#2e3440"),
+                color=app.color,
                 qicon=qicon,
             )
             tile.clicked.connect(lambda idx=i: self._activate_index(idx))
@@ -143,8 +145,8 @@ class TileBar(QScrollArea):
         """Activate the focused tile (as if it were clicked)."""
         self._activate_index(self._tile_index)
 
-    def current_context(self) -> dict | None:
-        """Context dict for the focused tile, or None if out of range."""
+    def current_context(self) -> Target | None:
+        """Foreground Target for the focused tile, or None if out of range."""
         return self._context_for_index(self._tile_index)
 
     def current_tile(self) -> AppTile | None:
@@ -178,7 +180,7 @@ class TileBar(QScrollArea):
         if self._app_manager.is_running(idx):
             return True
         if self._last_windows and idx < len(self._apps):
-            cmd = os.path.basename(self._apps[idx]['command']).lower()
+            cmd = self._apps[idx].command_basename
             return any(
                 w.get('resourceClass', '').lower() == cmd or
                 os.path.splitext(w.get('desktopFile', '').lower())[0] == cmd
@@ -211,7 +213,7 @@ class TileBar(QScrollArea):
         #      self-relaunch in a new process group, losing the pgid link.
         #      Uses all *defined* apps so filtering survives a Steam restart.
         running_pids  = set(self._app_manager.all_running_pids())
-        defined_cmds  = {os.path.basename(a['command']).lower() for a in self._apps}
+        defined_cmds  = {a.command_basename for a in self._apps}
 
         def _is_managed_window(w: dict) -> bool:
             pid = w.get('pid', 0)
@@ -370,17 +372,17 @@ class TileBar(QScrollArea):
                 self._activate_index(n_static + j)
                 return
 
-    def _context_for_index(self, idx: int) -> dict | None:
-        """Resolve a tile index to an app/window context dict, or None if out of range."""
+    def _context_for_index(self, idx: int) -> Target | None:
+        """Resolve a tile index to a foreground Target, or None if out of range."""
         n_static = len(self._tiles)
         if idx < n_static:
-            return {'type': 'app', 'id': idx, 'name': self._apps[idx]['name']}
+            return AppTarget(index=idx, name=self._apps[idx].name)
         dyn_idx = idx - n_static
         if dyn_idx >= len(self._dynamic_tiles):
             return None
         win_id, title, _ = self._dynamic_tiles[dyn_idx]
         trigger = self._find_trigger_for_pid(self._dynamic_pids.get(win_id, 0))
-        return {'type': 'dyn', 'id': win_id, 'name': title, 'trigger': trigger}
+        return WindowTarget(window_id=win_id, name=title, trigger=trigger)
 
     def _find_trigger_for_pid(self, pid: int) -> str:
         """Return the recall_menu_trigger of the static app that owns *pid*.
@@ -402,7 +404,7 @@ class TileBar(QScrollArea):
             visited.add(current)
             if current in pid_to_idx:
                 idx = pid_to_idx[current]
-                return self._apps[idx].get('recall_menu_trigger', BTN_MODE_CLICK)
+                return self._apps[idx].recall_menu_trigger
             ppid = _get_ppid(current)
             if ppid is None:
                 break

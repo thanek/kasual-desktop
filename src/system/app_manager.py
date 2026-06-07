@@ -4,6 +4,7 @@ import signal
 import subprocess
 import threading
 import time
+from collections.abc import Mapping, Sequence
 
 from PyQt6.QtCore import QObject, QTimer, pyqtSignal
 
@@ -27,37 +28,44 @@ class AppManager(QObject):
 
     # ── API ────────────────────────────────────────────────────────────────
 
-    def launch(self, idx: int, app: dict) -> bool:
+    def launch(
+        self,
+        idx: int,
+        command: str,
+        args: Sequence[object] = (),
+        env: Mapping[str, str] | None = None,
+    ) -> bool:
         """Start app *idx*. Returns True if a new process was actually spawned.
 
-        Returns False when the app is already running or the command could not
-        be started (the failure is also reported via app_launch_failed). Callers
-        use the return value to decide whether to arm post-launch behaviour such
-        as the deferred hide — which must not run for a launch that never began.
+        Takes primitive launch parameters (not a domain object) so this process
+        adapter stays decoupled from the app model. Returns False when the app is
+        already running or the command could not be started (the failure is also
+        reported via app_launch_failed). Callers use the return value to decide
+        whether to arm post-launch behaviour such as the deferred hide — which
+        must not run for a launch that never began.
         """
         if self.is_running(idx):
             logger.warning("App %d is already running — ignoring", idx)
             return False
 
-        command = app["command"]
-        args    = [str(a) for a in app.get("args", [])]
-        logger.info("Launching [%d] %s %s", idx, command, args)
+        arg_list = [str(a) for a in args]
+        logger.info("Launching [%d] %s %s", idx, command, arg_list)
 
         # Don't leak our layer-shell integration into child apps: it is meant
         # only for KD's own panels/overlays. A Qt child inheriting it would turn
         # its top-level window into a layer-shell surface that respects panel
         # struts (exclusive zone 0) instead of going truly full-screen, leaving
         # cut-off bars top and bottom. Launch apps as ordinary Wayland clients.
-        env = os.environ.copy()
-        env.pop("QT_WAYLAND_SHELL_INTEGRATION", None)
+        proc_env = os.environ.copy()
+        proc_env.pop("QT_WAYLAND_SHELL_INTEGRATION", None)
         # Per-app environment overrides (X-Kasual-Env in the .desktop file).
-        env.update(app.get("env", {}))
+        proc_env.update(env or {})
 
         try:
             proc = subprocess.Popen(
-                [command] + args,
+                [command] + arg_list,
                 start_new_session=True,   # new session → separate process group
-                env=env,
+                env=proc_env,
             )
         except FileNotFoundError:
             msg = f"Command not found: {command}"

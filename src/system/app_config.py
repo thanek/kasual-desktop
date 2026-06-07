@@ -16,6 +16,8 @@ import os
 import shlex
 from pathlib import Path
 
+from domain.app import App
+
 logger = logging.getLogger(__name__)
 
 # freedesktop Exec field codes — meaningless for our launcher (we pass no files
@@ -35,14 +37,11 @@ def apps_dir() -> Path:
     return Path(base) / "kasual-desktop" / "apps"
 
 
-def load_apps() -> list[dict]:
-    """Return the ordered list of app definitions found in :func:`apps_dir`.
+def load_apps() -> list[App]:
+    """Return the ordered list of :class:`App` definitions found in :func:`apps_dir`.
 
-    Each entry has: ``name``, ``command``, ``args``, ``icon`` (qtawesome name or
-    ``None``), ``icon_theme`` (themed ``Icon`` name or ``None``), ``color``,
-    ``recall_menu_trigger``, ``launch_hide_grace_ms`` and ``env`` (dict). Malformed
-    or hidden entries are skipped; one bad file never aborts the whole load. The
-    directory is created if missing so the user has a place to drop files.
+    Malformed or hidden entries are skipped; one bad file never aborts the whole
+    load. The directory is created if missing so the user has a place to drop files.
     """
     directory = apps_dir()
     try:
@@ -52,7 +51,7 @@ def load_apps() -> list[dict]:
         return []
 
     logger.info("Loading apps from %s", directory)
-    entries: list[tuple[int, str, dict]] = []
+    entries: list[tuple[int, str, App]] = []
     for path in directory.glob("*.desktop"):
         try:
             parsed = _parse_desktop(path)
@@ -70,7 +69,7 @@ def load_apps() -> list[dict]:
     return apps
 
 
-def _parse_desktop(path: Path) -> tuple[int, dict] | None:
+def _parse_desktop(path: Path) -> tuple[int, App] | None:
     parser = configparser.ConfigParser(interpolation=None, strict=False)
     parser.optionxform = str  # .desktop keys are case-sensitive
     parser.read(path, encoding="utf-8")
@@ -97,18 +96,18 @@ def _parse_desktop(path: Path) -> tuple[int, dict] | None:
         logger.warning("Skipping %s: empty Exec after parsing", path.name)
         return None
 
-    app = {
-        "name": name,
-        "command": command,
-        "args": args,
-        "icon": (entry.get("X-Kasual-Icon") or "").strip() or None,
-        "icon_theme": (entry.get("Icon") or "").strip() or None,
-        "color": (entry.get("X-Kasual-Color") or "").strip() or "#2e3440",
-        "recall_menu_trigger": (entry.get("X-Kasual-RecallMenuTrigger") or "").strip()
-                               or "BTN_MODE_CLICK",
-        "launch_hide_grace_ms": _parse_int(entry.get("X-Kasual-HideGraceMs"), 0),
-        "env": _parse_env(entry.get("X-Kasual-Env")),
-    }
+    app = App(
+        name=name,
+        command=command,
+        args=tuple(args),
+        icon=(entry.get("X-Kasual-Icon") or "").strip() or None,
+        icon_theme=(entry.get("Icon") or "").strip() or None,
+        color=(entry.get("X-Kasual-Color") or "").strip() or "#2e3440",
+        recall_menu_trigger=(entry.get("X-Kasual-RecallMenuTrigger") or "").strip()
+                            or "BTN_MODE_CLICK",
+        launch_hide_grace_ms=_parse_int(entry.get("X-Kasual-HideGraceMs"), 0),
+        env=_parse_env(entry.get("X-Kasual-Env")),
+    )
     order = _parse_int(entry.get("X-Kasual-Order"), _ORDER_DEFAULT)
     return order, app
 

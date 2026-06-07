@@ -7,6 +7,9 @@ from PyQt6.QtGui import QPainter, QColor
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QApplication
 
 from audio import sound_player
+from domain.app import App
+from domain.foreground import ForegroundState
+from domain.target import AppTarget, Target, WindowTarget
 from input.gamepad_watcher import GamepadWatcher, BTN_MODE_CLICK
 from overlays.base_overlay import BaseOverlay
 from overlays.confirm_dialog import ConfirmDialog
@@ -30,7 +33,7 @@ class Desktop(QWidget):
 
     def __init__(
         self,
-        apps: list[dict],
+        apps: list[App],
         gamepad: GamepadWatcher,
         window_manager: KWinWindowManager,
     ):
@@ -46,10 +49,9 @@ class Desktop(QWidget):
         self._tile_popover   = None
         self._is_paused      = False
 
-        # Currently active app/window — what BTN_MODE context menu will target
-        # {'type': 'app', 'id': idx, 'name': ...} or {'type': 'dyn', 'id': win_id, 'name': ...}
-        # dyn contexts also carry 'trigger' (BTN_MODE_CLICK / BTN_MODE_HOLD_1S)
-        self._active_context: dict | None                    = None
+        # What the BTN_MODE menu will target: an AppTarget / WindowTarget, or
+        # idle on the bare Desktop. Owns its own clear-on-finish/fail transitions.
+        self._foreground = ForegroundState()
 
         self.setWindowTitle("Kasual Desktop")
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint)
@@ -123,7 +125,7 @@ class Desktop(QWidget):
 
     def show_desktop(self) -> None:
         """Show the desktop without interrupting the running application."""
-        self._active_context = None
+        self._foreground.clear()
         self._gamepad.push_handler(self._handle_pad)
         self._wm.refresh_now()
         self.showFullScreen()
@@ -160,25 +162,25 @@ class Desktop(QWidget):
         for overlay in self._active_overlays:
             overlay.resume()
 
-    def current_app(self) -> dict | None:
-        """Returns the currently active app/window context, or None if on desktop."""
-        return self._active_context
+    def current_app(self) -> Target | None:
+        """Returns the currently active foreground Target, or None if on desktop."""
+        return self._foreground.current
 
-    def restore_app(self, app) -> None:
+    def restore_app(self, target: Target) -> None:
         sound_player.play("select")
-        if app['type'] == 'app':
-            idx = app['id']
-            trigger = self._apps[idx].get("recall_menu_trigger", BTN_MODE_CLICK)
+        if isinstance(target, AppTarget):
+            idx = target.index
+            trigger = self._apps[idx].recall_menu_trigger
             self._gamepad.set_app_btn_mode_trigger(trigger)
             self._arrange_windows(self._app_manager.running_pid(idx))
         else:
-            self._gamepad.set_app_btn_mode_trigger(app.get('trigger', BTN_MODE_CLICK))
-            self._wm.activate_window(app['id'])
+            self._gamepad.set_app_btn_mode_trigger(target.trigger)
+            self._wm.activate_window(target.window_id)
         self._gamepad.pop_handler(self._handle_pad)
         self.hide()
 
-    def request_close_app(self, app) -> None:
-        display = styles.truncate(app['name'], 40)
+    def request_close_app(self, target: Target) -> None:
+        display = styles.truncate(target.name, 40)
         # Where the close was triggered from decides where Cancel returns to:
         # the Desktop (tile menu, KD visible) or the running app (overlay opened
         # over it, KD hidden). Captured now, before the dialog changes anything.
@@ -186,8 +188,8 @@ class Desktop(QWidget):
 
         def _confirmed() -> None:
             self._restore_desktop_view()
-            if app['type'] == 'app':
-                idx = app['id']
+            if isinstance(target, AppTarget):
+                idx = target.index
                 self._tilebar.set_static_closing(idx)
                 if self._app_manager.is_running(idx):
                     self._app_manager.terminate(idx)
@@ -197,8 +199,8 @@ class Desktop(QWidget):
                     # no live process to kill. Close matching KWin windows instead.
                     self._close_app_windows(idx)
             else:
-                self._active_context = None
-                self._wm.close_window(app['id'])
+                self._foreground.clear()
+                self._wm.close_window(target.window_id)
                 QTimer.singleShot(1000, self._wm.refresh_now)
 
         def _cancelled() -> None:
@@ -207,7 +209,7 @@ class Desktop(QWidget):
             if from_desktop:
                 self._restore_desktop_view()
             else:
-                self.restore_app(app)
+                self.restore_app(target)
 
         self._show_confirm(
             question=self.tr('Are you sure you want to close\n"{0}"?').format(display),
@@ -222,7 +224,7 @@ class Desktop(QWidget):
         via a one-shot forwarder (steam://...) whose launcher exits immediately
         while the real process continues under a different PID.
         """
-        cmd = os.path.basename(self._apps[idx]['command']).lower()
+        cmd = self._apps[idx].command_basename
         matched = [
             w['id'] for w in self._wm.cached_windows()
             if w.get('resourceClass', '').lower() == cmd
@@ -270,7 +272,7 @@ class Desktop(QWidget):
             # foreground (we are not active then). This covers apps launched via
             # a forwarder — e.g. `steam steam://...`, whose launcher process
             # exits immediately, so the normal app_finished path runs too early.
-            if self.isActiveWindow() and self._active_context is None \
+            if self.isActiveWindow() and self._foreground.is_idle() \
                     and self._gamepad.top_handler() is None:
                 self._reactivate_desktop()
 
@@ -278,10 +280,10 @@ class Desktop(QWidget):
 
     def _check_active_dyn_gone(self) -> None:
         """If the active dynamic window disappeared (closed by the app) → show desktop."""
-        ctx = self._active_context
-        if ctx is not None and ctx.get('type') == 'dyn':
-            if not self._tilebar.has_dynamic_window(ctx['id']):
-                self._active_context = None
+        ctx = self._foreground.current
+        if isinstance(ctx, WindowTarget):
+            if not self._tilebar.has_dynamic_window(ctx.window_id):
+                self._foreground.clear()
                 # Re-establish gamepad control even when the Desktop window is
                 # already visible: restore_app() popped our handler, so a bare
                 # visible window would leave the pad unresponsive. Only seize
@@ -390,23 +392,23 @@ class Desktop(QWidget):
         self._focus_mode = "tiles"
         self._show_tile_popover()
 
-    def _on_tile_activated(self, context: dict) -> None:
+    def _on_tile_activated(self, target: Target) -> None:
         """A tile (static app or open window) was chosen via gamepad or click."""
-        self._active_context = context
-        if context['type'] != 'app':
-            self.restore_app(context)
+        self._foreground.set(target)
+        if not isinstance(target, AppTarget):
+            self.restore_app(target)
             return
 
-        idx = context['id']
+        idx = target.index
         if self._app_manager.is_running(idx):
             logger.info("Restoring application %d", idx)
-            self.restore_app(context)
+            self.restore_app(target)
         else:
             logger.info("Launching application %d", idx)
             sound_player.play("select")
             # Minimize other already-running apps to prevent virtual pad interference
             self._arrange_windows()
-            trigger = self._apps[idx].get("recall_menu_trigger", BTN_MODE_CLICK)
+            trigger = self._apps[idx].recall_menu_trigger
             self._gamepad.set_app_btn_mode_trigger(trigger)
             self._gamepad.pop_handler(self._handle_pad)
             # launch() reports an immediate failure (e.g. command not found)
@@ -415,7 +417,8 @@ class Desktop(QWidget):
             # this returns False. Only arm the deferred hide for a real launch;
             # arming it for a failed one would strand a window-poll + 5 s guard
             # that later hides the Desktop and churns the tile selection.
-            if self._app_manager.launch(idx, self._apps[idx]):
+            app = self._apps[idx]
+            if self._app_manager.launch(idx, app.command, app.args, app.env):
                 # The Desktop is a top-layer surface and must be hidden for the
                 # windowed app to show — but we defer that until the app's window
                 # is actually mapped, so the DE desktop never flashes through the
@@ -437,7 +440,7 @@ class Desktop(QWidget):
         """
         self._cancel_deferred_hide()
         self._pending_hide_idx = idx
-        self._pending_hide_grace_ms = int(self._apps[idx].get("launch_hide_grace_ms", 0))
+        self._pending_hide_grace_ms = self._apps[idx].launch_hide_grace_ms
         self._wm.windows_updated.connect(self._on_windows_pending_hide)
         self._pending_hide_poll.start()
         self._pending_hide_guard.start(5000)
@@ -466,7 +469,7 @@ class Desktop(QWidget):
         """
         pid  = self._app_manager.running_pid(idx)
         pids = expand_pid_tree({pid}) if pid else set()
-        cmd  = os.path.basename(self._apps[idx]['command']).lower()
+        cmd  = self._apps[idx].command_basename
         for w in windows:
             wpid = w.get('pid')
             if wpid and wpid in pids:
@@ -510,14 +513,11 @@ class Desktop(QWidget):
         # Launch failed before any window: drop the pending hide so the Desktop
         # stays up for the error dialog instead of vanishing.
         self._cancel_deferred_hide()
-        # _on_tile_activated set the active context optimistically when the tile
-        # was chosen; the app never started, so clear it (if it is still ours).
+        # _on_tile_activated set the foreground optimistically when the tile was
+        # chosen; the app never started, so clear it (if it is still ours).
         # Otherwise BTN_MODE would target the never-launched app instead of
         # opening the general Home Overlay.
-        if (self._active_context is not None
-                and self._active_context.get('type') == 'app'
-                and self._active_context.get('id') == idx):
-            self._active_context = None
+        self._foreground.clear_if_app(idx)
         self._reactivate_desktop()
         InfoDialog(
             message=self.tr("Failed to launch application:\n{0}").format(error),
@@ -534,11 +534,8 @@ class Desktop(QWidget):
         self._close_active_dialog()
         self._tilebar.refresh_status()
         self._wm.refresh_now()
-        # Clear active context if it was this app
-        if (self._active_context is not None
-                and self._active_context.get('type') == 'app'
-                and self._active_context.get('id') == idx):
-            self._active_context = None
+        # Drop back to the Desktop if the app that exited was in front.
+        self._foreground.clear_if_app(idx)
         if not self.isVisible():
             # App exited on its own (crash / self-close) — show desktop now
             self._reactivate_desktop()
@@ -556,7 +553,7 @@ class Desktop(QWidget):
             return
         options: list[tuple[str, object]] = []
 
-        if ctx['type'] == 'app' and not self._tilebar.is_tile_running(ctx['id']):
+        if isinstance(ctx, AppTarget) and not self._tilebar.is_tile_running(ctx.index):
             options.append((self.tr("Launch"), self._tilebar.select_current))
         else:
             options.append((self.tr("Restore"), self._tilebar.select_current))

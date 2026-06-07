@@ -6,6 +6,7 @@ import os
 from PyQt6.QtCore import QCoreApplication
 
 from desktop import Desktop
+from domain.target import AppTarget
 from input.gamepad_watcher import GamepadWatcher
 from overlays.home_overlay import HomeOverlay, MenuItem
 from system.system_actions import ActionDeps
@@ -81,9 +82,9 @@ class Application:
             items = [return_item] + HomeOverlay.action_items()
             on_cancel = None
         else:
-            title     = running_app['name']
-            close_cb  = lambda app=running_app: self._desktop.request_close_app(app)
-            cancel_cb = lambda app=running_app: self._desktop.restore_app(app)
+            title     = running_app.name
+            close_cb  = lambda t=running_app: self._desktop.request_close_app(t)
+            cancel_cb = lambda t=running_app: self._desktop.restore_app(t)
 
             label = styles.truncate(title, 22)
             items: list[MenuItem] = [
@@ -103,8 +104,8 @@ class Application:
         revisited in Phase 2 once the Desktop's show/hide model lands.
         """
         running_app = self._desktop.current_app()
-        if running_app is not None and running_app['type'] == 'app':
-            pid = self._desktop.app_manager.running_pid(running_app['id'])
+        if isinstance(running_app, AppTarget):
+            pid = self._desktop.app_manager.running_pid(running_app.index)
             if pid is not None:
                 self._wm.minimize_windows_for_pids({pid})
         self._wm.raise_windows_for_pid_exact(os.getpid())
