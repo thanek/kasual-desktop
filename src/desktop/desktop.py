@@ -23,6 +23,7 @@ from system.window_manager import KWinWindowManager
 from ui import styles
 from ui.layer_shell import make_layer_surface, Layer, Anchor, Keyboard
 from .deferred_hide import DeferredHide
+from .navigation import FocusNavigator
 from .tile_bar import TileBar
 from .topbar import TopBar
 from .wallpaper import KdeWallpaperLoader
@@ -45,8 +46,6 @@ class Desktop(QWidget):
         self._wm          = window_manager
         self._app_manager = AppManager(self)
         self._volume_control = PactlVolumeControl()
-        self._focus_mode     = "tiles"   # "tiles" | "topbar"
-        self._topbar_index   = 0
         self._confirm_dialog = None
         self._volume_overlay = None
         self._tile_popover   = None
@@ -86,6 +85,8 @@ class Desktop(QWidget):
         self._tilebar.tile_context_menu.connect(self._on_tile_context_menu)
         main.addWidget(self._tilebar)
         main.addStretch(1)
+
+        self._nav = FocusNavigator(self._tilebar, self._topbar, on_tile_menu=self._show_tile_popover)
 
         self._status_timer = QTimer(self)
         self._status_timer.timeout.connect(self._tilebar.refresh_status)
@@ -293,29 +294,7 @@ class Desktop(QWidget):
                 # rebind here too — same delay as the AppManager path.
                 QTimer.singleShot(1000, self._gamepad.refresh)
 
-    def _render_focus(self) -> None:
-        """Repaint the focus highlight across the tile bar and top bar."""
-        in_tiles = self._focus_mode == "tiles"
-        self._tilebar.set_focused(in_tiles)
-        self._topbar.set_selected(self._topbar_index if not in_tiles else None)
-
-    def _focus_moved(self) -> None:
-        """Repaint focus highlight and play the cursor-move sound."""
-        self._render_focus()
-        sound_player.play("cursor")
-
     # ── Gamepad handler ────────────────────────────────────────────────────
-
-    _KEY_MAP = {
-        Qt.Key.Key_Left:   "left",
-        Qt.Key.Key_Right:  "right",
-        Qt.Key.Key_Up:     "up",
-        Qt.Key.Key_Down:   "down",
-        Qt.Key.Key_Return: "select",
-        Qt.Key.Key_Enter:  "select",
-        Qt.Key.Key_Escape: "cancel",
-        Qt.Key.Key_Q:      "close",
-    }
 
     def eventFilter(self, obj, event) -> bool:
         if event.type() != QEvent.Type.KeyPress or not self.isActiveWindow():
@@ -323,68 +302,35 @@ class Desktop(QWidget):
         key = event.key()
         # Escape in tiles mode with no overlay open → open Home Overlay (same
         # signal as BTN_MODE short press). In topbar mode Escape still falls
-        # through to the _KEY_MAP and injects "cancel" to return to tiles.
+        # through to the key map and injects "cancel" to return to tiles.
         if (key == Qt.Key.Key_Escape
-                and self._focus_mode == "tiles"
+                and self._nav.in_tiles
                 and self._gamepad.top_handler() == self._handle_pad):
             self._gamepad.btn_mode_pressed.emit()
             return True
-        mapped = self._KEY_MAP.get(key)
+        mapped = self._nav.key_event(key)
         if mapped:
             self._gamepad.inject(mapped)
             return True
         return False
 
     def _handle_pad(self, event: str) -> None:
-        if self._focus_mode == "tiles":
-            if event == "left":
-                if self._tilebar.move(-1):
-                    sound_player.play("cursor")
-            elif event == "right":
-                if self._tilebar.move(+1):
-                    sound_player.play("cursor")
-            elif event == "up" and self._topbar.count:
-                self._focus_mode = "topbar"
-                self._topbar_index = 0
-                self._focus_moved()
-            elif event == "select":
-                self._tilebar.select_current()
-            elif event == "close":
-                self._show_tile_popover()
-
-        elif self._focus_mode == "topbar":
-            if event == "left":
-                self._topbar_index = (self._topbar_index - 1) % self._topbar.count
-                self._focus_moved()
-            elif event == "right":
-                self._topbar_index = (self._topbar_index + 1) % self._topbar.count
-                self._focus_moved()
-            elif event in ("down", "cancel"):
-                self._focus_mode = "tiles"
-                self._focus_moved()
-            elif event == "select":
-                self._topbar.trigger(self._topbar_index)
+        # Thin wrapper kept on the Desktop so its identity stays stable on the
+        # gamepad handler stack (push/pop/compare); the logic lives in the nav.
+        self._nav.handle_pad(event)
 
     # ── Tile actions ───────────────────────────────────────────────────────
 
     def _on_tile_hovered(self, _idx: int) -> None:
         if self._tile_popover is not None:
             return
-        if self._focus_mode != "tiles":
-            self._focus_mode = "tiles"
-            self._topbar.set_selected(None)
-            self._tilebar.set_focused(True, scroll=False)
-        sound_player.play("cursor")
+        self._nav.hover_tiles()
 
     def _on_topbar_hovered(self, idx: int) -> None:
-        changed = self._focus_mode != "topbar" or self._topbar_index != idx
-        if changed:
-            self._focus_mode = "topbar"
-            self._topbar_index = idx
-            self._focus_moved()
+        self._nav.hover_topbar(idx)
 
     def _on_tile_context_menu(self) -> None:
-        self._focus_mode = "tiles"
+        self._nav.focus_tiles()
         self._show_tile_popover()
 
     def _on_tile_activated(self, target: Target) -> None:
@@ -575,5 +521,4 @@ class Desktop(QWidget):
 
     def _on_volume_closed(self) -> None:
         self._volume_overlay = None
-        self._focus_mode = "topbar"
-        self._render_focus()
+        self._nav.focus_topbar()
