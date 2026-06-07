@@ -18,6 +18,7 @@ from overlays.tile_popover import TilePopoverMenu
 from overlays.volume_overlay import VolumeOverlay
 from system.app_manager import AppManager
 from system.system_actions import ActionDeps, ActionRunner
+from system.volume import PactlVolumeControl
 from system.window_manager import KWinWindowManager
 from ui import styles
 from ui.layer_shell import make_layer_surface, Layer, Anchor, Keyboard
@@ -43,6 +44,7 @@ class Desktop(QWidget):
         self._gamepad     = gamepad
         self._wm          = window_manager
         self._app_manager = AppManager(self)
+        self._volume_control = PactlVolumeControl()
         self._focus_mode     = "tiles"   # "tiles" | "topbar"
         self._topbar_index   = 0
         self._confirm_dialog = None
@@ -566,8 +568,8 @@ class Desktop(QWidget):
     def _topbar_action(self, action_type: str) -> None:
         self._action_runner.run(action_type)
 
-    def _open_volume_overlay(self) -> None:
-        overlay = VolumeOverlay(self._gamepad, parent=self)
+    def open_volume_overlay(self) -> None:
+        overlay = VolumeOverlay(self._gamepad, self._volume_control, parent=self)
         self._volume_overlay = overlay
         overlay.closed.connect(self._on_volume_closed)
 

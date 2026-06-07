@@ -1,6 +1,3 @@
-import logging
-import subprocess
-
 import qtawesome as qta
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QKeyEvent
@@ -10,9 +7,8 @@ from PyQt6.QtWidgets import (
 
 from audio import sound_player
 from input.gamepad_watcher import GamepadWatcher
+from ports import VolumeControl
 from .base_overlay import BaseOverlay
-
-logger = logging.getLogger(__name__)
 
 STEP = 5   # % na jeden krok
 
@@ -22,9 +18,10 @@ class VolumeOverlay(BaseOverlay):
 
     closed = pyqtSignal()
 
-    def __init__(self, gamepad: GamepadWatcher, parent: QWidget | None = None):
+    def __init__(self, gamepad: GamepadWatcher, volume: VolumeControl, parent: QWidget | None = None):
         super().__init__(gamepad, self._handle_pad, parent)
-        self._volume = self._get_volume()
+        self._control = volume
+        self._volume  = self._control.get()
 
         outer = QVBoxLayout(self)
         outer.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -82,34 +79,6 @@ class VolumeOverlay(BaseOverlay):
         sound_player.play("popup_open")
         self._show()
 
-    # ── Volume control ─────────────────────────────────────────────────────
-
-    @staticmethod
-    def _get_volume() -> int:
-        try:
-            out = subprocess.check_output(
-                ["pactl", "get-sink-volume", "@DEFAULT_SINK@"],
-                text=True, stderr=subprocess.DEVNULL,
-            )
-            # np. "Volume: front-left: 52428 / 80% / ..."
-            for part in out.split():
-                if part.endswith("%"):
-                    return int(part.rstrip("%"))
-        except Exception:
-            pass
-        return 50
-
-    @staticmethod
-    def _set_volume(pct: int) -> None:
-        pct = max(0, min(100, pct))
-        try:
-            subprocess.Popen(
-                ["pactl", "set-sink-volume", "@DEFAULT_SINK@", f"{pct}%"],
-                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-            )
-        except Exception as e:
-            logger.error("Error during volume setting: %s", e)
-
     # ── Gamepad handler ────────────────────────────────────────────────────
 
     def _handle_pad(self, event: str) -> None:
@@ -124,7 +93,7 @@ class VolumeOverlay(BaseOverlay):
         self._volume = max(0, min(100, self._volume + delta))
         self._slider.setValue(self._volume)
         self._value_lbl.setText(f"{self._volume}%")
-        self._set_volume(self._volume)
+        self._control.set(self._volume)
         sound_player.play("cursor")
 
     # ── Keyboard ───────────────────────────────────────────────────────────
