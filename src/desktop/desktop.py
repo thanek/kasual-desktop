@@ -18,9 +18,10 @@ from overlays.tile_popover import TilePopoverMenu
 from overlays.volume_overlay import VolumeOverlay
 from system.app_manager import AppManager
 from system.system_actions import ActionDeps, ActionRunner
-from system.window_manager import KWinWindowManager, expand_pid_tree
+from system.window_manager import KWinWindowManager
 from ui import styles
 from ui.layer_shell import make_layer_surface, Layer, Anchor, Keyboard
+from .deferred_hide import DeferredHide
 from .tile_bar import TileBar
 from .topbar import TopBar
 from .wallpaper import KdeWallpaperLoader
@@ -99,19 +100,11 @@ class Desktop(QWidget):
         self._app_manager.app_launch_failed.connect(self._on_app_launch_failed)
         self._wm.windows_updated.connect(self._tilebar.update_windows)
 
-        # Deferred-hide state: the Desktop stays on screen after launching an
-        # app until that app's window is actually mapped (see _arm_deferred_hide).
-        self._pending_hide_idx: int | None = None
-        self._pending_hide_grace_ms = 0
-        self._pending_hide_poll = QTimer(self)
-        self._pending_hide_poll.setInterval(150)
-        self._pending_hide_poll.timeout.connect(self._wm.refresh_now)
-        self._pending_hide_guard = QTimer(self)
-        self._pending_hide_guard.setSingleShot(True)
-        self._pending_hide_guard.timeout.connect(self._force_deferred_hide)
-        self._hide_grace = QTimer(self)
-        self._hide_grace.setSingleShot(True)
-        self._hide_grace.timeout.connect(self._do_deferred_hide)
+        # The Desktop stays on screen after launching an app until that app's
+        # window is actually mapped, then hides to reveal it.
+        self._deferred_hide = DeferredHide(
+            self._wm, self._app_manager, self._apps, on_hide=self.hide
+        )
 
         QApplication.instance().installEventFilter(self)
 
@@ -423,96 +416,13 @@ class Desktop(QWidget):
                 # windowed app to show — but we defer that until the app's window
                 # is actually mapped, so the DE desktop never flashes through the
                 # start-up gap. Re-shown by _on_app_finished.
-                self._arm_deferred_hide(idx)
-
-    # ── Deferred hide on launch ─────────────────────────────────────────────
-
-    def _arm_deferred_hide(self, idx: int) -> None:
-        """Hide the Desktop only once the launched app has a mapped window.
-
-        The Desktop is a top-layer surface sitting above the windowed app, so it
-        must be hidden for the app to be visible. Hiding it the instant we launch
-        would expose the DE desktop underneath for as long as the app takes to
-        draw its first frame. Instead we keep the Desktop covering the screen and
-        hide it when KWin first reports a window belonging to the app, polling
-        the window list quickly meanwhile. A safety timeout hides it anyway, so a
-        slow or undetected window never strands us in front of the running app.
-        """
-        self._cancel_deferred_hide()
-        self._pending_hide_idx = idx
-        self._pending_hide_grace_ms = self._apps[idx].launch_hide_grace_ms
-        self._wm.windows_updated.connect(self._on_windows_pending_hide)
-        self._pending_hide_poll.start()
-        self._pending_hide_guard.start(5000)
-        self._wm.refresh_now()
-
-    def _on_windows_pending_hide(self, windows: list[dict]) -> None:
-        idx = self._pending_hide_idx
-        if idx is None or not self._app_window_present(idx, windows):
-            return
-        # The app's window is mapped. Stop watching, but give apps that show an
-        # intermediate window before their real one (e.g. Steam's bootstrap
-        # window vs. Big Picture) an optional grace period to settle, so we
-        # don't uncover a half-drawn frame.
-        self._stop_pending_watch()
-        if self._pending_hide_grace_ms > 0:
-            self._hide_grace.start(self._pending_hide_grace_ms)
-        else:
-            self._do_deferred_hide()
-
-    def _app_window_present(self, idx: int, windows: list[dict]) -> bool:
-        """True if `windows` contains a window belonging to launched app `idx`.
-
-        Matched by PID subtree (covers normal child windows), with a resource /
-        desktop-file fallback for forwarder launchers like `steam steam://...`
-        whose visible window runs under an unrelated PID.
-        """
-        pid  = self._app_manager.running_pid(idx)
-        pids = expand_pid_tree({pid}) if pid else set()
-        cmd  = self._apps[idx].command_basename
-        for w in windows:
-            wpid = w.get('pid')
-            if wpid and wpid in pids:
-                return True
-            rc = w.get('resourceClass', '').lower()
-            df = os.path.splitext(w.get('desktopFile', '').lower())[0]
-            if cmd and (rc == cmd or df == cmd):
-                return True
-        return False
-
-    def _force_deferred_hide(self) -> None:
-        """Safety-timeout path: hide the Desktop even if no window was detected."""
-        self._stop_pending_watch()
-        self._do_deferred_hide()
-
-    def _do_deferred_hide(self) -> None:
-        """Hide the Desktop to reveal the now-mapped app."""
-        self._pending_hide_idx = None
-        if self.isVisible():
-            self.hide()
-
-    def _stop_pending_watch(self) -> None:
-        """Stop the window poll/guard and disconnect (keeps a queued grace hide)."""
-        self._pending_hide_poll.stop()
-        self._pending_hide_guard.stop()
-        try:
-            self._wm.windows_updated.disconnect(self._on_windows_pending_hide)
-        except TypeError:
-            pass
-
-    def _cancel_deferred_hide(self) -> None:
-        """Tear down the deferred-hide watcher entirely without hiding the Desktop."""
-        if self._pending_hide_idx is None:
-            return
-        self._pending_hide_idx = None
-        self._stop_pending_watch()
-        self._hide_grace.stop()
+                self._deferred_hide.arm(idx)
 
     def _on_app_launch_failed(self, idx: int, error: str) -> None:
         logger.warning("Application %d failed to launch: %s", idx, error)
         # Launch failed before any window: drop the pending hide so the Desktop
         # stays up for the error dialog instead of vanishing.
-        self._cancel_deferred_hide()
+        self._deferred_hide.cancel()
         # _on_tile_activated set the foreground optimistically when the tile was
         # chosen; the app never started, so clear it (if it is still ours).
         # Otherwise BTN_MODE would target the never-launched app instead of
@@ -530,7 +440,7 @@ class Desktop(QWidget):
         logger.info("Application %d finished – returning to desktop", idx)
         # App exited (possibly before its window ever mapped) — stop waiting to
         # hide the Desktop, otherwise we would hide onto a closed app.
-        self._cancel_deferred_hide()
+        self._deferred_hide.cancel()
         self._close_active_dialog()
         self._tilebar.refresh_status()
         self._wm.refresh_now()
