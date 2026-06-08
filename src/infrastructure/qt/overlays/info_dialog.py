@@ -6,6 +6,7 @@ from PyQt6.QtWidgets import (
     QPushButton, QLabel, QVBoxLayout, QWidget,
 )
 
+from domain.input import Event
 from infrastructure.audio import sound_player
 from infrastructure.input.gamepad_watcher import GamepadWatcher
 from infrastructure.qt.ui import styles
@@ -55,7 +56,7 @@ class InfoDialog(BaseOverlay):
         self._show()
 
     def _handle_pad(self, event: str) -> None:
-        if event in ("select", "cancel", "close"):
+        if event in (Event.SELECT, Event.CANCEL, Event.CLOSE):
             self._confirm()
 
     def keyPressEvent(self, event: QKeyEvent) -> None:
@@ -63,5 +64,5 @@ class InfoDialog(BaseOverlay):
             self._confirm()
 
     def _confirm(self) -> None:
-        if self._dismiss(sound="select"):
+        if self._dismiss(sound=Event.SELECT):
             self._on_confirmed()

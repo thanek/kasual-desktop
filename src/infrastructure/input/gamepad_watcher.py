@@ -7,6 +7,8 @@ from typing import Callable
 from PyQt6.QtCore import pyqtSignal, QObject
 from evdev import InputDevice, InputEvent, UInput, ecodes, list_devices
 
+from domain.input import Event, Trigger
+
 logger = logging.getLogger(__name__)
 
 STICK_THRESHOLD = 10000   # analog axis range: -32768..32767
@@ -15,8 +17,10 @@ STICK_RESET     = 6000    # hysteresis — below this value the axis is "centere
 VIRTUAL_DEVICE_NAME   = "kasual-vpad"
 BTN_MODE_HOLD_SECONDS = 1.0   # how long BTN_MODE must be held to trigger the menu
 
-BTN_MODE_CLICK   = "BTN_MODE_CLICK"    # trigger immediately on press
-BTN_MODE_HOLD_1S = "BTN_MODE_HOLD_1S"  # require BTN_MODE_HOLD_SECONDS hold
+# Recall-trigger vocabulary lives in domain.input.Trigger; re-exported here for
+# the historical import sites (kept str-compatible).
+BTN_MODE_CLICK   = Trigger.CLICK
+BTN_MODE_HOLD_1S = Trigger.HOLD_1S
 
 
 class GamepadWatcher(QObject):
@@ -52,7 +56,7 @@ class GamepadWatcher(QObject):
         self._suppress_uinput: bool = False   # True when Desktop is active
         self._btn_mode_timer:   threading.Timer | None = None
         self._btn_mode_long:    bool                  = False   # True once hold threshold passed
-        self._app_btn_mode_trigger: str               = "BTN_MODE_CLICK"
+        self._app_btn_mode_trigger: str               = Trigger.CLICK
         self._device: InputDevice | None              = None
         self._refresh_requested: bool                 = False
         self._raw.connect(self._dispatch)
@@ -292,11 +296,11 @@ class GamepadWatcher(QObject):
         if ev.value == 1:
             held.add(ev.code)
             if ev.code == ecodes.BTN_SOUTH:
-                self._raw.emit("select")
+                self._raw.emit(Event.SELECT)
             elif ev.code == ecodes.BTN_EAST:
-                self._raw.emit("cancel")
+                self._raw.emit(Event.CANCEL)
             elif ev.code == ecodes.BTN_WEST:
-                self._raw.emit("close")
+                self._raw.emit(Event.CLOSE)
             elif ev.code == ecodes.BTN_START and ecodes.BTN_SELECT in held:
                 self.btn_mode_pressed.emit()
         elif ev.value == 0:
@@ -308,22 +312,22 @@ class GamepadWatcher(QObject):
         # _handle_stick_axis with threshold and hysteresis. The asymmetry is intentional.
         if ev.code == ecodes.ABS_HAT0X:
             if ev.value == -1:
-                stick["x"] = "left";  pending.append("left")
+                stick["x"] = Event.LEFT;  pending.append(Event.LEFT)
             elif ev.value == 1:
-                stick["x"] = "right"; pending.append("right")
+                stick["x"] = Event.RIGHT; pending.append(Event.RIGHT)
             else:
                 stick["x"] = None
         elif ev.code == ecodes.ABS_HAT0Y:
             if ev.value == -1:
-                stick["y"] = "up";    pending.append("up")
+                stick["y"] = Event.UP;    pending.append(Event.UP)
             elif ev.value == 1:
-                stick["y"] = "down";  pending.append("down")
+                stick["y"] = Event.DOWN;  pending.append(Event.DOWN)
             else:
                 stick["y"] = None
         elif ev.code == ecodes.ABS_X:
-            self._handle_stick_axis(ev.value, "x", "left", "right", stick, pending)
+            self._handle_stick_axis(ev.value, "x", Event.LEFT, Event.RIGHT, stick, pending)
         elif ev.code == ecodes.ABS_Y:
-            self._handle_stick_axis(ev.value, "y", "up", "down", stick, pending)
+            self._handle_stick_axis(ev.value, "y", Event.UP, Event.DOWN, stick, pending)
 
     def _handle_stick_axis(
         self,

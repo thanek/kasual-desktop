@@ -6,6 +6,7 @@ from PyQt6.QtWidgets import (
     QPushButton, QLabel, QHBoxLayout, QVBoxLayout, QWidget,
 )
 
+from domain.input import Event
 from infrastructure.audio import sound_player
 from infrastructure.input.gamepad_watcher import GamepadWatcher
 from infrastructure.qt.ui import styles
@@ -68,11 +69,11 @@ class ConfirmDialog(BaseOverlay):
     # ── Gamepad handler ────────────────────────────────────────────────────
 
     def _handle_pad(self, event: str) -> None:
-        if event == "select":
+        if event == Event.SELECT:
             self._confirm() if self._focus_yes else self._cancel()
-        elif event in ("cancel", "close"):
+        elif event in (Event.CANCEL, Event.CLOSE):
             self._cancel()
-        elif event in ("left", "right"):
+        elif event in (Event.LEFT, Event.RIGHT):
             self._focus_yes = not self._focus_yes
             self._refresh_buttons()
             sound_player.play("cursor")
@@ -94,7 +95,7 @@ class ConfirmDialog(BaseOverlay):
     # ── Actions ────────────────────────────────────────────────────────────
 
     def _confirm(self) -> None:
-        if self._dismiss(sound="select"):
+        if self._dismiss(sound=Event.SELECT):
             self._on_confirmed()
 
     def _cancel(self) -> None:

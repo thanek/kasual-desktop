@@ -1,15 +1,12 @@
 """Tests for FocusNavigator — the tile-bar / top-bar focus state machine.
 
-Pure logic over a tilebar/topbar pair; both are mocked. The cursor sound is
-silenced by the autouse fixture in conftest.
+Pure interaction logic over a mocked tilebar/topbar pair and a mock Feedback
+port; no Qt. Events are passed as plain strings (StrEnum-compatible).
 """
 
 from unittest.mock import MagicMock
 
-import pytest
-
-from infrastructure.qt.desktop.navigation import FocusNavigator
-from PyQt6.QtCore import Qt
+from application.navigation import FocusNavigator
 
 
 def _make(topbar_count=3):
@@ -18,7 +15,10 @@ def _make(topbar_count=3):
     topbar = MagicMock()
     topbar.count = topbar_count
     on_tile_menu = MagicMock()
-    nav = FocusNavigator(tilebar, topbar, on_tile_menu=on_tile_menu)
+    feedback = MagicMock()
+    nav = FocusNavigator(
+        tilebar, topbar, on_tile_menu=on_tile_menu, feedback=feedback,
+    )
     return nav, tilebar, topbar, on_tile_menu
 
 
@@ -26,16 +26,6 @@ class TestBasics:
     def test_starts_in_tiles(self):
         nav, *_ = _make()
         assert nav.in_tiles is True
-
-    def test_key_event_maps_known_keys(self):
-        nav, *_ = _make()
-        assert nav.key_event(Qt.Key.Key_Left) == "left"
-        assert nav.key_event(Qt.Key.Key_Escape) == "cancel"
-        assert nav.key_event(Qt.Key.Key_Q) == "close"
-
-    def test_key_event_unmapped_is_none(self):
-        nav, *_ = _make()
-        assert nav.key_event(Qt.Key.Key_A) is None
 
 
 class TestPadInTiles:

@@ -1,43 +1,41 @@
-"""Focus navigation between the tile bar and top bar, driven by pad/keyboard.
+"""Focus navigation between the tile bar and top bar, driven by abstract events.
 
 Owns the focus mode ("tiles" | "topbar") and the top-bar selection index, and
 translates navigation events into tile/top-bar moves plus highlight repaint.
-Extracted from the Desktop so this input-routing logic is unit-testable in
-isolation from the layer-shell window.
+
+Pure interaction logic (application layer): no Qt, no sound backend. It consumes
+domain `Event`s and drives the tile/top bars through their (duck-typed) view API,
+with cursor feedback via the injected `Feedback` port. The Qt-key→event
+translation lives at the edge — the Desktop's eventFilter.
 """
 
+from __future__ import annotations
+
 from collections.abc import Callable
+from typing import TYPE_CHECKING
 
-from PyQt6.QtCore import Qt
+from domain.input import Event
+from ports import Feedback
 
-from infrastructure.audio import sound_player
-from .tile_bar import TileBar
-from .topbar import TopBar
+if TYPE_CHECKING:
+    # Type-only — the application layer carries no runtime dependency on the Qt
+    # widgets it drives; they are duck-typed at runtime (tests pass mocks).
+    from infrastructure.qt.desktop.tile_bar import TileBar
+    from infrastructure.qt.desktop.topbar import TopBar
 
 
 class FocusNavigator:
-    # Keyboard keys mapped to the navigation events the pad emits, so a keyboard
-    # can drive the same handler stack (injected via the gamepad).
-    _KEY_MAP = {
-        Qt.Key.Key_Left:   "left",
-        Qt.Key.Key_Right:  "right",
-        Qt.Key.Key_Up:     "up",
-        Qt.Key.Key_Down:   "down",
-        Qt.Key.Key_Return: "select",
-        Qt.Key.Key_Enter:  "select",
-        Qt.Key.Key_Escape: "cancel",
-        Qt.Key.Key_Q:      "close",
-    }
-
     def __init__(
         self,
-        tilebar:      TileBar,
-        topbar:       TopBar,
+        tilebar: TileBar,
+        topbar: TopBar,
         on_tile_menu: Callable[[], None],
+        feedback: Feedback,
     ) -> None:
         self._tilebar      = tilebar
         self._topbar       = topbar
-        self._on_tile_menu = on_tile_menu   # "close" in tiles → context popover
+        self._on_tile_menu = on_tile_menu   # Event.CLOSE in tiles → context popover
+        self._feedback     = feedback
         self._mode         = "tiles"        # "tiles" | "topbar"
         self._topbar_index = 0
 
@@ -47,40 +45,36 @@ class FocusNavigator:
     def in_tiles(self) -> bool:
         return self._mode == "tiles"
 
-    def key_event(self, key: Qt.Key) -> str | None:
-        """Translate a Qt key to a navigation event, or None if unmapped."""
-        return self._KEY_MAP.get(key)
-
     # ── Navigation ───────────────────────────────────────────────────────────
 
     def handle_pad(self, event: str) -> None:
         if self._mode == "tiles":
-            if event == "left":
+            if event == Event.LEFT:
                 if self._tilebar.move(-1):
-                    sound_player.play("cursor")
-            elif event == "right":
+                    self._feedback.play("cursor")
+            elif event == Event.RIGHT:
                 if self._tilebar.move(+1):
-                    sound_player.play("cursor")
-            elif event == "up" and self._topbar.count:
+                    self._feedback.play("cursor")
+            elif event == Event.UP and self._topbar.count:
                 self._mode = "topbar"
                 self._topbar_index = 0
                 self._moved()
-            elif event == "select":
+            elif event == Event.SELECT:
                 self._tilebar.select_current()
-            elif event == "close":
+            elif event == Event.CLOSE:
                 self._on_tile_menu()
 
         elif self._mode == "topbar":
-            if event == "left":
+            if event == Event.LEFT:
                 self._topbar_index = (self._topbar_index - 1) % self._topbar.count
                 self._moved()
-            elif event == "right":
+            elif event == Event.RIGHT:
                 self._topbar_index = (self._topbar_index + 1) % self._topbar.count
                 self._moved()
-            elif event in ("down", "cancel"):
+            elif event in (Event.DOWN, Event.CANCEL):
                 self._mode = "tiles"
                 self._moved()
-            elif event == "select":
+            elif event == Event.SELECT:
                 self._topbar.trigger(self._topbar_index)
 
     def render(self) -> None:
@@ -91,7 +85,7 @@ class FocusNavigator:
 
     def _moved(self) -> None:
         self.render()
-        sound_player.play("cursor")
+        self._feedback.play("cursor")
 
     # ── Mouse hover (delegated from the Desktop slots) ───────────────────────
 
@@ -101,7 +95,7 @@ class FocusNavigator:
             self._mode = "tiles"
             self._topbar.set_selected(None)
             self._tilebar.set_focused(True, scroll=False)
-        sound_player.play("cursor")
+        self._feedback.play("cursor")
 
     def hover_topbar(self, idx: int) -> None:
         """Pointer entered top-bar button *idx*."""

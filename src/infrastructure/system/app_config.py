@@ -17,6 +17,7 @@ import shlex
 from pathlib import Path
 
 from domain.app import App
+from domain.input import Trigger
 
 logger = logging.getLogger(__name__)
 
@@ -104,7 +105,7 @@ def _parse_desktop(path: Path) -> tuple[int, App] | None:
         icon_theme=(entry.get("Icon") or "").strip() or None,
         color=(entry.get("X-Kasual-Color") or "").strip() or "#2e3440",
         recall_menu_trigger=(entry.get("X-Kasual-RecallMenuTrigger") or "").strip()
-                            or "BTN_MODE_CLICK",
+                            or Trigger.CLICK,
         launch_hide_grace_ms=_parse_int(entry.get("X-Kasual-HideGraceMs"), 0),
         env=_parse_env(entry.get("X-Kasual-Env")),
     )

@@ -6,6 +6,7 @@ from collections.abc import Callable
 from PyQt6.QtCore import Qt, QEvent, QPoint, QRect, pyqtSignal
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QPushButton, QApplication
 
+from domain.input import Event
 from infrastructure.audio import sound_player
 from infrastructure.input.gamepad_watcher import GamepadWatcher
 from infrastructure.qt.ui import styles
@@ -87,19 +88,19 @@ class TilePopoverMenu(QWidget):
     # ── Gamepad handler ────────────────────────────────────────────────────
 
     def _handle_pad(self, event: str) -> None:
-        if event == "up" and self._idx > 0:
+        if event == Event.UP and self._idx > 0:
             self._idx -= 1
             self._refresh_style()
             sound_player.play("cursor")
-        elif event == "down" and self._idx < len(self._options) - 1:
+        elif event == Event.DOWN and self._idx < len(self._options) - 1:
             self._idx += 1
             self._refresh_style()
             sound_player.play("cursor")
-        elif event == "select":
+        elif event == Event.SELECT:
             _, callback = self._options[self._idx]
             self._dismiss(play_sound=False)
             callback()
-        elif event in ("cancel", "close"):
+        elif event in (Event.CANCEL, Event.CLOSE):
             self._dismiss()
 
     # ── Internal ───────────────────────────────────────────────────────────

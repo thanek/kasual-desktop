@@ -8,6 +8,7 @@ from PyQt6.QtWidgets import (
     QWidget, QPushButton, QVBoxLayout, QLabel, QSizePolicy,
 )
 
+from domain.input import Event
 from infrastructure.audio import sound_player
 from infrastructure.input.gamepad_watcher import GamepadWatcher
 from infrastructure.system.system_actions import ACTIONS, ActionDeps, ActionRunner
@@ -56,7 +57,7 @@ class HomeOverlay(QWidget):
         cancel_item: MenuItem = {
             "label": QT_TRANSLATE_NOOP("Kasual", "Return to Desktop"),
             "icon": "fa5s.times",
-            "action": "cancel",
+            "action": Event.CANCEL,
         }
         return [cancel_item] + HomeOverlay.action_items()
 
@@ -215,17 +216,17 @@ class HomeOverlay(QWidget):
     # ── Gamepad handler ────────────────────────────────────────────────────
 
     def _handle_pad(self, event: str) -> None:
-        if event == "up":
+        if event == Event.UP:
             self._index = (self._index - 1) % len(self._items)
             self._refresh_buttons()
             sound_player.play("cursor")
-        elif event == "down":
+        elif event == Event.DOWN:
             self._index = (self._index + 1) % len(self._items)
             self._refresh_buttons()
             sound_player.play("cursor")
-        elif event == "select":
+        elif event == Event.SELECT:
             self._activate(self._index)
-        elif event in ("cancel", "close"):
+        elif event in (Event.CANCEL, Event.CLOSE):
             self._dismiss()
 
     # ── Keyboard ───────────────────────────────────────────────────────────
@@ -255,7 +256,7 @@ class HomeOverlay(QWidget):
             return
 
         action = item["action"]
-        if action == "cancel":
+        if action == Event.CANCEL:
             sound_player.play("popup_close")
             self.hide_overlay()
             if self._on_cancel:

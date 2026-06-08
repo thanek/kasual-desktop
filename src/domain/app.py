@@ -9,11 +9,12 @@ import os
 from dataclasses import dataclass, field
 from collections.abc import Mapping
 
-# Recall-menu triggers (how BTN_MODE behaves once the app is foreground). Kept as
-# plain strings so the domain stays free of the input/gamepad framework; the
-# GamepadWatcher uses the same literals.
-TRIGGER_CLICK   = "BTN_MODE_CLICK"
-TRIGGER_HOLD_1S = "BTN_MODE_HOLD_1S"
+from domain.input import Trigger
+
+# Recall-menu triggers — canonical values live in domain.input.Trigger; these
+# aliases stay for the existing importers (App default, Target, tests).
+TRIGGER_CLICK   = Trigger.CLICK
+TRIGGER_HOLD_1S = Trigger.HOLD_1S
 
 
 @dataclass(frozen=True)

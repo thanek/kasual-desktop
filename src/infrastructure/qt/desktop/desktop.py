@@ -8,6 +8,7 @@ from PyQt6.QtWidgets import QWidget, QVBoxLayout, QApplication
 from infrastructure.audio import sound_player
 from domain.app import App
 from domain.foreground import ForegroundState
+from domain.input import Event
 from domain.target import AppTarget, Target
 from infrastructure.input.gamepad_watcher import GamepadWatcher
 from infrastructure.qt.overlays.base_overlay import BaseOverlay
@@ -21,16 +22,30 @@ from infrastructure.system.volume import PactlVolumeControl
 from infrastructure.system.window_manager import KWinWindowManager
 from infrastructure.qt.ui.layer_shell import make_layer_surface, Layer, Anchor, Keyboard
 from application.lifecycle import AppLifecycle
+from application.navigation import FocusNavigator
 from infrastructure.audio.feedback import SoundFeedback
 from infrastructure.qt.prompts import QtPrompts
 from infrastructure.qt.scheduler import QtScheduler
 from .deferred_hide import DeferredHide
-from .navigation import FocusNavigator
 from .tile_bar import TileBar
 from .topbar import TopBar
 from .wallpaper import KdeWallpaperLoader
 
 logger = logging.getLogger(__name__)
+
+# Keyboard keys → navigation events, so a keyboard drives the same handler stack
+# (injected via the gamepad). Translating Qt key codes is an input-edge concern;
+# FocusNavigator itself deals only in abstract domain events.
+_KEY_MAP = {
+    Qt.Key.Key_Left:   Event.LEFT,
+    Qt.Key.Key_Right:  Event.RIGHT,
+    Qt.Key.Key_Up:     Event.UP,
+    Qt.Key.Key_Down:   Event.DOWN,
+    Qt.Key.Key_Return: Event.SELECT,
+    Qt.Key.Key_Enter:  Event.SELECT,
+    Qt.Key.Key_Escape: Event.CANCEL,
+    Qt.Key.Key_Q:      Event.CLOSE,
+}
 
 
 class Desktop(QWidget):
@@ -86,7 +101,11 @@ class Desktop(QWidget):
         main.addWidget(self._tilebar)
         main.addStretch(1)
 
-        self._nav = FocusNavigator(self._tilebar, self._topbar, on_tile_menu=self._show_tile_popover)
+        self._feedback = SoundFeedback()
+        self._nav = FocusNavigator(
+            self._tilebar, self._topbar,
+            on_tile_menu=self._show_tile_popover, feedback=self._feedback,
+        )
 
         # The Desktop stays on screen after launching an app until that app's
         # window is actually mapped, then hides to reveal it.
@@ -108,7 +127,7 @@ class Desktop(QWidget):
             tilebar=self._tilebar,
             pad_handler=self._handle_pad,
             scheduler=QtScheduler(),
-            feedback=SoundFeedback(),
+            feedback=self._feedback,
             prompts=QtPrompts(),
         )
         self._tilebar.activated.connect(self._lifecycle.on_tile_activated)
@@ -279,7 +298,7 @@ class Desktop(QWidget):
                 and self._gamepad.top_handler() == self._handle_pad):
             self._gamepad.btn_mode_pressed.emit()
             return True
-        mapped = self._nav.key_event(key)
+        mapped = _KEY_MAP.get(key)
         if mapped:
             self._gamepad.inject(mapped)
             return True

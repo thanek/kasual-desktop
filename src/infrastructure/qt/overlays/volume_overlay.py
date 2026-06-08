@@ -5,6 +5,7 @@ from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QSlider,
 )
 
+from domain.input import Event
 from infrastructure.audio import sound_player
 from infrastructure.input.gamepad_watcher import GamepadWatcher
 from ports import VolumeControl
@@ -82,11 +83,11 @@ class VolumeOverlay(BaseOverlay):
     # ── Gamepad handler ────────────────────────────────────────────────────
 
     def _handle_pad(self, event: str) -> None:
-        if event == "left":
+        if event == Event.LEFT:
             self._change(-STEP)
-        elif event == "right":
+        elif event == Event.RIGHT:
             self._change(STEP)
-        elif event in ("select", "cancel", "close"):
+        elif event in (Event.SELECT, Event.CANCEL, Event.CLOSE):
             self._close()
 
     def _change(self, delta: int) -> None:
