@@ -6,6 +6,7 @@ This is the boundary that keeps the application/registry layer free of pactl,
 systemctl and Desktop internals.
 """
 
+from collections.abc import Callable
 from typing import Protocol
 
 
@@ -29,3 +30,23 @@ class DesktopShell(Protocol):
 
     def open_volume_overlay(self) -> None: ...
     def pause(self) -> None: ...
+
+
+class DesktopView(Protocol):
+    """The Qt-side operations the app-lifecycle coordinator drives on the
+    Desktop window. Keeps `AppLifecycle` free of QWidget/QDialog internals: the
+    coordinator orchestrates show/hide/activate and dialog spawning through this
+    narrow port, and a fake satisfying it makes the lifecycle testable."""
+
+    def is_visible(self) -> bool: ...
+    def show_fullscreen(self) -> None: ...
+    def activate(self) -> None: ...
+    def hide_view(self) -> None: ...
+    def close_active_dialog(self) -> None: ...
+    def show_confirm(
+        self,
+        question: str,
+        on_confirmed: Callable[[], None],
+        on_cancelled: Callable[[], None] | None = None,
+    ) -> None: ...
+    def show_error(self, message: str) -> None: ...

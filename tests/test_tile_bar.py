@@ -75,7 +75,7 @@ class TestSignatureGuard:
 
 class TestWindowsChangedSignal:
     """windows_changed musi być emitowany przy każdej prawdziwej przebudowie —
-    w tym przy przejściu do pustej listy, żeby Desktop._check_active_dyn_gone
+    w tym przy przejściu do pustej listy, żeby AppLifecycle.check_active_dyn_gone
     uruchomił się gdy ostatnie otwarte okno zostanie zamknięte."""
 
     def test_emitowany_gdy_okna_dodane(self, bar):

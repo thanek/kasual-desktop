@@ -1,0 +1,312 @@
+"""Tests for AppLifecycle — the launch / restore / close / exit coordinator
+extracted from the Desktop (E2 of the refactoring roadmap).
+
+Pure orchestration over mocked ports and a fake DesktopView; no QWidget. The
+QTimer.singleShot deferrals (gamepad rebind / window refresh) are neutered by an
+autouse fixture so the logic runs without a Qt event loop. The cursor sound is
+silenced by the autouse fixture in conftest.
+"""
+
+from types import SimpleNamespace
+from unittest.mock import MagicMock
+
+import pytest
+
+from desktop.lifecycle import AppLifecycle
+from domain.app import App, TRIGGER_CLICK, TRIGGER_HOLD_1S
+from domain.foreground import ForegroundState
+from domain.target import AppTarget, WindowTarget
+
+
+@pytest.fixture(autouse=True)
+def no_timer(monkeypatch):
+    """Drop the QTimer.singleShot deferrals so tests need no event loop."""
+    monkeypatch.setattr("desktop.lifecycle.QTimer.singleShot", lambda *a, **k: None)
+
+
+class FakeView:
+    """In-memory DesktopView: tracks visibility and records dialog/error calls."""
+
+    def __init__(self, visible: bool = False):
+        self._visible = visible
+        self.shown = 0
+        self.activated = 0
+        self.hidden = 0
+        self.dialog_closed = 0
+        self.errors: list[str] = []
+        self.confirm: tuple | None = None
+
+    def is_visible(self) -> bool:
+        return self._visible
+
+    def show_fullscreen(self) -> None:
+        self._visible = True
+        self.shown += 1
+
+    def activate(self) -> None:
+        self.activated += 1
+
+    def hide_view(self) -> None:
+        self._visible = False
+        self.hidden += 1
+
+    def close_active_dialog(self) -> None:
+        self.dialog_closed += 1
+
+    def show_error(self, message: str) -> None:
+        self.errors.append(message)
+
+    def show_confirm(self, question, on_confirmed, on_cancelled=None) -> None:
+        self.confirm = (question, on_confirmed, on_cancelled)
+
+
+def _app(command="prog", trigger=TRIGGER_CLICK):
+    return App(name="App", command=command, recall_menu_trigger=trigger)
+
+
+def _make(apps=None, visible=False):
+    view = FakeView(visible=visible)
+    gamepad = MagicMock()
+    gamepad.top_handler.return_value = None
+    wm = MagicMock()
+    app_manager = MagicMock()
+    apps = apps if apps is not None else [_app()]
+    foreground = ForegroundState()
+    deferred_hide = MagicMock()
+    tilebar = MagicMock()
+    pad = object()  # sentinel pad-handler identity
+    lc = AppLifecycle(
+        view=view,
+        gamepad=gamepad,
+        window_manager=wm,
+        app_manager=app_manager,
+        apps=apps,
+        foreground=foreground,
+        deferred_hide=deferred_hide,
+        tilebar=tilebar,
+        pad_handler=pad,
+    )
+    return SimpleNamespace(
+        lc=lc, view=view, gamepad=gamepad, wm=wm, am=app_manager,
+        apps=apps, fg=foreground, dh=deferred_hide, tilebar=tilebar, pad=pad,
+    )
+
+
+# ── on_tile_activated ───────────────────────────────────────────────────────
+
+class TestOnTileActivated:
+    def test_window_target_restores(self):
+        c = _make()
+        target = WindowTarget(window_id="w1", name="Win", trigger=TRIGGER_CLICK)
+        c.lc.on_tile_activated(target)
+        # restore path: foreground set, window activated, handler popped, view hidden
+        assert c.fg.current == target
+        c.wm.activate_window.assert_called_once_with("w1")
+        c.gamepad.pop_handler.assert_called_once_with(c.pad)
+        assert c.view.hidden == 1
+        c.dh.arm.assert_not_called()
+
+    def test_running_app_restores_not_launches(self):
+        c = _make()
+        c.am.is_running.return_value = True
+        c.lc.on_tile_activated(AppTarget(index=0, name="App"))
+        c.am.launch.assert_not_called()
+        assert c.view.hidden == 1  # restore hides the desktop
+
+    def test_idle_app_launches_and_arms_hide(self):
+        c = _make(apps=[_app(trigger=TRIGGER_HOLD_1S)])
+        c.am.is_running.return_value = False
+        c.am.launch.return_value = True
+        c.lc.on_tile_activated(AppTarget(index=0, name="App"))
+        app = c.apps[0]
+        c.am.launch.assert_called_once_with(0, app.command, app.args, app.env)
+        c.gamepad.set_app_btn_mode_trigger.assert_called_with(TRIGGER_HOLD_1S)
+        c.gamepad.pop_handler.assert_called_once_with(c.pad)
+        c.dh.arm.assert_called_once_with(0)
+
+    def test_failed_launch_does_not_arm_hide(self):
+        c = _make()
+        c.am.is_running.return_value = False
+        c.am.launch.return_value = False
+        c.lc.on_tile_activated(AppTarget(index=0, name="App"))
+        c.dh.arm.assert_not_called()
+
+
+# ── restore_app ─────────────────────────────────────────────────────────────
+
+class TestRestoreApp:
+    def test_app_target_uses_app_trigger_and_arranges(self):
+        c = _make(apps=[_app(trigger=TRIGGER_HOLD_1S)])
+        c.am.running_pid.return_value = 4321
+        c.lc.restore_app(AppTarget(index=0, name="App"))
+        c.gamepad.set_app_btn_mode_trigger.assert_called_once_with(TRIGGER_HOLD_1S)
+        c.wm.activate_windows_for_pids.assert_called_once_with({4321})
+        c.gamepad.pop_handler.assert_called_once_with(c.pad)
+        assert c.view.hidden == 1
+
+    def test_window_target_uses_own_trigger(self):
+        c = _make()
+        target = WindowTarget(window_id="w9", name="Win", trigger=TRIGGER_HOLD_1S)
+        c.lc.restore_app(target)
+        c.gamepad.set_app_btn_mode_trigger.assert_called_once_with(TRIGGER_HOLD_1S)
+        c.wm.activate_window.assert_called_once_with("w9")
+        assert c.view.hidden == 1
+
+
+# ── arrange_windows ─────────────────────────────────────────────────────────
+
+class TestArrangeWindows:
+    def test_activates_target_and_minimizes_others(self):
+        c = _make()
+        c.am.all_running_pids.return_value = [100, 200, 300]
+        c.lc.arrange_windows(activate_pid=200)
+        c.wm.activate_windows_for_pids.assert_called_once_with({200})
+        c.wm.minimize_windows_for_pids.assert_called_once_with({100, 300})
+
+    def test_no_target_minimizes_all_running(self):
+        c = _make()
+        c.am.all_running_pids.return_value = [100, 200]
+        c.lc.arrange_windows()
+        c.wm.activate_windows_for_pids.assert_not_called()
+        c.wm.minimize_windows_for_pids.assert_called_once_with({100, 200})
+
+    def test_nothing_running_is_noop(self):
+        c = _make()
+        c.am.all_running_pids.return_value = []
+        c.lc.arrange_windows(activate_pid=7)
+        c.wm.minimize_windows_for_pids.assert_not_called()
+
+
+# ── on_app_finished ─────────────────────────────────────────────────────────
+
+class TestOnAppFinished:
+    def test_reactivates_when_hidden(self):
+        c = _make(visible=False)
+        c.fg.set(AppTarget(index=0, name="App"))
+        c.lc.on_app_finished(0)
+        c.dh.cancel.assert_called_once()
+        assert c.view.dialog_closed == 1
+        assert c.view.shown == 1          # desktop brought back
+        assert c.fg.is_idle()             # foreground cleared (was app 0)
+        c.gamepad.push_handler.assert_called_with(c.pad)
+
+    def test_does_not_reshow_when_visible(self):
+        c = _make(visible=True)
+        c.fg.set(AppTarget(index=0, name="App"))
+        c.lc.on_app_finished(0)
+        assert c.view.shown == 0          # already visible — no re-show
+        c.gamepad.push_handler.assert_not_called()
+
+    def test_keeps_foreground_for_other_app(self):
+        c = _make(visible=True)
+        c.fg.set(AppTarget(index=2, name="Other"))
+        c.lc.on_app_finished(0)           # a different app exited
+        assert c.fg.current == AppTarget(index=2, name="Other")
+
+
+# ── on_app_launch_failed ────────────────────────────────────────────────────
+
+class TestOnAppLaunchFailed:
+    def test_cancels_hide_clears_fg_and_shows_error(self):
+        c = _make(visible=False)
+        c.fg.set(AppTarget(index=0, name="App"))
+        c.lc.on_app_launch_failed(0, "command not found")
+        c.dh.cancel.assert_called_once()
+        assert c.fg.is_idle()
+        assert c.view.shown == 1          # reactivated for the dialog
+        assert len(c.view.errors) == 1
+        assert "command not found" in c.view.errors[0]
+
+
+# ── check_active_dyn_gone ───────────────────────────────────────────────────
+
+class TestCheckActiveDynGone:
+    def test_clears_and_reactivates_when_window_gone(self):
+        c = _make(visible=True)
+        c.tilebar.has_dynamic_window.return_value = False
+        c.gamepad.top_handler.return_value = c.pad  # we own the stack
+        c.fg.set(WindowTarget(window_id="w1", name="Win"))
+        c.lc.check_active_dyn_gone()
+        assert c.fg.is_idle()
+        assert c.view.activated == 1
+
+    def test_noop_when_window_still_present(self):
+        c = _make(visible=True)
+        c.tilebar.has_dynamic_window.return_value = True
+        c.fg.set(WindowTarget(window_id="w1", name="Win"))
+        c.lc.check_active_dyn_gone()
+        assert c.fg.current == WindowTarget(window_id="w1", name="Win")
+        assert c.view.activated == 0
+
+    def test_noop_when_foreground_is_app(self):
+        c = _make(visible=True)
+        c.fg.set(AppTarget(index=0, name="App"))
+        c.lc.check_active_dyn_gone()
+        c.tilebar.has_dynamic_window.assert_not_called()
+
+    def test_does_not_steal_handler_owned_by_overlay(self):
+        c = _make(visible=True)
+        c.tilebar.has_dynamic_window.return_value = False
+        c.gamepad.top_handler.return_value = object()  # someone else on top
+        c.fg.set(WindowTarget(window_id="w1", name="Win"))
+        c.lc.check_active_dyn_gone()
+        assert c.fg.is_idle()             # still drops the dead window
+        assert c.view.activated == 0      # but does not reactivate
+
+
+# ── request_close_app ───────────────────────────────────────────────────────
+
+class TestRequestCloseApp:
+    def test_opens_confirm_dialog(self):
+        c = _make()
+        c.lc.request_close_app(AppTarget(index=0, name="App"))
+        assert c.view.confirm is not None
+
+    def test_confirm_terminates_running_app(self):
+        c = _make(visible=True)
+        c.am.is_running.return_value = True
+        c.lc.request_close_app(AppTarget(index=0, name="App"))
+        _, on_confirmed, _ = c.view.confirm
+        on_confirmed()
+        c.tilebar.set_static_closing.assert_called_once_with(0)
+        c.am.terminate.assert_called_once_with(0)
+
+    def test_confirm_closes_windows_when_no_live_process(self):
+        c = _make(apps=[_app(command="/usr/bin/steam")])
+        c.am.is_running.return_value = False
+        c.wm.cached_windows.return_value = [
+            {"id": "win1", "resourceClass": "Steam", "desktopFile": ""},
+            {"id": "win2", "resourceClass": "other", "desktopFile": ""},
+        ]
+        c.lc.request_close_app(AppTarget(index=0, name="Steam"))
+        _, on_confirmed, _ = c.view.confirm
+        on_confirmed()
+        c.am.terminate.assert_not_called()
+        c.wm.close_window.assert_called_once_with("win1")
+
+    def test_confirm_closes_window_target(self):
+        c = _make()
+        target = WindowTarget(window_id="w5", name="Win")
+        c.fg.set(target)
+        c.lc.request_close_app(target)
+        _, on_confirmed, _ = c.view.confirm
+        on_confirmed()
+        c.wm.close_window.assert_called_once_with("w5")
+        assert c.fg.is_idle()
+
+    def test_cancel_from_desktop_restores_view(self):
+        c = _make(visible=True)            # opened from the tile menu
+        c.lc.request_close_app(AppTarget(index=0, name="App"))
+        _, _, on_cancelled = c.view.confirm
+        on_cancelled()
+        # restore_desktop_view path raises the desktop via KWin
+        c.wm.raise_windows_for_pid_exact.assert_called_once()
+        assert c.view.hidden == 0
+
+    def test_cancel_over_app_restores_app(self):
+        c = _make(visible=False)           # overlay opened over the running app
+        c.am.is_running.return_value = True
+        c.lc.request_close_app(AppTarget(index=0, name="App"))
+        _, _, on_cancelled = c.view.confirm
+        on_cancelled()
+        assert c.view.hidden == 1          # restore_app hides the desktop again

@@ -1,5 +1,4 @@
 import logging
-import os
 from collections.abc import Callable
 
 from PyQt6.QtCore import Qt, QTimer, QEvent
@@ -9,8 +8,8 @@ from PyQt6.QtWidgets import QWidget, QVBoxLayout, QApplication
 from audio import sound_player
 from domain.app import App
 from domain.foreground import ForegroundState
-from domain.target import AppTarget, Target, WindowTarget
-from input.gamepad_watcher import GamepadWatcher, BTN_MODE_CLICK
+from domain.target import AppTarget, Target
+from input.gamepad_watcher import GamepadWatcher
 from overlays.base_overlay import BaseOverlay
 from overlays.confirm_dialog import ConfirmDialog
 from overlays.info_dialog import InfoDialog
@@ -20,9 +19,9 @@ from system.app_manager import AppManager
 from system.system_actions import ActionDeps, ActionRunner
 from system.volume import PactlVolumeControl
 from system.window_manager import KWinWindowManager
-from ui import styles
 from ui.layer_shell import make_layer_surface, Layer, Anchor, Keyboard
 from .deferred_hide import DeferredHide
+from .lifecycle import AppLifecycle
 from .navigation import FocusNavigator
 from .tile_bar import TileBar
 from .topbar import TopBar
@@ -79,14 +78,37 @@ class Desktop(QWidget):
         main.addWidget(self._topbar)
         main.addStretch(1)
         self._tilebar = TileBar(self._apps, self._app_manager)
-        self._tilebar.activated.connect(self._on_tile_activated)
-        self._tilebar.windows_changed.connect(self._check_active_dyn_gone)
         self._tilebar.tile_hovered.connect(self._on_tile_hovered)
         self._tilebar.tile_context_menu.connect(self._on_tile_context_menu)
         main.addWidget(self._tilebar)
         main.addStretch(1)
 
         self._nav = FocusNavigator(self._tilebar, self._topbar, on_tile_menu=self._show_tile_popover)
+
+        # The Desktop stays on screen after launching an app until that app's
+        # window is actually mapped, then hides to reveal it.
+        self._deferred_hide = DeferredHide(
+            self._wm, self._app_manager, self._apps, on_hide=self.hide
+        )
+        # App launch/restore/close/exit orchestration lives off the widget in a
+        # testable coordinator; the Desktop is just its DesktopView. The pad
+        # handler identity stays owned here so push/pop on the gamepad stack
+        # matches the eventFilter's comparisons.
+        self._lifecycle = AppLifecycle(
+            view=self,
+            gamepad=self._gamepad,
+            window_manager=self._wm,
+            app_manager=self._app_manager,
+            apps=self._apps,
+            foreground=self._foreground,
+            deferred_hide=self._deferred_hide,
+            tilebar=self._tilebar,
+            pad_handler=self._handle_pad,
+        )
+        self._tilebar.activated.connect(self._lifecycle.on_tile_activated)
+        self._tilebar.windows_changed.connect(self._lifecycle.check_active_dyn_gone)
+        self._app_manager.app_finished.connect(self._lifecycle.on_app_finished)
+        self._app_manager.app_launch_failed.connect(self._lifecycle.on_app_launch_failed)
 
         self._status_timer = QTimer(self)
         self._status_timer.timeout.connect(self._tilebar.refresh_status)
@@ -99,15 +121,7 @@ class Desktop(QWidget):
             lambda q, cb: self._show_confirm(question=q, on_confirmed=cb),
         )
 
-        self._app_manager.app_finished.connect(self._on_app_finished)
-        self._app_manager.app_launch_failed.connect(self._on_app_launch_failed)
         self._wm.windows_updated.connect(self._tilebar.update_windows)
-
-        # The Desktop stays on screen after launching an app until that app's
-        # window is actually mapped, then hides to reveal it.
-        self._deferred_hide = DeferredHide(
-            self._wm, self._app_manager, self._apps, on_hide=self.hide
-        )
 
         QApplication.instance().installEventFilter(self)
 
@@ -163,74 +177,47 @@ class Desktop(QWidget):
         return self._foreground.current
 
     def restore_app(self, target: Target) -> None:
-        sound_player.play("select")
-        if isinstance(target, AppTarget):
-            idx = target.index
-            trigger = self._apps[idx].recall_menu_trigger
-            self._gamepad.set_app_btn_mode_trigger(trigger)
-            self._arrange_windows(self._app_manager.running_pid(idx))
-        else:
-            self._gamepad.set_app_btn_mode_trigger(target.trigger)
-            self._wm.activate_window(target.window_id)
-        self._gamepad.pop_handler(self._handle_pad)
-        self.hide()
+        """Bring an already-running app back to the foreground (public API used
+        by the Home Overlay). Delegates to the lifecycle coordinator."""
+        self._lifecycle.restore_app(target)
 
     def request_close_app(self, target: Target) -> None:
-        display = styles.truncate(target.name, 40)
-        # Where the close was triggered from decides where Cancel returns to:
-        # the Desktop (tile menu, KD visible) or the running app (overlay opened
-        # over it, KD hidden). Captured now, before the dialog changes anything.
-        from_desktop = self.isVisible()
+        """Ask to close an app, with a confirm dialog (public API used by the
+        Home Overlay and the tile popover). Delegates to the coordinator."""
+        self._lifecycle.request_close_app(target)
 
-        def _confirmed() -> None:
-            self._restore_desktop_view()
-            if isinstance(target, AppTarget):
-                idx = target.index
-                self._tilebar.set_static_closing(idx)
-                if self._app_manager.is_running(idx):
-                    self._app_manager.terminate(idx)
-                else:
-                    # App was launched via a forwarder (e.g. `steam steam://...`)
-                    # whose launcher process has already exited — AppManager has
-                    # no live process to kill. Close matching KWin windows instead.
-                    self._close_app_windows(idx)
-            else:
-                self._foreground.clear()
-                self._wm.close_window(target.window_id)
-                QTimer.singleShot(1000, self._wm.refresh_now)
+    # ── DesktopView port (driven by AppLifecycle) ───────────────────────────
 
-        def _cancelled() -> None:
-            # Cancelling closes the dialog without consequences: return to the
-            # context the user came from rather than yanking up the Desktop.
-            if from_desktop:
-                self._restore_desktop_view()
-            else:
-                self.restore_app(target)
+    def is_visible(self) -> bool:
+        return self.isVisible()
 
-        self._show_confirm(
-            question=self.tr('Are you sure you want to close\n"{0}"?').format(display),
-            on_confirmed=_confirmed,
-            on_cancelled=_cancelled,
+    def show_fullscreen(self) -> None:
+        self.showFullScreen()
+
+    def activate(self) -> None:
+        self.activateWindow()
+
+    def hide_view(self) -> None:
+        self.hide()
+
+    def close_active_dialog(self) -> None:
+        self._close_active_dialog()
+
+    def show_error(self, message: str) -> None:
+        InfoDialog(
+            message=message,
+            on_confirmed=lambda: None,
+            gamepad=self._gamepad,
+            parent=self,
         )
 
-    def _close_app_windows(self, idx: int) -> None:
-        """Close all KWin windows belonging to a static app matched by command name.
-
-        Used when AppManager has no live process for the app — e.g. apps started
-        via a one-shot forwarder (steam://...) whose launcher exits immediately
-        while the real process continues under a different PID.
-        """
-        cmd = self._apps[idx].command_basename
-        matched = [
-            w['id'] for w in self._wm.cached_windows()
-            if w.get('resourceClass', '').lower() == cmd
-            or os.path.splitext(w.get('desktopFile', '').lower())[0] == cmd
-        ]
-        logger.info("Closing app %d via KWin windows %s (cmd=%s)", idx, matched, cmd)
-        for win_id in matched:
-            self._wm.close_window(win_id)
-        QTimer.singleShot(1500, self._wm.refresh_now)
-
+    def show_confirm(
+        self,
+        question: str,
+        on_confirmed: Callable[[], None],
+        on_cancelled: Callable[[], None] | None = None,
+    ) -> None:
+        self._show_confirm(question, on_confirmed, on_cancelled)
 
     def showEvent(self, event) -> None:
         super().showEvent(event)
@@ -270,29 +257,7 @@ class Desktop(QWidget):
             # exits immediately, so the normal app_finished path runs too early.
             if self.isActiveWindow() and self._foreground.is_idle() \
                     and self._gamepad.top_handler() is None:
-                self._reactivate_desktop()
-
-    # ── Tile bar coordination ───────────────────────────────────────────────
-
-    def _check_active_dyn_gone(self) -> None:
-        """If the active dynamic window disappeared (closed by the app) → show desktop."""
-        ctx = self._foreground.current
-        if isinstance(ctx, WindowTarget):
-            if not self._tilebar.has_dynamic_window(ctx.window_id):
-                self._foreground.clear()
-                # Re-establish gamepad control even when the Desktop window is
-                # already visible: restore_app() popped our handler, so a bare
-                # visible window would leave the pad unresponsive. Only seize
-                # input if nobody else owns it (an open HomeOverlay sits on top
-                # of the handler stack and must keep receiving events).
-                top = self._gamepad.top_handler()
-                if top is None or top == self._handle_pad:
-                    self._reactivate_desktop()
-                # Some apps (notably Steam) re-enumerate the gamepad when they
-                # exit, silently invalidating our evdev fd. Externally-launched
-                # (dyn) apps don't go through _on_app_finished, so force the
-                # rebind here too — same delay as the AppManager path.
-                QTimer.singleShot(1000, self._gamepad.refresh)
+                self._lifecycle.reactivate_desktop()
 
     # ── Gamepad handler ────────────────────────────────────────────────────
 
@@ -333,75 +298,6 @@ class Desktop(QWidget):
         self._nav.focus_tiles()
         self._show_tile_popover()
 
-    def _on_tile_activated(self, target: Target) -> None:
-        """A tile (static app or open window) was chosen via gamepad or click."""
-        self._foreground.set(target)
-        if not isinstance(target, AppTarget):
-            self.restore_app(target)
-            return
-
-        idx = target.index
-        if self._app_manager.is_running(idx):
-            logger.info("Restoring application %d", idx)
-            self.restore_app(target)
-        else:
-            logger.info("Launching application %d", idx)
-            sound_player.play("select")
-            # Minimize other already-running apps to prevent virtual pad interference
-            self._arrange_windows()
-            trigger = self._apps[idx].recall_menu_trigger
-            self._gamepad.set_app_btn_mode_trigger(trigger)
-            self._gamepad.pop_handler(self._handle_pad)
-            # launch() reports an immediate failure (e.g. command not found)
-            # synchronously via app_launch_failed — _on_app_launch_failed has
-            # already reactivated the Desktop and shown the error by the time
-            # this returns False. Only arm the deferred hide for a real launch;
-            # arming it for a failed one would strand a window-poll + 5 s guard
-            # that later hides the Desktop and churns the tile selection.
-            app = self._apps[idx]
-            if self._app_manager.launch(idx, app.command, app.args, app.env):
-                # The Desktop is a top-layer surface and must be hidden for the
-                # windowed app to show — but we defer that until the app's window
-                # is actually mapped, so the DE desktop never flashes through the
-                # start-up gap. Re-shown by _on_app_finished.
-                self._deferred_hide.arm(idx)
-
-    def _on_app_launch_failed(self, idx: int, error: str) -> None:
-        logger.warning("Application %d failed to launch: %s", idx, error)
-        # Launch failed before any window: drop the pending hide so the Desktop
-        # stays up for the error dialog instead of vanishing.
-        self._deferred_hide.cancel()
-        # _on_tile_activated set the foreground optimistically when the tile was
-        # chosen; the app never started, so clear it (if it is still ours).
-        # Otherwise BTN_MODE would target the never-launched app instead of
-        # opening the general Home Overlay.
-        self._foreground.clear_if_app(idx)
-        self._reactivate_desktop()
-        InfoDialog(
-            message=self.tr("Failed to launch application:\n{0}").format(error),
-            on_confirmed=lambda: None,
-            gamepad=self._gamepad,
-            parent=self,
-        )
-
-    def _on_app_finished(self, idx: int) -> None:
-        logger.info("Application %d finished – returning to desktop", idx)
-        # App exited (possibly before its window ever mapped) — stop waiting to
-        # hide the Desktop, otherwise we would hide onto a closed app.
-        self._deferred_hide.cancel()
-        self._close_active_dialog()
-        self._tilebar.refresh_status()
-        self._wm.refresh_now()
-        # Drop back to the Desktop if the app that exited was in front.
-        self._foreground.clear_if_app(idx)
-        if not self.isVisible():
-            # App exited on its own (crash / self-close) — show desktop now
-            self._reactivate_desktop()
-        # Some apps (notably Steam) re-enumerate the gamepad on exit,
-        # leaving our evdev fd pointing at a dead device with no error.
-        # Delay long enough for the kernel to surface the replacement.
-        QTimer.singleShot(1000, self._gamepad.refresh)
-
     # ── Closing an application ─────────────────────────────────────────────
 
     def _show_tile_popover(self) -> None:
@@ -434,36 +330,6 @@ class Desktop(QWidget):
         app = self._tilebar.current_context()
         if app is not None:
             self.request_close_app(app)
-
-    def _reactivate_desktop(self) -> None:
-        """Restore Desktop input control and bring it to the front.
-
-        Idempotent: push_handler() moves our handler to the top if it is already
-        present, and the window is only re-shown when actually hidden. The
-        BTN_MODE trigger is reset to the Desktop default so no app-specific
-        HOLD_1S setting lingers after the app is gone.
-        """
-        self._gamepad.set_app_btn_mode_trigger(BTN_MODE_CLICK)
-        self._gamepad.push_handler(self._handle_pad)
-        if not self.isVisible():
-            self.showFullScreen()
-        self.activateWindow()
-
-    def _restore_desktop_view(self) -> None:
-        self._reactivate_desktop()
-        # Wayland focus-stealing prevention can ignore Qt's activateWindow
-        # when another app (still dying) holds focus. Force Desktop to the
-        # top of the stack via KWin scripting.
-        self._wm.raise_windows_for_pid_exact(os.getpid())
-
-    def _arrange_windows(self, activate_pid: int | None = None) -> None:
-        """Activate windows for activate_pid and minimize all other running apps."""
-        all_pids = set(self._app_manager.all_running_pids())
-        if activate_pid:
-            self._wm.activate_windows_for_pids({activate_pid})
-        other_pids = all_pids - ({activate_pid} if activate_pid else set())
-        if other_pids:
-            self._wm.minimize_windows_for_pids(other_pids)
 
     def _close_active_dialog(self) -> None:
         if self._confirm_dialog is not None:

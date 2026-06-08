@@ -34,13 +34,15 @@ class TestPause:
         assert not desktop.isVisible()
 
 
-# ── _on_app_finished ──────────────────────────────────────────────────────────
+# ── on_app_finished (via AppLifecycle) ──────────────────────────────────────────
 
 class TestOnAppFinished:
     """
-    Desktop._on_app_finished powinien pokazać desktop tylko gdy jest niewidoczny
-    (crash / samodzielne zamknięcie). Gdy użytkownik potwierdził zamknięcie,
-    desktop jest już widoczny i nie powinien być pokazywany ponownie.
+    AppLifecycle.on_app_finished powinien pokazać desktop tylko gdy jest
+    niewidoczny (crash / samodzielne zamknięcie). Gdy użytkownik potwierdził
+    zamknięcie, desktop jest już widoczny i nie powinien być pokazywany ponownie.
+
+    Test integracyjny przez prawdziwy Desktop (DesktopView) + koordynator.
     """
 
     def test_shows_desktop_when_not_visible(self, mock_gamepad):
@@ -48,7 +50,7 @@ class TestOnAppFinished:
         desktop = _make_desktop(mock_gamepad)
         assert not desktop.isVisible()
 
-        desktop._on_app_finished(0)
+        desktop._lifecycle.on_app_finished(0)
 
         assert desktop.isVisible()
         assert desktop._handle_pad in mock_gamepad._handlers
@@ -60,7 +62,7 @@ class TestOnAppFinished:
         desktop.showFullScreen()
 
         handlers_before = list(mock_gamepad._handlers)
-        desktop._on_app_finished(0)
+        desktop._lifecycle.on_app_finished(0)
 
         # handler nie powinien być dodany po raz drugi (push jest idempotentny,
         # ale liczymy, że liczba handlerów nie rośnie)
