@@ -15,7 +15,7 @@ from unittest.mock import MagicMock
 
 def _make_overlay(mock_gamepad, volume=50):
     """Tworzy VolumeOverlay ze wstrzykniętym, zamockowanym VolumeControl."""
-    from overlays.volume_overlay import VolumeOverlay
+    from infrastructure.qt.overlays.volume_overlay import VolumeOverlay
     control = MagicMock()
     control.get.return_value = volume
     return VolumeOverlay(gamepad=mock_gamepad, volume=control)

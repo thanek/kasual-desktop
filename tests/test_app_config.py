@@ -2,7 +2,7 @@
 
 import pytest
 
-from system.app_config import load_apps, _parse_exec, _parse_env
+from infrastructure.system.app_config import load_apps, _parse_exec, _parse_env
 
 
 def _write(directory, filename, content):

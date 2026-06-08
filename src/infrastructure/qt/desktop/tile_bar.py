@@ -9,9 +9,9 @@ from PyQt6.QtWidgets import QWidget, QHBoxLayout, QScrollArea, QApplication
 
 from domain.app import App
 from domain.target import AppTarget, Target, WindowTarget
-from input.gamepad_watcher import BTN_MODE_CLICK
-from system.app_manager import AppManager
-from ui import styles
+from infrastructure.input.gamepad_watcher import BTN_MODE_CLICK
+from infrastructure.system.app_manager import AppManager
+from infrastructure.qt.ui import styles
 from .app_tile import AppTile, TILE_H, TILE_SEL_H
 from .window_icons import WindowIconResolver
 

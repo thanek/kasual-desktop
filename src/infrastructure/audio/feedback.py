@@ -4,7 +4,7 @@ Co-located with `sound_player` (its dependency); lets the application layer
 trigger cues ('select', …) without importing the audio module directly.
 """
 
-from audio import sound_player
+from infrastructure.audio import sound_player
 
 
 class SoundFeedback:

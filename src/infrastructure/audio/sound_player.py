@@ -21,7 +21,9 @@ from PyQt6.QtMultimedia import QAudio, QAudioFormat, QAudioSink
 
 logger = logging.getLogger(__name__)
 
-_SOUNDS_DIR = Path(__file__).parent.parent.parent / "sounds"
+# sounds/ lives at the repo root; this file sits at src/infrastructure/audio/,
+# so the root is four levels up (parents[3]).
+_SOUNDS_DIR = Path(__file__).resolve().parents[3] / "sounds"
 _SOUND_NAMES = ("cursor", "exit", "popup_open", "popup_close", "select", "start")
 
 # name → (QAudioFormat, bytes)

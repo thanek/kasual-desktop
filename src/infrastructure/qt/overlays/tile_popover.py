@@ -6,9 +6,9 @@ from collections.abc import Callable
 from PyQt6.QtCore import Qt, QEvent, QPoint, QRect, pyqtSignal
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QPushButton, QApplication
 
-from audio import sound_player
-from input.gamepad_watcher import GamepadWatcher
-from ui import styles
+from infrastructure.audio import sound_player
+from infrastructure.input.gamepad_watcher import GamepadWatcher
+from infrastructure.qt.ui import styles
 
 logger = logging.getLogger(__name__)
 

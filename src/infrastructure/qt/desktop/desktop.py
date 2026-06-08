@@ -5,23 +5,23 @@ from PyQt6.QtCore import Qt, QTimer, QEvent
 from PyQt6.QtGui import QPainter, QColor
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QApplication
 
-from audio import sound_player
+from infrastructure.audio import sound_player
 from domain.app import App
 from domain.foreground import ForegroundState
 from domain.target import AppTarget, Target
-from input.gamepad_watcher import GamepadWatcher
-from overlays.base_overlay import BaseOverlay
-from overlays.confirm_dialog import ConfirmDialog
-from overlays.info_dialog import InfoDialog
-from overlays.tile_popover import TilePopoverMenu
-from overlays.volume_overlay import VolumeOverlay
-from system.app_manager import AppManager
-from system.system_actions import ActionDeps, ActionRunner
-from system.volume import PactlVolumeControl
-from system.window_manager import KWinWindowManager
-from ui.layer_shell import make_layer_surface, Layer, Anchor, Keyboard
+from infrastructure.input.gamepad_watcher import GamepadWatcher
+from infrastructure.qt.overlays.base_overlay import BaseOverlay
+from infrastructure.qt.overlays.confirm_dialog import ConfirmDialog
+from infrastructure.qt.overlays.info_dialog import InfoDialog
+from infrastructure.qt.overlays.tile_popover import TilePopoverMenu
+from infrastructure.qt.overlays.volume_overlay import VolumeOverlay
+from infrastructure.system.app_manager import AppManager
+from infrastructure.system.system_actions import ActionDeps, ActionRunner
+from infrastructure.system.volume import PactlVolumeControl
+from infrastructure.system.window_manager import KWinWindowManager
+from infrastructure.qt.ui.layer_shell import make_layer_surface, Layer, Anchor, Keyboard
 from application.lifecycle import AppLifecycle
-from audio.feedback import SoundFeedback
+from infrastructure.audio.feedback import SoundFeedback
 from infrastructure.qt.prompts import QtPrompts
 from infrastructure.qt.scheduler import QtScheduler
 from .deferred_hide import DeferredHide

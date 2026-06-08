@@ -15,7 +15,7 @@ import pytest
 @pytest.fixture(autouse=True)
 def silence_sounds():
     """Wycisza sound_player.play we wszystkich testach."""
-    with patch("audio.sound_player.play"):
+    with patch("infrastructure.audio.sound_player.play"):
         yield
 
 
@@ -28,7 +28,7 @@ def mock_gamepad(qapp):
     więc wątek evdev nigdy nie startuje — testy są w pełni izolowane
     od sprzętu i uprawnień do UInput.
     """
-    with patch("input.gamepad_watcher.threading.Thread"):
-        from input.gamepad_watcher import GamepadWatcher
+    with patch("infrastructure.input.gamepad_watcher.threading.Thread"):
+        from infrastructure.input.gamepad_watcher import GamepadWatcher
         gw = GamepadWatcher()
     return gw

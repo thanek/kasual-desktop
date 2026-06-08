@@ -11,7 +11,7 @@ import textwrap
 
 import pytest
 
-from desktop.window_icons import WindowIconResolver, theme_icon_candidates
+from infrastructure.qt.desktop.window_icons import WindowIconResolver, theme_icon_candidates
 
 
 def _write_desktop(dir_path: str, filename: str, content: str) -> str:

@@ -4,7 +4,7 @@ import struct
 
 import pytest
 
-from audio.sound_player import _convert_24_to_16
+from infrastructure.audio.sound_player import _convert_24_to_16
 
 
 def _encode_24(val: int) -> bytes:

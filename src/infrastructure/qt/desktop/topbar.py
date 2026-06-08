@@ -6,8 +6,8 @@ import qtawesome as qta
 from PyQt6.QtCore import Qt, QLocale, QTimer, QSize, pyqtSignal
 from PyQt6.QtWidgets import QWidget, QPushButton, QHBoxLayout, QVBoxLayout, QLabel
 
-from system.system_actions import ACTIONS
-from ui import styles
+from infrastructure.system.system_actions import ACTIONS
+from infrastructure.qt.ui import styles
 
 BTN_SIZE    = 56
 BTN_SPACING = 14

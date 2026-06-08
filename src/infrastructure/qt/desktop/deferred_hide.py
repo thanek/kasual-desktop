@@ -6,8 +6,8 @@ from collections.abc import Callable
 from PyQt6.QtCore import QObject, QTimer
 
 from domain.app import App
-from system.app_manager import AppManager
-from system.window_manager import KWinWindowManager, expand_pid_tree
+from infrastructure.system.app_manager import AppManager
+from infrastructure.system.window_manager import KWinWindowManager, expand_pid_tree
 
 _POLL_INTERVAL_MS = 150
 _GUARD_TIMEOUT_MS = 5000

@@ -11,7 +11,7 @@ Widget jest tworzony w trybie offscreen – showFullScreen() nie wymaga
 prawdziwego wyświetlacza.
 """
 
-from overlays.confirm_dialog import ConfirmDialog
+from infrastructure.qt.overlays.confirm_dialog import ConfirmDialog
 
 
 def _make_dialog(mock_gamepad, on_confirmed=None, on_cancelled=None):

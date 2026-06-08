@@ -11,7 +11,7 @@ import pytest
 from unittest.mock import MagicMock, patch
 from PyQt6.QtCore import QPoint
 
-from desktop.tile_bar import TileBar
+from infrastructure.qt.desktop.tile_bar import TileBar
 from domain.app import App
 
 
@@ -125,7 +125,7 @@ class TestHoverSuppression:
         bar.move(1)
         assert bar._tile_index == 1
         bar.suppress_hover_until_move()       # Desktop appeared
-        with patch("desktop.tile_bar.QCursor.pos", return_value=QPoint(100, 100)):
+        with patch("infrastructure.qt.desktop.tile_bar.QCursor.pos", return_value=QPoint(100, 100)):
             bar._on_tile_hovered(2)           # synthetic enter latches the anchor
         assert bar._tile_index == 1           # selection untouched
 
@@ -133,7 +133,7 @@ class TestHoverSuppression:
         bar = bar_with_tiles
         bar.move(1)
         bar.suppress_hover_until_move()
-        with patch("desktop.tile_bar.QCursor.pos", return_value=QPoint(100, 100)):
+        with patch("infrastructure.qt.desktop.tile_bar.QCursor.pos", return_value=QPoint(100, 100)):
             bar._on_tile_hovered(2)           # latch + ignore
             bar._on_tile_hovered(0)           # bar scrolled, same cursor → ignore
         assert bar._tile_index == 1
@@ -141,9 +141,9 @@ class TestHoverSuppression:
     def test_hover_honoured_after_cursor_moves(self, bar_with_tiles):
         bar = bar_with_tiles
         bar.suppress_hover_until_move()
-        with patch("desktop.tile_bar.QCursor.pos", return_value=QPoint(100, 100)):
+        with patch("infrastructure.qt.desktop.tile_bar.QCursor.pos", return_value=QPoint(100, 100)):
             bar._on_tile_hovered(2)           # synthetic, latched at (100,100)
-        with patch("desktop.tile_bar.QCursor.pos", return_value=QPoint(140, 100)):
+        with patch("infrastructure.qt.desktop.tile_bar.QCursor.pos", return_value=QPoint(140, 100)):
             bar._on_tile_hovered(2)           # cursor genuinely moved → honoured
         assert bar._tile_index == 2
         assert bar._hover_blocked is False    # block lifted for subsequent hovers

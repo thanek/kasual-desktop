@@ -10,7 +10,7 @@ poza kartą z BaseOverlay — te testy domykają ten współdzielony kontrakt:
   - klik poza kartą nie zamyka (InfoDialog ma tylko OK)
 """
 
-from overlays.info_dialog import InfoDialog
+from infrastructure.qt.overlays.info_dialog import InfoDialog
 
 
 def _make_dialog(mock_gamepad, on_confirmed=None):

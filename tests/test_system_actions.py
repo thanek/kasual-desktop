@@ -6,8 +6,8 @@ gated behind a confirmation while immediate ones are not.
 
 from unittest.mock import MagicMock
 
-from system.power import SystemdPowerControl
-from system.system_actions import ActionDeps, ActionRunner
+from infrastructure.system.power import SystemdPowerControl
+from infrastructure.system.system_actions import ActionDeps, ActionRunner
 
 
 def _deps():

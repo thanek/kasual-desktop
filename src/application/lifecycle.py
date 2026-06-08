@@ -13,26 +13,27 @@ own `_handle_pad` bound method in as `pad_handler` so push/pop/compare on the
 gamepad handler stack stays consistent with the rest of the widget.
 """
 
+from __future__ import annotations
+
 import logging
 import os
 from collections.abc import Callable
 from typing import TYPE_CHECKING
 
-from domain.app import App
+from domain.app import App, TRIGGER_CLICK
 from domain.foreground import ForegroundState
 from domain.target import AppTarget, Target, WindowTarget
-from input.gamepad_watcher import GamepadWatcher, BTN_MODE_CLICK
 from ports import DesktopView, Feedback, Prompts, Scheduler
-from system.app_manager import AppManager
-from system.window_manager import KWinWindowManager
-from ui import styles
 
 if TYPE_CHECKING:
-    # Type-only: importing these at runtime would pull in the `desktop` package,
-    # whose __init__ imports Desktop, which imports this module → cycle. They are
-    # used solely as constructor annotations (quoted below).
-    from desktop.deferred_hide import DeferredHide
-    from desktop.tile_bar import TileBar
+    # Type-only: the application layer carries no runtime dependency on
+    # infrastructure. These are constructor annotations, resolved lazily thanks
+    # to `from __future__ import annotations`.
+    from infrastructure.input.gamepad_watcher import GamepadWatcher
+    from infrastructure.system.app_manager import AppManager
+    from infrastructure.system.window_manager import KWinWindowManager
+    from infrastructure.qt.desktop.deferred_hide import DeferredHide
+    from infrastructure.qt.desktop.tile_bar import TileBar
 
 logger = logging.getLogger(__name__)
 
@@ -52,8 +53,8 @@ class AppLifecycle:
         app_manager: AppManager,
         apps: list[App],
         foreground: ForegroundState,
-        deferred_hide: "DeferredHide",
-        tilebar: "TileBar",
+        deferred_hide: DeferredHide,
+        tilebar: TileBar,
         pad_handler: Callable[[str], None],
         scheduler: Scheduler,
         feedback: Feedback,
@@ -132,7 +133,6 @@ class AppLifecycle:
     # ── Closing an application ──────────────────────────────────────────────
 
     def request_close_app(self, target: Target) -> None:
-        display = styles.truncate(target.name, 40)
         # Where the close was triggered from decides where Cancel returns to:
         # the Desktop (tile menu, KD visible) or the running app (overlay opened
         # over it, KD hidden). Captured now, before the dialog changes anything.
@@ -164,7 +164,7 @@ class AppLifecycle:
                 self.restore_app(target)
 
         self._view.show_confirm(
-            question=self._prompts.close_confirm(display),
+            question=self._prompts.close_confirm(target.name),
             on_confirmed=_confirmed,
             on_cancelled=_cancelled,
         )
@@ -250,7 +250,7 @@ class AppLifecycle:
         BTN_MODE trigger is reset to the Desktop default so no app-specific
         HOLD_1S setting lingers after the app is gone.
         """
-        self._gamepad.set_app_btn_mode_trigger(BTN_MODE_CLICK)
+        self._gamepad.set_app_btn_mode_trigger(TRIGGER_CLICK)
         self._gamepad.push_handler(self._pad_handler)
         if not self._view.is_visible():
             self._view.show_fullscreen()

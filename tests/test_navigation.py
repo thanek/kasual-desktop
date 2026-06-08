@@ -8,7 +8,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from desktop.navigation import FocusNavigator
+from infrastructure.qt.desktop.navigation import FocusNavigator
 from PyQt6.QtCore import Qt
 
 

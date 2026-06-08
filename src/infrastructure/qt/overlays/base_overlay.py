@@ -6,10 +6,10 @@ from collections.abc import Callable
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QWidget
 
-from audio import sound_player
-from input.gamepad_watcher import GamepadWatcher
-from ui import styles
-from ui.layer_shell import make_layer_surface, Layer, Anchor, Keyboard
+from infrastructure.audio import sound_player
+from infrastructure.input.gamepad_watcher import GamepadWatcher
+from infrastructure.qt.ui import styles
+from infrastructure.qt.ui.layer_shell import make_layer_surface, Layer, Anchor, Keyboard
 
 logger = logging.getLogger(__name__)
 

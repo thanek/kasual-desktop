@@ -7,7 +7,7 @@ from PyQt6.QtCore import (Qt, QSize, QPoint,
 from PyQt6.QtGui import QCursor, QFont, QFontMetrics
 from PyQt6.QtWidgets import QWidget, QToolButton, QLabel
 
-from ui import styles
+from infrastructure.qt.ui import styles
 
 TILE_W        = 180
 TILE_H        = 200

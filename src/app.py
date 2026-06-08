@@ -5,18 +5,18 @@ import os
 
 from PyQt6.QtCore import QCoreApplication
 
+from domain.target import AppTarget, Target
 from application.home_menu import (
     CLOSE_APP, RETURN_TO_APP, RETURN_TO_DESKTOP, MenuEntry, compose_home_menu,
 )
 from application.session import SessionPolicy
-from desktop import Desktop
-from domain.target import AppTarget, Target
-from input.gamepad_watcher import GamepadWatcher
-from overlays.home_overlay import HomeOverlay, MenuItem
-from system.system_actions import ActionDeps
-from system.window_manager import KWinWindowManager
-from ui import styles
-from ui.tray import SystemTray
+from infrastructure.input.gamepad_watcher import GamepadWatcher
+from infrastructure.qt.desktop import Desktop
+from infrastructure.qt.overlays.home_overlay import HomeOverlay, MenuItem
+from infrastructure.qt.ui import styles
+from infrastructure.qt.ui.tray import SystemTray
+from infrastructure.system.system_actions import ActionDeps
+from infrastructure.system.window_manager import KWinWindowManager
 
 logger = logging.getLogger(__name__)
 

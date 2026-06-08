@@ -10,7 +10,7 @@ from collections.abc import Callable
 
 from PyQt6.QtCore import Qt
 
-from audio import sound_player
+from infrastructure.audio import sound_player
 from .tile_bar import TileBar
 from .topbar import TopBar
 

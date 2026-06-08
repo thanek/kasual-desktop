@@ -5,8 +5,8 @@ from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QSlider,
 )
 
-from audio import sound_player
-from input.gamepad_watcher import GamepadWatcher
+from infrastructure.audio import sound_player
+from infrastructure.input.gamepad_watcher import GamepadWatcher
 from ports import VolumeControl
 from .base_overlay import BaseOverlay
 

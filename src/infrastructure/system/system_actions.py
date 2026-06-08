@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 from PyQt6.QtCore import QT_TRANSLATE_NOOP, QCoreApplication
 
 from ports import DesktopShell, PowerControl
-from system.power import SystemdPowerControl
+from infrastructure.system.power import SystemdPowerControl
 
 
 @dataclass

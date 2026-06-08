@@ -8,11 +8,11 @@ from PyQt6.QtWidgets import (
     QWidget, QPushButton, QVBoxLayout, QLabel, QSizePolicy,
 )
 
-from audio import sound_player
-from input.gamepad_watcher import GamepadWatcher
-from system.system_actions import ACTIONS, ActionDeps, ActionRunner
-from ui import styles
-from ui.layer_shell import make_layer_surface, Layer, Anchor, Keyboard
+from infrastructure.audio import sound_player
+from infrastructure.input.gamepad_watcher import GamepadWatcher
+from infrastructure.system.system_actions import ACTIONS, ActionDeps, ActionRunner
+from infrastructure.qt.ui import styles
+from infrastructure.qt.ui.layer_shell import make_layer_surface, Layer, Anchor, Keyboard
 from .confirm_dialog import ConfirmDialog
 
 logger = logging.getLogger(__name__)

@@ -14,14 +14,14 @@ from PyQt6.QtCore import QLocale, QTimer, QTranslator
 from PyQt6.QtWidgets import QApplication
 
 from app import Application
-from audio import sound_player
-from desktop import Desktop
-from input.gamepad_watcher import GamepadWatcher
-from system.app_config import load_apps
-from system.window_manager import KWinWindowManager
-from system.system_actions import ActionDeps
-from ui.log_viewer import LogViewer
-from ui.tray import SystemTray
+from infrastructure.audio import sound_player
+from infrastructure.input.gamepad_watcher import GamepadWatcher
+from infrastructure.qt.desktop import Desktop
+from infrastructure.qt.ui.log_viewer import LogViewer
+from infrastructure.qt.ui.tray import SystemTray
+from infrastructure.system.app_config import load_apps
+from infrastructure.system.system_actions import ActionDeps
+from infrastructure.system.window_manager import KWinWindowManager
 
 logger = logging.getLogger(__name__)
 
