@@ -1,27 +1,39 @@
 """Tests for AppLifecycle — the launch / restore / close / exit coordinator
 extracted from the Desktop (E2 of the refactoring roadmap).
 
-Pure orchestration over mocked ports and a fake DesktopView; no QWidget. The
-QTimer.singleShot deferrals (gamepad rebind / window refresh) are neutered by an
-autouse fixture so the logic runs without a Qt event loop. The cursor sound is
-silenced by the autouse fixture in conftest.
+Pure orchestration over injected fakes (DesktopView, Scheduler, Feedback,
+Prompts) and mocked infra; no QWidget, no Qt event loop. The Scheduler fake just
+records deferrals without firing them, matching production's singleShot timing
+(callbacks never run mid-test).
 """
 
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
-import pytest
-
-from desktop.lifecycle import AppLifecycle
+from application.lifecycle import AppLifecycle
 from domain.app import App, TRIGGER_CLICK, TRIGGER_HOLD_1S
 from domain.foreground import ForegroundState
 from domain.target import AppTarget, WindowTarget
 
 
-@pytest.fixture(autouse=True)
-def no_timer(monkeypatch):
-    """Drop the QTimer.singleShot deferrals so tests need no event loop."""
-    monkeypatch.setattr("desktop.lifecycle.QTimer.singleShot", lambda *a, **k: None)
+class FakeScheduler:
+    """Records call_later deferrals without running the callbacks."""
+
+    def __init__(self):
+        self.calls: list[tuple[int, object]] = []
+
+    def call_later(self, delay_ms: int, callback) -> None:
+        self.calls.append((delay_ms, callback))
+
+
+class FakePrompts:
+    """Returns plain strings echoing the argument (no Qt translation)."""
+
+    def close_confirm(self, name: str) -> str:
+        return f"close? {name}"
+
+    def launch_failed(self, error: str) -> str:
+        return f"failed: {error}"
 
 
 class FakeView:
@@ -75,6 +87,9 @@ def _make(apps=None, visible=False):
     deferred_hide = MagicMock()
     tilebar = MagicMock()
     pad = object()  # sentinel pad-handler identity
+    scheduler = FakeScheduler()
+    feedback = MagicMock()
+    prompts = FakePrompts()
     lc = AppLifecycle(
         view=view,
         gamepad=gamepad,
@@ -85,10 +100,14 @@ def _make(apps=None, visible=False):
         deferred_hide=deferred_hide,
         tilebar=tilebar,
         pad_handler=pad,
+        scheduler=scheduler,
+        feedback=feedback,
+        prompts=prompts,
     )
     return SimpleNamespace(
         lc=lc, view=view, gamepad=gamepad, wm=wm, am=app_manager,
         apps=apps, fg=foreground, dh=deferred_hide, tilebar=tilebar, pad=pad,
+        scheduler=scheduler, feedback=feedback, prompts=prompts,
     )
 
 

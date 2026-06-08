@@ -20,8 +20,11 @@ from system.system_actions import ActionDeps, ActionRunner
 from system.volume import PactlVolumeControl
 from system.window_manager import KWinWindowManager
 from ui.layer_shell import make_layer_surface, Layer, Anchor, Keyboard
+from application.lifecycle import AppLifecycle
+from audio.feedback import SoundFeedback
+from infrastructure.qt.prompts import QtPrompts
+from infrastructure.qt.scheduler import QtScheduler
 from .deferred_hide import DeferredHide
-from .lifecycle import AppLifecycle
 from .navigation import FocusNavigator
 from .tile_bar import TileBar
 from .topbar import TopBar
@@ -104,6 +107,9 @@ class Desktop(QWidget):
             deferred_hide=self._deferred_hide,
             tilebar=self._tilebar,
             pad_handler=self._handle_pad,
+            scheduler=QtScheduler(),
+            feedback=SoundFeedback(),
+            prompts=QtPrompts(),
         )
         self._tilebar.activated.connect(self._lifecycle.on_tile_activated)
         self._tilebar.windows_changed.connect(self._lifecycle.check_active_dyn_gone)

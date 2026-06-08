@@ -16,20 +16,23 @@ gamepad handler stack stays consistent with the rest of the widget.
 import logging
 import os
 from collections.abc import Callable
+from typing import TYPE_CHECKING
 
-from PyQt6.QtCore import QCoreApplication, QTimer
-
-from audio import sound_player
 from domain.app import App
 from domain.foreground import ForegroundState
 from domain.target import AppTarget, Target, WindowTarget
 from input.gamepad_watcher import GamepadWatcher, BTN_MODE_CLICK
-from ports import DesktopView
+from ports import DesktopView, Feedback, Prompts, Scheduler
 from system.app_manager import AppManager
 from system.window_manager import KWinWindowManager
 from ui import styles
-from .deferred_hide import DeferredHide
-from .tile_bar import TileBar
+
+if TYPE_CHECKING:
+    # Type-only: importing these at runtime would pull in the `desktop` package,
+    # whose __init__ imports Desktop, which imports this module → cycle. They are
+    # used solely as constructor annotations (quoted below).
+    from desktop.deferred_hide import DeferredHide
+    from desktop.tile_bar import TileBar
 
 logger = logging.getLogger(__name__)
 
@@ -49,9 +52,12 @@ class AppLifecycle:
         app_manager: AppManager,
         apps: list[App],
         foreground: ForegroundState,
-        deferred_hide: DeferredHide,
-        tilebar: TileBar,
+        deferred_hide: "DeferredHide",
+        tilebar: "TileBar",
         pad_handler: Callable[[str], None],
+        scheduler: Scheduler,
+        feedback: Feedback,
+        prompts: Prompts,
     ):
         self._view          = view
         self._gamepad       = gamepad
@@ -62,6 +68,9 @@ class AppLifecycle:
         self._deferred_hide = deferred_hide
         self._tilebar       = tilebar
         self._pad_handler   = pad_handler
+        self._scheduler     = scheduler
+        self._feedback      = feedback
+        self._prompts       = prompts
 
     # ── Launch / restore ────────────────────────────────────────────────────
 
@@ -78,7 +87,7 @@ class AppLifecycle:
             self.restore_app(target)
         else:
             logger.info("Launching application %d", idx)
-            sound_player.play("select")
+            self._feedback.play("select")
             # Minimize other already-running apps to prevent virtual pad interference
             self.arrange_windows()
             trigger = self._apps[idx].recall_menu_trigger
@@ -99,7 +108,7 @@ class AppLifecycle:
                 self._deferred_hide.arm(idx)
 
     def restore_app(self, target: Target) -> None:
-        sound_player.play("select")
+        self._feedback.play("select")
         if isinstance(target, AppTarget):
             idx = target.index
             trigger = self._apps[idx].recall_menu_trigger
@@ -144,7 +153,7 @@ class AppLifecycle:
             else:
                 self._foreground.clear()
                 self._wm.close_window(target.window_id)
-                QTimer.singleShot(1000, self._wm.refresh_now)
+                self._scheduler.call_later(1000, self._wm.refresh_now)
 
         def _cancelled() -> None:
             # Cancelling closes the dialog without consequences: return to the
@@ -154,12 +163,8 @@ class AppLifecycle:
             else:
                 self.restore_app(target)
 
-        # Translation context "Desktop" preserved so the existing locale entry
-        # (lupdate keeps reusing it) still resolves after the move off the widget.
         self._view.show_confirm(
-            question=QCoreApplication.translate(
-                "Desktop", 'Are you sure you want to close\n"{0}"?'
-            ).format(display),
+            question=self._prompts.close_confirm(display),
             on_confirmed=_confirmed,
             on_cancelled=_cancelled,
         )
@@ -180,7 +185,7 @@ class AppLifecycle:
         logger.info("Closing app %d via KWin windows %s (cmd=%s)", idx, matched, cmd)
         for win_id in matched:
             self._wm.close_window(win_id)
-        QTimer.singleShot(1500, self._wm.refresh_now)
+        self._scheduler.call_later(1500, self._wm.refresh_now)
 
     # ── Exit handling ───────────────────────────────────────────────────────
 
@@ -195,11 +200,7 @@ class AppLifecycle:
         # opening the general Home Overlay.
         self._foreground.clear_if_app(idx)
         self.reactivate_desktop()
-        self._view.show_error(
-            QCoreApplication.translate(
-                "Desktop", "Failed to launch application:\n{0}"
-            ).format(error)
-        )
+        self._view.show_error(self._prompts.launch_failed(error))
 
     def on_app_finished(self, idx: int) -> None:
         logger.info("Application %d finished – returning to desktop", idx)
@@ -217,7 +218,7 @@ class AppLifecycle:
         # Some apps (notably Steam) re-enumerate the gamepad on exit,
         # leaving our evdev fd pointing at a dead device with no error.
         # Delay long enough for the kernel to surface the replacement.
-        QTimer.singleShot(1000, self._gamepad.refresh)
+        self._scheduler.call_later(1000, self._gamepad.refresh)
 
     def check_active_dyn_gone(self) -> None:
         """If the active dynamic window disappeared (closed by the app) → show desktop."""
@@ -237,7 +238,7 @@ class AppLifecycle:
                 # exit, silently invalidating our evdev fd. Externally-launched
                 # (dyn) apps don't go through on_app_finished, so force the
                 # rebind here too — same delay as the AppManager path.
-                QTimer.singleShot(1000, self._gamepad.refresh)
+                self._scheduler.call_later(1000, self._gamepad.refresh)
 
     # ── Reactivation ────────────────────────────────────────────────────────
 
