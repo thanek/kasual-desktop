@@ -9,7 +9,7 @@ from PyQt6.QtWidgets import QWidget, QHBoxLayout, QScrollArea, QApplication
 
 from domain.app import App
 from domain.target import AppTarget, Target, WindowTarget
-from infrastructure.input.gamepad_watcher import BTN_MODE_CLICK
+from domain.window import Window, resolve_recall_trigger
 from infrastructure.system.app_manager import AppManager
 from infrastructure.qt.ui import styles
 from .app_tile import AppTile, TILE_H, TILE_SEL_H
@@ -30,6 +30,18 @@ def _get_ppid(pid: int) -> int | None:
     except (OSError, ValueError):
         pass
     return None
+
+
+def _to_window(d: dict) -> Window:
+    """Adapt a KWin window-list entry (its dict shape) to a domain Window."""
+    return Window(
+        id=str(d.get('id', '')),
+        title=str(d.get('title', '')),
+        pid=int(d.get('pid', 0) or 0),
+        active=bool(d.get('active', False)),
+        desktop_file=d.get('desktopFile', '') or '',
+        resource_class=d.get('resourceClass', '') or '',
+    )
 
 
 class TileBar(QScrollArea):
@@ -188,12 +200,8 @@ class TileBar(QScrollArea):
         if self._app_manager.is_running(idx):
             return True
         if self._last_windows and idx < len(self._apps):
-            cmd = self._apps[idx].command_basename
-            return any(
-                w.get('resourceClass', '').lower() == cmd or
-                os.path.splitext(w.get('desktopFile', '').lower())[0] == cmd
-                for w in self._last_windows
-            )
+            app = self._apps[idx]
+            return any(_to_window(w).matches_app(app) for w in self._last_windows)
         return False
 
     def refresh_status(self) -> None:
@@ -220,8 +228,7 @@ class TileBar(QScrollArea):
         #   2. resourceClass/desktopFile match: works for apps (Steam) that
         #      self-relaunch in a new process group, losing the pgid link.
         #      Uses all *defined* apps so filtering survives a Steam restart.
-        running_pids  = set(self._app_manager.all_running_pids())
-        defined_cmds  = {a.command_basename for a in self._apps}
+        running_pids = set(self._app_manager.all_running_pids())
 
         def _is_managed_window(w: dict) -> bool:
             pid = w.get('pid', 0)
@@ -232,9 +239,8 @@ class TileBar(QScrollArea):
                     return True
             except OSError:
                 pass
-            rc = w.get('resourceClass', '').lower()
-            df = os.path.splitext(w.get('desktopFile', '').lower())[0]
-            return rc in defined_cmds or df in defined_cmds
+            window = _to_window(w)
+            return any(window.matches_app(app) for app in self._apps)
 
         extern_windows = [w for w in windows if not _is_managed_window(w)]
 
@@ -400,28 +406,15 @@ class TileBar(QScrollArea):
         return WindowTarget(window_id=win_id, name=title, trigger=trigger)
 
     def _find_trigger_for_pid(self, pid: int) -> str:
-        """Return the recall_menu_trigger of the static app that owns *pid*.
+        """Recall trigger a dynamic-tile window owned by *pid* should inherit.
 
-        Walks the ppid chain upward looking for any PID tracked by AppManager.
-        Needed so that games launched by Steam inherit Steam's BTN_MODE_HOLD_1S
-        rather than using the dynamic-tile default (BTN_MODE_CLICK).
+        The ownership rule (walk the parent chain to the owning app, default
+        CLICK) lives in the domain; this only supplies the pid→app map from the
+        AppManager and the /proc parent lookup.
         """
-        if pid == 0:
-            return BTN_MODE_CLICK
-        pid_to_idx = {
-            self._app_manager.running_pid(i): i
+        pid_to_app = {
+            self._app_manager.running_pid(i): self._apps[i]
             for i in self._app_manager.running_idxs()
             if self._app_manager.running_pid(i) is not None
         }
-        visited: set[int] = set()
-        current = pid
-        while current > 1 and current not in visited:
-            visited.add(current)
-            if current in pid_to_idx:
-                idx = pid_to_idx[current]
-                return self._apps[idx].recall_menu_trigger
-            ppid = _get_ppid(current)
-            if ppid is None:
-                break
-            current = ppid
-        return BTN_MODE_CLICK
+        return resolve_recall_trigger(pid, pid_to_app, _get_ppid)
