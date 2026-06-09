@@ -20,7 +20,8 @@ from infrastructure.qt.desktop import Desktop
 from infrastructure.qt.ui.log_viewer import LogViewer
 from infrastructure.qt.ui.tray import SystemTray
 from infrastructure.system.app_config import load_apps
-from infrastructure.system.system_actions import ActionDeps
+from infrastructure.system.power import SystemdPowerControl
+from application.system_actions import ActionDeps
 from infrastructure.system.window_manager import KWinWindowManager
 
 logger = logging.getLogger(__name__)
@@ -82,7 +83,7 @@ def main() -> None:
     controller = Application(
         gamepad=gamepad,
         desktop=desktop,
-        action_deps=ActionDeps(desktop=desktop),
+        action_deps=ActionDeps(desktop=desktop, power=SystemdPowerControl()),
         tray=tray,
         wm=wm,
     )

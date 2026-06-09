@@ -13,7 +13,8 @@ from domain.input import Event
 from infrastructure.audio import sound_player
 from infrastructure.audio.feedback import SoundFeedback
 from infrastructure.input.gamepad_watcher import GamepadWatcher
-from infrastructure.system.system_actions import ACTIONS, ActionDeps, ActionRunner
+from application.system_actions import ActionDeps, ActionRunner
+from infrastructure.qt.ui.action_view import PRESENTATION, make_action_confirm
 from infrastructure.qt.ui import styles
 from infrastructure.qt.ui.layer_shell import make_layer_surface, Layer, Anchor, Keyboard
 from .confirm_dialog import ConfirmDialog
@@ -50,8 +51,8 @@ class HomeOverlay(QWidget):
     def action_items() -> list[MenuItem]:
         """System-action menu items (shutdown, minimize, etc.)."""
         return [
-            {"label": spec["label"], "icon": spec["icon"], "action": action_type}
-            for action_type, spec in ACTIONS.items()
+            {"label": view.label, "icon": view.icon, "action": action_type}
+            for action_type, view in PRESENTATION.items()
         ]
 
     @staticmethod
@@ -95,7 +96,8 @@ class HomeOverlay(QWidget):
             )
         )
         self._action_runner = (
-            ActionRunner(action_deps, confirm) if action_deps is not None else None
+            ActionRunner(action_deps, make_action_confirm(confirm))
+            if action_deps is not None else None
         )
         self._items:     list[MenuItem]    = []
         self._buttons:   list[QPushButton] = []

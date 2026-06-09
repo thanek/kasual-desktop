@@ -15,7 +15,7 @@ from infrastructure.qt.desktop import Desktop
 from infrastructure.qt.overlays.home_overlay import HomeOverlay, MenuItem
 from infrastructure.qt.ui import styles
 from infrastructure.qt.ui.tray import SystemTray
-from infrastructure.system.system_actions import ActionDeps
+from application.system_actions import ActionDeps
 from infrastructure.system.window_manager import KWinWindowManager
 
 logger = logging.getLogger(__name__)

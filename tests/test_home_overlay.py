@@ -13,7 +13,7 @@ import pytest
 from unittest.mock import MagicMock, patch
 
 from infrastructure.qt.overlays.home_overlay import HomeOverlay, MenuItem
-from infrastructure.system.system_actions import ActionDeps
+from application.system_actions import ActionDeps
 
 
 def _make_overlay(mock_gamepad, action_deps=None):
@@ -149,7 +149,7 @@ class TestActivate:
 
     @pytest.mark.parametrize("action", ["sleep", "restart", "shutdown"])
     def test_system_action_calls_ask_confirmation(self, action, mock_gamepad):
-        overlay = _shown(mock_gamepad, action_deps=ActionDeps(desktop=MagicMock()))
+        overlay = _shown(mock_gamepad, action_deps=ActionDeps(desktop=MagicMock(), power=MagicMock()))
         action_idx = next(i for i, it in enumerate(overlay._items) if it.get("action") == action)
         overlay._index = action_idx
         with patch("infrastructure.qt.overlays.home_overlay.ConfirmDialog") as mock_dlg:
@@ -158,7 +158,7 @@ class TestActivate:
 
     @pytest.mark.parametrize("action", ["sleep", "restart", "shutdown"])
     def test_system_action_hides_overlay_before_confirming(self, action, mock_gamepad):
-        overlay = _shown(mock_gamepad, action_deps=ActionDeps(desktop=MagicMock()))
+        overlay = _shown(mock_gamepad, action_deps=ActionDeps(desktop=MagicMock(), power=MagicMock()))
         action_idx = next(i for i, it in enumerate(overlay._items) if it.get("action") == action)
         overlay._index = action_idx
         with patch("infrastructure.qt.overlays.home_overlay.ConfirmDialog"):
@@ -167,7 +167,7 @@ class TestActivate:
 
     def test_hide_desktop_calls_pause_immediately(self, mock_gamepad):
         desktop = MagicMock()
-        overlay = _shown(mock_gamepad, action_deps=ActionDeps(desktop=desktop))
+        overlay = _shown(mock_gamepad, action_deps=ActionDeps(desktop=desktop, power=MagicMock()))
         hide_idx = next(i for i, it in enumerate(overlay._items) if it.get("action") == "hide_desktop")
         overlay._index = hide_idx
         with patch("infrastructure.qt.overlays.home_overlay.ConfirmDialog") as mock_dlg:
@@ -176,7 +176,7 @@ class TestActivate:
         desktop.pause.assert_called_once()
 
     def test_hide_desktop_hides_overlay(self, mock_gamepad):
-        overlay = _shown(mock_gamepad, action_deps=ActionDeps(desktop=MagicMock()))
+        overlay = _shown(mock_gamepad, action_deps=ActionDeps(desktop=MagicMock(), power=MagicMock()))
         hide_idx = next(i for i, it in enumerate(overlay._items) if it.get("action") == "hide_desktop")
         overlay._index = hide_idx
         overlay._handle_pad("select")

@@ -17,12 +17,14 @@ from infrastructure.qt.overlays.info_dialog import InfoDialog
 from infrastructure.qt.overlays.tile_popover import TilePopoverMenu
 from infrastructure.qt.overlays.volume_overlay import VolumeOverlay
 from infrastructure.system.app_manager import AppManager
-from infrastructure.system.system_actions import ActionDeps, ActionRunner
+from infrastructure.system.power import SystemdPowerControl
 from infrastructure.system.volume import PactlVolumeControl
 from infrastructure.system.window_manager import KWinWindowManager
 from infrastructure.qt.ui.layer_shell import make_layer_surface, Layer, Anchor, Keyboard
+from infrastructure.qt.ui.action_view import make_action_confirm
 from application.lifecycle import AppLifecycle
 from application.navigation import FocusNavigator
+from application.system_actions import ActionDeps, ActionRunner
 from infrastructure.audio.feedback import SoundFeedback
 from infrastructure.qt.prompts import QtPrompts
 from infrastructure.qt.scheduler import QtScheduler
@@ -142,8 +144,10 @@ class Desktop(QWidget):
         self._wallpaper: 'QPixmap | None' = KdeWallpaperLoader().load()
 
         self._action_runner = ActionRunner(
-            ActionDeps(desktop=self),
-            lambda q, cb: self._show_confirm(question=q, on_confirmed=cb),
+            ActionDeps(desktop=self, power=SystemdPowerControl()),
+            make_action_confirm(
+                lambda q, cb: self._show_confirm(question=q, on_confirmed=cb)
+            ),
         )
 
         self._wm.windows_updated.connect(self._tilebar.update_windows)

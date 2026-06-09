@@ -6,7 +6,8 @@ import qtawesome as qta
 from PyQt6.QtCore import Qt, QLocale, QTimer, QSize, pyqtSignal
 from PyQt6.QtWidgets import QWidget, QPushButton, QHBoxLayout, QVBoxLayout, QLabel
 
-from infrastructure.system.system_actions import ACTIONS
+from application.system_actions import ACTIONS
+from infrastructure.qt.ui.action_view import PRESENTATION
 from infrastructure.qt.ui import styles
 
 BTN_SIZE    = 56
@@ -59,7 +60,7 @@ class TopBar(QWidget):
         self._build_clock(layout)
         layout.addStretch(1)
 
-        self._colors = [a["color"] for a in ACTIONS.values()]
+        self._colors = [PRESENTATION[k].color for k in ACTIONS]
         self._buttons: list[QPushButton] = []
         btn_area = QWidget()
         btn_area.setFixedWidth(btns_total)
@@ -74,7 +75,8 @@ class TopBar(QWidget):
                 self.button_hovered.emit(idx)
             btn.enterEvent = _enter
 
-        for i, (action_type, action) in enumerate(ACTIONS.items()):
+        for i, action_type in enumerate(ACTIONS):
+            view = PRESENTATION[action_type]
             btn = QPushButton()
             btn.setFixedSize(BTN_SIZE, BTN_SIZE)
             # Navigation is gamepad/highlight-driven, so the buttons must not take
@@ -83,9 +85,9 @@ class TopBar(QWidget):
             # frame — a sharp rectangle ignoring border-radius, so it looks like a
             # square button with an extra border among the rounded ones.
             btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-            btn.setIcon(qta.icon(action["icon"], color="white"))
+            btn.setIcon(qta.icon(view.icon, color="white"))
             btn.setIconSize(QSize(24, 24))
-            btn.setStyleSheet(styles.topbar_normal(action["color"]))
+            btn.setStyleSheet(styles.topbar_normal(view.color))
             btn.clicked.connect(lambda _, t=action_type: self.action_triggered.emit(t))
             _bind_hover(btn, i)
             btn_layout.addWidget(btn)

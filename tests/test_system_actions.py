@@ -6,15 +6,14 @@ gated behind a confirmation while immediate ones are not.
 
 from unittest.mock import MagicMock
 
-from infrastructure.system.power import SystemdPowerControl
-from infrastructure.system.system_actions import ActionDeps, ActionRunner
+from application.system_actions import ActionDeps, ActionRunner
 
 
 def _deps():
     return ActionDeps(desktop=MagicMock(), power=MagicMock())
 
 
-def _auto_confirm(question, callback):
+def _auto_confirm(action_key, callback):
     callback()
 
 
@@ -63,6 +62,21 @@ class TestConfirmationGating:
 
 
 class TestActionDeps:
-    def test_power_defaults_to_systemd(self):
-        deps = ActionDeps(desktop=MagicMock())
-        assert isinstance(deps.power, SystemdPowerControl)
+    def test_holds_injected_ports(self):
+        desktop, power = MagicMock(), MagicMock()
+        deps = ActionDeps(desktop=desktop, power=power)
+        assert deps.desktop is desktop and deps.power is power
+
+
+class TestCatalogPresentationConsistency:
+    """The confirmation *policy* (application catalog) and the confirmation
+    *question text* (view presentation) are two facets of the same fact — keep
+    them in lock-step: confirmable ⟺ has a question."""
+
+    def test_confirmation_policy_matches_presentation(self):
+        from application.system_actions import ACTIONS
+        from infrastructure.qt.ui.action_view import PRESENTATION
+        assert PRESENTATION.keys() == ACTIONS.keys()
+        for key, action in ACTIONS.items():
+            has_question = PRESENTATION[key].confirm_question is not None
+            assert action.needs_confirmation == has_question, key
