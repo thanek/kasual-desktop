@@ -25,7 +25,7 @@ class TestPause:
         desktop = _make_desktop(mock_gamepad)
         mock_gamepad.push_handler(desktop._handle_pad)
         desktop.pause()
-        assert desktop._handle_pad not in mock_gamepad._handlers
+        assert desktop._handle_pad not in mock_gamepad._stack
 
     def test_pause_hides_widget(self, mock_gamepad):
         desktop = _make_desktop(mock_gamepad)
@@ -53,7 +53,7 @@ class TestOnAppFinished:
         desktop._lifecycle.on_app_finished(0)
 
         assert desktop.isVisible()
-        assert desktop._handle_pad in mock_gamepad._handlers
+        assert desktop._handle_pad in mock_gamepad._stack
 
     def test_does_not_push_handler_again_when_already_visible(self, mock_gamepad):
         """Użytkownik potwierdził zamknięcie — desktop już widoczny, handler już w stosie."""
@@ -61,9 +61,9 @@ class TestOnAppFinished:
         mock_gamepad.push_handler(desktop._handle_pad)
         desktop.showFullScreen()
 
-        handlers_before = list(mock_gamepad._handlers)
+        handlers_before = list(mock_gamepad._stack)
         desktop._lifecycle.on_app_finished(0)
 
         # handler nie powinien być dodany po raz drugi (push jest idempotentny,
         # ale liczymy, że liczba handlerów nie rośnie)
-        assert mock_gamepad._handlers == handlers_before
+        assert list(mock_gamepad._stack) == handlers_before

@@ -32,19 +32,19 @@ def _shown(mock_gamepad, items=None, on_cancel=None, action_deps=None):
 class TestShowHide:
     def test_show_registers_handler(self, mock_gamepad):
         overlay = _shown(mock_gamepad)
-        assert overlay._handle_pad in mock_gamepad._handlers
+        assert overlay._handle_pad in mock_gamepad._stack
         overlay.hide_overlay()
 
     def test_hide_deregisters_handler(self, mock_gamepad):
         overlay = _shown(mock_gamepad)
         overlay.hide_overlay()
-        assert overlay._handle_pad not in mock_gamepad._handlers
+        assert overlay._handle_pad not in mock_gamepad._stack
 
     def test_double_show_does_not_register_handler_twice(self, mock_gamepad):
         overlay = _shown(mock_gamepad)
-        count_before = len(mock_gamepad._handlers)
+        count_before = len(mock_gamepad._stack)
         overlay.show_overlay()   # już widoczny – noop
-        assert len(mock_gamepad._handlers) == count_before
+        assert len(mock_gamepad._stack) == count_before
         overlay.hide_overlay()
 
     def test_hide_when_not_visible_is_noop(self, mock_gamepad):

@@ -38,7 +38,7 @@ class TestInit:
 
     def test_registers_handler(self, mock_gamepad):
         overlay = _make_overlay(mock_gamepad)
-        assert overlay._handle_pad in mock_gamepad._handlers
+        assert overlay._handle_pad in mock_gamepad._stack
 
 
 # ── Zmiana głośności ───────────────────────────────────────────────────────────
@@ -115,4 +115,4 @@ class TestClose:
     def test_deregisters_handler_on_close(self, mock_gamepad):
         overlay = _make_overlay(mock_gamepad)
         overlay._handle_pad("cancel")
-        assert overlay._handle_pad not in mock_gamepad._handlers
+        assert overlay._handle_pad not in mock_gamepad._stack

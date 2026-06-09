@@ -28,17 +28,17 @@ def _make_dialog(mock_gamepad, on_confirmed=None, on_cancelled=None):
 class TestHandlerRegistration:
     def test_registers_handler_on_init(self, mock_gamepad):
         dlg = _make_dialog(mock_gamepad)
-        assert dlg._handle_pad in mock_gamepad._handlers
+        assert dlg._handle_pad in mock_gamepad._stack
 
     def test_deregisters_handler_after_confirm(self, mock_gamepad):
         dlg = _make_dialog(mock_gamepad)
         dlg._handle_pad("select")   # _focus_yes=True → potwierdza i zamyka
-        assert dlg._handle_pad not in mock_gamepad._handlers
+        assert dlg._handle_pad not in mock_gamepad._stack
 
     def test_deregisters_handler_after_cancel(self, mock_gamepad):
         dlg = _make_dialog(mock_gamepad)
         dlg._handle_pad("cancel")
-        assert dlg._handle_pad not in mock_gamepad._handlers
+        assert dlg._handle_pad not in mock_gamepad._stack
 
 
 # ── Pad: select ────────────────────────────────────────────────────────────────
@@ -139,7 +139,7 @@ class TestForceClose:
     def test_deregisters_handler(self, mock_gamepad):
         dlg = _make_dialog(mock_gamepad)
         dlg.force_close()
-        assert dlg._handle_pad not in mock_gamepad._handlers
+        assert dlg._handle_pad not in mock_gamepad._stack
 
     def test_does_not_call_any_callback(self, mock_gamepad):
         confirmed, cancelled = [], []

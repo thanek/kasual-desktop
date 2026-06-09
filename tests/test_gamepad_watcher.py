@@ -25,46 +25,27 @@ def ev(ev_type, code, value):
 
 
 # ── Stos handlerów ─────────────────────────────────────────────────────────────
+# Pełna charakteryzacja stosu żyje w test_input_focus.py (InputFocusStack).
+# Tu sprawdzamy tylko, że publiczne API watchera deleguje do stosu.
 
 class TestHandlerStack:
     def test_push_sets_suppress(self, mock_gamepad):
-        assert mock_gamepad._suppress_uinput is False
+        assert mock_gamepad._stack.suppressed is False
         mock_gamepad.push_handler(lambda e: None)
-        assert mock_gamepad._suppress_uinput is True
+        assert mock_gamepad._stack.suppressed is True
 
     def test_pop_clears_suppress_when_empty(self, mock_gamepad):
         h = lambda e: None
         mock_gamepad.push_handler(h)
         mock_gamepad.pop_handler(h)
-        assert mock_gamepad._suppress_uinput is False
+        assert mock_gamepad._stack.suppressed is False
 
-    def test_pop_keeps_suppress_when_handlers_remain(self, mock_gamepad):
+    def test_top_handler_reflects_stack(self, mock_gamepad):
         h1 = lambda e: None
         h2 = lambda e: None
         mock_gamepad.push_handler(h1)
         mock_gamepad.push_handler(h2)
-        mock_gamepad.pop_handler(h2)
-        assert mock_gamepad._suppress_uinput is True
-
-    def test_push_deduplicates_and_moves_to_top(self, mock_gamepad):
-        h1 = lambda e: None
-        h2 = lambda e: None
-        mock_gamepad.push_handler(h1)
-        mock_gamepad.push_handler(h2)
-        mock_gamepad.push_handler(h1)   # h1 już był → przesuń na szczyt
-        assert mock_gamepad._handlers[-1] is h1
-        assert len(mock_gamepad._handlers) == 2
-
-    def test_pop_nonexistent_handler_is_noop(self, mock_gamepad):
-        mock_gamepad.pop_handler(lambda e: None)   # nie powinno rzucać
-
-    def test_multiple_push_pop_cycle(self, mock_gamepad):
-        h = lambda e: None
-        for _ in range(5):
-            mock_gamepad.push_handler(h)
-            mock_gamepad.pop_handler(h)
-        assert mock_gamepad._handlers == []
-        assert mock_gamepad._suppress_uinput is False
+        assert mock_gamepad.top_handler() is h2
 
 
 # ── _dispatch ─────────────────────────────────────────────────────────────────
@@ -287,12 +268,8 @@ class TestIsGamepad:
 # ── BTN_MODE — logika triggera ─────────────────────────────────────────────────
 
 class TestBtnModeLogic:
-    """
-    Testujemy _on_btn_mode_long i set_app_btn_mode_trigger.
-
-    Właściwa decyzja press/timer siedzi w _loop (nie uruchamia się w testach),
-    ale możemy przetestować setter i callback timera bezpośrednio.
-    """
+    """Tylko per-app setter triggera (logika CLICK/HOLD żyje w RecallTrigger —
+    patrz test_recall_trigger.py; tu sprawdzamy, że firing recall emituje sygnał)."""
 
     def test_set_app_btn_mode_trigger_stores_value(self, mock_gamepad):
         mock_gamepad.set_app_btn_mode_trigger("BTN_MODE_HOLD_1S")
@@ -301,15 +278,8 @@ class TestBtnModeLogic:
     def test_set_app_btn_mode_trigger_default_is_click(self, mock_gamepad):
         assert mock_gamepad._app_btn_mode_trigger == "BTN_MODE_CLICK"
 
-    def test_on_btn_mode_long_emits_signal(self, mock_gamepad):
+    def test_recall_is_wired_to_btn_mode_signal(self, mock_gamepad):
         fired = []
         mock_gamepad.btn_mode_pressed.connect(lambda: fired.append(True))
-        mock_gamepad._on_btn_mode_long()
+        mock_gamepad._recall.press(kasual_active=True, trigger="BTN_MODE_HOLD_1S")
         assert fired == [True]
-
-    def test_on_btn_mode_long_sets_flag(self, mock_gamepad):
-        mock_gamepad._on_btn_mode_long()
-        assert mock_gamepad._btn_mode_long is True
-
-    def test_btn_mode_long_flag_false_initially(self, mock_gamepad):
-        assert mock_gamepad._btn_mode_long is False

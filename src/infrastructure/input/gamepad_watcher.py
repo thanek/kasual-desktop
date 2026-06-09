@@ -7,6 +7,8 @@ from typing import Callable
 from PyQt6.QtCore import pyqtSignal, QObject
 from evdev import InputDevice, InputEvent, UInput, ecodes, list_devices
 
+from application.input_focus import InputFocusStack
+from application.recall_trigger import RecallTrigger
 from domain.input import Event, Trigger
 
 logger = logging.getLogger(__name__)
@@ -15,7 +17,6 @@ STICK_THRESHOLD = 10000   # analog axis range: -32768..32767
 STICK_RESET     = 6000    # hysteresis — below this value the axis is "centered"
 
 VIRTUAL_DEVICE_NAME   = "kasual-vpad"
-BTN_MODE_HOLD_SECONDS = 1.0   # how long BTN_MODE must be held to trigger the menu
 
 # Recall-trigger vocabulary lives in domain.input.Trigger; re-exported here for
 # the historical import sites (kept str-compatible).
@@ -51,11 +52,9 @@ class GamepadWatcher(QObject):
 
     def __init__(self, parent: QObject | None = None):
         super().__init__(parent)
-        self._handlers: list[Callable[[str], None]] = []
+        self._stack = InputFocusStack()   # who receives navigation events (LIFO)
+        self._recall = RecallTrigger(on_recall=self.btn_mode_pressed.emit)
         self._lock = threading.Lock()
-        self._suppress_uinput: bool = False   # True when Desktop is active
-        self._btn_mode_timer:   threading.Timer | None = None
-        self._btn_mode_long:    bool                  = False   # True once hold threshold passed
         self._app_btn_mode_trigger: str               = Trigger.CLICK
         self._device: InputDevice | None              = None
         self._refresh_requested: bool                 = False
@@ -65,32 +64,24 @@ class GamepadWatcher(QObject):
     # ── Public API ─────────────────────────────────────────────────────────
 
     def push_handler(self, handler: Callable[[str], None]) -> None:
-        with self._lock:
-            if handler in self._handlers:
-                self._handlers.remove(handler)
-            self._handlers.append(handler)
-            self._suppress_uinput = True   # our UI is active → block keys to gamepad
+        self._stack.push(handler)
 
     def pop_handler(self, handler: Callable[[str], None]) -> None:
-        with self._lock:
-            if handler in self._handlers:
-                self._handlers.remove(handler)
-            self._suppress_uinput = bool(self._handlers)  # False when stack is empty (app in control)
+        self._stack.pop(handler)
 
     def inject(self, event: str) -> None:
         """Inject a navigation event (e.g. from keyboard) into the active handler."""
-        self._dispatch(event)
+        self._stack.dispatch(event)
 
     def top_handler(self) -> Callable[[str], None] | None:
         """Return the handler currently receiving events, or None if the stack is empty."""
-        with self._lock:
-            return self._handlers[-1] if self._handlers else None
+        return self._stack.top()
 
     def set_app_btn_mode_trigger(self, trigger: str) -> None:
         """Set the BTN_MODE recall trigger for the currently active app.
 
         trigger: BTN_MODE_CLICK   — fire immediately on press (default)
-                 BTN_MODE_HOLD_1S — require BTN_MODE_HOLD_SECONDS hold
+                 BTN_MODE_HOLD_1S — require a hold (see RecallTrigger.HOLD_SECONDS)
         """
         with self._lock:
             self._app_btn_mode_trigger = trigger
@@ -111,16 +102,8 @@ class GamepadWatcher(QObject):
 
     # ── Internal ───────────────────────────────────────────────────────────
 
-    def _on_btn_mode_long(self) -> None:
-        """Called from threading.Timer after BTN_MODE_HOLD_SECONDS — triggers Kasual menu."""
-        self._btn_mode_long = True
-        self.btn_mode_pressed.emit()
-
     def _dispatch(self, event: str) -> None:
-        with self._lock:
-            handler = self._handlers[-1] if self._handlers else None
-        if handler:
-            handler(event)
+        self._stack.dispatch(event)
 
     def _loop(self) -> None:
         device: InputDevice | None = None
@@ -198,10 +181,7 @@ class GamepadWatcher(QObject):
                                 refresh_now = False
                         if refresh_now:
                             logger.info("Gamepad refresh — closing %s and rescanning", device.path)
-                            if self._btn_mode_timer is not None:
-                                self._btn_mode_timer.cancel()
-                                self._btn_mode_timer = None
-                            self._btn_mode_long = False
+                            self._recall.cancel()
                             refresh_started_at = time.monotonic()
                             try:
                                 device.close()
@@ -232,49 +212,34 @@ class GamepadWatcher(QObject):
 
                             elif ev.type == ecodes.EV_KEY and ev.code == ecodes.BTN_MODE:
                                 # BTN_MODE is never forwarded to virtual gamepad in real-time.
-                                # Short press  → synthetic press+release sent on release (Steam reacts).
-                                # Long press   → btn_mode_pressed signal (Kasual menu); nothing to Steam.
+                                # The recall policy decides press → menu now / hold / nothing;
+                                # a short press that didn't recall is forwarded on release
+                                # (synthetic press+release, so Steam reacts).
                                 if ev.value == 1:
-                                    self._btn_mode_long = False
                                     with self._lock:
-                                        kasual_active = self._suppress_uinput
-                                        trigger       = self._app_btn_mode_trigger
-                                    if kasual_active or trigger == BTN_MODE_CLICK:
-                                        self._on_btn_mode_long()
-                                    else:
-                                        # BTN_MODE_HOLD_1S — wait for hold threshold
-                                        self._btn_mode_timer = threading.Timer(
-                                            BTN_MODE_HOLD_SECONDS, self._on_btn_mode_long
-                                        )
-                                        self._btn_mode_timer.start()
+                                        trigger = self._app_btn_mode_trigger
+                                    self._recall.press(
+                                        kasual_active=self._stack.suppressed,
+                                        trigger=trigger,
+                                    )
                                 elif ev.value == 0:
-                                    if self._btn_mode_timer is not None:
-                                        self._btn_mode_timer.cancel()
-                                        self._btn_mode_timer = None
-                                    if not self._btn_mode_long and uinput:
-                                        # Short press — forward to virtual gamepad now
-                                        with self._lock:
-                                            suppress_now = self._suppress_uinput
-                                        if not suppress_now:
-                                            uinput.write(ecodes.EV_KEY, ecodes.BTN_MODE, 1)
-                                            uinput.syn()
-                                            uinput.write(ecodes.EV_KEY, ecodes.BTN_MODE, 0)
-                                            uinput.syn()
+                                    forward = self._recall.release(
+                                        suppressed=self._stack.suppressed
+                                    )
+                                    if forward and uinput:
+                                        uinput.write(ecodes.EV_KEY, ecodes.BTN_MODE, 1)
+                                        uinput.syn()
+                                        uinput.write(ecodes.EV_KEY, ecodes.BTN_MODE, 0)
+                                        uinput.syn()
 
                             else:
                                 # Forward to virtual gamepad (unless our UI is active)
-                                if uinput:
-                                    with self._lock:
-                                        suppress_now = self._suppress_uinput
-                                    if not suppress_now:
-                                        uinput.write(ev.type, ev.code, ev.value)
+                                if uinput and not self._stack.suppressed:
+                                    uinput.write(ev.type, ev.code, ev.value)
                                 self._translate(ev, held, stick, pending)
 
                 except OSError:
-                    if self._btn_mode_timer is not None:
-                        self._btn_mode_timer.cancel()
-                        self._btn_mode_timer = None
-                    self._btn_mode_long = False
+                    self._recall.cancel()
                     logger.info("Gamepad disconnected")
                     device = None
                     with self._lock:
