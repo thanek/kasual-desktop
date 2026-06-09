@@ -8,8 +8,10 @@ from PyQt6.QtWidgets import (
     QWidget, QPushButton, QVBoxLayout, QLabel, QSizePolicy,
 )
 
+from application.menu_cursor import MenuCursor
 from domain.input import Event
 from infrastructure.audio import sound_player
+from infrastructure.audio.feedback import SoundFeedback
 from infrastructure.input.gamepad_watcher import GamepadWatcher
 from infrastructure.system.system_actions import ACTIONS, ActionDeps, ActionRunner
 from infrastructure.qt.ui import styles
@@ -69,7 +71,17 @@ class HomeOverlay(QWidget):
     ):
         super().__init__()
         self._gamepad = gamepad
-        self._index   = 0
+        # Vertical menu navigation (index + move/select/dismiss) lives in the
+        # application layer; this widget owns only presentation. wrap=True — the
+        # home menu wraps around its ends.
+        self._cursor = MenuCursor(
+            count=lambda: len(self._items),
+            render=self._render_selection,
+            on_activate=self._activate,
+            on_dismiss=self._dismiss,
+            feedback=SoundFeedback(),
+            wrap=True,
+        )
         # Confirmation UI: prefer an injected show_confirm (the Desktop's tracked
         # dialog manager) so action dialogs are owned and cleaned up centrally.
         # Falls back to a standalone ConfirmDialog when none is provided (e.g.
@@ -153,8 +165,7 @@ class HomeOverlay(QWidget):
             return
         self._on_cancel = on_cancel
         self._rebuild_buttons(items or [])
-        self._index = 0
-        self._refresh_buttons()
+        self._cursor.reset(0)
         self._gamepad.push_handler(self._handle_pad)
         sound_player.play("popup_open")
         self.showFullScreen()
@@ -213,36 +224,34 @@ class HomeOverlay(QWidget):
             self._buttons_layout.addWidget(btn)
             self._buttons.append(btn)
 
-    # ── Gamepad handler ────────────────────────────────────────────────────
+    # ── Selection (delegated to the application-layer cursor) ────────────────
+
+    @property
+    def _index(self) -> int:
+        return self._cursor.index
+
+    @_index.setter
+    def _index(self, value: int) -> None:
+        self._cursor.index = value
 
     def _handle_pad(self, event: str) -> None:
-        if event == Event.UP:
-            self._index = (self._index - 1) % len(self._items)
-            self._refresh_buttons()
-            sound_player.play("cursor")
-        elif event == Event.DOWN:
-            self._index = (self._index + 1) % len(self._items)
-            self._refresh_buttons()
-            sound_player.play("cursor")
-        elif event == Event.SELECT:
-            self._activate(self._index)
-        elif event in (Event.CANCEL, Event.CLOSE):
-            self._dismiss()
+        self._cursor.handle_pad(event)
 
     # ── Keyboard ───────────────────────────────────────────────────────────
 
+    _KEY_MAP = {
+        Qt.Key.Key_Up:     Event.UP,
+        Qt.Key.Key_Down:   Event.DOWN,
+        Qt.Key.Key_Return: Event.SELECT,
+        Qt.Key.Key_Enter:  Event.SELECT,
+        Qt.Key.Key_Escape: Event.CANCEL,
+        Qt.Key.Key_F1:     Event.CANCEL,
+    }
+
     def keyPressEvent(self, event: QKeyEvent) -> None:
-        key = event.key()
-        if key == Qt.Key.Key_Up:
-            self._index = (self._index - 1) % len(self._items)
-            self._refresh_buttons()
-        elif key == Qt.Key.Key_Down:
-            self._index = (self._index + 1) % len(self._items)
-            self._refresh_buttons()
-        elif key in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
-            self._activate(self._index)
-        elif key in (Qt.Key.Key_Escape, Qt.Key.Key_F1):
-            self._dismiss()
+        mapped = self._KEY_MAP.get(event.key())
+        if mapped is not None:
+            self._cursor.handle_pad(mapped)
 
     # ── Actions ────────────────────────────────────────────────────────────
 
@@ -276,14 +285,11 @@ class HomeOverlay(QWidget):
             super().mousePressEvent(event)
 
     def _on_hover(self, idx: int) -> None:
-        if self._index != idx:
-            self._index = idx
-            self._refresh_buttons()
-            sound_player.play("cursor")
+        self._cursor.hover(idx)
 
-    def _refresh_buttons(self) -> None:
+    def _render_selection(self, index: int) -> None:
         for i, btn in enumerate(self._buttons):
             btn.setStyleSheet(
-                styles.home_menu_item_selected() if i == self._index
+                styles.home_menu_item_selected() if i == index
                 else styles.home_menu_item_normal()
             )

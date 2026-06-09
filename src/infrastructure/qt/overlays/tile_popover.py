@@ -6,8 +6,10 @@ from collections.abc import Callable
 from PyQt6.QtCore import Qt, QEvent, QPoint, QRect, pyqtSignal
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QPushButton, QApplication
 
+from application.menu_cursor import MenuCursor
 from domain.input import Event
 from infrastructure.audio import sound_player
+from infrastructure.audio.feedback import SoundFeedback
 from infrastructure.input.gamepad_watcher import GamepadWatcher
 from infrastructure.qt.ui import styles
 
@@ -28,8 +30,17 @@ class TilePopoverMenu(QWidget):
         super().__init__(parent)
         self._options = options
         self._gamepad = gamepad
-        self._idx = 0
         self._closed = False
+        # Vertical menu navigation lives in the application layer; this widget
+        # owns only presentation. wrap=False — the popover clamps at its ends.
+        self._cursor = MenuCursor(
+            count=lambda: len(self._options),
+            render=self._render_selection,
+            on_activate=self._on_btn_clicked,
+            on_dismiss=self._dismiss,
+            feedback=SoundFeedback(),
+            wrap=False,
+        )
 
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground)
         self.setStyleSheet("background: transparent;")
@@ -66,7 +77,7 @@ class TilePopoverMenu(QWidget):
             self._buttons.append(btn)
 
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
-        self._refresh_style()
+        self._cursor.reset(0)
         self._gamepad.push_handler(self._handle_pad)
         sound_player.play("popup_open")
         QApplication.instance().installEventFilter(self)
@@ -88,20 +99,7 @@ class TilePopoverMenu(QWidget):
     # ── Gamepad handler ────────────────────────────────────────────────────
 
     def _handle_pad(self, event: str) -> None:
-        if event == Event.UP and self._idx > 0:
-            self._idx -= 1
-            self._refresh_style()
-            sound_player.play("cursor")
-        elif event == Event.DOWN and self._idx < len(self._options) - 1:
-            self._idx += 1
-            self._refresh_style()
-            sound_player.play("cursor")
-        elif event == Event.SELECT:
-            _, callback = self._options[self._idx]
-            self._dismiss(play_sound=False)
-            callback()
-        elif event in (Event.CANCEL, Event.CLOSE):
-            self._dismiss()
+        self._cursor.handle_pad(event)
 
     # ── Internal ───────────────────────────────────────────────────────────
 
@@ -116,22 +114,19 @@ class TilePopoverMenu(QWidget):
             self.hide()
             self.deleteLater()
 
+    _KEY_MAP = {
+        Qt.Key.Key_Up:     Event.UP,
+        Qt.Key.Key_Down:   Event.DOWN,
+        Qt.Key.Key_Return: Event.SELECT,
+        Qt.Key.Key_Enter:  Event.SELECT,
+        Qt.Key.Key_Escape: Event.CANCEL,
+        Qt.Key.Key_Q:      Event.CANCEL,
+    }
+
     def keyPressEvent(self, event) -> None:
-        key = event.key()
-        if key == Qt.Key.Key_Up and self._idx > 0:
-            self._idx -= 1
-            self._refresh_style()
-            sound_player.play("cursor")
-        elif key == Qt.Key.Key_Down and self._idx < len(self._options) - 1:
-            self._idx += 1
-            self._refresh_style()
-            sound_player.play("cursor")
-        elif key in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
-            _, callback = self._options[self._idx]
-            self._dismiss(play_sound=False)
-            callback()
-        elif key in (Qt.Key.Key_Escape, Qt.Key.Key_Q):
-            self._dismiss()
+        mapped = self._KEY_MAP.get(event.key())
+        if mapped is not None:
+            self._cursor.handle_pad(mapped)
 
     def eventFilter(self, obj, event) -> bool:
         if (event.type() == QEvent.Type.MouseButtonPress
@@ -149,14 +144,11 @@ class TilePopoverMenu(QWidget):
         callback()
 
     def _on_hover(self, idx: int) -> None:
-        if self._idx != idx:
-            self._idx = idx
-            self._refresh_style()
-            sound_player.play("cursor")
+        self._cursor.hover(idx)
 
-    def _refresh_style(self) -> None:
+    def _render_selection(self, index: int) -> None:
         for i, btn in enumerate(self._buttons):
-            if i == self._idx:
+            if i == index:
                 btn.setStyleSheet(styles.home_menu_item_selected())
             else:
                 btn.setStyleSheet(styles.home_menu_item_normal())
