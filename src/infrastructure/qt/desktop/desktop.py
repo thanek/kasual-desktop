@@ -5,9 +5,8 @@ from PyQt6.QtCore import Qt, QTimer, QEvent
 from PyQt6.QtGui import QPainter, QColor
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QApplication
 
-from infrastructure.audio import sound_player
 from domain.app import App
-from domain.foreground import ForegroundState
+from domain.desktop_state import DesktopState
 from domain.input import Event
 from domain.target import AppTarget, Target
 from infrastructure.input.gamepad_watcher import GamepadWatcher
@@ -22,9 +21,11 @@ from infrastructure.system.volume import PactlVolumeControl
 from infrastructure.system.window_manager import KWinWindowManager
 from infrastructure.qt.ui.layer_shell import make_layer_surface, Layer, Anchor, Keyboard
 from infrastructure.qt.ui.action_view import make_action_confirm
+from application.desktop import Desktop as DesktopCoordinator
 from application.lifecycle import AppLifecycle
 from application.navigation import FocusNavigator
 from application.system_actions import ActionDeps, ActionRunner
+from application.tile_menu import CLOSE, LAUNCH, RESTORE, compose_tile_menu
 from infrastructure.audio.feedback import SoundFeedback
 from infrastructure.qt.prompts import QtPrompts
 from infrastructure.qt.scheduler import QtScheduler
@@ -68,11 +69,11 @@ class Desktop(QWidget):
         self._confirm_dialog = None
         self._volume_overlay = None
         self._tile_popover   = None
-        self._is_paused      = False
 
-        # What the BTN_MODE menu will target: an AppTarget / WindowTarget, or
-        # idle on the bare Desktop. Owns its own clear-on-finish/fail transitions.
-        self._foreground = ForegroundState()
+        # Desktop visibility + paused + what the BTN_MODE menu targets (foreground).
+        # The foreground is shared by reference with the AppLifecycle coordinator.
+        self._state      = DesktopState()
+        self._foreground = self._state.foreground
 
         self.setWindowTitle("Kasual Desktop")
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint)
@@ -132,6 +133,10 @@ class Desktop(QWidget):
             feedback=self._feedback,
             prompts=QtPrompts(),
         )
+        # Coordinates show/pause/resume of the Desktop surface (this widget = view).
+        self._desktop = DesktopCoordinator(
+            state=self._state, view=self, feedback=self._feedback,
+        )
         self._tilebar.activated.connect(self._lifecycle.on_tile_activated)
         self._tilebar.windows_changed.connect(self._lifecycle.check_active_dyn_gone)
         self._app_manager.app_finished.connect(self._lifecycle.on_app_finished)
@@ -164,42 +169,20 @@ class Desktop(QWidget):
 
     def show_desktop(self) -> None:
         """Show the desktop without interrupting the running application."""
-        self._foreground.clear()
-        self._gamepad.push_handler(self._handle_pad)
-        self._wm.refresh_now()
-        self.showFullScreen()
-        self._restore_overlays()
-        self.activateWindow()
+        self._desktop.show_desktop()
+
+    def pause(self) -> None:
+        """Hide the Desktop without disconnecting the gamepad (minimize to tray)."""
+        self._desktop.pause()
+
+    def resume(self) -> None:
+        """Restore the Desktop after reconnecting the gamepad — without resetting state."""
+        self._desktop.resume()
 
     @property
     def _active_overlays(self) -> list[BaseOverlay]:
         """Active overlays (those that can be paused/resumed)."""
         return [o for o in (self._volume_overlay, self._confirm_dialog) if o is not None]
-
-    def pause(self) -> None:
-        """Hide the Desktop without disconnecting the gamepad (minimize to tray)."""
-        sound_player.play("exit")
-        self._is_paused = True
-        for overlay in self._active_overlays:
-            overlay.pause()
-        self._gamepad.pop_handler(self._handle_pad)
-        self.hide()
-
-    def resume(self) -> None:
-        """Restore the Desktop after reconnecting the gamepad — without resetting state."""
-        self._gamepad.push_handler(self._handle_pad)
-        sound_player.play("start")
-        self.showFullScreen()
-        self._restore_overlays()
-        self.activateWindow()
-
-    def _restore_overlays(self) -> None:
-        """Restore overlays hidden by pause(). No-op if we were not paused."""
-        if not self._is_paused:
-            return
-        self._is_paused = False
-        for overlay in self._active_overlays:
-            overlay.resume()
 
     def current_app(self) -> Target | None:
         """Returns the currently active foreground Target, or None if on desktop."""
@@ -228,6 +211,23 @@ class Desktop(QWidget):
 
     def hide_view(self) -> None:
         self.hide()
+
+    def take_input(self) -> None:
+        self._gamepad.push_handler(self._handle_pad)
+
+    def release_input(self) -> None:
+        self._gamepad.pop_handler(self._handle_pad)
+
+    def refresh_windows(self) -> None:
+        self._wm.refresh_now()
+
+    def pause_overlays(self) -> None:
+        for overlay in self._active_overlays:
+            overlay.pause()
+
+    def resume_overlays(self) -> None:
+        for overlay in self._active_overlays:
+            overlay.resume()
 
     def close_active_dialog(self) -> None:
         self._close_active_dialog()
@@ -330,17 +330,19 @@ class Desktop(QWidget):
     # ── Closing an application ─────────────────────────────────────────────
 
     def _show_tile_popover(self) -> None:
-        """Show a context popover above the focused tile."""
+        """Show a context popover above the focused tile.
+
+        The *which entries* rule lives in application.compose_tile_menu; here we
+        only render each abstract entry into a (label, callback) the widget shows.
+        """
         ctx = self._tilebar.current_context()
         if ctx is None:
             return
-        options: list[tuple[str, object]] = []
-
-        if isinstance(ctx, AppTarget) and not self._tilebar.is_tile_running(ctx.index):
-            options.append((self.tr("Launch"), self._tilebar.select_current))
-        else:
-            options.append((self.tr("Restore"), self._tilebar.select_current))
-            options.append((self.tr("Close"),   self._close_focused_tile))
+        is_running = (
+            self._tilebar.is_tile_running(ctx.index)
+            if isinstance(ctx, AppTarget) else True
+        )
+        options = [self._render_tile_entry(e) for e in compose_tile_menu(ctx, is_running)]
 
         popover = TilePopoverMenu(
             options=options,
@@ -353,6 +355,15 @@ class Desktop(QWidget):
 
     def _on_tile_popover_closed(self) -> None:
         self._tile_popover = None
+
+    def _render_tile_entry(self, entry) -> tuple[str, object]:
+        """Render an abstract tile-menu entry into a (label, callback) pair."""
+        if entry.kind == LAUNCH:
+            return self.tr("Launch"), self._tilebar.select_current
+        if entry.kind == RESTORE:
+            return self.tr("Restore"), self._tilebar.select_current
+        # CLOSE
+        return self.tr("Close"), self._close_focused_tile
 
     def _close_focused_tile(self) -> None:
         """Close the application represented by the currently focused tile."""

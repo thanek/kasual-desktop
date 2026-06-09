@@ -12,20 +12,10 @@ lifecycle) stays in the Application wiring; this owns only the composition rule:
 from dataclasses import dataclass
 
 from domain.target import Target
-
-# Entry kinds — the Application maps each to an icon, label and callback.
-RETURN_TO_APP     = "return_to_app"
-CLOSE_APP         = "close_app"
-RETURN_TO_DESKTOP = "return_to_desktop"
-
-
-@dataclass(frozen=True)
-class MenuEntry:
-    """One abstract menu entry. `name` carries the app/window title for the
-    app-control entries (return / close); empty for return-to-desktop."""
-
-    kind: str
-    name: str = ""
+# Re-exported so existing importers keep using `application.home_menu`.
+from application.menu import (  # noqa: F401
+    CLOSE_APP, RETURN_TO_APP, RETURN_TO_DESKTOP, MenuEntry,
+)
 
 
 @dataclass(frozen=True)
