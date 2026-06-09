@@ -1,11 +1,14 @@
 """Domain model for a configured, launchable application.
 
-Pure Python — no Qt, no I/O. Built by ``system.app_config`` from a ``.desktop``
-file and consumed by the Desktop / TileBar / AppManager. Replaces the loose
-``dict`` that used to carry these fields around with stringly-typed keys.
+Pure Python — no Qt, no I/O. The freedesktop ``.desktop`` format is part of the
+problem domain (Kasual is a launcher of freedesktop app definitions), so the
+*rules* for turning a ``[Desktop Entry]`` into an :class:`App` live here, in
+:meth:`App.from_desktop_entry`. Only the file/``configparser`` I/O stays in the
+``system.app_config`` adapter, which feeds raw key→value mappings to this.
 """
 
 import os
+import shlex
 from dataclasses import dataclass, field
 from collections.abc import Mapping
 
@@ -15,6 +18,16 @@ from domain.input import Trigger
 # aliases stay for the existing importers (App default, Target, tests).
 TRIGGER_CLICK   = Trigger.CLICK
 TRIGGER_HOLD_1S = Trigger.HOLD_1S
+
+# freedesktop Exec field codes — meaningless for our launcher (we pass no files
+# or URLs), so they are stripped. See the Desktop Entry Specification.
+_FIELD_CODES = {
+    "%f", "%F", "%u", "%U", "%i", "%c", "%k",
+    "%d", "%D", "%n", "%N", "%v", "%m",
+}
+
+# Apps without X-Kasual-Order sort after explicitly-ordered ones (ties: filename).
+ORDER_DEFAULT = 10_000
 
 
 @dataclass(frozen=True)
@@ -36,3 +49,83 @@ class App:
         """Lowercased basename of the command — used to match KWin windows
         (resourceClass / desktopFile) back to this app."""
         return os.path.basename(self.command).lower()
+
+    @classmethod
+    def from_desktop_entry(cls, entry: Mapping[str, str]) -> "tuple[int, App] | None":
+        """Build an :class:`App` from a freedesktop ``[Desktop Entry]`` mapping.
+
+        Applies the standard's rules as Kasual uses them: skip entries that are
+        not application tiles, strip Exec field codes, read the ``X-Kasual-*``
+        extensions, fall back to defaults. Returns ``(order, app)`` — *order* is
+        the placement key (``X-Kasual-Order``, default :data:`ORDER_DEFAULT`).
+
+        Returns ``None`` for entries that are deliberately not tiles (``Type``
+        other than Application, ``NoDisplay``/``Hidden`` true). Raises
+        :class:`ValueError` for a malformed entry (no usable ``Name``/``Exec``),
+        which the loader surfaces as a warning. Pure — no I/O, no logging.
+        """
+        if entry.get("Type", "Application") != "Application":
+            return None
+        if (entry.get("NoDisplay") or "").strip().lower() == "true":
+            return None
+        if (entry.get("Hidden") or "").strip().lower() == "true":
+            return None
+
+        name     = (entry.get("Name") or "").strip()
+        exec_str = (entry.get("Exec") or "").strip()
+        if not name or not exec_str:
+            raise ValueError("missing Name or Exec")
+
+        command, args = _parse_exec(exec_str)
+        if command is None:
+            raise ValueError("empty Exec after parsing")
+
+        app = cls(
+            name=name,
+            command=command,
+            args=tuple(args),
+            icon=(entry.get("X-Kasual-Icon") or "").strip() or None,
+            icon_theme=(entry.get("Icon") or "").strip() or None,
+            color=(entry.get("X-Kasual-Color") or "").strip() or "#2e3440",
+            recall_menu_trigger=(entry.get("X-Kasual-RecallMenuTrigger") or "").strip()
+                                or TRIGGER_CLICK,
+            launch_hide_grace_ms=_parse_int(entry.get("X-Kasual-HideGraceMs"), 0),
+            env=_parse_env(entry.get("X-Kasual-Env")),
+        )
+        order = _parse_int(entry.get("X-Kasual-Order"), ORDER_DEFAULT)
+        return order, app
+
+
+def _parse_exec(exec_str: str) -> "tuple[str | None, list[str]]":
+    """Split a desktop ``Exec`` value into (command, args), dropping field codes."""
+    cleaned: list[str] = []
+    for token in shlex.split(exec_str):
+        if token in _FIELD_CODES:
+            continue
+        cleaned.append(token.replace("%%", "%"))
+    if not cleaned:
+        return None, []
+    return cleaned[0], cleaned[1:]
+
+
+def _parse_env(raw: str | None) -> dict:
+    """Parse ``X-Kasual-Env`` (``KEY1=val1;KEY2=val2``) into a dict."""
+    env: dict[str, str] = {}
+    if not raw:
+        return env
+    for part in raw.split(";"):
+        part = part.strip()
+        if not part or "=" not in part:
+            continue
+        key, _, value = part.partition("=")
+        key = key.strip()
+        if key:
+            env[key] = value
+    return env
+
+
+def _parse_int(raw: str | None, default: int) -> int:
+    try:
+        return int(raw.strip())
+    except (ValueError, AttributeError):
+        return default

@@ -1,8 +1,13 @@
-"""Tests for the .desktop app loader (system.app_config)."""
+"""Tests for the .desktop app loader (system.app_config).
+
+The freedesktop→App mapping rules are tested directly against the domain factory
+in test_domain_app.py (TestFromDesktopEntry / Exec / Env). Here we cover the
+loader: directory handling, file parsing, ordering and resilience to bad files.
+"""
 
 import pytest
 
-from infrastructure.system.app_config import load_apps, _parse_exec, _parse_env
+from infrastructure.system.app_config import load_apps
 
 
 def _write(directory, filename, content):
@@ -16,44 +21,6 @@ def apps_root(tmp_path, monkeypatch):
     d = tmp_path / "kasual-desktop" / "apps"
     d.mkdir(parents=True)
     return d
-
-
-# ── Exec parsing ────────────────────────────────────────────────────────────
-
-class TestExecParsing:
-    def test_command_and_args(self):
-        assert _parse_exec("steam steam://open/bigpicture") == (
-            "steam", ["steam://open/bigpicture"]
-        )
-
-    def test_field_codes_stripped(self):
-        assert _parse_exec("firefox --kiosk %U") == ("firefox", ["--kiosk"])
-
-    def test_quoted_args(self):
-        assert _parse_exec('app "a b" c') == ("app", ["a b", "c"])
-
-    def test_escaped_percent(self):
-        assert _parse_exec("app 50%%") == ("app", ["50%"])
-
-    def test_empty(self):
-        assert _parse_exec("   ") == (None, [])
-
-
-# ── Env parsing ───────────────────────────────────────────────────────────────
-
-class TestEnvParsing:
-    def test_basic(self):
-        assert _parse_env("A=1;B=2") == {"A": "1", "B": "2"}
-
-    def test_none_and_empty(self):
-        assert _parse_env(None) == {}
-        assert _parse_env("") == {}
-
-    def test_ignores_malformed(self):
-        assert _parse_env("A=1;garbage;B=2") == {"A": "1", "B": "2"}
-
-    def test_value_keeps_equals(self):
-        assert _parse_env("URL=http://x?a=b") == {"URL": "http://x?a=b"}
 
 
 # ── load_apps ─────────────────────────────────────────────────────────────────
