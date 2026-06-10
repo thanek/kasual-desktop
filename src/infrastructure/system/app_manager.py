@@ -5,14 +5,24 @@ import subprocess
 import threading
 import time
 from collections.abc import Mapping, Sequence
+from typing import _ProtocolMeta  # type: ignore[attr-defined]
 
 from PyQt6.QtCore import QObject, QTimer, pyqtSignal
+
+from ports import ProcessManager
 
 logger = logging.getLogger(__name__)
 
 
-class AppManager(QObject):
-    """Manages multiple concurrently running applications."""
+class _Meta(type(QObject), _ProtocolMeta):
+    """Combined metaclass so a QObject can declare it implements a Protocol port."""
+
+
+class AppManager(QObject, ProcessManager, metaclass=_Meta):
+    """Manages multiple concurrently running applications.
+
+    Implements the `ProcessManager` port the app-lifecycle coordinator drives.
+    """
 
     app_started       = pyqtSignal(int)        # idx
     app_finished      = pyqtSignal(int)        # idx

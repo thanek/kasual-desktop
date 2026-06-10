@@ -2,6 +2,7 @@
 
 import logging
 import os
+from typing import _ProtocolMeta  # type: ignore[attr-defined]
 
 from PyQt6.QtCore import Qt, QPoint, QTimer, pyqtSignal
 from PyQt6.QtGui import QCursor, QIcon
@@ -13,10 +14,15 @@ from domain.window import Window, external_windows, resolve_recall_trigger
 from infrastructure.system.app_manager import AppManager
 from infrastructure.system.window_manager import to_window
 from infrastructure.qt.ui import styles
+from ports import TileBarView, TileFocusView
 from .app_tile import AppTile, TILE_H, TILE_SEL_H
 from .window_icons import WindowIconResolver
 
 logger = logging.getLogger(__name__)
+
+
+class _Meta(type(QScrollArea), _ProtocolMeta):
+    """Combined metaclass so a QWidget can declare it implements a Protocol port."""
 
 _DYN_TILE_MAX_TITLE = 22   # Maximum length of a dynamic tile title
 
@@ -33,8 +39,10 @@ def _get_ppid(pid: int) -> int | None:
     return None
 
 
-class TileBar(QScrollArea):
+class TileBar(QScrollArea, TileBarView, TileFocusView, metaclass=_Meta):
     """Scrollable row of tiles: configured apps first, then open-window tiles.
+
+    Implements `TileBarView` (app-lifecycle) and `TileFocusView` (focus navigation).
 
     Navigation between the tile bar and the top bar lives in the Desktop
     coordinator; this widget only renders the highlight it is told to own via

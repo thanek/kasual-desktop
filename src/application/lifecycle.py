@@ -18,22 +18,14 @@ from __future__ import annotations
 import logging
 import os
 from collections.abc import Callable
-from typing import TYPE_CHECKING
 
 from domain.app import App, TRIGGER_CLICK
 from domain.foreground import ForegroundState
 from domain.target import AppTarget, Target, WindowTarget
-from ports import DesktopView, Feedback, Prompts, Scheduler
-
-if TYPE_CHECKING:
-    # Type-only: the application layer carries no runtime dependency on
-    # infrastructure. These are constructor annotations, resolved lazily thanks
-    # to `from __future__ import annotations`.
-    from infrastructure.input.gamepad_watcher import GamepadWatcher
-    from infrastructure.system.app_manager import AppManager
-    from infrastructure.system.window_manager import KWinWindowManager
-    from infrastructure.qt.desktop.deferred_hide import DeferredHide
-    from infrastructure.qt.desktop.tile_bar import TileBar
+from ports import (
+    DesktopView, Feedback, LaunchHide, PadControl, ProcessManager, Prompts,
+    Scheduler, TileBarView, WindowManager,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -48,13 +40,13 @@ class AppLifecycle:
     def __init__(
         self,
         view: DesktopView,
-        gamepad: GamepadWatcher,
-        window_manager: KWinWindowManager,
-        app_manager: AppManager,
+        gamepad: PadControl,
+        window_manager: WindowManager,
+        app_manager: ProcessManager,
         apps: list[App],
         foreground: ForegroundState,
-        deferred_hide: DeferredHide,
-        tilebar: TileBar,
+        deferred_hide: LaunchHide,
+        tilebar: TileBarView,
         pad_handler: Callable[[str], None],
         scheduler: Scheduler,
         feedback: Feedback,
@@ -170,19 +162,15 @@ class AppLifecycle:
         )
 
     def _close_app_windows(self, idx: int) -> None:
-        """Close all KWin windows belonging to a static app matched by command name.
+        """Close all windows belonging to a static app, matched by app identity.
 
-        Used when AppManager has no live process for the app — e.g. apps started
-        via a one-shot forwarder (steam://...) whose launcher exits immediately
-        while the real process continues under a different PID.
+        Used when the process manager has no live process for the app — e.g. apps
+        started via a one-shot forwarder (steam://...) whose launcher exits
+        immediately while the real process continues under a different PID.
         """
-        cmd = self._apps[idx].command_basename
-        matched = [
-            w['id'] for w in self._wm.cached_windows()
-            if w.get('resourceClass', '').lower() == cmd
-            or os.path.splitext(w.get('desktopFile', '').lower())[0] == cmd
-        ]
-        logger.info("Closing app %d via KWin windows %s (cmd=%s)", idx, matched, cmd)
+        app = self._apps[idx]
+        matched = [w.id for w in self._wm.cached_windows() if w.matches_app(app)]
+        logger.info("Closing app %d via windows %s (cmd=%s)", idx, matched, app.command_basename)
         for win_id in matched:
             self._wm.close_window(win_id)
         self._scheduler.call_later(1500, self._wm.refresh_now)

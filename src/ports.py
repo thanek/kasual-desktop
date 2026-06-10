@@ -5,8 +5,10 @@ This is the boundary that keeps the application/registry layer free of pactl,
 systemctl and Desktop internals.
 """
 
-from collections.abc import Callable
+from collections.abc import Callable, Mapping, Sequence
 from typing import Protocol
+
+from domain.window import Window
 
 
 class PowerControl(Protocol):
@@ -97,3 +99,91 @@ class Dismissable(Protocol):
     """Something that can be dismissed if currently shown (the Home Overlay)."""
 
     def hide_overlay(self) -> None: ...
+
+
+# ── App-lifecycle collaborators ──────────────────────────────────────────────
+# The capabilities AppLifecycle orchestrates, each behind a consumer-driven port
+# (only the methods the application layer actually calls). Keeps the lifecycle
+# coordinator free of KWin / evdev / process / Qt-widget detail; the production
+# adapters (KWinWindowManager, AppManager, GamepadWatcher, DeferredHide, TileBar)
+# declare these explicitly.
+
+
+class WindowManager(Protocol):
+    """Window management as the lifecycle drives it (KWinWindowManager)."""
+
+    def activate_window(self, window_id: str) -> None: ...
+    def close_window(self, window_id: str) -> None: ...
+    def cached_windows(self) -> list[Window]: ...
+    def refresh_now(self) -> None: ...
+    def raise_windows_for_pid_exact(self, pid: int) -> None: ...
+    def activate_windows_for_pids(self, pids: set[int]) -> None: ...
+    def minimize_windows_for_pids(self, pids: set[int]) -> None: ...
+
+
+class ProcessManager(Protocol):
+    """Launch / track / terminate the configured apps by index (AppManager)."""
+
+    def is_running(self, idx: int | None = None) -> bool: ...
+    def launch(
+        self,
+        idx: int,
+        command: str,
+        args: Sequence[object] = (),
+        env: Mapping[str, str] | None = None,
+    ) -> bool: ...
+    def running_pid(self, idx: int) -> int | None: ...
+    def all_running_pids(self) -> list[int]: ...
+    def terminate(self, idx: int) -> None: ...
+
+
+class PadControl(Protocol):
+    """Gamepad input control the lifecycle seizes/cedes (GamepadWatcher): the
+    handler stack, the per-app BTN_MODE trigger, and device re-binding."""
+
+    def set_app_btn_mode_trigger(self, trigger: str) -> None: ...
+    def push_handler(self, handler: Callable[[str], None]) -> None: ...
+    def pop_handler(self, handler: Callable[[str], None]) -> None: ...
+    def top_handler(self) -> Callable[[str], None] | None: ...
+    def refresh(self) -> None: ...
+
+
+class LaunchHide(Protocol):
+    """Deferred hide of the Desktop until a launched app's window maps (DeferredHide)."""
+
+    @property
+    def is_armed(self) -> bool: ...
+    def arm(self, idx: int) -> None: ...
+    def cancel(self) -> None: ...
+
+
+class TileBarView(Protocol):
+    """The tile bar as the lifecycle touches it (TileBar): running-status display
+    and dynamic-window presence queries."""
+
+    def set_static_closing(self, idx: int) -> None: ...
+    def refresh_status(self) -> None: ...
+    def has_dynamic_window(self, window_id: str) -> bool: ...
+
+
+# ── Focus-navigation collaborators ───────────────────────────────────────────
+# The tile bar and top bar as FocusNavigator drives them — moving focus/selection
+# and repainting the highlight. Separate, narrower role-interfaces than the
+# lifecycle's TileBarView (ISP): TileBar satisfies both.
+
+
+class TileFocusView(Protocol):
+    """The tile bar as focus navigation drives it (TileBar)."""
+
+    def move(self, delta: int) -> bool: ...
+    def select_current(self) -> None: ...
+    def set_focused(self, focused: bool, scroll: bool = True) -> None: ...
+
+
+class TopBarView(Protocol):
+    """The top bar as focus navigation drives it (TopBar)."""
+
+    @property
+    def count(self) -> int: ...
+    def set_selected(self, index: int | None) -> None: ...
+    def trigger(self, index: int) -> None: ...

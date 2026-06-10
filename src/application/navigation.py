@@ -4,31 +4,24 @@ Owns the focus mode ("tiles" | "topbar") and the top-bar selection index, and
 translates navigation events into tile/top-bar moves plus highlight repaint.
 
 Pure interaction logic (application layer): no Qt, no sound backend. It consumes
-domain `Event`s and drives the tile/top bars through their (duck-typed) view API,
-with cursor feedback via the injected `Feedback` port. The Qt-key→event
-translation lives at the edge — the Desktop's eventFilter.
+domain `Event`s and drives the tile/top bars through the `TileFocusView` /
+`TopBarView` ports, with cursor feedback via the injected `Feedback` port. The
+Qt-key→event translation lives at the edge — the Desktop's eventFilter.
 """
 
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import TYPE_CHECKING
 
 from domain.input import Event
-from ports import Feedback
-
-if TYPE_CHECKING:
-    # Type-only — the application layer carries no runtime dependency on the Qt
-    # widgets it drives; they are duck-typed at runtime (tests pass mocks).
-    from infrastructure.qt.desktop.tile_bar import TileBar
-    from infrastructure.qt.desktop.topbar import TopBar
+from ports import Feedback, TileFocusView, TopBarView
 
 
 class FocusNavigator:
     def __init__(
         self,
-        tilebar: TileBar,
-        topbar: TopBar,
+        tilebar: TileFocusView,
+        topbar: TopBarView,
         on_tile_menu: Callable[[], None],
         feedback: Feedback,
     ) -> None:

@@ -2,7 +2,7 @@ import logging
 import select
 import threading
 import time
-from typing import Callable
+from typing import Callable, _ProtocolMeta  # type: ignore[attr-defined]
 
 from PyQt6.QtCore import pyqtSignal, QObject
 from evdev import InputDevice, InputEvent, UInput, ecodes, list_devices
@@ -10,8 +10,13 @@ from evdev import InputDevice, InputEvent, UInput, ecodes, list_devices
 from application.input_focus import InputFocusStack
 from application.recall_trigger import RecallTrigger
 from domain.input import Event, Trigger
+from ports import PadControl
 
 logger = logging.getLogger(__name__)
+
+
+class _Meta(type(QObject), _ProtocolMeta):
+    """Combined metaclass so a QObject can declare it implements a Protocol port."""
 
 STICK_THRESHOLD = 10000   # analog axis range: -32768..32767
 STICK_RESET     = 6000    # hysteresis — below this value the axis is "centered"
@@ -24,9 +29,11 @@ BTN_MODE_CLICK   = Trigger.CLICK
 BTN_MODE_HOLD_1S = Trigger.HOLD_1S
 
 
-class GamepadWatcher(QObject):
+class GamepadWatcher(QObject, PadControl, metaclass=_Meta):
     """
     Reads events from a physical gamepad in a background thread.
+
+    Implements the `PadControl` port the app-lifecycle coordinator drives.
 
     The gamepad is always grabbed exclusively. All events except BTN_MODE
     are forwarded to a virtual gamepad (UInput, name: VIRTUAL_DEVICE_NAME),

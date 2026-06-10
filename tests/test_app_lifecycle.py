@@ -14,6 +14,7 @@ from application.lifecycle import AppLifecycle
 from domain.app import App, TRIGGER_CLICK, TRIGGER_HOLD_1S
 from domain.foreground import ForegroundState
 from domain.target import AppTarget, WindowTarget
+from domain.window import Window
 
 
 class FakeScheduler:
@@ -294,8 +295,8 @@ class TestRequestCloseApp:
         c = _make(apps=[_app(command="/usr/bin/steam")])
         c.am.is_running.return_value = False
         c.wm.cached_windows.return_value = [
-            {"id": "win1", "resourceClass": "Steam", "desktopFile": ""},
-            {"id": "win2", "resourceClass": "other", "desktopFile": ""},
+            Window(id="win1", title="", resource_class="Steam"),
+            Window(id="win2", title="", resource_class="other"),
         ]
         c.lc.request_close_app(AppTarget(index=0, name="Steam"))
         _, on_confirmed, _ = c.view.confirm

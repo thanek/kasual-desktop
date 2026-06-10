@@ -17,14 +17,21 @@ import logging
 import os
 import tempfile
 
+from typing import _ProtocolMeta  # type: ignore[attr-defined]
+
 from PyQt6.QtCore import QObject, QTimer, pyqtSignal, pyqtSlot
 from PyQt6.QtDBus import (
     QDBusConnection, QDBusInterface, QDBusMessage,
 )
 
 from domain.window import Window
+from ports import WindowManager
 
 logger = logging.getLogger(__name__)
+
+
+class _Meta(type(QObject), _ProtocolMeta):
+    """Combined metaclass so a QObject can declare it implements a Protocol port."""
 
 
 def to_window(d: dict) -> Window:
@@ -224,10 +231,12 @@ class _WindowListHost(QObject):
         bus.unregisterObject(_WL_PATH)
 
 
-class KWinWindowManager(QObject):
+class KWinWindowManager(QObject, WindowManager, metaclass=_Meta):
     """
     Manages windows via KWin D-Bus + one-shot KWin scripts.
     Wayland-native, no xdotool. Compatible with KDE Plasma 6.
+
+    Implements the `WindowManager` port the app-lifecycle coordinator drives.
     """
 
     windows_updated = pyqtSignal(list)   # list[dict]: id, title, pid
@@ -335,8 +344,10 @@ class KWinWindowManager(QObject):
     def window_exists(self, window_id: str) -> bool:
         return window_id in self._cache
 
-    def cached_windows(self) -> list[dict]:
-        return list(self._cache.values())
+    def cached_windows(self) -> list[Window]:
+        """Last known window list as domain Windows (the KWin dict shape stays
+        internal; callers in the application layer get the domain value object)."""
+        return [to_window(w) for w in self._cache.values()]
 
     def close(self) -> None:
         self.stop_refresh()

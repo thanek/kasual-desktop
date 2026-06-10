@@ -1,6 +1,7 @@
 """Top bar widget: date/clock readout and the row of system-action buttons."""
 
 from datetime import datetime
+from typing import _ProtocolMeta  # type: ignore[attr-defined]
 
 import qtawesome as qta
 from PyQt6.QtCore import Qt, QLocale, QTimer, QSize, pyqtSignal
@@ -9,13 +10,20 @@ from PyQt6.QtWidgets import QWidget, QPushButton, QHBoxLayout, QVBoxLayout, QLab
 from application.system_actions import ACTIONS
 from infrastructure.qt.ui.action_view import PRESENTATION
 from infrastructure.qt.ui import styles
+from ports import TopBarView
+
+
+class _Meta(type(QWidget), _ProtocolMeta):
+    """Combined metaclass so a QWidget can declare it implements a Protocol port."""
 
 BTN_SIZE    = 56
 BTN_SPACING = 14
 
 
-class TopBar(QWidget):
+class TopBar(QWidget, TopBarView, metaclass=_Meta):
     """Floating top bar — clock on the left/centre, action buttons on the right.
+
+    Implements the `TopBarView` port the focus navigator drives.
 
     Owns its own clock timer and action buttons. Navigation state (which button
     is focused) lives in the Desktop coordinator; the bar only renders the
