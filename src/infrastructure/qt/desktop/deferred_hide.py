@@ -1,13 +1,15 @@
 """Deferred hide of the Desktop until a freshly launched app's window is mapped."""
 
-import os
 from collections.abc import Callable
 
 from PyQt6.QtCore import QObject, QTimer
 
 from domain.app import App
+from domain.window import app_window_present
 from infrastructure.system.app_manager import AppManager
-from infrastructure.system.window_manager import KWinWindowManager, expand_pid_tree
+from infrastructure.system.window_manager import (
+    KWinWindowManager, expand_pid_tree, to_window,
+)
 
 _POLL_INTERVAL_MS = 150
 _GUARD_TIMEOUT_MS = 5000
@@ -97,22 +99,14 @@ class DeferredHide(QObject):
     def _app_window_present(self, idx: int, windows: list[dict]) -> bool:
         """True if `windows` contains a window belonging to launched app `idx`.
 
-        Matched by PID subtree (covers normal child windows), with a resource /
-        desktop-file fallback for forwarder launchers like `steam steam://...`
-        whose visible window runs under an unrelated PID.
-        """
-        pid  = self._app_manager.running_pid(idx)
-        pids = expand_pid_tree({pid}) if pid else set()
-        cmd  = self._apps[idx].command_basename
-        for w in windows:
-            wpid = w.get('pid')
-            if wpid and wpid in pids:
-                return True
-            rc = w.get('resourceClass', '').lower()
-            df = os.path.splitext(w.get('desktopFile', '').lower())[0]
-            if cmd and (rc == cmd or df == cmd):
-                return True
-        return False
+        The presence rule (PID subtree or app-identity match) lives in the
+        domain; this supplies its infrastructure inputs — the launch's PID
+        subtree (/proc) and the KWin dict→Window adaptation."""
+        pid   = self._app_manager.running_pid(idx)
+        owned = expand_pid_tree({pid}) if pid else set()
+        return app_window_present(
+            [to_window(w) for w in windows], self._apps[idx], owned,
+        )
 
     def _force(self) -> None:
         """Safety-timeout path: hide even if no window was detected."""

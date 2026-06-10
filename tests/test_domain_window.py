@@ -5,7 +5,9 @@ Pure rules, no Qt/KWin/proc — the process-parent lookup is injected.
 
 from domain.app import App, TRIGGER_CLICK, TRIGGER_HOLD_1S
 from domain.target import AppTarget, WindowTarget, target_at_index
-from domain.window import Window, external_windows, resolve_recall_trigger
+from domain.window import (
+    Window, app_window_present, external_windows, resolve_recall_trigger,
+)
 
 
 def _win(resource_class="", desktop_file="", pid=0):
@@ -61,6 +63,31 @@ class TestExternalWindows:
         managed = _win(resource_class="Steam", pid=2)
         ext2 = _win(resource_class="vlc", pid=3)
         assert external_windows([ext1, managed, ext2], self.APPS, self._never_owned) == [ext1, ext2]
+
+
+class TestAppWindowPresent:
+    """Has a just-launched app already mapped a window? (defer-hide rule)."""
+
+    APP = App(name="Foo", command="/usr/bin/foo")   # command_basename == "foo"
+
+    def test_present_by_owned_pid_subtree(self):
+        win = Window(id="w", title="t", pid=1001)
+        assert app_window_present([win], self.APP, {1000, 1001}) is True
+
+    def test_present_by_resource_class(self):
+        win = Window(id="w", title="t", pid=9, resource_class="foo")
+        assert app_window_present([win], self.APP, set()) is True
+
+    def test_present_by_desktop_file(self):
+        win = Window(id="w", title="t", pid=9, desktop_file="foo.desktop")
+        assert app_window_present([win], self.APP, set()) is True
+
+    def test_absent_when_neither_pid_nor_identity(self):
+        win = Window(id="w", title="t", pid=9, resource_class="bar", desktop_file="baz.desktop")
+        assert app_window_present([win], self.APP, set()) is False
+
+    def test_absent_with_no_windows(self):
+        assert app_window_present([], self.APP, {1000}) is False
 
 
 class TestTargetAtIndex:

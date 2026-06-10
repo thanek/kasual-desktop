@@ -22,7 +22,22 @@ from PyQt6.QtDBus import (
     QDBusConnection, QDBusInterface, QDBusMessage,
 )
 
+from domain.window import Window
+
 logger = logging.getLogger(__name__)
+
+
+def to_window(d: dict) -> Window:
+    """Adapt a KWin window-list entry (the dict shape produced by _LIST_SCRIPT)
+    to a domain Window. Lives here, beside the script that defines that shape."""
+    return Window(
+        id=str(d.get('id', '')),
+        title=str(d.get('title', '')),
+        pid=int(d.get('pid', 0) or 0),
+        active=bool(d.get('active', False)),
+        desktop_file=d.get('desktopFile', '') or '',
+        resource_class=d.get('resourceClass', '') or '',
+    )
 
 _KWIN_SVC   = 'org.kde.KWin'
 _KWIN_PATH  = '/KWin'

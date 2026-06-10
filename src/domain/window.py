@@ -60,6 +60,21 @@ def external_windows(
     return [w for w in windows if not managed(w)]
 
 
+def app_window_present(
+    windows:    Sequence[Window],
+    app:        App,
+    owned_pids: set[int],
+) -> bool:
+    """True if a just-launched *app* already has a mapped window — matched either
+    by process subtree (the window's pid is among *owned_pids*, the launch and
+    its descendants) or by app identity (``matches_app``). Each key covers cases
+    the other misses: forwarder launchers (e.g. ``steam steam://...``) show a
+    window under an unrelated pid but a matching class, while a bootstrap window
+    may carry the right pid before its class is set. The /proc subtree expansion
+    that fills *owned_pids* is infrastructure, computed by the caller."""
+    return any(w.pid in owned_pids or w.matches_app(app) for w in windows)
+
+
 def resolve_recall_trigger(
     pid:        int,
     pid_to_app: Mapping[int, App],

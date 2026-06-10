@@ -11,6 +11,7 @@ from domain.app import App
 from domain.target import Target, target_at_index
 from domain.window import Window, external_windows, resolve_recall_trigger
 from infrastructure.system.app_manager import AppManager
+from infrastructure.system.window_manager import to_window
 from infrastructure.qt.ui import styles
 from .app_tile import AppTile, TILE_H, TILE_SEL_H
 from .window_icons import WindowIconResolver
@@ -30,18 +31,6 @@ def _get_ppid(pid: int) -> int | None:
     except (OSError, ValueError):
         pass
     return None
-
-
-def _to_window(d: dict) -> Window:
-    """Adapt a KWin window-list entry (its dict shape) to a domain Window."""
-    return Window(
-        id=str(d.get('id', '')),
-        title=str(d.get('title', '')),
-        pid=int(d.get('pid', 0) or 0),
-        active=bool(d.get('active', False)),
-        desktop_file=d.get('desktopFile', '') or '',
-        resource_class=d.get('resourceClass', '') or '',
-    )
 
 
 class TileBar(QScrollArea):
@@ -220,7 +209,7 @@ class TileBar(QScrollArea):
         coordinator can re-check active state — e.g. reactivate the desktop when
         the last open window closes.
         """
-        windows = [_to_window(w) for w in raw_windows]
+        windows = [to_window(w) for w in raw_windows]
         self._last_windows = windows
 
         # Which windows earn a dynamic tile — the "external window" rule lives in
