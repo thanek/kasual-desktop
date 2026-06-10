@@ -1,7 +1,8 @@
 """Tests for compose_tile_menu — the tile Popover composition rule (pure, no Qt)."""
 
-from application.tile_menu import CLOSE, LAUNCH, RESTORE, compose_tile_menu
-from domain.target import AppTarget, WindowTarget
+from domain.menu.entry import CLOSE, LAUNCH, RESTORE
+from domain.menu.tile import compose_tile_menu
+from domain.catalog.target import AppTarget, WindowTarget
 
 
 class TestCompose:

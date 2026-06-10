@@ -1,38 +1,17 @@
-"""An open top-level window, and the rules relating windows to our apps.
+"""Rules relating the open-window list to our apps.
 
-`Window` is a pure value object — the compositor-agnostic view of an open window
-(the KWin/D-Bus dict→Window translation stays in the infrastructure adapter).
-The matching rules ("does this window belong to that app?", "which recall
-trigger does a window inherit?") survive a rewrite to another compositor, so
-they live here rather than in the tile bar widget.
+Compositor-agnostic decisions over a list of :class:`Window`s — which windows
+deserve their own dynamic tile, whether a just-launched app already has a mapped
+window, and which recall trigger a window inherits. They survive a rewrite to
+another compositor, so they live here rather than in the tile bar widget; the
+/proc and os.getpgid reads they need are injected from infrastructure.
 """
 
-import os
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass
 
-from domain.app import App
-from domain.input import Trigger
-
-
-@dataclass(frozen=True)
-class Window:
-    id:             str
-    title:          str
-    pid:            int  = 0
-    active:         bool = False
-    desktop_file:   str  = ""   # freedesktop desktopFileName (may include ".desktop")
-    resource_class: str  = ""   # X11/Wayland app id
-
-    def matches_app(self, app: App) -> bool:
-        """True if this window belongs to *app* by identity, via either key:
-        the resourceClass or the desktopFile basename matched against the app's
-        command basename. Two keys because each handles cases the other misses
-        (e.g. Steam self-relaunching loses one but keeps the other)."""
-        cmd = app.command_basename
-        rc  = self.resource_class.lower()
-        df  = os.path.splitext(self.desktop_file.lower())[0]
-        return rc == cmd or df == cmd
+from domain.catalog.app import App
+from domain.catalog.window import Window
+from domain.input.vocabulary import Trigger
 
 
 def external_windows(

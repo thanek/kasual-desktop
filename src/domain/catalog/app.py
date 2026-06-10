@@ -12,7 +12,7 @@ import shlex
 from dataclasses import dataclass, field
 from collections.abc import Mapping
 
-from domain.input import Trigger
+from domain.input.vocabulary import Trigger
 
 # Recall-menu triggers — canonical values live in domain.input.Trigger; these
 # aliases stay for the existing importers (App default, Target, tests).

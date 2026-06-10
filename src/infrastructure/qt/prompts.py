@@ -8,7 +8,7 @@ message logic moved off the Desktop widget into the application layer.
 from PyQt6.QtCore import QCoreApplication
 
 from infrastructure.qt.ui import styles
-from ports import Prompts
+from domain.lifecycle.prompts import Prompts
 
 
 class QtPrompts(Prompts):

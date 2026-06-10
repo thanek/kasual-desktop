@@ -5,13 +5,13 @@ from typing import _ProtocolMeta  # type: ignore[attr-defined]
 
 from PyQt6.QtCore import QObject, QTimer
 
-from domain.app import App
-from domain.window import app_window_present
+from domain.catalog.app import App
+from domain.catalog.window_rules import app_window_present
 from infrastructure.system.app_manager import AppManager
 from infrastructure.system.window_manager import (
     KWinWindowManager, expand_pid_tree, to_window,
 )
-from ports import LaunchHide
+from domain.lifecycle.launch_hide import LaunchHide
 
 _POLL_INTERVAL_MS = 150
 _GUARD_TIMEOUT_MS = 5000

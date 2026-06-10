@@ -1,6 +1,6 @@
 """Presentation for the system actions — how each one looks and reads.
 
-Maps the action keys from `application.system_actions` to their icon, colour and
+Maps the action keys from `domain.system_actions` to their icon, colour and
 localized label, plus the wording of the confirmation question (for the ones the
 catalog marks as needing one). This is the "HOW it looks/reads"; the "WHAT it is
 / does" lives in the application catalog.
@@ -15,9 +15,7 @@ from dataclasses import dataclass
 
 from PyQt6.QtCore import QT_TRANSLATE_NOOP, QCoreApplication
 
-from application.system_actions import (
-    HIDE_DESKTOP, RESTART, SHUTDOWN, SLEEP, VOLUME,
-)
+from domain.system.actions import HIDE_DESKTOP, RESTART, SHUTDOWN, SLEEP, VOLUME
 
 
 @dataclass(frozen=True)

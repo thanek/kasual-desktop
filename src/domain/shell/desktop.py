@@ -17,11 +17,11 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from domain.desktop_state import DesktopState
-from ports import Feedback
+from domain.shell.desktop_state import DesktopState
+from domain.shared.feedback import Feedback
 
 if TYPE_CHECKING:
-    from ports import DesktopView
+    from domain.shell.desktop_view import DesktopView
 
 
 class Desktop:

@@ -3,7 +3,7 @@
 Pure use-case over fakes; no Qt.
 """
 
-from application.session import SessionPolicy
+from domain.shell.session import SessionPolicy
 
 
 class FakeView:

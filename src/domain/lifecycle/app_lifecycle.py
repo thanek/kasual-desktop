@@ -19,13 +19,18 @@ import logging
 import os
 from collections.abc import Callable
 
-from domain.app import App, TRIGGER_CLICK
-from domain.foreground import ForegroundState
-from domain.target import AppTarget, Target, WindowTarget
-from ports import (
-    DesktopView, Feedback, LaunchHide, PadControl, ProcessManager, Prompts,
-    Scheduler, TileBarView, WindowManager,
-)
+from domain.catalog.app import App, TRIGGER_CLICK
+from domain.shell.foreground import ForegroundState
+from domain.catalog.target import AppTarget, Target, WindowTarget
+from domain.input.pad_control import PadControl
+from domain.lifecycle.launch_hide import LaunchHide
+from domain.lifecycle.process_manager import ProcessManager
+from domain.lifecycle.prompts import Prompts
+from domain.lifecycle.tile_bar_view import TileBarView
+from domain.lifecycle.window_manager import WindowManager
+from domain.shared.feedback import Feedback
+from domain.shared.scheduler import Scheduler
+from domain.shell.desktop_view import DesktopView
 
 logger = logging.getLogger(__name__)
 

@@ -4,7 +4,7 @@ from collections.abc import Callable
 
 from PyQt6.QtCore import QTimer
 
-from ports import Scheduler
+from domain.shared.scheduler import Scheduler
 
 
 class QtScheduler(Scheduler):

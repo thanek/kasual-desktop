@@ -3,7 +3,7 @@
 import logging
 import subprocess
 
-from ports import PowerControl
+from domain.system.power_control import PowerControl
 
 logger = logging.getLogger(__name__)
 

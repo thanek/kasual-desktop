@@ -3,11 +3,10 @@
 Pure rules, no Qt/KWin/proc — the process-parent lookup is injected.
 """
 
-from domain.app import App, TRIGGER_CLICK, TRIGGER_HOLD_1S
-from domain.target import AppTarget, WindowTarget, target_at_index
-from domain.window import (
-    Window, app_window_present, external_windows, resolve_recall_trigger,
-)
+from domain.catalog.app import App, TRIGGER_CLICK, TRIGGER_HOLD_1S
+from domain.catalog.target import AppTarget, WindowTarget, target_at_index
+from domain.catalog.window import Window
+from domain.catalog.window_rules import app_window_present, external_windows, resolve_recall_trigger
 
 
 def _win(resource_class="", desktop_file="", pid=0):

@@ -21,7 +21,7 @@ from infrastructure.qt.ui.log_viewer import LogViewer
 from infrastructure.qt.ui.tray import SystemTray
 from infrastructure.system.app_config import load_apps
 from infrastructure.system.power import SystemdPowerControl
-from application.system_actions import ActionDeps
+from domain.system.actions import ActionDeps
 from infrastructure.system.window_manager import KWinWindowManager
 
 logger = logging.getLogger(__name__)

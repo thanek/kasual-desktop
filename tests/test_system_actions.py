@@ -6,7 +6,8 @@ gated behind a confirmation while immediate ones are not.
 
 from unittest.mock import MagicMock
 
-from application.system_actions import ActionDeps, ActionRunner
+from domain.system.actions import ActionDeps
+from domain.system.runner import ActionRunner
 
 
 def _deps():
@@ -74,7 +75,7 @@ class TestCatalogPresentationConsistency:
     them in lock-step: confirmable ⟺ has a question."""
 
     def test_confirmation_policy_matches_presentation(self):
-        from application.system_actions import ACTIONS
+        from domain.system.actions import ACTIONS
         from infrastructure.qt.ui.action_view import PRESENTATION
         assert PRESENTATION.keys() == ACTIONS.keys()
         for key, action in ACTIONS.items():

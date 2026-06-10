@@ -9,7 +9,7 @@ from typing import _ProtocolMeta  # type: ignore[attr-defined]
 
 from PyQt6.QtCore import QObject, QTimer, pyqtSignal
 
-from ports import ProcessManager
+from domain.lifecycle.process_manager import ProcessManager
 
 logger = logging.getLogger(__name__)
 

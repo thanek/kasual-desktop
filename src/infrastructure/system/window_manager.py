@@ -24,8 +24,8 @@ from PyQt6.QtDBus import (
     QDBusConnection, QDBusInterface, QDBusMessage,
 )
 
-from domain.window import Window
-from ports import WindowManager
+from domain.catalog.window import Window
+from domain.lifecycle.window_manager import WindowManager
 
 logger = logging.getLogger(__name__)
 

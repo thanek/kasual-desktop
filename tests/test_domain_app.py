@@ -2,7 +2,7 @@
 
 import pytest
 
-from domain.app import App, ORDER_DEFAULT, _parse_env, _parse_exec
+from domain.catalog.app import App, ORDER_DEFAULT, _parse_env, _parse_exec
 
 
 class TestCommandBasename:

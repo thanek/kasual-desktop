@@ -18,8 +18,8 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
-from domain.input import Event
-from ports import Feedback
+from domain.input.vocabulary import Event
+from domain.shared.feedback import Feedback
 
 
 class MenuCursor:

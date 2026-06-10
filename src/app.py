@@ -5,17 +5,16 @@ import os
 
 from PyQt6.QtCore import QCoreApplication
 
-from domain.target import AppTarget, Target
-from application.home_menu import (
-    CLOSE_APP, RETURN_TO_APP, RETURN_TO_DESKTOP, MenuEntry, compose_home_menu,
-)
-from application.session import SessionPolicy
+from domain.catalog.target import AppTarget, Target
+from domain.menu.entry import CLOSE_APP, RETURN_TO_APP, RETURN_TO_DESKTOP, MenuEntry
+from domain.menu.home import compose_home_menu
+from domain.shell.session import SessionPolicy
 from infrastructure.input.gamepad_watcher import GamepadWatcher
 from infrastructure.qt.desktop import Desktop
 from infrastructure.qt.overlays.home_overlay import HomeOverlay, MenuItem
 from infrastructure.qt.ui import styles
 from infrastructure.qt.ui.tray import SystemTray
-from application.system_actions import ActionDeps
+from domain.system.actions import ActionDeps
 from infrastructure.system.window_manager import KWinWindowManager
 
 logger = logging.getLogger(__name__)
@@ -87,7 +86,7 @@ class Application:
         self._overlay.show_overlay(items=items, on_cancel=on_cancel)
 
     def _render_entry(self, entry: MenuEntry, running_app: Target | None) -> MenuItem:
-        """Map an abstract menu entry (composed by application.home_menu) to a
+        """Map an abstract menu entry (composed by domain.home_menu) to a
         concrete, localized HomeOverlay item with its icon and callback."""
         if entry.kind == RETURN_TO_APP:
             label = styles.truncate(entry.name, 22)

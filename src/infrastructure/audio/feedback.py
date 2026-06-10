@@ -5,7 +5,7 @@ trigger cues ('select', …) without importing the audio module directly.
 """
 
 from infrastructure.audio import sound_player
-from ports import Feedback
+from domain.shared.feedback import Feedback
 
 
 class SoundFeedback(Feedback):

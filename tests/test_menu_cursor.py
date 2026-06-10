@@ -6,7 +6,7 @@ hover and the feedback/render side effects.
 
 from unittest.mock import MagicMock
 
-from application.menu_cursor import MenuCursor
+from domain.menu.cursor import MenuCursor
 
 
 def _make(n=3, wrap=False):

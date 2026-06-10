@@ -13,7 +13,7 @@ import pytest
 from unittest.mock import MagicMock, patch
 
 from infrastructure.qt.overlays.home_overlay import HomeOverlay, MenuItem
-from application.system_actions import ActionDeps
+from domain.system.actions import ActionDeps
 
 
 def _make_overlay(mock_gamepad, action_deps=None):

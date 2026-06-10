@@ -12,7 +12,7 @@ from unittest.mock import MagicMock, patch
 from PyQt6.QtCore import QPoint
 
 from infrastructure.qt.desktop.tile_bar import TileBar
-from domain.app import App
+from domain.catalog.app import App
 
 
 def _win(id_: str, title: str = "App") -> dict:

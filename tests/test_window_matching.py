@@ -10,7 +10,7 @@ import pytest
 from unittest.mock import MagicMock, patch
 
 from infrastructure.qt.desktop.tile_bar import TileBar
-from domain.app import App, TRIGGER_CLICK, TRIGGER_HOLD_1S
+from domain.catalog.app import App, TRIGGER_CLICK, TRIGGER_HOLD_1S
 
 
 def _win(id_="1", title="App", pid=0, desktop_file="", resource_class=""):

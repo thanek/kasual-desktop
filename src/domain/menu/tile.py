@@ -9,11 +9,11 @@ this owns only the composition rule:
   - anything already on screen (a running App, or an open Window) → "restore" or
     "close" it.
 
-Mirrors `application.home_menu` — the Home Overlay's twin.
+Mirrors `domain.home_menu` — the Home Overlay's twin.
 """
 
-from domain.target import AppTarget, Target
-from application.menu import CLOSE, LAUNCH, RESTORE, MenuEntry
+from domain.catalog.target import AppTarget, Target
+from domain.menu.entry import CLOSE, LAUNCH, RESTORE, MenuEntry
 
 
 def compose_tile_menu(target: Target, is_running: bool) -> list[MenuEntry]:

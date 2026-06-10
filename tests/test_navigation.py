@@ -6,7 +6,7 @@ port; no Qt. Events are passed as plain strings (StrEnum-compatible).
 
 from unittest.mock import MagicMock
 
-from application.navigation import FocusNavigator
+from domain.navigation.focus_navigator import FocusNavigator
 
 
 def _make(topbar_count=3):

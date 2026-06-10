@@ -10,11 +10,11 @@ records deferrals without firing them, matching production's singleShot timing
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
-from application.lifecycle import AppLifecycle
-from domain.app import App, TRIGGER_CLICK, TRIGGER_HOLD_1S
-from domain.foreground import ForegroundState
-from domain.target import AppTarget, WindowTarget
-from domain.window import Window
+from domain.lifecycle.app_lifecycle import AppLifecycle
+from domain.catalog.app import App, TRIGGER_CLICK, TRIGGER_HOLD_1S
+from domain.shell.foreground import ForegroundState
+from domain.catalog.target import AppTarget, WindowTarget
+from domain.catalog.window import Window
 
 
 class FakeScheduler:

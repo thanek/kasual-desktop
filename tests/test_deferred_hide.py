@@ -10,7 +10,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from infrastructure.qt.desktop.deferred_hide import DeferredHide
-from domain.app import App
+from domain.catalog.app import App
 
 
 def _make(apps=None, running_pid=None):

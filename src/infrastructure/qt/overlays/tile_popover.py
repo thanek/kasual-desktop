@@ -6,8 +6,8 @@ from collections.abc import Callable
 from PyQt6.QtCore import Qt, QEvent, QPoint, QRect, pyqtSignal
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QPushButton, QApplication
 
-from application.menu_cursor import MenuCursor
-from domain.input import Event
+from domain.menu.cursor import MenuCursor
+from domain.input.vocabulary import Event
 from infrastructure.audio import sound_player
 from infrastructure.audio.feedback import SoundFeedback
 from infrastructure.input.gamepad_watcher import GamepadWatcher

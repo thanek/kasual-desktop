@@ -8,13 +8,13 @@ the application layer still tells the story, they pass.
 
 from unittest.mock import MagicMock
 
-from application.desktop import Desktop
-from application.menu import CLOSE, LAUNCH, RESTORE
-from application.menu_cursor import MenuCursor
-from application.tile_menu import compose_tile_menu
-from domain.desktop_state import DesktopState
-from domain.input import Event
-from domain.target import AppTarget
+from domain.shell.desktop import Desktop
+from domain.menu.entry import CLOSE, LAUNCH, RESTORE
+from domain.menu.cursor import MenuCursor
+from domain.menu.tile import compose_tile_menu
+from domain.shell.desktop_state import DesktopState
+from domain.input.vocabulary import Event
+from domain.catalog.target import AppTarget
 
 
 def _popover(target, is_running, *, on_close, on_launch, on_restore, feedback):

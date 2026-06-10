@@ -14,7 +14,7 @@ import logging
 import os
 from pathlib import Path
 
-from domain.app import App
+from domain.catalog.app import App
 
 logger = logging.getLogger(__name__)
 

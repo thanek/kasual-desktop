@@ -6,7 +6,7 @@ controller (`_on_connected_changed`); here it is named and unit-testable against
 fakes.
 """
 
-from ports import ConnectionIndicator, Dismissable, SessionView
+from domain.shell.session_collaborators import ConnectionIndicator, Dismissable, SessionView
 
 
 class SessionPolicy:

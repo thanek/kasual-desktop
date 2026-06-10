@@ -5,10 +5,10 @@ from PyQt6.QtCore import Qt, QTimer, QEvent
 from PyQt6.QtGui import QPainter, QColor
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QApplication
 
-from domain.app import App
-from domain.desktop_state import DesktopState
-from domain.input import Event
-from domain.target import AppTarget, Target
+from domain.catalog.app import App
+from domain.shell.desktop_state import DesktopState
+from domain.input.vocabulary import Event
+from domain.catalog.target import AppTarget, Target
 from infrastructure.input.gamepad_watcher import GamepadWatcher
 from infrastructure.qt.overlays.base_overlay import BaseOverlay
 from infrastructure.qt.overlays.confirm_dialog import ConfirmDialog
@@ -21,16 +21,20 @@ from infrastructure.system.volume import PactlVolumeControl
 from infrastructure.system.window_manager import KWinWindowManager
 from infrastructure.qt.ui.layer_shell import make_layer_surface, Layer, Anchor, Keyboard
 from infrastructure.qt.ui.action_view import make_action_confirm
-from application.desktop import Desktop as DesktopCoordinator
-from application.lifecycle import AppLifecycle
-from application.navigation import FocusNavigator
-from application.system_actions import ActionDeps, ActionRunner
-from application.tile_menu import CLOSE, LAUNCH, RESTORE, compose_tile_menu
+from domain.shell.desktop import Desktop as DesktopCoordinator
+from domain.lifecycle.app_lifecycle import AppLifecycle
+from domain.navigation.focus_navigator import FocusNavigator
+from domain.system.actions import ActionDeps
+from domain.system.runner import ActionRunner
+from domain.menu.entry import CLOSE, LAUNCH, RESTORE
+from domain.menu.tile import compose_tile_menu
 from infrastructure.audio.feedback import SoundFeedback
 from infrastructure.qt.prompts import QtPrompts
 from infrastructure.qt.scheduler import QtScheduler
 from typing import _ProtocolMeta  # type: ignore[attr-defined]
-from ports import DesktopView, DesktopShell, SessionView
+from domain.shell.desktop_view import DesktopView
+from domain.shell.session_collaborators import SessionView
+from domain.system.desktop_shell import DesktopShell
 from .deferred_hide import DeferredHide
 from .tile_bar import TileBar
 from .topbar import TopBar
@@ -337,7 +341,7 @@ class Desktop(QWidget, DesktopView, DesktopShell, SessionView, metaclass=_Meta):
     def _show_tile_popover(self) -> None:
         """Show a context popover above the focused tile.
 
-        The *which entries* rule lives in application.compose_tile_menu; here we
+        The *which entries* rule lives in domain.compose_tile_menu; here we
         only render each abstract entry into a (label, callback) the widget shows.
         """
         ctx = self._tilebar.current_context()

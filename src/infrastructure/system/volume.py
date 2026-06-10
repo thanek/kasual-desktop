@@ -3,7 +3,7 @@
 import logging
 import subprocess
 
-from ports import VolumeControl
+from domain.system.volume_control import VolumeControl
 
 logger = logging.getLogger(__name__)
 

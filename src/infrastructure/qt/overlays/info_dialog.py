@@ -6,7 +6,7 @@ from PyQt6.QtWidgets import (
     QPushButton, QLabel, QVBoxLayout, QWidget,
 )
 
-from domain.input import Event
+from domain.input.vocabulary import Event
 from infrastructure.audio import sound_player
 from infrastructure.input.gamepad_watcher import GamepadWatcher
 from infrastructure.qt.ui import styles

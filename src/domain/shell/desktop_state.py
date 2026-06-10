@@ -10,8 +10,8 @@ overlays hidden by a pause are restored *only* when we are actually coming back
 from a pause — both transitions report that so the view can act on it.
 """
 
-from domain.foreground import ForegroundState
-from domain.target import Target
+from domain.shell.foreground import ForegroundState
+from domain.catalog.target import Target
 
 
 class DesktopState:

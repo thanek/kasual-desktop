@@ -5,8 +5,8 @@ assignments in Desktop, including the 'clear when the foreground app
 finished / failed to launch' rule behind two earlier bug fixes.
 """
 
-from domain.foreground import ForegroundState
-from domain.target import AppTarget, WindowTarget
+from domain.shell.foreground import ForegroundState
+from domain.catalog.target import AppTarget, WindowTarget
 
 
 def _app(i=0):

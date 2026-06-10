@@ -5,7 +5,7 @@ Pure state, no Qt. Centralises the transitions that used to be scattered as bare
 bug-prone 'clear when the app finished / failed to launch' rule.
 """
 
-from .target import AppTarget, Target
+from domain.catalog.target import AppTarget, Target
 
 
 class ForegroundState:

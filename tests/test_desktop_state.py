@@ -1,8 +1,8 @@
 """Tests for DesktopState — visibility / paused / foreground transitions (pure)."""
 
-from domain.desktop_state import DesktopState
-from domain.foreground import ForegroundState
-from domain.target import AppTarget
+from domain.shell.desktop_state import DesktopState
+from domain.shell.foreground import ForegroundState
+from domain.catalog.target import AppTarget
 
 
 class TestInitial:

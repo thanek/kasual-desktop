@@ -6,10 +6,10 @@ that previously lived inline in the Qt widget's show_desktop/pause/resume.
 
 from unittest.mock import MagicMock
 
-from application.desktop import Desktop
-from domain.desktop_state import DesktopState
-from domain.foreground import ForegroundState
-from domain.target import AppTarget
+from domain.shell.desktop import Desktop
+from domain.shell.desktop_state import DesktopState
+from domain.shell.foreground import ForegroundState
+from domain.catalog.target import AppTarget
 
 
 class FakeView:

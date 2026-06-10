@@ -5,8 +5,8 @@ GamepadWatcher._loop. The hold timer is a fake so we can fire/cancel it
 deterministically; the menu-open is a recording callback.
 """
 
-from application.recall_trigger import RecallTrigger
-from domain.input import Trigger
+from domain.input.recall import RecallTrigger
+from domain.input.vocabulary import Trigger
 
 
 class FakeTimer:

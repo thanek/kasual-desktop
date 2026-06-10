@@ -8,13 +8,15 @@ from PyQt6.QtCore import Qt, QPoint, QTimer, pyqtSignal
 from PyQt6.QtGui import QCursor, QIcon
 from PyQt6.QtWidgets import QWidget, QHBoxLayout, QScrollArea, QApplication
 
-from domain.app import App
-from domain.target import Target, target_at_index
-from domain.window import Window, external_windows, resolve_recall_trigger
+from domain.catalog.app import App
+from domain.catalog.target import Target, target_at_index
+from domain.catalog.window import Window
+from domain.catalog.window_rules import external_windows, resolve_recall_trigger
 from infrastructure.system.app_manager import AppManager
 from infrastructure.system.window_manager import to_window
 from infrastructure.qt.ui import styles
-from ports import TileBarView, TileFocusView
+from domain.lifecycle.tile_bar_view import TileBarView
+from domain.navigation.bar_views import TileFocusView
 from .app_tile import AppTile, TILE_H, TILE_SEL_H
 from .window_icons import WindowIconResolver
 

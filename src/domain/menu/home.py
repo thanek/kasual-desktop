@@ -11,11 +11,9 @@ lifecycle) stays in the Application wiring; this owns only the composition rule:
 
 from dataclasses import dataclass
 
-from domain.target import Target
-# Re-exported so existing importers keep using `application.home_menu`.
-from application.menu import (  # noqa: F401
-    CLOSE_APP, RETURN_TO_APP, RETURN_TO_DESKTOP, MenuEntry,
-)
+from domain.catalog.target import Target
+# Re-exported so existing importers keep using `domain.home_menu`.
+from domain.menu.entry import CLOSE_APP, RETURN_TO_APP, RETURN_TO_DESKTOP, MenuEntry  # noqa: F401
 
 
 @dataclass(frozen=True)

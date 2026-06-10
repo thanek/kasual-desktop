@@ -8,16 +8,17 @@ from PyQt6.QtWidgets import (
     QWidget, QPushButton, QVBoxLayout, QLabel, QSizePolicy,
 )
 
-from application.menu_cursor import MenuCursor
-from domain.input import Event
+from domain.menu.cursor import MenuCursor
+from domain.input.vocabulary import Event
 from infrastructure.audio import sound_player
 from infrastructure.audio.feedback import SoundFeedback
 from infrastructure.input.gamepad_watcher import GamepadWatcher
-from application.system_actions import ActionDeps, ActionRunner
+from domain.system.actions import ActionDeps
+from domain.system.runner import ActionRunner
 from infrastructure.qt.ui.action_view import PRESENTATION, make_action_confirm
 from infrastructure.qt.ui import styles
 from infrastructure.qt.ui.layer_shell import make_layer_surface, Layer, Anchor, Keyboard
-from ports import Dismissable
+from domain.shell.session_collaborators import Dismissable
 from .confirm_dialog import ConfirmDialog
 
 logger = logging.getLogger(__name__)

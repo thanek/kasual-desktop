@@ -13,8 +13,9 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
-from domain.input import Event
-from ports import Feedback, TileFocusView, TopBarView
+from domain.input.vocabulary import Event
+from domain.navigation.bar_views import TileFocusView, TopBarView
+from domain.shared.feedback import Feedback
 
 
 class FocusNavigator:

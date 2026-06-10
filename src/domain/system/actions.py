@@ -5,7 +5,8 @@ This is the single source of truth for *which* actions exist, *in what order*,
 port). It is the "WHAT" — pure application logic, free of Qt and of any concrete
 adapter. How each action looks (icon, colour, localized label) and the wording of
 its confirmation live in the view layer (`infrastructure/qt/ui/action_view`); the
-concrete power/desktop adapters are wired in at the composition root.
+concrete power/desktop adapters are wired in at the composition root. Executing an
+action (the confirm-gating) lives next door in :mod:`domain.system.runner`.
 """
 
 from __future__ import annotations
@@ -13,7 +14,8 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass
 
-from ports import DesktopShell, PowerControl
+from domain.system.desktop_shell import DesktopShell
+from domain.system.power_control import PowerControl
 
 # Action identities — stable keys shared with the presentation table and the
 # top-bar / home-menu renderers.
@@ -50,30 +52,3 @@ ACTIONS: dict[str, SystemAction] = {
     SHUTDOWN:     SystemAction(True,  lambda d: d.power.poweroff()),
     HIDE_DESKTOP: SystemAction(False, lambda d: d.desktop.pause()),
 }
-
-
-class ActionRunner:
-    """Executes a system action: gates the confirmable ones behind the injected
-    confirmation flow, runs the rest immediately.
-
-    `confirm(action_key, execute)` is supplied by the view — it resolves the
-    localized question for the key and shows the dialog, calling `execute` on
-    acceptance. Keeping the question text out of here is what lets this stay
-    Qt-free.
-    """
-
-    def __init__(
-        self,
-        deps:    ActionDeps,
-        confirm: Callable[[str, Callable[[], None]], None],
-    ) -> None:
-        self._deps    = deps
-        self._confirm = confirm
-
-    def run(self, action_key: str) -> None:
-        action  = ACTIONS[action_key]
-        execute = lambda: action.effect(self._deps)
-        if action.needs_confirmation:
-            self._confirm(action_key, execute)
-        else:
-            execute()

@@ -23,7 +23,7 @@ from __future__ import annotations
 import threading
 from collections.abc import Callable
 
-from domain.input import Trigger
+from domain.input.vocabulary import Trigger
 
 HOLD_SECONDS = 1.0   # how long BTN_MODE must be held for the menu, in HOLD_1S mode
 

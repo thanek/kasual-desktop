@@ -3,10 +3,9 @@
 Pure decision over the foreground target; no Qt, no rendering.
 """
 
-from application.home_menu import (
-    CLOSE_APP, RETURN_TO_APP, RETURN_TO_DESKTOP, compose_home_menu,
-)
-from domain.target import AppTarget, WindowTarget
+from domain.menu.entry import CLOSE_APP, RETURN_TO_APP, RETURN_TO_DESKTOP
+from domain.menu.home import compose_home_menu
+from domain.catalog.target import AppTarget, WindowTarget
 
 
 class TestIdle:

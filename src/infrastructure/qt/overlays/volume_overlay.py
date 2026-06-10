@@ -5,10 +5,10 @@ from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QSlider,
 )
 
-from domain.input import Event
+from domain.input.vocabulary import Event
 from infrastructure.audio import sound_player
 from infrastructure.input.gamepad_watcher import GamepadWatcher
-from ports import VolumeControl
+from domain.system.volume_control import VolumeControl
 from .base_overlay import BaseOverlay
 
 STEP = 5   # % na jeden krok

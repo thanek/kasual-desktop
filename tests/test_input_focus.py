@@ -4,7 +4,7 @@ Pure logic, no Qt/evdev. Mirrors (and supersedes) the stack characterization
 that previously lived against GamepadWatcher internals in test_gamepad_watcher.
 """
 
-from application.input_focus import InputFocusStack
+from domain.input.focus_stack import InputFocusStack
 
 
 class TestSuppress:

@@ -7,10 +7,10 @@ from typing import Callable, _ProtocolMeta  # type: ignore[attr-defined]
 from PyQt6.QtCore import pyqtSignal, QObject
 from evdev import InputDevice, InputEvent, UInput, ecodes, list_devices
 
-from application.input_focus import InputFocusStack
-from application.recall_trigger import RecallTrigger
-from domain.input import Event, Trigger
-from ports import PadControl
+from domain.input.focus_stack import InputFocusStack
+from domain.input.recall import RecallTrigger
+from domain.input.vocabulary import Event, Trigger
+from domain.input.pad_control import PadControl
 
 logger = logging.getLogger(__name__)
 
