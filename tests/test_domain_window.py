@@ -4,7 +4,8 @@ Pure rules, no Qt/KWin/proc — the process-parent lookup is injected.
 """
 
 from domain.app import App, TRIGGER_CLICK, TRIGGER_HOLD_1S
-from domain.window import Window, resolve_recall_trigger
+from domain.target import AppTarget, WindowTarget, target_at_index
+from domain.window import Window, external_windows, resolve_recall_trigger
 
 
 def _win(resource_class="", desktop_file="", pid=0):
@@ -28,6 +29,69 @@ class TestMatchesApp:
     def test_empty_window_does_not_match(self):
         app = App(name="Steam", command="steam")
         assert _win().matches_app(app) is False
+
+
+class TestExternalWindows:
+    """Which open windows deserve a dynamic tile (not already a static app tile)."""
+
+    APPS = [App(name="Steam", command="steam")]
+
+    def _never_owned(self, w):
+        return False
+
+    def test_unmatched_window_is_external(self):
+        win = _win(resource_class="gedit", pid=9999)
+        assert external_windows([win], self.APPS, self._never_owned) == [win]
+
+    def test_window_matching_an_app_is_not_external(self):
+        win = _win(resource_class="Steam", pid=9999)
+        assert external_windows([win], self.APPS, self._never_owned) == []
+
+    def test_window_owned_by_running_group_is_not_external(self):
+        win = _win(resource_class="mystery", pid=9999)
+        assert external_windows([win], self.APPS, lambda w: True) == []
+
+    def test_pid_zero_window_is_always_external(self):
+        # Even matching an app's class, a pid==0 window still earns a tile.
+        win = _win(resource_class="Steam", pid=0)
+        assert external_windows([win], self.APPS, self._never_owned) == [win]
+
+    def test_preserves_order_and_filters_mix(self):
+        ext1 = _win(resource_class="gedit", pid=1)
+        managed = _win(resource_class="Steam", pid=2)
+        ext2 = _win(resource_class="vlc", pid=3)
+        assert external_windows([ext1, managed, ext2], self.APPS, self._never_owned) == [ext1, ext2]
+
+
+class TestTargetAtIndex:
+    """Foreground Target at a tile position: static apps first, then windows."""
+
+    APPS = [App(name="Steam", command="steam"), App(name="Firefox", command="firefox")]
+    WINS = [Window(id="w1", title="Doc", pid=1000),
+            Window(id="w2", title="Video", pid=2000)]
+
+    def _no_trigger(self, pid):
+        return TRIGGER_CLICK
+
+    def test_static_index_yields_app_target(self):
+        assert target_at_index(1, self.APPS, self.WINS, self._no_trigger) == \
+            AppTarget(index=1, name="Firefox")
+
+    def test_dynamic_index_yields_window_target(self):
+        # index 2 == first window (after 2 static apps)
+        assert target_at_index(2, self.APPS, self.WINS, self._no_trigger) == \
+            WindowTarget(window_id="w1", name="Doc", trigger=TRIGGER_CLICK)
+
+    def test_window_target_carries_resolved_trigger(self):
+        trigger_for = lambda pid: TRIGGER_HOLD_1S if pid == 2000 else TRIGGER_CLICK
+        target = target_at_index(3, self.APPS, self.WINS, trigger_for)  # w2, pid 2000
+        assert target == WindowTarget(window_id="w2", name="Video", trigger=TRIGGER_HOLD_1S)
+
+    def test_out_of_range_yields_none(self):
+        assert target_at_index(4, self.APPS, self.WINS, self._no_trigger) is None
+
+    def test_empty_yields_none(self):
+        assert target_at_index(0, [], [], self._no_trigger) is None
 
 
 class TestResolveRecallTrigger:

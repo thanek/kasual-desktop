@@ -8,7 +8,7 @@ they live here rather than in the tile bar widget.
 """
 
 import os
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 
 from domain.app import App
@@ -33,6 +33,31 @@ class Window:
         rc  = self.resource_class.lower()
         df  = os.path.splitext(self.desktop_file.lower())[0]
         return rc == cmd or df == cmd
+
+
+def external_windows(
+    windows:               Sequence[Window],
+    apps:                  Sequence[App],
+    owned_by_running_group: Callable[[Window], bool],
+) -> list[Window]:
+    """Windows that deserve their own dynamic tile — those NOT already shown as a
+    static app tile, in their original order.
+
+    A window is *managed* (and so excluded) when it belongs to a running app's
+    process group or is identifiable as one of our apps; everything else is
+    external. A window with no pid (``pid == 0``) is always external — KWin gave
+    us nothing to attribute it to, so we never fold it into a static tile even
+    if its class happens to match.
+
+    ``owned_by_running_group`` answers the process-group question (the
+    ``os.getpgid`` read is infrastructure, injected like ``parent_of`` below).
+    """
+    def managed(w: Window) -> bool:
+        if w.pid == 0:
+            return False
+        return owned_by_running_group(w) or any(w.matches_app(app) for app in apps)
+
+    return [w for w in windows if not managed(w)]
 
 
 def resolve_recall_trigger(

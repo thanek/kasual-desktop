@@ -8,8 +8,8 @@ from PyQt6.QtGui import QCursor, QIcon
 from PyQt6.QtWidgets import QWidget, QHBoxLayout, QScrollArea, QApplication
 
 from domain.app import App
-from domain.target import AppTarget, Target, WindowTarget
-from domain.window import Window, resolve_recall_trigger
+from domain.target import Target, target_at_index
+from domain.window import Window, external_windows, resolve_recall_trigger
 from infrastructure.system.app_manager import AppManager
 from infrastructure.qt.ui import styles
 from .app_tile import AppTile, TILE_H, TILE_SEL_H
@@ -85,8 +85,9 @@ class TileBar(QScrollArea):
         self._dyn_separator: QWidget | None                 = None
         # window_id → pid for dynamic tiles (used for trigger inheritance)
         self._dynamic_pids:  dict[str, int]                 = {}
-        # Last window list from KWin — used for window-presence running checks
-        self._last_windows:  list[dict]                     = []
+        # Last window list from KWin (as domain Windows) — used for the
+        # window-presence running check in is_tile_running.
+        self._last_windows:  list[Window]                   = []
         # Signature of the currently displayed dynamic tiles — lets a periodic
         # KWin refresh skip the teardown/rebuild when nothing visible changed,
         # so an in-progress tile marquee animation is not restarted.
@@ -201,7 +202,7 @@ class TileBar(QScrollArea):
             return True
         if self._last_windows and idx < len(self._apps):
             app = self._apps[idx]
-            return any(_to_window(w).matches_app(app) for w in self._last_windows)
+            return any(w.matches_app(app) for w in self._last_windows)
         return False
 
     def refresh_status(self) -> None:
@@ -210,7 +211,7 @@ class TileBar(QScrollArea):
 
     # ── Dynamic tiles (currently open windows) ─────────────────────────────
 
-    def update_windows(self, windows: list[dict]) -> None:
+    def update_windows(self, raw_windows: list[dict]) -> None:
         """Rebuild the dynamic tile section from the KWin window list.
 
         Filters out windows belonging to an application launched by AppManager —
@@ -219,37 +220,28 @@ class TileBar(QScrollArea):
         coordinator can re-check active state — e.g. reactivate the desktop when
         the last open window closes.
         """
+        windows = [_to_window(w) for w in raw_windows]
         self._last_windows = windows
 
-        # Exclude windows belonging to any of our static applications.
-        # Two complementary checks — each handles cases the other misses:
-        #   1. pgid match: works for apps (Heroic, Firefox) that stay in the
-        #      same process group as the launcher.
-        #   2. resourceClass/desktopFile match: works for apps (Steam) that
-        #      self-relaunch in a new process group, losing the pgid link.
-        #      Uses all *defined* apps so filtering survives a Steam restart.
+        # Which windows earn a dynamic tile — the "external window" rule lives in
+        # the domain. The process-group check it needs (whether a window belongs
+        # to a running app's group) is the infrastructure half: an os.getpgid read
+        # against the launcher pids, supplied here as a callable.
         running_pids = set(self._app_manager.all_running_pids())
 
-        def _is_managed_window(w: dict) -> bool:
-            pid = w.get('pid', 0)
-            if pid == 0:
-                return False
+        def _owned_by_running_group(window: Window) -> bool:
             try:
-                if running_pids and os.getpgid(pid) in running_pids:
-                    return True
+                return bool(running_pids) and os.getpgid(window.pid) in running_pids
             except OSError:
-                pass
-            window = _to_window(w)
-            return any(window.matches_app(app) for app in self._apps)
+                return False
 
-        extern_windows = [w for w in windows if not _is_managed_window(w)]
+        extern_windows = external_windows(windows, self._apps, _owned_by_running_group)
 
         # The window list is refreshed periodically (every few seconds). When the
         # visible dynamic tiles are unchanged, skip the teardown/rebuild entirely —
         # recreating the AppTiles would restart any in-progress marquee animation.
         signature = tuple(
-            (w['id'], w['title'], w.get('desktopFile', ''), w.get('resourceClass', ''))
-            for w in extern_windows
+            (w.id, w.title, w.desktop_file, w.resource_class) for w in extern_windows
         )
         if signature == self._dyn_signature:
             return
@@ -271,19 +263,15 @@ class TileBar(QScrollArea):
         self._dyn_separator = sep
 
         for w in extern_windows:
-            full_title = w['title']
-            app_name   = self._icon_resolver.resolve_name(
-                w.get('desktopFile', ''), w.get('resourceClass', '')
-            )
+            full_title = w.title
+            app_name   = self._icon_resolver.resolve_name(w.desktop_file, w.resource_class)
             if app_name and app_name != full_title:
                 combined = f"{app_name} ({full_title})"
             else:
                 combined = app_name or full_title
             display_title = styles.truncate(combined, _DYN_TILE_MAX_TITLE)
             app_icon = self._icon_resolver.resolve_icon(
-                w.get('desktopFile', ''),
-                w.get('resourceClass', ''),
-                w.get('pid', 0),
+                w.desktop_file, w.resource_class, w.pid,
             )
             tile = AppTile(
                 name=display_title,
@@ -293,14 +281,14 @@ class TileBar(QScrollArea):
                 full_name=combined,
             )
             tile.set_running(True)   # window exists → application is running
-            win_id = w['id']
+            win_id = w.id
             abs_idx = len(self._tiles) + len(self._dynamic_tiles)
             tile.clicked.connect(lambda wid=win_id: self._on_dynamic_clicked(wid))
             tile.hovered.connect(lambda i=abs_idx: self._on_tile_hovered(i))
             tile.right_clicked.connect(lambda i=abs_idx: self._on_tile_right_clicked(i))
             self._tile_layout.addWidget(tile)
             self._dynamic_tiles.append((win_id, full_title, tile))
-            self._dynamic_pids[win_id] = w.get('pid', 0)
+            self._dynamic_pids[win_id] = w.pid
 
         self._clamp_index()
         self._render_tiles()
@@ -394,16 +382,16 @@ class TileBar(QScrollArea):
                 return
 
     def _context_for_index(self, idx: int) -> Target | None:
-        """Resolve a tile index to a foreground Target, or None if out of range."""
-        n_static = len(self._tiles)
-        if idx < n_static:
-            return AppTarget(index=idx, name=self._apps[idx].name)
-        dyn_idx = idx - n_static
-        if dyn_idx >= len(self._dynamic_tiles):
-            return None
-        win_id, title, _ = self._dynamic_tiles[dyn_idx]
-        trigger = self._find_trigger_for_pid(self._dynamic_pids.get(win_id, 0))
-        return WindowTarget(window_id=win_id, name=title, trigger=trigger)
+        """Resolve a tile index to a foreground Target, or None if out of range.
+
+        The static-then-dynamic position→Target rule lives in the domain; this
+        only supplies the open windows (rebuilt from the dynamic-tile state) and
+        the pid→trigger resolver."""
+        dyn_windows = [
+            Window(id=wid, title=title, pid=self._dynamic_pids.get(wid, 0))
+            for wid, title, _ in self._dynamic_tiles
+        ]
+        return target_at_index(idx, self._apps, dyn_windows, self._find_trigger_for_pid)
 
     def _find_trigger_for_pid(self, pid: int) -> str:
         """Recall trigger a dynamic-tile window owned by *pid* should inherit.
