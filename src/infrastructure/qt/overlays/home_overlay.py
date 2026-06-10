@@ -1,5 +1,5 @@
 import logging
-from typing import Callable, NotRequired, TypedDict
+from typing import Callable, NotRequired, TypedDict, _ProtocolMeta  # type: ignore[attr-defined]
 
 import qtawesome as qta
 from PyQt6.QtCore import Qt, QCoreApplication, QT_TRANSLATE_NOOP, pyqtSignal
@@ -17,6 +17,7 @@ from application.system_actions import ActionDeps, ActionRunner
 from infrastructure.qt.ui.action_view import PRESENTATION, make_action_confirm
 from infrastructure.qt.ui import styles
 from infrastructure.qt.ui.layer_shell import make_layer_surface, Layer, Anchor, Keyboard
+from ports import Dismissable
 from .confirm_dialog import ConfirmDialog
 
 logger = logging.getLogger(__name__)
@@ -29,7 +30,10 @@ class MenuItem(TypedDict):
     callback: NotRequired[Callable]  # for dynamic items (extra_items)
 
 
-class HomeOverlay(QWidget):
+class _Meta(type(QWidget), _ProtocolMeta): pass
+
+
+class HomeOverlay(QWidget, Dismissable, metaclass=_Meta):
     """
     Full-screen menu overlay shown when BTN_MODE is pressed.
 

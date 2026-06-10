@@ -29,6 +29,8 @@ from application.tile_menu import CLOSE, LAUNCH, RESTORE, compose_tile_menu
 from infrastructure.audio.feedback import SoundFeedback
 from infrastructure.qt.prompts import QtPrompts
 from infrastructure.qt.scheduler import QtScheduler
+from typing import _ProtocolMeta  # type: ignore[attr-defined]
+from ports import DesktopView, DesktopShell, SessionView
 from .deferred_hide import DeferredHide
 from .tile_bar import TileBar
 from .topbar import TopBar
@@ -51,7 +53,10 @@ _KEY_MAP = {
 }
 
 
-class Desktop(QWidget):
+class _Meta(type(QWidget), _ProtocolMeta): pass
+
+
+class Desktop(QWidget, DesktopView, DesktopShell, SessionView, metaclass=_Meta):
     """Main environment window — always fullscreen."""
 
     def __init__(

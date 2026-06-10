@@ -7,8 +7,10 @@ from PyQt6.QtCore import QCoreApplication
 from PyQt6.QtGui import QIcon
 from PyQt6.QtWidgets import QSystemTrayIcon, QMenu
 
+from ports import ConnectionIndicator
 
-class SystemTray:
+
+class SystemTray(ConnectionIndicator):
     """Encapsulates QSystemTrayIcon, context menu, and icon logic."""
 
     def __init__(

@@ -3,13 +3,15 @@
 import logging
 import subprocess
 
+from ports import VolumeControl
+
 logger = logging.getLogger(__name__)
 
 _SINK    = "@DEFAULT_SINK@"
 _DEFAULT = 50   # fallback when the sink volume can't be read
 
 
-class PactlVolumeControl:
+class PactlVolumeControl(VolumeControl):
     """Implements the VolumeControl port for the default sink via ``pactl``."""
 
     def get(self) -> int:

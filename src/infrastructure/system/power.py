@@ -3,10 +3,12 @@
 import logging
 import subprocess
 
+from ports import PowerControl
+
 logger = logging.getLogger(__name__)
 
 
-class SystemdPowerControl:
+class SystemdPowerControl(PowerControl):
     """Implements the PowerControl port by shelling out to ``systemctl``."""
 
     def suspend(self) -> None:

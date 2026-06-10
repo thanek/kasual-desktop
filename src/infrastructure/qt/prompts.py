@@ -8,9 +8,10 @@ message logic moved off the Desktop widget into the application layer.
 from PyQt6.QtCore import QCoreApplication
 
 from infrastructure.qt.ui import styles
+from ports import Prompts
 
 
-class QtPrompts:
+class QtPrompts(Prompts):
     """Implements `ports.Prompts` via Qt's translation system."""
 
     def close_confirm(self, name: str) -> str:

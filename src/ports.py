@@ -1,7 +1,6 @@
 """Ports — the abstract capabilities the app depends on, implemented by infra
 adapters (system/power.py, system/volume.py) and by the Desktop view.
 
-Structural (Protocol) typing: an adapter conforms by shape, it need not inherit.
 This is the boundary that keeps the application/registry layer free of pactl,
 systemctl and Desktop internals.
 """
