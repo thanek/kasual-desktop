@@ -3,8 +3,6 @@
 import logging
 import os
 
-from PyQt6.QtCore import QCoreApplication
-
 from domain.catalog.target import AppTarget, Target
 from domain.menu.entry import CLOSE_APP, RETURN_TO_APP, RETURN_TO_DESKTOP, MenuEntry
 from domain.menu.home import compose_home_menu
@@ -16,6 +14,7 @@ from infrastructure.qt.ui import styles
 from infrastructure.qt.ui.tray import SystemTray
 from domain.system.actions import ActionDeps
 from infrastructure.system.window_manager import KWinWindowManager
+from support.i18n import translate
 
 logger = logging.getLogger(__name__)
 
@@ -91,14 +90,14 @@ class Application:
         if entry.kind == RETURN_TO_APP:
             label = styles.truncate(entry.name, 22)
             return {
-                "label": "  " + QCoreApplication.translate("Kasual", "Return to {0}").format(label),
+                "label": "  " + translate("Kasual", "Return to {0}").format(label),
                 "icon": "fa5s.times",
                 "callback": lambda t=running_app: self._desktop.restore_app(t),
             }
         if entry.kind == CLOSE_APP:
             label = styles.truncate(entry.name, 22)
             return {
-                "label": "  " + QCoreApplication.translate("Kasual", "Close {0}").format(label),
+                "label": "  " + translate("Kasual", "Close {0}").format(label),
                 "icon": "fa5s.times-circle",
                 "callback": lambda t=running_app: self._desktop.request_close_app(t),
             }
@@ -106,7 +105,7 @@ class Application:
         # on the bare Desktop we just bring KD to the front.
         callback = self._return_to_desktop if running_app is not None else self._desktop.show_desktop
         return {
-            "label": "  " + QCoreApplication.translate("Kasual", "Return to Desktop"),
+            "label": "  " + translate("Kasual", "Return to Desktop"),
             "icon": "fa5s.home",
             "callback": callback,
         }

@@ -4,7 +4,7 @@ This is the single source of truth for *which* actions exist, *in what order*,
 *which require a confirmation*, and *what each one does* (a call onto an injected
 port). It is the "WHAT" — pure application logic, free of Qt and of any concrete
 adapter. How each action looks (icon, colour, localized label) and the wording of
-its confirmation live in the view layer (`infrastructure/qt/ui/action_view`); the
+its confirmation live next door in :mod:`domain.system.action_view`; the
 concrete power/desktop adapters are wired in at the composition root. Executing an
 action (the confirm-gating) lives next door in :mod:`domain.system.runner`.
 """

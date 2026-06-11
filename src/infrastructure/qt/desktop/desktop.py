@@ -20,7 +20,7 @@ from infrastructure.system.power import SystemdPowerControl
 from infrastructure.system.volume import PactlVolumeControl
 from infrastructure.system.window_manager import KWinWindowManager
 from infrastructure.qt.ui.layer_shell import make_layer_surface, Layer, Anchor, Keyboard
-from infrastructure.qt.ui.action_view import make_action_confirm
+from domain.system.action_view import make_action_confirm
 from domain.shell.desktop import Desktop as DesktopCoordinator
 from domain.lifecycle.app_lifecycle import AppLifecycle
 from domain.navigation.focus_navigator import FocusNavigator

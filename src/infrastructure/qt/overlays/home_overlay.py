@@ -2,7 +2,7 @@ import logging
 from typing import Callable, NotRequired, TypedDict, _ProtocolMeta  # type: ignore[attr-defined]
 
 import qtawesome as qta
-from PyQt6.QtCore import Qt, QCoreApplication, QT_TRANSLATE_NOOP, pyqtSignal
+from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QKeyEvent
 from PyQt6.QtWidgets import (
     QWidget, QPushButton, QVBoxLayout, QLabel, QSizePolicy,
@@ -15,10 +15,11 @@ from infrastructure.audio.feedback import SoundFeedback
 from infrastructure.input.gamepad_watcher import GamepadWatcher
 from domain.system.actions import ActionDeps
 from domain.system.runner import ActionRunner
-from infrastructure.qt.ui.action_view import PRESENTATION, make_action_confirm
+from domain.system.action_view import PRESENTATION, make_action_confirm
 from infrastructure.qt.ui import styles
 from infrastructure.qt.ui.layer_shell import make_layer_surface, Layer, Anchor, Keyboard
 from domain.shell.session_collaborators import Dismissable
+from support.i18n import translate
 from .confirm_dialog import ConfirmDialog
 
 logger = logging.getLogger(__name__)
@@ -63,7 +64,7 @@ class HomeOverlay(QWidget, Dismissable, metaclass=_Meta):
     @staticmethod
     def static_items() -> list[MenuItem]:
         cancel_item: MenuItem = {
-            "label": QT_TRANSLATE_NOOP("Kasual", "Return to Desktop"),
+            "label": translate("Kasual", "Return to Desktop"),
             "icon": "fa5s.times",
             "action": Event.CANCEL,
         }
@@ -215,10 +216,11 @@ class HomeOverlay(QWidget, Dismissable, metaclass=_Meta):
             btn.enterEvent = _enter
 
         for i, item in enumerate(self._items):
-            # Static items have labels marked with QT_TRANSLATE_NOOP — we translate here.
+            # Static items carry source-string labels (marked for extraction at
+            # their definition) — we translate here, at render time.
             # Dynamic items (callback) already have ready-formatted labels.
             label = (
-                "  " + QCoreApplication.translate("Kasual", item["label"])
+                "  " + translate("Kasual", item["label"])
                 if "action" in item
                 else item["label"]
             )

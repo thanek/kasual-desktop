@@ -8,7 +8,7 @@ from PyQt6.QtCore import Qt, QLocale, QTimer, QSize, pyqtSignal
 from PyQt6.QtWidgets import QWidget, QPushButton, QHBoxLayout, QVBoxLayout, QLabel
 
 from domain.system.actions import ACTIONS
-from infrastructure.qt.ui.action_view import PRESENTATION
+from domain.system.action_view import PRESENTATION
 from infrastructure.qt.ui import styles
 from domain.navigation.bar_views import TopBarView
 

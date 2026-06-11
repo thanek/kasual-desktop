@@ -23,6 +23,8 @@ from infrastructure.system.app_config import load_apps
 from infrastructure.system.power import SystemdPowerControl
 from domain.system.actions import ActionDeps
 from infrastructure.system.window_manager import KWinWindowManager
+from infrastructure.qt.i18n import QtTranslator
+from support import i18n
 
 logger = logging.getLogger(__name__)
 
@@ -68,6 +70,10 @@ def main() -> None:
         logger.info("Loaded translation: %s", QLocale.system().name())
     else:
         logger.info("No .qm file for localization: %s", QLocale.system().name())
+
+    # Route the app's `support.i18n.translate` calls through Qt's translation
+    # system now that the QApplication (and any QTranslator) exists.
+    i18n.use(QtTranslator())
 
     gamepad = GamepadWatcher()
     wm = KWinWindowManager()

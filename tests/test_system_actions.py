@@ -76,7 +76,7 @@ class TestCatalogPresentationConsistency:
 
     def test_confirmation_policy_matches_presentation(self):
         from domain.system.actions import ACTIONS
-        from infrastructure.qt.ui.action_view import PRESENTATION
+        from domain.system.action_view import PRESENTATION
         assert PRESENTATION.keys() == ACTIONS.keys()
         for key, action in ACTIONS.items():
             has_question = PRESENTATION[key].confirm_question is not None
