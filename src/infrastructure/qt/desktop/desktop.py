@@ -33,7 +33,7 @@ from infrastructure.audio.feedback import SoundFeedback
 from infrastructure.qt.scheduler import QtScheduler
 from typing import _ProtocolMeta  # type: ignore[attr-defined]
 from domain.shell.desktop_view import DesktopView
-from domain.shell.session_collaborators import SessionView
+from domain.shell.desktop_control import DesktopControl
 from domain.system.desktop_shell import DesktopShell
 from .deferred_hide import DeferredHide
 from .tile_bar import TileBar
@@ -60,7 +60,7 @@ _KEY_MAP = {
 class _Meta(type(QWidget), _ProtocolMeta): pass
 
 
-class Desktop(QWidget, DesktopView, DesktopShell, SessionView, metaclass=_Meta):
+class Desktop(QWidget, DesktopView, DesktopShell, DesktopControl, metaclass=_Meta):
     """Main environment window — always fullscreen."""
 
     def __init__(
@@ -196,6 +196,13 @@ class Desktop(QWidget, DesktopView, DesktopShell, SessionView, metaclass=_Meta):
     def current_app(self) -> Target | None:
         """Returns the currently active foreground Target, or None if on desktop."""
         return self._foreground.current
+
+    def foreground_pid(self) -> int | None:
+        """OS pid of the current foreground app, if one is a running App tile."""
+        app = self.current_app()
+        if isinstance(app, AppTarget):
+            return self._app_manager.running_pid(app.index)
+        return None
 
     def restore_app(self, target: Target) -> None:
         """Bring an already-running app back to the foreground (public API used

@@ -3,19 +3,20 @@
 import logging
 import os
 
-from domain.catalog.target import AppTarget
 from domain.menu.entry import CLOSE_APP, RETURN_TO_APP, RETURN_TO_DESKTOP
 from domain.menu.home import compose_home_menu
 from domain.menu.item import MenuItem
+from domain.lifecycle.window_manager import WindowManager
+from domain.shell.desktop_control import DesktopControl
 from domain.shell.session import SessionPolicy
-from infrastructure.input.gamepad_watcher import GamepadWatcher
-from infrastructure.qt.desktop import Desktop
-from infrastructure.qt.overlays.home_overlay import HomeOverlay
-from infrastructure.qt.ui.tray import SystemTray
+from domain.shell.session_collaborators import ConnectionIndicator
 from domain.system.actions import ActionDeps
 from domain.system.action_view import make_action_confirm
 from domain.system.runner import ActionRunner
-from infrastructure.system.window_manager import KWinWindowManager
+# Concrete (deferred to a later session): the gamepad signals and the overlay's
+# Qt lifecycle still tie Application to these two infrastructure types.
+from infrastructure.input.gamepad_watcher import GamepadWatcher
+from infrastructure.qt.overlays.home_overlay import HomeOverlay
 
 logger = logging.getLogger(__name__)
 
@@ -30,10 +31,10 @@ class Application:
     def __init__(
         self,
         gamepad:     GamepadWatcher,
-        desktop:     Desktop,
+        desktop:     DesktopControl,
         action_deps: ActionDeps,
-        tray:        SystemTray,
-        wm:          KWinWindowManager,
+        tray:        ConnectionIndicator,
+        wm:          WindowManager,
     ) -> None:
         self._gamepad     = gamepad
         self._desktop     = desktop
@@ -49,10 +50,6 @@ class Application:
 
         gamepad.btn_mode_pressed.connect(self._on_btn_mode)
         gamepad.connected_changed.connect(self._on_connected_changed)
-
-    def start(self) -> None:
-        """Starts periodic window list refresh."""
-        self._wm.start_periodic_refresh(3000)
 
     # ── Event handling ─────────────────────────────────────────────────────
 
@@ -110,11 +107,9 @@ class Application:
         minimize the foreground app and raise ourselves via KWin. To be
         revisited in Phase 2 once the Desktop's show/hide model lands.
         """
-        running_app = self._desktop.current_app()
-        if isinstance(running_app, AppTarget):
-            pid = self._desktop.app_manager.running_pid(running_app.index)
-            if pid is not None:
-                self._wm.minimize_windows_for_pids({pid})
+        pid = self._desktop.foreground_pid()
+        if pid is not None:
+            self._wm.minimize_windows_for_pids({pid})
         self._wm.raise_windows_for_pid_exact(os.getpid())
         self._desktop.show_desktop()
 

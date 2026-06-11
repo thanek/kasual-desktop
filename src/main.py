@@ -93,7 +93,7 @@ def main() -> None:
         tray=tray,
         wm=wm,
     )
-    controller.start()
+    wm.start_periodic_refresh(3000)
 
     QTimer.singleShot(0, sound_player.init)
 
