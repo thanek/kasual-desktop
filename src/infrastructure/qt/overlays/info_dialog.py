@@ -6,9 +6,9 @@ from PyQt6.QtWidgets import (
     QPushButton, QLabel, QVBoxLayout, QWidget,
 )
 
+from domain.input.pad_control import PadControl
 from domain.input.vocabulary import Event
 from infrastructure.audio import sound_player
-from infrastructure.input.gamepad_watcher import GamepadWatcher
 from infrastructure.qt.ui import styles
 from .base_overlay import BaseOverlay
 
@@ -22,7 +22,7 @@ class InfoDialog(BaseOverlay):
         self,
         message: str,
         on_confirmed: Callable[[], None],
-        gamepad: GamepadWatcher,
+        gamepad: PadControl,
         parent: QWidget | None = None,
     ):
         super().__init__(gamepad, self._handle_pad, parent)

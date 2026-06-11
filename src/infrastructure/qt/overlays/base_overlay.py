@@ -1,4 +1,4 @@
-"""Base class for full-screen layer-shell overlays managed by GamepadWatcher."""
+"""Base class for full-screen layer-shell overlays managed by PadControl."""
 
 import logging
 from collections.abc import Callable
@@ -6,8 +6,8 @@ from collections.abc import Callable
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QWidget
 
+from domain.input.pad_control import PadControl
 from infrastructure.audio import sound_player
-from infrastructure.input.gamepad_watcher import GamepadWatcher
 from infrastructure.qt.ui import styles
 from infrastructure.qt.ui.layer_shell import make_layer_surface, Layer, Anchor, Keyboard
 
@@ -34,7 +34,7 @@ class BaseOverlay(QWidget):
 
     def __init__(
         self,
-        gamepad: GamepadWatcher,
+        gamepad: PadControl,
         handler: Callable[[str], None],
         parent: QWidget | None = None,   # accepted for API compat; always top-level
     ) -> None:

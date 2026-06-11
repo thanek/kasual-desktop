@@ -6,12 +6,12 @@ from collections.abc import Callable
 from PyQt6.QtCore import Qt, QEvent, QPoint, QRect, pyqtSignal
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QPushButton, QApplication
 
+from domain.input.pad_control import PadControl
+from domain.input.vocabulary import Event
 from domain.menu.cursor import MenuCursor
 from domain.menu.item import MenuItem
-from domain.input.vocabulary import Event
 from infrastructure.audio import sound_player
 from infrastructure.audio.feedback import SoundFeedback
-from infrastructure.input.gamepad_watcher import GamepadWatcher
 from infrastructure.qt.ui import styles
 
 logger = logging.getLogger(__name__)
@@ -26,7 +26,7 @@ class TilePopoverMenu(QWidget):
         self,
         items: list[MenuItem],
         on_select: Callable[[MenuItem], None],
-        gamepad: GamepadWatcher,
+        gamepad: PadControl,
         parent: QWidget,
     ) -> None:
         super().__init__(parent)

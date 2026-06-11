@@ -5,10 +5,10 @@ from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QSlider,
 )
 
+from domain.input.pad_control import PadControl
 from domain.input.vocabulary import Event
-from infrastructure.audio import sound_player
-from infrastructure.input.gamepad_watcher import GamepadWatcher
 from domain.system.volume_control import VolumeControl
+from infrastructure.audio import sound_player
 from .base_overlay import BaseOverlay
 
 STEP = 5   # % na jeden krok
@@ -19,7 +19,7 @@ class VolumeOverlay(BaseOverlay):
 
     closed = pyqtSignal()
 
-    def __init__(self, gamepad: GamepadWatcher, volume: VolumeControl, parent: QWidget | None = None):
+    def __init__(self, gamepad: PadControl, volume: VolumeControl, parent: QWidget | None = None):
         super().__init__(gamepad, self._handle_pad, parent)
         self._control = volume
         self._volume  = self._control.get()

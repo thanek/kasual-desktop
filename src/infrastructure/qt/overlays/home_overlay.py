@@ -8,15 +8,15 @@ from PyQt6.QtWidgets import (
     QWidget, QPushButton, QVBoxLayout, QLabel, QSizePolicy,
 )
 
+from domain.input.pad_control import PadControl
+from domain.input.vocabulary import Event
 from domain.menu.cursor import MenuCursor
 from domain.menu.item import MenuItem
-from domain.input.vocabulary import Event
+from domain.shell.session_collaborators import Dismissable
 from infrastructure.audio import sound_player
 from infrastructure.audio.feedback import SoundFeedback
-from infrastructure.input.gamepad_watcher import GamepadWatcher
 from infrastructure.qt.ui import styles
 from infrastructure.qt.ui.layer_shell import make_layer_surface, Layer, Anchor, Keyboard
-from domain.shell.session_collaborators import Dismissable
 
 logger = logging.getLogger(__name__)
 
@@ -45,7 +45,7 @@ class HomeOverlay(QWidget, Dismissable, metaclass=_Meta):
 
     closed = pyqtSignal()   # emitted when the overlay is dismissed
 
-    def __init__(self, gamepad: GamepadWatcher):
+    def __init__(self, gamepad: PadControl):
         super().__init__()
         self._gamepad = gamepad
         # Vertical menu navigation (index + move/select/dismiss) lives in the
