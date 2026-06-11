@@ -10,8 +10,9 @@ records deferrals without firing them, matching production's singleShot timing
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
+from domain.input.vocabulary import Trigger
 from domain.lifecycle.app_lifecycle import AppLifecycle
-from domain.catalog.app import App, TRIGGER_CLICK, TRIGGER_HOLD_1S
+from domain.catalog.app import App
 from domain.shell.foreground import ForegroundState
 from domain.catalog.target import AppTarget, WindowTarget
 from domain.catalog.window import Window
@@ -73,7 +74,7 @@ class FakeView:
         self.confirm = (question, on_confirmed, on_cancelled)
 
 
-def _app(command="prog", trigger=TRIGGER_CLICK):
+def _app(command="prog", trigger=Trigger.CLICK):
     return App(name="App", command=command, recall_menu_trigger=trigger)
 
 
@@ -117,7 +118,7 @@ def _make(apps=None, visible=False):
 class TestOnTileActivated:
     def test_window_target_restores(self):
         c = _make()
-        target = WindowTarget(window_id="w1", name="Win", trigger=TRIGGER_CLICK)
+        target = WindowTarget(window_id="w1", name="Win", trigger=Trigger.CLICK)
         c.lc.on_tile_activated(target)
         # restore path: foreground set, window activated, handler popped, view hidden
         assert c.fg.current == target
@@ -134,13 +135,13 @@ class TestOnTileActivated:
         assert c.view.hidden == 1  # restore hides the desktop
 
     def test_idle_app_launches_and_arms_hide(self):
-        c = _make(apps=[_app(trigger=TRIGGER_HOLD_1S)])
+        c = _make(apps=[_app(trigger=Trigger.HOLD_1S)])
         c.am.is_running.return_value = False
         c.am.launch.return_value = True
         c.lc.on_tile_activated(AppTarget(index=0, name="App"))
         app = c.apps[0]
         c.am.launch.assert_called_once_with(0, app.command, app.args, app.env)
-        c.gamepad.set_app_btn_mode_trigger.assert_called_with(TRIGGER_HOLD_1S)
+        c.gamepad.set_app_btn_mode_trigger.assert_called_with(Trigger.HOLD_1S)
         c.gamepad.pop_handler.assert_called_once_with(c.pad)
         c.dh.arm.assert_called_once_with(0)
 
@@ -156,19 +157,19 @@ class TestOnTileActivated:
 
 class TestRestoreApp:
     def test_app_target_uses_app_trigger_and_arranges(self):
-        c = _make(apps=[_app(trigger=TRIGGER_HOLD_1S)])
+        c = _make(apps=[_app(trigger=Trigger.HOLD_1S)])
         c.am.running_pid.return_value = 4321
         c.lc.restore_app(AppTarget(index=0, name="App"))
-        c.gamepad.set_app_btn_mode_trigger.assert_called_once_with(TRIGGER_HOLD_1S)
+        c.gamepad.set_app_btn_mode_trigger.assert_called_once_with(Trigger.HOLD_1S)
         c.wm.activate_windows_for_pids.assert_called_once_with({4321})
         c.gamepad.pop_handler.assert_called_once_with(c.pad)
         assert c.view.hidden == 1
 
     def test_window_target_uses_own_trigger(self):
         c = _make()
-        target = WindowTarget(window_id="w9", name="Win", trigger=TRIGGER_HOLD_1S)
+        target = WindowTarget(window_id="w9", name="Win", trigger=Trigger.HOLD_1S)
         c.lc.restore_app(target)
-        c.gamepad.set_app_btn_mode_trigger.assert_called_once_with(TRIGGER_HOLD_1S)
+        c.gamepad.set_app_btn_mode_trigger.assert_called_once_with(Trigger.HOLD_1S)
         c.wm.activate_window.assert_called_once_with("w9")
         assert c.view.hidden == 1
 

@@ -1,3 +1,5 @@
+from domain.shared.text import truncate  # noqa: F401 - re-exported: callers use styles.truncate
+
 COLOR_ACCENT   = "#88c0d0"
 COLOR_BG_DARK  = "#0b140e"
 COLOR_TEXT     = "white"
@@ -5,10 +7,6 @@ COLOR_TOPBAR   = "rgba(15, 17, 25, 210)"
 COLOR_RUNNING  = "#a3be8c"
 COLOR_CARD_BG  = "#2e3440"
 CARD_RADIUS_PX = 12
-
-
-def truncate(text: str, max_len: int) -> str:
-    return text[:max_len - 1] + '…' if len(text) > max_len else text
 
 
 def apply_card_shadow(

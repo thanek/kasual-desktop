@@ -23,13 +23,13 @@ from infrastructure.qt.ui.layer_shell import make_layer_surface, Layer, Anchor, 
 from domain.system.action_view import make_action_confirm
 from domain.shell.desktop import Desktop as DesktopCoordinator
 from domain.lifecycle.app_lifecycle import AppLifecycle
+from domain.lifecycle.prompts import LocalizedPrompts
 from domain.navigation.focus_navigator import FocusNavigator
 from domain.system.actions import ActionDeps
 from domain.system.runner import ActionRunner
 from domain.menu.entry import CLOSE, LAUNCH, RESTORE
 from domain.menu.tile import compose_tile_menu
 from infrastructure.audio.feedback import SoundFeedback
-from infrastructure.qt.prompts import QtPrompts
 from infrastructure.qt.scheduler import QtScheduler
 from typing import _ProtocolMeta  # type: ignore[attr-defined]
 from domain.shell.desktop_view import DesktopView
@@ -140,7 +140,7 @@ class Desktop(QWidget, DesktopView, DesktopShell, SessionView, metaclass=_Meta):
             pad_handler=self._handle_pad,
             scheduler=QtScheduler(),
             feedback=self._feedback,
-            prompts=QtPrompts(),
+            prompts=LocalizedPrompts(),
         )
         # Coordinates show/pause/resume of the Desktop surface (this widget = view).
         self._desktop = DesktopCoordinator(

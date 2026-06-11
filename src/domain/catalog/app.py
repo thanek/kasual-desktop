@@ -14,11 +14,6 @@ from collections.abc import Mapping
 
 from domain.input.vocabulary import Trigger
 
-# Recall-menu triggers — canonical values live in domain.input.Trigger; these
-# aliases stay for the existing importers (App default, Target, tests).
-TRIGGER_CLICK   = Trigger.CLICK
-TRIGGER_HOLD_1S = Trigger.HOLD_1S
-
 # freedesktop Exec field codes — meaningless for our launcher (we pass no files
 # or URLs), so they are stripped. See the Desktop Entry Specification.
 _FIELD_CODES = {
@@ -40,7 +35,7 @@ class App:
     icon:                 str | None        = None   # qtawesome glyph (X-Kasual-Icon)
     icon_theme:           str | None        = None   # themed Icon name (freedesktop)
     color:                str               = "#2e3440"
-    recall_menu_trigger:  str               = TRIGGER_CLICK
+    recall_menu_trigger:  str               = Trigger.CLICK
     launch_hide_grace_ms: int               = 0
     env:                  Mapping[str, str] = field(default_factory=dict)
 
@@ -88,7 +83,7 @@ class App:
             icon_theme=(entry.get("Icon") or "").strip() or None,
             color=(entry.get("X-Kasual-Color") or "").strip() or "#2e3440",
             recall_menu_trigger=(entry.get("X-Kasual-RecallMenuTrigger") or "").strip()
-                                or TRIGGER_CLICK,
+                                or Trigger.CLICK,
             launch_hide_grace_ms=_parse_int(entry.get("X-Kasual-HideGraceMs"), 0),
             env=_parse_env(entry.get("X-Kasual-Env")),
         )

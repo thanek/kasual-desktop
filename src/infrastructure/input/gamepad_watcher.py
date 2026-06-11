@@ -23,12 +23,6 @@ STICK_RESET     = 6000    # hysteresis — below this value the axis is "centere
 
 VIRTUAL_DEVICE_NAME   = "kasual-vpad"
 
-# Recall-trigger vocabulary lives in domain.input.Trigger; re-exported here for
-# the historical import sites (kept str-compatible).
-BTN_MODE_CLICK   = Trigger.CLICK
-BTN_MODE_HOLD_1S = Trigger.HOLD_1S
-
-
 class GamepadWatcher(QObject, PadControl, metaclass=_Meta):
     """
     Reads events from a physical gamepad in a background thread.
@@ -87,8 +81,8 @@ class GamepadWatcher(QObject, PadControl, metaclass=_Meta):
     def set_app_btn_mode_trigger(self, trigger: str) -> None:
         """Set the BTN_MODE recall trigger for the currently active app.
 
-        trigger: BTN_MODE_CLICK   — fire immediately on press (default)
-                 BTN_MODE_HOLD_1S — require a hold (see RecallTrigger.HOLD_SECONDS)
+        trigger: Trigger.CLICK   — fire immediately on press (default)
+                 Trigger.HOLD_1S — require a hold (see RecallTrigger.HOLD_SECONDS)
         """
         with self._lock:
             self._app_btn_mode_trigger = trigger

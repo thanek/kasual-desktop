@@ -7,8 +7,9 @@ context dict and its stringly-typed ``ctx['type']`` branching. Pure Python.
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 
-from .app import App, TRIGGER_CLICK
+from .app import App
 from .window import Window
+from ..input.vocabulary import Trigger
 
 
 @dataclass(frozen=True)
@@ -29,7 +30,7 @@ class WindowTarget:
 
     window_id: str
     name:      str
-    trigger:   str = TRIGGER_CLICK
+    trigger:   str = Trigger.CLICK
 
 
 # A foreground target is either a configured app or an external window.

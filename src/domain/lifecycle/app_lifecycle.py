@@ -19,7 +19,8 @@ import logging
 import os
 from collections.abc import Callable
 
-from domain.catalog.app import App, TRIGGER_CLICK
+from domain.catalog.app import App
+from domain.input.vocabulary import Trigger
 from domain.shell.foreground import ForegroundState
 from domain.catalog.target import AppTarget, Target, WindowTarget
 from domain.input.pad_control import PadControl
@@ -243,7 +244,7 @@ class AppLifecycle:
         BTN_MODE trigger is reset to the Desktop default so no app-specific
         HOLD_1S setting lingers after the app is gone.
         """
-        self._gamepad.set_app_btn_mode_trigger(TRIGGER_CLICK)
+        self._gamepad.set_app_btn_mode_trigger(Trigger.CLICK)
         self._gamepad.push_handler(self._pad_handler)
         if not self._view.is_visible():
             self._view.show_fullscreen()

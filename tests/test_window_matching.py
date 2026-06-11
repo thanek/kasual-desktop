@@ -9,8 +9,9 @@ their own focused unit tests in test_domain_window.py once extracted.
 import pytest
 from unittest.mock import MagicMock, patch
 
+from domain.input.vocabulary import Trigger
 from infrastructure.qt.desktop.tile_bar import TileBar
-from domain.catalog.app import App, TRIGGER_CLICK, TRIGGER_HOLD_1S
+from domain.catalog.app import App
 
 
 def _win(id_="1", title="App", pid=0, desktop_file="", resource_class=""):
@@ -33,7 +34,7 @@ def app_manager():
 @pytest.fixture
 def apps():
     return [
-        App(name="Steam", command="steam", recall_menu_trigger=TRIGGER_HOLD_1S),
+        App(name="Steam", command="steam", recall_menu_trigger=Trigger.HOLD_1S),
         App(name="Firefox", command="/usr/bin/firefox"),
     ]
 
@@ -102,21 +103,21 @@ class TestManagedWindowFiltering:
 
 class TestFindTriggerForPid:
     def test_pid_zero_defaults_to_click(self, bar):
-        assert bar._find_trigger_for_pid(0) == TRIGGER_CLICK
+        assert bar._find_trigger_for_pid(0) == Trigger.CLICK
 
     def test_owned_pid_inherits_app_trigger(self, bar, app_manager):
         app_manager.running_idxs.return_value = [0]        # Steam (HOLD_1S)
         app_manager.running_pid.side_effect = lambda i: 1000 if i == 0 else None
-        assert bar._find_trigger_for_pid(1000) == TRIGGER_HOLD_1S
+        assert bar._find_trigger_for_pid(1000) == Trigger.HOLD_1S
 
     def test_inherits_through_parent_chain(self, bar, app_manager):
         app_manager.running_idxs.return_value = [0]
         app_manager.running_pid.side_effect = lambda i: 1000 if i == 0 else None
         # child 2000 → parent 1000 (owned by Steam)
         with patch("infrastructure.qt.desktop.tile_bar._get_ppid", return_value=1000):
-            assert bar._find_trigger_for_pid(2000) == TRIGGER_HOLD_1S
+            assert bar._find_trigger_for_pid(2000) == Trigger.HOLD_1S
 
     def test_unowned_pid_defaults_to_click(self, bar, app_manager):
         app_manager.running_idxs.return_value = []
         with patch("infrastructure.qt.desktop.tile_bar._get_ppid", return_value=None):
-            assert bar._find_trigger_for_pid(7777) == TRIGGER_CLICK
+            assert bar._find_trigger_for_pid(7777) == Trigger.CLICK

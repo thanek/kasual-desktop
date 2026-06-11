@@ -3,10 +3,11 @@
 Pure rules, no Qt/KWin/proc — the process-parent lookup is injected.
 """
 
-from domain.catalog.app import App, TRIGGER_CLICK, TRIGGER_HOLD_1S
+from domain.catalog.app import App
 from domain.catalog.target import AppTarget, WindowTarget, target_at_index
 from domain.catalog.window import Window
 from domain.catalog.window_rules import app_window_present, external_windows, resolve_recall_trigger
+from domain.input.vocabulary import Trigger
 
 
 def _win(resource_class="", desktop_file="", pid=0):
@@ -97,7 +98,7 @@ class TestTargetAtIndex:
             Window(id="w2", title="Video", pid=2000)]
 
     def _no_trigger(self, pid):
-        return TRIGGER_CLICK
+        return Trigger.CLICK
 
     def test_static_index_yields_app_target(self):
         assert target_at_index(1, self.APPS, self.WINS, self._no_trigger) == \
@@ -106,12 +107,12 @@ class TestTargetAtIndex:
     def test_dynamic_index_yields_window_target(self):
         # index 2 == first window (after 2 static apps)
         assert target_at_index(2, self.APPS, self.WINS, self._no_trigger) == \
-            WindowTarget(window_id="w1", name="Doc", trigger=TRIGGER_CLICK)
+            WindowTarget(window_id="w1", name="Doc", trigger=Trigger.CLICK)
 
     def test_window_target_carries_resolved_trigger(self):
-        trigger_for = lambda pid: TRIGGER_HOLD_1S if pid == 2000 else TRIGGER_CLICK
+        trigger_for = lambda pid: Trigger.HOLD_1S if pid == 2000 else Trigger.CLICK
         target = target_at_index(3, self.APPS, self.WINS, trigger_for)  # w2, pid 2000
-        assert target == WindowTarget(window_id="w2", name="Video", trigger=TRIGGER_HOLD_1S)
+        assert target == WindowTarget(window_id="w2", name="Video", trigger=Trigger.HOLD_1S)
 
     def test_out_of_range_yields_none(self):
         assert target_at_index(4, self.APPS, self.WINS, self._no_trigger) is None
@@ -125,26 +126,26 @@ class TestResolveRecallTrigger:
         return App(name="A", command="a", recall_menu_trigger=trigger)
 
     def test_pid_zero_defaults_to_click(self):
-        assert resolve_recall_trigger(0, {}, lambda p: None) == TRIGGER_CLICK
+        assert resolve_recall_trigger(0, {}, lambda p: None) == Trigger.CLICK
 
     def test_direct_owner(self):
-        apps = {1000: self._app(TRIGGER_HOLD_1S)}
-        assert resolve_recall_trigger(1000, apps, lambda p: None) == TRIGGER_HOLD_1S
+        apps = {1000: self._app(Trigger.HOLD_1S)}
+        assert resolve_recall_trigger(1000, apps, lambda p: None) == Trigger.HOLD_1S
 
     def test_inherits_through_parent_chain(self):
-        apps = {1000: self._app(TRIGGER_HOLD_1S)}
+        apps = {1000: self._app(Trigger.HOLD_1S)}
         parent = {2000: 1000}.get
-        assert resolve_recall_trigger(2000, apps, parent) == TRIGGER_HOLD_1S
+        assert resolve_recall_trigger(2000, apps, parent) == Trigger.HOLD_1S
 
     def test_unowned_defaults_to_click(self):
-        assert resolve_recall_trigger(7777, {}, lambda p: None) == TRIGGER_CLICK
+        assert resolve_recall_trigger(7777, {}, lambda p: None) == Trigger.CLICK
 
     def test_stops_on_cycle(self):
         # A parent cycle must terminate (visited guard), defaulting to CLICK.
         parent = {5: 6, 6: 5}.get
-        assert resolve_recall_trigger(5, {}, parent) == TRIGGER_CLICK
+        assert resolve_recall_trigger(5, {}, parent) == Trigger.CLICK
 
     def test_stops_at_pid_1(self):
         # Walking up to init (pid 1) without an owner → CLICK, no infinite loop.
         parent = {10: 1}.get
-        assert resolve_recall_trigger(10, {}, parent) == TRIGGER_CLICK
+        assert resolve_recall_trigger(10, {}, parent) == Trigger.CLICK
