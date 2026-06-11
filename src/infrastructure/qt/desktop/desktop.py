@@ -341,8 +341,9 @@ class Desktop(QWidget, DesktopView, DesktopShell, SessionView, metaclass=_Meta):
     def _show_tile_popover(self) -> None:
         """Show a context popover above the focused tile.
 
-        The *which entries* rule lives in domain.compose_tile_menu; here we
-        only render each abstract entry into a (label, callback) the widget shows.
+        The whole menu (which items, their labels) is composed by
+        domain.compose_tile_menu; here we only render it and dispatch the chosen
+        item's action.
         """
         ctx = self._tilebar.current_context()
         if ctx is None:
@@ -351,10 +352,9 @@ class Desktop(QWidget, DesktopView, DesktopShell, SessionView, metaclass=_Meta):
             self._tilebar.is_tile_running(ctx.index)
             if isinstance(ctx, AppTarget) else True
         )
-        options = [self._render_tile_entry(e) for e in compose_tile_menu(ctx, is_running)]
-
         popover = TilePopoverMenu(
-            options=options,
+            items=compose_tile_menu(ctx, is_running),
+            on_select=self._dispatch_tile,
             gamepad=self._gamepad,
             parent=self,
         )
@@ -365,14 +365,12 @@ class Desktop(QWidget, DesktopView, DesktopShell, SessionView, metaclass=_Meta):
     def _on_tile_popover_closed(self) -> None:
         self._tile_popover = None
 
-    def _render_tile_entry(self, entry) -> tuple[str, object]:
-        """Render an abstract tile-menu entry into a (label, callback) pair."""
-        if entry.kind == LAUNCH:
-            return self.tr("Launch"), self._tilebar.select_current
-        if entry.kind == RESTORE:
-            return self.tr("Restore"), self._tilebar.select_current
-        # CLOSE
-        return self.tr("Close"), self._close_focused_tile
+    def _dispatch_tile(self, item) -> None:
+        """Perform the behaviour for an activated tile Popover item."""
+        if item.action in (LAUNCH, RESTORE):
+            self._tilebar.select_current()
+        elif item.action == CLOSE:
+            self._close_focused_tile()
 
     def _close_focused_tile(self) -> None:
         """Close the application represented by the currently focused tile."""

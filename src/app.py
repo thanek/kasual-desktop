@@ -3,18 +3,19 @@
 import logging
 import os
 
-from domain.catalog.target import AppTarget, Target
-from domain.menu.entry import CLOSE_APP, RETURN_TO_APP, RETURN_TO_DESKTOP, MenuEntry
+from domain.catalog.target import AppTarget
+from domain.menu.entry import CLOSE_APP, RETURN_TO_APP, RETURN_TO_DESKTOP
 from domain.menu.home import compose_home_menu
+from domain.menu.item import MenuItem
 from domain.shell.session import SessionPolicy
 from infrastructure.input.gamepad_watcher import GamepadWatcher
 from infrastructure.qt.desktop import Desktop
-from infrastructure.qt.overlays.home_overlay import HomeOverlay, MenuItem
-from infrastructure.qt.ui import styles
+from infrastructure.qt.overlays.home_overlay import HomeOverlay
 from infrastructure.qt.ui.tray import SystemTray
 from domain.system.actions import ActionDeps
+from domain.system.action_view import make_action_confirm
+from domain.system.runner import ActionRunner
 from infrastructure.system.window_manager import KWinWindowManager
-from support.i18n import translate
 
 logger = logging.getLogger(__name__)
 
@@ -36,11 +37,15 @@ class Application:
     ) -> None:
         self._gamepad     = gamepad
         self._desktop     = desktop
-        self._action_deps = action_deps
         self._tray        = tray
         self._wm          = wm
         self._overlay: HomeOverlay | None = None
         self._session     = SessionPolicy(view=desktop, indicator=tray)
+        # System actions (sleep/shutdown/…) run through the domain ActionRunner,
+        # gating the confirmable ones on the Desktop's tracked confirm dialog.
+        self._action_runner = ActionRunner(
+            action_deps, make_action_confirm(desktop.confirm)
+        )
 
         gamepad.btn_mode_pressed.connect(self._on_btn_mode)
         gamepad.connected_changed.connect(self._on_connected_changed)
@@ -65,50 +70,37 @@ class Application:
             self._overlay.deleteLater()
             self._overlay = None
 
-        running_app = self._desktop.current_app()
-        menu = compose_home_menu(running_app)
+        menu = compose_home_menu(self._desktop.current_app())
 
-        self._overlay = HomeOverlay(
-            self._gamepad, self._action_deps, show_confirm=self._desktop.confirm
-        )
+        self._overlay = HomeOverlay(self._gamepad)
         self._overlay.closed.connect(self._on_overlay_closed)
 
-        items = [self._render_entry(entry, running_app) for entry in menu.entries]
-        if menu.include_system_actions:
-            items += HomeOverlay.action_items()
         # cancel (B button) returns to the running app when one is foreground;
         # on the bare Desktop it just closes the overlay (None).
         on_cancel = (
-            (lambda t=running_app: self._desktop.restore_app(t))
-            if menu.cancel_restores_app else None
+            (lambda t=menu.cancel_restores: self._desktop.restore_app(t))
+            if menu.cancel_restores is not None else None
         )
-        self._overlay.show_overlay(items=items, on_cancel=on_cancel)
+        self._overlay.show_overlay(
+            items=menu.items, on_select=self._dispatch_home, on_cancel=on_cancel
+        )
 
-    def _render_entry(self, entry: MenuEntry, running_app: Target | None) -> MenuItem:
-        """Map an abstract menu entry (composed by domain.home_menu) to a
-        concrete, localized HomeOverlay item with its icon and callback."""
-        if entry.kind == RETURN_TO_APP:
-            label = styles.truncate(entry.name, 22)
-            return {
-                "label": "  " + translate("Kasual", "Return to {0}").format(label),
-                "icon": "fa5s.times",
-                "callback": lambda t=running_app: self._desktop.restore_app(t),
-            }
-        if entry.kind == CLOSE_APP:
-            label = styles.truncate(entry.name, 22)
-            return {
-                "label": "  " + translate("Kasual", "Close {0}").format(label),
-                "icon": "fa5s.times-circle",
-                "callback": lambda t=running_app: self._desktop.request_close_app(t),
-            }
-        # RETURN_TO_DESKTOP: from a running app we leave it (minimize + raise KD);
-        # on the bare Desktop we just bring KD to the front.
-        callback = self._return_to_desktop if running_app is not None else self._desktop.show_desktop
-        return {
-            "label": "  " + translate("Kasual", "Return to Desktop"),
-            "icon": "fa5s.home",
-            "callback": callback,
-        }
+    def _dispatch_home(self, item: MenuItem) -> None:
+        """Perform the behaviour for an activated Home Overlay item."""
+        if item.action == RETURN_TO_APP:
+            self._desktop.restore_app(item.target)
+        elif item.action == CLOSE_APP:
+            self._desktop.request_close_app(item.target)
+        elif item.action == RETURN_TO_DESKTOP:
+            # From a running app we leave it (minimize + raise KD); on the bare
+            # Desktop we just bring KD to the front.
+            if self._desktop.current_app() is not None:
+                self._return_to_desktop()
+            else:
+                self._desktop.show_desktop()
+        else:
+            # A system-action key (volume, sleep, …).
+            self._action_runner.run(item.action)
 
     def _return_to_desktop(self) -> None:
         """Leave the running app and surface the Desktop.

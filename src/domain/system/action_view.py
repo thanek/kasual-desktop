@@ -17,6 +17,7 @@ the actual confirm-dialog opener.
 from collections.abc import Callable
 from dataclasses import dataclass
 
+from domain.menu.item import MenuItem
 from domain.system.actions import HIDE_DESKTOP, RESTART, SHUTDOWN, SLEEP, VOLUME
 from support.i18n import translate
 
@@ -59,6 +60,21 @@ PRESENTATION: dict[str, ActionView] = {
         "fa5s.window-minimize", "#d580ff", None,
     ),
 }
+
+
+def system_action_items() -> list[MenuItem]:
+    """The system actions (volume, sleep, …) as menu items, in catalog order.
+
+    Each item's `action` is the action key the ActionRunner dispatches on; the
+    label is localized here (the PRESENTATION strings are marker sources)."""
+    return [
+        MenuItem(
+            label=translate("Kasual", view.label),
+            action=key,
+            icon=view.icon,
+        )
+        for key, view in PRESENTATION.items()
+    ]
 
 
 def make_action_confirm(

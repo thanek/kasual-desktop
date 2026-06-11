@@ -1,29 +1,36 @@
 """
-Testy jednostkowe dla HomeOverlay.
+Testy jednostkowe dla HomeOverlay (warstwa prezentacji).
+
+Po przeniesieniu składania menu i dispatchu do dziedziny/kontrolera overlay
+tylko renderuje listę `MenuItem`, nawiguje po niej i raportuje wybór przez
+`on_select` oraz odrzucenie przez `on_cancel`. Zachowania akcji (np. potwierdzenia
+akcji systemowych) są testowane przy `ActionRunner` w test_system_actions.py.
 
 Testujemy:
   - show_overlay / hide_overlay: rejestracja handlera, idempotentność
-  - budowanie listy pozycji (items vs. _STATIC_ITEMS)
+  - budowanie przycisków z przekazanych MenuItem
   - nawigacja padem: up/down (z zawijaniem), cancel/close
-  - resetowanie indeksu przy każdym show_overlay
-  - _activate: wywołanie callbacku, akcja cancel, akcja systemowa
+  - reset indeksu przy każdym show_overlay
+  - _activate: woła on_select z właściwym MenuItem i chowa overlay
+  - _dismiss: woła on_cancel
 """
 
-import pytest
-from unittest.mock import MagicMock, patch
-
-from infrastructure.qt.overlays.home_overlay import HomeOverlay, MenuItem
-from domain.system.actions import ActionDeps
+from domain.menu.item import MenuItem
 
 
-def _make_overlay(mock_gamepad, action_deps=None):
-    return HomeOverlay(gamepad=mock_gamepad, action_deps=action_deps)
+def _items(n: int = 3) -> list[MenuItem]:
+    return [MenuItem(label=f"Item {i}", action=f"a{i}", icon="fa5s.home") for i in range(n)]
 
 
-def _shown(mock_gamepad, items=None, on_cancel=None, action_deps=None):
+def _make_overlay(mock_gamepad):
+    from infrastructure.qt.overlays.home_overlay import HomeOverlay
+    return HomeOverlay(gamepad=mock_gamepad)
+
+
+def _shown(mock_gamepad, items=None, on_select=None, on_cancel=None):
     """Zwraca overlay w stanie pokazanym (show_overlay wywołane)."""
-    overlay = _make_overlay(mock_gamepad, action_deps=action_deps)
-    overlay.show_overlay(items=items, on_cancel=on_cancel)
+    overlay = _make_overlay(mock_gamepad)
+    overlay.show_overlay(items=items or _items(), on_select=on_select, on_cancel=on_cancel)
     return overlay
 
 
@@ -43,7 +50,7 @@ class TestShowHide:
     def test_double_show_does_not_register_handler_twice(self, mock_gamepad):
         overlay = _shown(mock_gamepad)
         count_before = len(mock_gamepad._stack)
-        overlay.show_overlay()   # już widoczny – noop
+        overlay.show_overlay(items=_items())   # już widoczny – noop
         assert len(mock_gamepad._stack) == count_before
         overlay.hide_overlay()
 
@@ -55,21 +62,21 @@ class TestShowHide:
 # ── Budowanie pozycji menu ────────────────────────────────────────────────────
 
 class TestItemBuilding:
-    def test_default_items_are_static(self, mock_gamepad):
-        overlay = _shown(mock_gamepad)
-        assert overlay._items == HomeOverlay.static_items()
+    def test_buttons_count_matches_items(self, mock_gamepad):
+        overlay = _shown(mock_gamepad, items=_items(4))
+        assert len(overlay._buttons) == 4
         overlay.hide_overlay()
 
-    def test_buttons_count_matches_items(self, mock_gamepad):
-        overlay = _shown(mock_gamepad)
-        assert len(overlay._buttons) == len(overlay._items)
+    def test_items_are_stored(self, mock_gamepad):
+        items = _items(2)
+        overlay = _shown(mock_gamepad, items=items)
+        assert overlay._items == items
         overlay.hide_overlay()
 
     def test_buttons_rebuilt_on_second_show(self, mock_gamepad):
-        overlay = _shown(mock_gamepad)
+        overlay = _shown(mock_gamepad, items=_items(3))
         overlay.hide_overlay()
-        items = [MenuItem(label="A", icon="fa5s.times", callback=lambda: None)]
-        overlay.show_overlay(items=items)
+        overlay.show_overlay(items=_items(1))
         assert len(overlay._buttons) == 1
         overlay.hide_overlay()
 
@@ -111,7 +118,7 @@ class TestNavigation:
         overlay._handle_pad("down")
         overlay._handle_pad("down")
         overlay.hide_overlay()
-        overlay.show_overlay()
+        overlay.show_overlay(items=_items())
         assert overlay._index == 0
         overlay.hide_overlay()
 
@@ -119,66 +126,21 @@ class TestNavigation:
 # ── _activate ─────────────────────────────────────────────────────────────────
 
 class TestActivate:
-    def test_callback_item_called_on_select(self, mock_gamepad):
-        called = []
-        items = [MenuItem(label="X", icon="fa5s.times", callback=lambda: called.append(True))]
-        overlay = _shown(mock_gamepad, items=items)
+    def test_select_calls_on_select_with_current_item(self, mock_gamepad):
+        items = _items(3)
+        chosen = []
+        overlay = _shown(mock_gamepad, items=items, on_select=chosen.append)
+        overlay._index = 2
         overlay._handle_pad("select")
-        assert called == [True]
+        assert chosen == [items[2]]
 
-    def test_callback_item_hides_overlay(self, mock_gamepad):
-        items = [MenuItem(label="A", icon="fa5s.times", callback=lambda: None)]
-        overlay = _shown(mock_gamepad, items=items)
-        overlay._handle_pad("select")
-        assert not overlay.isVisible()
-
-    def test_cancel_action_hides_overlay(self, mock_gamepad):
-        overlay = _shown(mock_gamepad)
-        cancel_idx = next(i for i, it in enumerate(overlay._items) if it.get("action") == "cancel")
-        overlay._index = cancel_idx
+    def test_select_hides_overlay(self, mock_gamepad):
+        overlay = _shown(mock_gamepad, items=_items(), on_select=lambda item: None)
         overlay._handle_pad("select")
         assert not overlay.isVisible()
 
-    def test_cancel_action_calls_on_cancel(self, mock_gamepad):
-        called = []
-        overlay = _shown(mock_gamepad, on_cancel=lambda: called.append(True))
-        cancel_idx = next(i for i, it in enumerate(overlay._items) if it.get("action") == "cancel")
-        overlay._index = cancel_idx
-        overlay._handle_pad("select")
-        assert called == [True]
-
-    @pytest.mark.parametrize("action", ["sleep", "restart", "shutdown"])
-    def test_system_action_calls_ask_confirmation(self, action, mock_gamepad):
-        overlay = _shown(mock_gamepad, action_deps=ActionDeps(desktop=MagicMock(), power=MagicMock()))
-        action_idx = next(i for i, it in enumerate(overlay._items) if it.get("action") == action)
-        overlay._index = action_idx
-        with patch("infrastructure.qt.overlays.home_overlay.ConfirmDialog") as mock_dlg:
-            overlay._handle_pad("select")
-        mock_dlg.assert_called_once()
-
-    @pytest.mark.parametrize("action", ["sleep", "restart", "shutdown"])
-    def test_system_action_hides_overlay_before_confirming(self, action, mock_gamepad):
-        overlay = _shown(mock_gamepad, action_deps=ActionDeps(desktop=MagicMock(), power=MagicMock()))
-        action_idx = next(i for i, it in enumerate(overlay._items) if it.get("action") == action)
-        overlay._index = action_idx
-        with patch("infrastructure.qt.overlays.home_overlay.ConfirmDialog"):
-            overlay._handle_pad("select")
-        assert not overlay.isVisible()
-
-    def test_hide_desktop_calls_pause_immediately(self, mock_gamepad):
-        desktop = MagicMock()
-        overlay = _shown(mock_gamepad, action_deps=ActionDeps(desktop=desktop, power=MagicMock()))
-        hide_idx = next(i for i, it in enumerate(overlay._items) if it.get("action") == "hide_desktop")
-        overlay._index = hide_idx
-        with patch("infrastructure.qt.overlays.home_overlay.ConfirmDialog") as mock_dlg:
-            overlay._handle_pad("select")
-        mock_dlg.assert_not_called()
-        desktop.pause.assert_called_once()
-
-    def test_hide_desktop_hides_overlay(self, mock_gamepad):
-        overlay = _shown(mock_gamepad, action_deps=ActionDeps(desktop=MagicMock(), power=MagicMock()))
-        hide_idx = next(i for i, it in enumerate(overlay._items) if it.get("action") == "hide_desktop")
-        overlay._index = hide_idx
+    def test_select_without_on_select_does_not_raise(self, mock_gamepad):
+        overlay = _shown(mock_gamepad)   # on_select=None
         overlay._handle_pad("select")
         assert not overlay.isVisible()
 

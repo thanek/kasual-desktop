@@ -7,6 +7,7 @@ from PyQt6.QtCore import Qt, QEvent, QPoint, QRect, pyqtSignal
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QPushButton, QApplication
 
 from domain.menu.cursor import MenuCursor
+from domain.menu.item import MenuItem
 from domain.input.vocabulary import Event
 from infrastructure.audio import sound_player
 from infrastructure.audio.feedback import SoundFeedback
@@ -23,18 +24,20 @@ class TilePopoverMenu(QWidget):
 
     def __init__(
         self,
-        options: list[tuple[str, Callable[[], None]]],
+        items: list[MenuItem],
+        on_select: Callable[[MenuItem], None],
         gamepad: GamepadWatcher,
         parent: QWidget,
     ) -> None:
         super().__init__(parent)
-        self._options = options
+        self._items = items
+        self._on_select = on_select
         self._gamepad = gamepad
         self._closed = False
-        # Vertical menu navigation lives in the application layer; this widget
-        # owns only presentation. wrap=False — the popover clamps at its ends.
+        # Vertical menu navigation lives in the domain; this widget owns only
+        # presentation. wrap=False — the popover clamps at its ends.
         self._cursor = MenuCursor(
-            count=lambda: len(self._options),
+            count=lambda: len(self._items),
             render=self._render_selection,
             on_activate=self._on_btn_clicked,
             on_dismiss=self._dismiss,
@@ -67,8 +70,8 @@ class TilePopoverMenu(QWidget):
                 self._on_hover(idx)
             btn.enterEvent = _enter
 
-        for i, (label, _) in enumerate(options):
-            btn = QPushButton(label)
+        for i, item in enumerate(items):
+            btn = QPushButton(item.label)
             btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
             btn.setMinimumWidth(220)
             btn.clicked.connect(lambda checked=False, idx=i: self._on_btn_clicked(idx))
@@ -139,9 +142,9 @@ class TilePopoverMenu(QWidget):
         return False
 
     def _on_btn_clicked(self, idx: int) -> None:
-        _, callback = self._options[idx]
+        item = self._items[idx]
         self._dismiss(play_sound=False)
-        callback()
+        self._on_select(item)
 
     def _on_hover(self, idx: int) -> None:
         self._cursor.hover(idx)

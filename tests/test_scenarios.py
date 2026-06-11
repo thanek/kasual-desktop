@@ -24,7 +24,7 @@ def _popover(target, is_running, *, on_close, on_launch, on_restore, feedback):
     cursor = MenuCursor(
         count=lambda: len(menu),
         render=lambda i: None,
-        on_activate=lambda i: effects[menu[i].kind](),
+        on_activate=lambda i: effects[menu[i].action](),
         on_dismiss=lambda: None,
         feedback=feedback,
     )
@@ -60,7 +60,7 @@ def test_launch_from_popover_over_idle_app_tile_launches_it():
         on_close=lambda: None, on_launch=lambda: launched.append("Steam"),
         on_restore=lambda: None, feedback=feedback,
     )
-    assert [e.kind for e in menu] == [LAUNCH]
+    assert [e.action for e in menu] == [LAUNCH]
     cursor.handle_pad(Event.SELECT)
     assert launched == ["Steam"]
 

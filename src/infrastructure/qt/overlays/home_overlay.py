@@ -1,5 +1,5 @@
 import logging
-from typing import Callable, NotRequired, TypedDict, _ProtocolMeta  # type: ignore[attr-defined]
+from typing import Callable, _ProtocolMeta  # type: ignore[attr-defined]
 
 import qtawesome as qta
 from PyQt6.QtCore import Qt, pyqtSignal
@@ -9,27 +9,16 @@ from PyQt6.QtWidgets import (
 )
 
 from domain.menu.cursor import MenuCursor
+from domain.menu.item import MenuItem
 from domain.input.vocabulary import Event
 from infrastructure.audio import sound_player
 from infrastructure.audio.feedback import SoundFeedback
 from infrastructure.input.gamepad_watcher import GamepadWatcher
-from domain.system.actions import ActionDeps
-from domain.system.runner import ActionRunner
-from domain.system.action_view import PRESENTATION, make_action_confirm
 from infrastructure.qt.ui import styles
 from infrastructure.qt.ui.layer_shell import make_layer_surface, Layer, Anchor, Keyboard
 from domain.shell.session_collaborators import Dismissable
-from support.i18n import translate
-from .confirm_dialog import ConfirmDialog
 
 logger = logging.getLogger(__name__)
-
-
-class MenuItem(TypedDict):
-    label: str
-    icon:  str
-    action:   NotRequired[str]       # for static items (_STATIC_ITEMS)
-    callback: NotRequired[Callable]  # for dynamic items (extra_items)
 
 
 class _Meta(type(QWidget), _ProtocolMeta): pass
@@ -44,43 +33,24 @@ class HomeOverlay(QWidget, Dismissable, metaclass=_Meta):
     without touching what is underneath. Its translucent backdrop lets the live
     screen show through; the menu card is anchored to the right edge (sidebar).
 
+    Pure presentation: it renders the domain-composed `MenuItem`s, navigates
+    them, and reports activation through `on_select(item)`; deciding what each
+    item *does* is the controller's job.
+
     Usage:
-        overlay = HomeOverlay(gamepad, action_deps)
-        overlay.show_overlay(items=[...])         # show with context
-        overlay.hide_overlay()                    # hide
+        overlay = HomeOverlay(gamepad)
+        overlay.show_overlay(items=[...], on_select=..., on_cancel=...)
+        overlay.hide_overlay()
     """
 
     closed = pyqtSignal()   # emitted when the overlay is dismissed
 
-
-    @staticmethod
-    def action_items() -> list[MenuItem]:
-        """System-action menu items (shutdown, minimize, etc.)."""
-        return [
-            {"label": view.label, "icon": view.icon, "action": action_type}
-            for action_type, view in PRESENTATION.items()
-        ]
-
-    @staticmethod
-    def static_items() -> list[MenuItem]:
-        cancel_item: MenuItem = {
-            "label": translate("Kasual", "Return to Desktop"),
-            "icon": "fa5s.times",
-            "action": Event.CANCEL,
-        }
-        return [cancel_item] + HomeOverlay.action_items()
-
-    def __init__(
-        self,
-        gamepad: GamepadWatcher,
-        action_deps: ActionDeps | None = None,
-        show_confirm: Callable[[str, Callable[[], None]], None] | None = None,
-    ):
+    def __init__(self, gamepad: GamepadWatcher):
         super().__init__()
         self._gamepad = gamepad
         # Vertical menu navigation (index + move/select/dismiss) lives in the
-        # application layer; this widget owns only presentation. wrap=True — the
-        # home menu wraps around its ends.
+        # domain; this widget owns only presentation. wrap=True — the home menu
+        # wraps around its ends.
         self._cursor = MenuCursor(
             count=lambda: len(self._items),
             render=self._render_selection,
@@ -89,24 +59,9 @@ class HomeOverlay(QWidget, Dismissable, metaclass=_Meta):
             feedback=SoundFeedback(),
             wrap=True,
         )
-        # Confirmation UI: prefer an injected show_confirm (the Desktop's tracked
-        # dialog manager) so action dialogs are owned and cleaned up centrally.
-        # Falls back to a standalone ConfirmDialog when none is provided (e.g.
-        # tests, or standalone use without a Desktop).
-        confirm = show_confirm or (
-            lambda q, cb: ConfirmDialog(
-                question=q,
-                on_confirmed=cb,
-                on_cancelled=lambda: None,
-                gamepad=self._gamepad,
-            )
-        )
-        self._action_runner = (
-            ActionRunner(action_deps, make_action_confirm(confirm))
-            if action_deps is not None else None
-        )
         self._items:     list[MenuItem]    = []
         self._buttons:   list[QPushButton] = []
+        self._on_select: Callable[[MenuItem], None] | None = None
         self._on_cancel  = None
 
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint)
@@ -160,19 +115,22 @@ class HomeOverlay(QWidget, Dismissable, metaclass=_Meta):
 
     def show_overlay(
         self,
-        items: list[MenuItem] | None = None,
+        items: list[MenuItem],
+        on_select: Callable[[MenuItem], None] | None = None,
         on_cancel=None,
     ) -> None:
         """
-        Show overlay with a dynamic menu.
+        Show the overlay with a domain-composed menu.
 
-        items — list of MenuItem; the static system menu is used when omitted.
-        on_cancel — callback invoked when the overlay is dismissed.
+        items — the `MenuItem`s to render (already localized).
+        on_select — invoked with the chosen item when one is activated.
+        on_cancel — invoked when the overlay is dismissed (B / backdrop).
         """
         if self.isVisible():
             return
+        self._on_select = on_select
         self._on_cancel = on_cancel
-        self._rebuild_buttons(items or [])
+        self._rebuild_buttons(items)
         self._cursor.reset(0)
         self._gamepad.push_handler(self._handle_pad)
         sound_player.play("popup_open")
@@ -207,7 +165,7 @@ class HomeOverlay(QWidget, Dismissable, metaclass=_Meta):
                 item.widget().deleteLater()
         self._buttons.clear()
 
-        self._items = list(items) if items else self.static_items()
+        self._items = list(items)
 
         def _bind_hover(btn: QPushButton, idx: int) -> None:
             def _enter(event) -> None:
@@ -216,24 +174,17 @@ class HomeOverlay(QWidget, Dismissable, metaclass=_Meta):
             btn.enterEvent = _enter
 
         for i, item in enumerate(self._items):
-            # Static items carry source-string labels (marked for extraction at
-            # their definition) — we translate here, at render time.
-            # Dynamic items (callback) already have ready-formatted labels.
-            label = (
-                "  " + translate("Kasual", item["label"])
-                if "action" in item
-                else item["label"]
-            )
-            btn = QPushButton(label)
+            btn = QPushButton("  " + item.label)
             btn.setMinimumHeight(62)
-            btn.setIcon(qta.icon(item["icon"], color="white"))
+            if item.icon:
+                btn.setIcon(qta.icon(item.icon, color="white"))
             btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
             btn.clicked.connect(lambda checked=False, idx=i: self._activate(idx))
             _bind_hover(btn, i)
             self._buttons_layout.addWidget(btn)
             self._buttons.append(btn)
 
-    # ── Selection (delegated to the application-layer cursor) ────────────────
+    # ── Selection (delegated to the domain cursor) ───────────────────────────
 
     @property
     def _index(self) -> int:
@@ -266,24 +217,10 @@ class HomeOverlay(QWidget, Dismissable, metaclass=_Meta):
 
     def _activate(self, idx: int) -> None:
         item = self._items[idx]
-
-        if "callback" in item:
-            sound_player.play("select")
-            self.hide_overlay()
-            item["callback"]()
-            return
-
-        action = item["action"]
-        if action == Event.CANCEL:
-            sound_player.play("popup_close")
-            self.hide_overlay()
-            if self._on_cancel:
-                self._on_cancel()
-            return
-
+        sound_player.play("select")
         self.hide_overlay()
-        if self._action_runner is not None:
-            self._action_runner.run(action)
+        if self._on_select is not None:
+            self._on_select(item)
 
     # ── Style ──────────────────────────────────────────────────────────────
 

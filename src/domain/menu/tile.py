@@ -1,27 +1,31 @@
-"""Tile Popover menu composition — which entries appear for a focused tile.
+"""Tile Popover menu composition — which items appear for a focused tile.
 
-Pure use-case (no Qt): decides the *structure* of the context Popover shown over
-a tile, given what that tile is and whether it is running. Rendering (label,
-icon, the callback wired to each entry) stays in the Application/Desktop wiring;
-this owns only the composition rule:
+Pure use-case (no Qt): composes the render-ready context Popover shown over a
+tile, given what that tile is and whether it is running:
 
   - a configured App that is not running → just "launch" it;
   - anything already on screen (a running App, or an open Window) → "restore" or
     "close" it.
 
-Mirrors `domain.home_menu` — the Home Overlay's twin.
+Mirrors `domain.menu.home` — the Home Overlay's twin. Labels keep the "Desktop"
+translation context so the existing locale entries keep resolving.
 """
 
 from domain.catalog.target import AppTarget, Target
-from domain.menu.entry import CLOSE, LAUNCH, RESTORE, MenuEntry
+from domain.menu.entry import CLOSE, LAUNCH, RESTORE
+from domain.menu.item import MenuItem
+from support.i18n import translate
 
 
-def compose_tile_menu(target: Target, is_running: bool) -> list[MenuEntry]:
+def compose_tile_menu(target: Target, is_running: bool) -> list[MenuItem]:
     """Compose the tile Popover for *target*.
 
     `is_running` is only consulted for an :class:`AppTarget` (a configured app
     tile); an open :class:`WindowTarget` is by definition already running.
     """
     if isinstance(target, AppTarget) and not is_running:
-        return [MenuEntry(LAUNCH)]
-    return [MenuEntry(RESTORE), MenuEntry(CLOSE)]
+        return [MenuItem(translate("Desktop", "Launch"), LAUNCH, target=target)]
+    return [
+        MenuItem(translate("Desktop", "Restore"), RESTORE, target=target),
+        MenuItem(translate("Desktop", "Close"), CLOSE, target=target),
+    ]

@@ -1,29 +1,18 @@
-"""The shared vocabulary of Kasual's menus.
+"""The shared action vocabulary of Kasual's menus.
 
-One value type for every menu entry, and one place naming every menu *word* the
-Home Overlay and the tile Popover can show. The composition rules (which words
-appear when) live in `home_menu` / `tile_menu`; how each word looks (label, icon)
-and what it does (callback) live in the view wiring. This module is just the
-glossary — the entries themselves.
+One place naming every menu *action* the Home Overlay and the tile Popover can
+offer. The composition rules (which actions appear when, with what label/icon)
+live in `home` / `tile`, producing `domain.menu.item.MenuItem`s that carry these
+as their `action`; the presenter dispatches on them. This module is just the
+glossary.
 """
 
-from dataclasses import dataclass
-
-# ── Home Overlay entry kinds ─────────────────────────────────────────────────
+# ── Home Overlay actions ─────────────────────────────────────────────────────
 RETURN_TO_APP     = "return_to_app"
 CLOSE_APP         = "close_app"
 RETURN_TO_DESKTOP = "return_to_desktop"
 
-# ── Tile Popover entry kinds ─────────────────────────────────────────────────
+# ── Tile Popover actions ─────────────────────────────────────────────────────
 LAUNCH  = "launch"
 RESTORE = "restore"
 CLOSE   = "close"
-
-
-@dataclass(frozen=True)
-class MenuEntry:
-    """One abstract menu entry: a named *kind*, optionally carrying the target
-    *name* (the app/window title) for entries that act on something specific."""
-
-    kind: str
-    name: str = ""
