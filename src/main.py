@@ -24,6 +24,7 @@ from infrastructure.system.file_log_source import FileLogSource
 from domain.shared.log_provider import LogProvider
 from infrastructure.system.app_config import load_apps
 from infrastructure.system.power import SystemdPowerControl
+from infrastructure.system.kde_wallpaper import KdeSystemWallpaper
 from domain.system.actions import ActionDeps
 from infrastructure.system.window_manager import KWinWindowManager
 from infrastructure.qt.i18n import QtTranslator
@@ -80,7 +81,10 @@ def main() -> None:
 
     gamepad = GamepadWatcher()
     wm = KWinWindowManager()
-    desktop = Desktop(apps=apps, gamepad=gamepad, window_manager=wm)
+    desktop = Desktop(
+        apps=apps, gamepad=gamepad, window_manager=wm,
+        wallpaper=KdeSystemWallpaper(),
+    )
 
     log_viewer = LogViewer(LogProvider(FileLogSource(str(log_file))))
     tray = SystemTray(

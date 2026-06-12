@@ -2,7 +2,14 @@
 Testy cyklu życia Desktop: pause().
 """
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
+
+
+class _NoWallpaper:
+    """SystemWallpaper port returning nothing — Desktop paints the fallback."""
+
+    def current(self):
+        return None
 
 
 def _make_desktop(mock_gamepad):
@@ -12,10 +19,11 @@ def _make_desktop(mock_gamepad):
     wm.windows_updated.connect = MagicMock()
     wm.refresh_now = MagicMock()
 
-    with patch("infrastructure.qt.desktop.desktop.KdeWallpaperLoader.load", return_value=None):
-        from infrastructure.qt.desktop import Desktop
-        desktop = Desktop(apps=[], gamepad=mock_gamepad, window_manager=wm)
-    return desktop
+    from infrastructure.qt.desktop import Desktop
+    return Desktop(
+        apps=[], gamepad=mock_gamepad, window_manager=wm,
+        wallpaper=_NoWallpaper(),
+    )
 
 
 # ── pause() ───────────────────────────────────────────────────────────────────

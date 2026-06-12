@@ -1,25 +1,31 @@
-"""Loading KDE Plasma wallpaper from plasma-org.kde.plasma.desktop-appletsrc."""
+"""Resolving KDE Plasma's current wallpaper from its appletsrc config.
+
+The SystemWallpaper port backed by `plasma-org.kde.plasma.desktop-appletsrc`:
+reads the configured image, expanding a wallpaper *package* (a directory with
+contents/images/WxH.ext) to its highest-resolution image. Pure config/file I/O,
+no Qt — it hands back a domain `Wallpaper` (a path); rendering is the view's job.
+"""
 
 import configparser
 import logging
 import os
 from pathlib import Path
 
+from domain.shell.wallpaper import SystemWallpaper, Wallpaper
+
 logger = logging.getLogger(__name__)
 
 _CFG_PATH = Path.home() / '.config' / 'plasma-org.kde.plasma.desktop-appletsrc'
 
 
-class KdeWallpaperLoader:
-    """Reads the KDE Plasma wallpaper setting and returns a QPixmap.
+class KdeSystemWallpaper(SystemWallpaper):
+    """Reads the KDE Plasma wallpaper setting and returns it as a `Wallpaper`.
 
     Handles both direct file paths and wallpaper packages
     (directory with contents/images/WxH.ext).
     """
 
-    def load(self) -> 'QPixmap | None':
-        from PyQt6.QtGui import QPixmap
-
+    def current(self) -> Wallpaper | None:
         if not _CFG_PATH.exists():
             logger.warning('Could not find plasma config file: %s', _CFG_PATH)
             return None
@@ -49,13 +55,8 @@ class KdeWallpaperLoader:
                 logger.debug('Ommitting (not a file): %s', path)
                 continue
 
-            px = QPixmap(path)
-            if px.isNull():
-                logger.debug('Could not read: %s', path)
-                continue
-
             logger.info('KDE wallpaper: %s', path)
-            return px
+            return Wallpaper(image_path=path)
 
         logger.warning('No wallpaper found in Plasma configuration')
         return None

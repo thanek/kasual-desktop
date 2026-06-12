@@ -35,10 +35,10 @@ from typing import _ProtocolMeta  # type: ignore[attr-defined]
 from domain.shell.desktop_view import DesktopView
 from domain.shell.desktop_control import DesktopControl
 from domain.system.desktop_shell import DesktopShell
+from domain.shell.wallpaper import SystemWallpaper
 from .deferred_hide import DeferredHide
 from .tile_bar import TileBar
 from .topbar import TopBar
-from .wallpaper import KdeWallpaperLoader
 
 logger = logging.getLogger(__name__)
 
@@ -68,11 +68,13 @@ class Desktop(QWidget, DesktopView, DesktopShell, DesktopControl, metaclass=_Met
         apps: list[App],
         gamepad: PadControl,
         window_manager: KWinWindowManager,
+        wallpaper: SystemWallpaper,
     ):
         super().__init__()
         self._apps        = apps
         self._gamepad     = gamepad
         self._wm          = window_manager
+        self._system_wallpaper = wallpaper
         self._app_manager = AppManager(self)
         self._volume_control = PactlVolumeControl()
         self._confirm_dialog = None
@@ -155,7 +157,7 @@ class Desktop(QWidget, DesktopView, DesktopShell, DesktopControl, metaclass=_Met
         self._status_timer.timeout.connect(self._tilebar.refresh_status)
         self._status_timer.start(500)
 
-        self._wallpaper: 'QPixmap | None' = KdeWallpaperLoader().load()
+        self._wallpaper: 'QPixmap | None' = self._load_wallpaper_pixmap()
 
         self._action_runner = ActionRunner(
             ActionDeps(desktop=self, power=SystemdPowerControl()),
@@ -276,6 +278,18 @@ class Desktop(QWidget, DesktopView, DesktopShell, DesktopControl, metaclass=_Met
         super().resizeEvent(event)
         if hasattr(self, '_tilebar'):
             QTimer.singleShot(0, self._tilebar.center_current)
+
+    def _load_wallpaper_pixmap(self) -> 'QPixmap | None':
+        """Render the domain wallpaper (a path) into a QPixmap for painting.
+
+        The domain decides *which* image is the background (the system
+        wallpaper); turning it into pixels is this view's concern.
+        """
+        from PyQt6.QtGui import QPixmap
+        wallpaper = self._system_wallpaper.current()
+        if wallpaper is None:
+            return None
+        return QPixmap(wallpaper.image_path)
 
     def paintEvent(self, _) -> None:
         painter = QPainter(self)
