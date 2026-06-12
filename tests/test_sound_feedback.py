@@ -1,10 +1,8 @@
-"""Tests for pure helper functions in audio/sound_player.py."""
+"""Tests for pure helper functions in audio/feedback.py (SoundFeedback backend)."""
 
 import struct
 
-import pytest
-
-from infrastructure.audio.sound_player import _convert_24_to_16
+from infrastructure.audio.feedback import _convert_24_to_16
 
 
 def _encode_24(val: int) -> bytes:

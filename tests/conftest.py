@@ -14,8 +14,8 @@ import pytest
 
 @pytest.fixture(autouse=True)
 def silence_sounds():
-    """Wycisza sound_player.play we wszystkich testach."""
-    with patch("infrastructure.audio.sound_player.play"):
+    """Wycisza odtwarzanie dźwięków (SoundFeedback) we wszystkich testach."""
+    with patch("infrastructure.audio.feedback.SoundFeedback.play"):
         yield
 
 

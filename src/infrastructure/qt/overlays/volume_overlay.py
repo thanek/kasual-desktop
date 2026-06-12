@@ -7,8 +7,8 @@ from PyQt6.QtWidgets import (
 
 from domain.input.pad_control import PadControl
 from domain.input.vocabulary import Event
+from domain.shared.feedback import Feedback
 from domain.system.volume_control import VolumeControl
-from infrastructure.audio import sound_player
 from .base_overlay import BaseOverlay
 
 STEP = 5   # % na jeden krok
@@ -19,8 +19,8 @@ class VolumeOverlay(BaseOverlay):
 
     closed = pyqtSignal()
 
-    def __init__(self, gamepad: PadControl, volume: VolumeControl, parent: QWidget | None = None):
-        super().__init__(gamepad, self._handle_pad, parent)
+    def __init__(self, gamepad: PadControl, volume: VolumeControl, feedback: Feedback, parent: QWidget | None = None):
+        super().__init__(gamepad, self._handle_pad, feedback, parent)
         self._control = volume
         self._volume  = self._control.get()
 
@@ -77,7 +77,7 @@ class VolumeOverlay(BaseOverlay):
 
         outer.addWidget(card)
 
-        sound_player.play("popup_open")
+        self._feedback.play("popup_open")
         self._show()
 
     # ── Gamepad handler ────────────────────────────────────────────────────
@@ -95,7 +95,7 @@ class VolumeOverlay(BaseOverlay):
         self._slider.setValue(self._volume)
         self._value_lbl.setText(f"{self._volume}%")
         self._control.set(self._volume)
-        sound_player.play("cursor")
+        self._feedback.play("cursor")
 
     # ── Keyboard ───────────────────────────────────────────────────────────
 

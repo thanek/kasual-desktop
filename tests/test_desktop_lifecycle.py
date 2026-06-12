@@ -22,7 +22,7 @@ def _make_desktop(mock_gamepad):
     from infrastructure.qt.desktop import Desktop
     return Desktop(
         apps=[], gamepad=mock_gamepad, window_manager=wm,
-        wallpaper=_NoWallpaper(),
+        wallpaper=_NoWallpaper(), feedback=MagicMock(),
     )
 
 

@@ -8,7 +8,7 @@ from PyQt6.QtWidgets import (
 
 from domain.input.pad_control import PadControl
 from domain.input.vocabulary import Event
-from infrastructure.audio import sound_player
+from domain.shared.feedback import Feedback
 from infrastructure.qt.ui import styles
 from .base_overlay import BaseOverlay
 
@@ -25,9 +25,10 @@ class ConfirmDialog(BaseOverlay):
         on_confirmed: Callable[[], None],
         on_cancelled: Callable[[], None],
         gamepad: PadControl,
+        feedback: Feedback,
         parent: QWidget | None = None,
     ):
-        super().__init__(gamepad, self._handle_pad, parent)
+        super().__init__(gamepad, self._handle_pad, feedback, parent)
         self._on_confirmed = on_confirmed
         self._on_cancelled = on_cancelled
         self._focus_yes    = True
@@ -63,7 +64,7 @@ class ConfirmDialog(BaseOverlay):
         outer.addWidget(card)
         self._refresh_buttons()
 
-        sound_player.play("popup_open")
+        self._feedback.play("popup_open")
         self._show()
 
     # ── Gamepad handler ────────────────────────────────────────────────────
@@ -76,7 +77,7 @@ class ConfirmDialog(BaseOverlay):
         elif event in (Event.LEFT, Event.RIGHT):
             self._focus_yes = not self._focus_yes
             self._refresh_buttons()
-            sound_player.play("cursor")
+            self._feedback.play("cursor")
 
     # ── Keyboard ───────────────────────────────────────────────────────────
 

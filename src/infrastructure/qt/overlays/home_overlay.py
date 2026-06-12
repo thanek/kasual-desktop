@@ -13,9 +13,8 @@ from domain.input.pad_control import PadControl
 from domain.input.vocabulary import Event
 from domain.menu.cursor import MenuCursor
 from domain.menu.item import MenuItem
+from domain.shared.feedback import Feedback
 from domain.shell.overlay import HomeMenuOverlay
-from infrastructure.audio import sound_player
-from infrastructure.audio.feedback import SoundFeedback
 from infrastructure.qt.ui import styles
 from infrastructure.qt.ui.layer_shell import make_layer_surface, Layer, Anchor, Keyboard
 
@@ -39,16 +38,17 @@ class HomeOverlay(QWidget, HomeMenuOverlay, metaclass=_Meta):
     item *does* is the controller's job.
 
     Usage:
-        overlay = HomeOverlay(gamepad)
+        overlay = HomeOverlay(gamepad, feedback)
         overlay.show_overlay(items=[...], on_select=..., on_cancel=...)
         overlay.hide_overlay()
     """
 
     closed = pyqtSignal()   # emitted when the overlay is dismissed
 
-    def __init__(self, gamepad: PadControl):
+    def __init__(self, gamepad: PadControl, feedback: Feedback):
         super().__init__()
         self._gamepad = gamepad
+        self._feedback = feedback
         # Vertical menu navigation (index + move/select/dismiss) lives in the
         # domain; this widget owns only presentation. wrap=True — the home menu
         # wraps around its ends.
@@ -57,7 +57,7 @@ class HomeOverlay(QWidget, HomeMenuOverlay, metaclass=_Meta):
             render=self._render_selection,
             on_activate=self._activate,
             on_dismiss=self._dismiss,
-            feedback=SoundFeedback(),
+            feedback=feedback,
             wrap=True,
         )
         self._items:     list[MenuItem]    = []
@@ -134,7 +134,7 @@ class HomeOverlay(QWidget, HomeMenuOverlay, metaclass=_Meta):
         self._rebuild_buttons(items)
         self._cursor.reset(0)
         self._gamepad.push_handler(self._handle_pad)
-        sound_player.play("popup_open")
+        self._feedback.play("popup_open")
         self.showFullScreen()
         self.raise_()
         # Deliberately NOT activateWindow(): grabbing Wayland activation would
@@ -164,7 +164,7 @@ class HomeOverlay(QWidget, HomeMenuOverlay, metaclass=_Meta):
 
     def _dismiss(self) -> None:
         """Close the overlay and restore the previous context (on_cancel)."""
-        sound_player.play("popup_close")
+        self._feedback.play("popup_close")
         self.hide_overlay()
         if self._on_cancel:
             self._on_cancel()
@@ -230,7 +230,7 @@ class HomeOverlay(QWidget, HomeMenuOverlay, metaclass=_Meta):
 
     def _activate(self, idx: int) -> None:
         item = self._items[idx]
-        sound_player.play("select")
+        self._feedback.play("select")
         self.hide_overlay()
         if self._on_select is not None:
             self._on_select(item)
@@ -255,14 +255,15 @@ class HomeOverlay(QWidget, HomeMenuOverlay, metaclass=_Meta):
 
 
 class HomeOverlayFactory:
-    """Builds Home Overlays bound to the gamepad (the OverlayFactory port).
+    """Builds Home Overlays bound to the gamepad and feedback (OverlayFactory port).
 
-    Holds the `PadControl` so the controller can create a fresh overlay per
-    BTN_MODE press without knowing the widget or its gamepad wiring.
+    Holds the `PadControl` and `Feedback` so the controller can create a fresh
+    overlay per BTN_MODE press without knowing the widget or its wiring.
     """
 
-    def __init__(self, gamepad: PadControl) -> None:
+    def __init__(self, gamepad: PadControl, feedback: Feedback) -> None:
         self._gamepad = gamepad
+        self._feedback = feedback
 
     def create_home_overlay(self) -> HomeMenuOverlay:
-        return HomeOverlay(self._gamepad)
+        return HomeOverlay(self._gamepad, self._feedback)

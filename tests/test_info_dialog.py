@@ -10,6 +10,8 @@ poza kartą z BaseOverlay — te testy domykają ten współdzielony kontrakt:
   - klik poza kartą nie zamyka (InfoDialog ma tylko OK)
 """
 
+from unittest.mock import MagicMock
+
 from infrastructure.qt.overlays.info_dialog import InfoDialog
 
 
@@ -18,6 +20,7 @@ def _make_dialog(mock_gamepad, on_confirmed=None):
         message="Coś się nie udało",
         on_confirmed=on_confirmed or (lambda: None),
         gamepad=mock_gamepad,
+        feedback=MagicMock(),
     )
 
 

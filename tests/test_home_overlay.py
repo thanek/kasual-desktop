@@ -23,8 +23,9 @@ def _items(n: int = 3) -> list[MenuItem]:
 
 
 def _make_overlay(mock_gamepad):
+    from unittest.mock import MagicMock
     from infrastructure.qt.overlays.home_overlay import HomeOverlay
-    return HomeOverlay(gamepad=mock_gamepad)
+    return HomeOverlay(gamepad=mock_gamepad, feedback=MagicMock())
 
 
 def _shown(mock_gamepad, items=None, on_select=None, on_cancel=None):

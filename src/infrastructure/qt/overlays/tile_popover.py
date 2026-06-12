@@ -10,8 +10,7 @@ from domain.input.pad_control import PadControl
 from domain.input.vocabulary import Event
 from domain.menu.cursor import MenuCursor
 from domain.menu.item import MenuItem
-from infrastructure.audio import sound_player
-from infrastructure.audio.feedback import SoundFeedback
+from domain.shared.feedback import Feedback
 from infrastructure.qt.ui import styles
 
 logger = logging.getLogger(__name__)
@@ -27,12 +26,14 @@ class TilePopoverMenu(QWidget):
         items: list[MenuItem],
         on_select: Callable[[MenuItem], None],
         gamepad: PadControl,
+        feedback: Feedback,
         parent: QWidget,
     ) -> None:
         super().__init__(parent)
         self._items = items
         self._on_select = on_select
         self._gamepad = gamepad
+        self._feedback = feedback
         self._closed = False
         # Vertical menu navigation lives in the domain; this widget owns only
         # presentation. wrap=False — the popover clamps at its ends.
@@ -41,7 +42,7 @@ class TilePopoverMenu(QWidget):
             render=self._render_selection,
             on_activate=self._on_btn_clicked,
             on_dismiss=self._dismiss,
-            feedback=SoundFeedback(),
+            feedback=feedback,
             wrap=False,
         )
 
@@ -82,7 +83,7 @@ class TilePopoverMenu(QWidget):
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self._cursor.reset(0)
         self._gamepad.push_handler(self._handle_pad)
-        sound_player.play("popup_open")
+        self._feedback.play("popup_open")
         QApplication.instance().installEventFilter(self)
 
     def show_above(self, tile: QWidget) -> None:
@@ -112,7 +113,7 @@ class TilePopoverMenu(QWidget):
             self._gamepad.pop_handler(self._handle_pad)
             QApplication.instance().removeEventFilter(self)
             if play_sound:
-                sound_player.play("popup_close")
+                self._feedback.play("popup_close")
             self.closed.emit()
             self.hide()
             self.deleteLater()

@@ -29,7 +29,7 @@ from domain.system.actions import ActionDeps
 from domain.system.runner import ActionRunner
 from domain.menu.entry import CLOSE, LAUNCH, RESTORE
 from domain.menu.tile import compose_tile_menu
-from infrastructure.audio.feedback import SoundFeedback
+from domain.shared.feedback import Feedback
 from infrastructure.qt.scheduler import QtScheduler
 from typing import _ProtocolMeta  # type: ignore[attr-defined]
 from domain.shell.desktop_view import DesktopView
@@ -69,12 +69,14 @@ class Desktop(QWidget, DesktopView, DesktopShell, DesktopControl, metaclass=_Met
         gamepad: PadControl,
         window_manager: KWinWindowManager,
         wallpaper: SystemWallpaper,
+        feedback: Feedback,
     ):
         super().__init__()
         self._apps        = apps
         self._gamepad     = gamepad
         self._wm          = window_manager
         self._system_wallpaper = wallpaper
+        self._feedback    = feedback
         self._app_manager = AppManager(self)
         self._volume_control = PactlVolumeControl()
         self._confirm_dialog = None
@@ -115,7 +117,6 @@ class Desktop(QWidget, DesktopView, DesktopShell, DesktopControl, metaclass=_Met
         main.addWidget(self._tilebar)
         main.addStretch(1)
 
-        self._feedback = SoundFeedback()
         self._nav = FocusNavigator(
             self._tilebar, self._topbar,
             on_tile_menu=self._show_tile_popover, feedback=self._feedback,
@@ -255,6 +256,7 @@ class Desktop(QWidget, DesktopView, DesktopShell, DesktopControl, metaclass=_Met
             message=message,
             on_confirmed=lambda: None,
             gamepad=self._gamepad,
+            feedback=self._feedback,
             parent=self,
         )
 
@@ -377,6 +379,7 @@ class Desktop(QWidget, DesktopView, DesktopShell, DesktopControl, metaclass=_Met
             items=compose_tile_menu(ctx, is_running),
             on_select=self._dispatch_tile,
             gamepad=self._gamepad,
+            feedback=self._feedback,
             parent=self,
         )
         self._tile_popover = popover
@@ -440,6 +443,7 @@ class Desktop(QWidget, DesktopView, DesktopShell, DesktopControl, metaclass=_Met
             on_confirmed=_wrap(on_confirmed),
             on_cancelled=_wrap(on_cancelled),
             gamepad=self._gamepad,
+            feedback=self._feedback,
             parent=self,
         )
 
@@ -449,7 +453,7 @@ class Desktop(QWidget, DesktopView, DesktopShell, DesktopControl, metaclass=_Met
         self._action_runner.run(action_type)
 
     def open_volume_overlay(self) -> None:
-        overlay = VolumeOverlay(self._gamepad, self._volume_control, parent=self)
+        overlay = VolumeOverlay(self._gamepad, self._volume_control, self._feedback, parent=self)
         self._volume_overlay = overlay
         overlay.closed.connect(self._on_volume_closed)
 

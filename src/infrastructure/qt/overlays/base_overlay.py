@@ -7,7 +7,7 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QWidget
 
 from domain.input.pad_control import PadControl
-from infrastructure.audio import sound_player
+from domain.shared.feedback import Feedback
 from infrastructure.qt.ui import styles
 from infrastructure.qt.ui.layer_shell import make_layer_surface, Layer, Anchor, Keyboard
 
@@ -27,7 +27,7 @@ class BaseOverlay(QWidget):
     by Desktop.
 
     Subclass should:
-      1. Call super().__init__(gamepad, self._handle_pad)
+      1. Call super().__init__(gamepad, self._handle_pad, feedback)
       2. Build the UI
       3. Call self._show() at the end of __init__ (optionally after a sound)
     """
@@ -36,11 +36,13 @@ class BaseOverlay(QWidget):
         self,
         gamepad: PadControl,
         handler: Callable[[str], None],
+        feedback: Feedback,
         parent: QWidget | None = None,   # accepted for API compat; always top-level
     ) -> None:
         super().__init__()
         self._gamepad = gamepad
         self._handler = handler
+        self._feedback = feedback
         self._closed  = False
         # Set by build_card(); used to detect clicks outside the card.
         self._card: QWidget | None = None
@@ -102,7 +104,7 @@ class BaseOverlay(QWidget):
         logger.info("%s closing", type(self).__name__)
         self._gamepad.pop_handler(self._handler)
         if sound is not None:
-            sound_player.play(sound)
+            self._feedback.play(sound)
         self.hide()
         self.deleteLater()
         return True

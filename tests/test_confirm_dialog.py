@@ -11,6 +11,8 @@ Widget jest tworzony w trybie offscreen – showFullScreen() nie wymaga
 prawdziwego wyświetlacza.
 """
 
+from unittest.mock import MagicMock
+
 from infrastructure.qt.overlays.confirm_dialog import ConfirmDialog
 
 
@@ -20,6 +22,7 @@ def _make_dialog(mock_gamepad, on_confirmed=None, on_cancelled=None):
         on_confirmed=on_confirmed or (lambda: None),
         on_cancelled=on_cancelled or (lambda: None),
         gamepad=mock_gamepad,
+        feedback=MagicMock(),
     )
 
 

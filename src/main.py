@@ -14,7 +14,7 @@ from PyQt6.QtCore import QLocale, QTimer, QTranslator
 from PyQt6.QtWidgets import QApplication
 
 from app import Application
-from infrastructure.audio import sound_player
+from infrastructure.audio.feedback import SoundFeedback
 from infrastructure.input.gamepad_watcher import GamepadWatcher
 from infrastructure.qt.desktop import Desktop
 from infrastructure.qt.overlays.home_overlay import HomeOverlayFactory
@@ -81,14 +81,15 @@ def main() -> None:
 
     gamepad = GamepadWatcher()
     wm = KWinWindowManager()
+    feedback = SoundFeedback()
     desktop = Desktop(
         apps=apps, gamepad=gamepad, window_manager=wm,
-        wallpaper=KdeSystemWallpaper(),
+        wallpaper=KdeSystemWallpaper(), feedback=feedback,
     )
 
     log_viewer = LogViewer(LogProvider(FileLogSource(str(log_file))))
     tray = SystemTray(
-        on_show=lambda: (sound_player.play("start"), desktop.show_desktop()),
+        on_show=lambda: (feedback.play("start"), desktop.show_desktop()),
         on_logs=log_viewer.show,
         on_quit=app.quit,
     )
@@ -99,12 +100,12 @@ def main() -> None:
         action_deps=ActionDeps(desktop=desktop, power=SystemdPowerControl()),
         tray=tray,
         wm=wm,
-        overlay_factory=HomeOverlayFactory(gamepad),
+        overlay_factory=HomeOverlayFactory(gamepad, feedback),
     )
     wm.start_periodic_refresh(3000)
     app.aboutToQuit.connect(controller.shutdown)
 
-    QTimer.singleShot(0, sound_player.init)
+    QTimer.singleShot(0, feedback.init)
 
     sys.exit(app.exec())
 

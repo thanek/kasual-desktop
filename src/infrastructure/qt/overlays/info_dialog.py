@@ -8,7 +8,7 @@ from PyQt6.QtWidgets import (
 
 from domain.input.pad_control import PadControl
 from domain.input.vocabulary import Event
-from infrastructure.audio import sound_player
+from domain.shared.feedback import Feedback
 from infrastructure.qt.ui import styles
 from .base_overlay import BaseOverlay
 
@@ -23,9 +23,10 @@ class InfoDialog(BaseOverlay):
         message: str,
         on_confirmed: Callable[[], None],
         gamepad: PadControl,
+        feedback: Feedback,
         parent: QWidget | None = None,
     ):
-        super().__init__(gamepad, self._handle_pad, parent)
+        super().__init__(gamepad, self._handle_pad, feedback, parent)
         self._on_confirmed = on_confirmed
 
         outer = QVBoxLayout(self)
@@ -52,7 +53,7 @@ class InfoDialog(BaseOverlay):
 
         outer.addWidget(card)
 
-        sound_player.play("popup_open")
+        self._feedback.play("popup_open")
         self._show()
 
     def _handle_pad(self, event: str) -> None:
