@@ -1,4 +1,8 @@
-"""Application controller — wiring between gamepad, desktop, overlay, and tray."""
+"""Application controller — wiring between gamepad, desktop, overlay, and tray.
+
+Depends only on domain ports (gamepad events, desktop control, the overlay
+factory, the session collaborators) — no `infrastructure.*` imports.
+"""
 
 import logging
 import os
@@ -6,17 +10,16 @@ import os
 from domain.menu.entry import CLOSE_APP, RETURN_TO_APP, RETURN_TO_DESKTOP
 from domain.menu.home import compose_home_menu
 from domain.menu.item import MenuItem
+from domain.shared.event_emitter import Unsubscribe
+from domain.input.gamepad_signals import GamepadSignals
 from domain.lifecycle.window_manager import WindowManager
 from domain.shell.desktop_control import DesktopControl
+from domain.shell.overlay import HomeMenuOverlay, OverlayFactory
 from domain.shell.session import SessionPolicy
 from domain.shell.session_collaborators import ConnectionIndicator
 from domain.system.actions import ActionDeps
 from domain.system.action_view import make_action_confirm
 from domain.system.runner import ActionRunner
-# Concrete (deferred to a later session): the gamepad signals and the overlay's
-# Qt lifecycle still tie Application to these two infrastructure types.
-from infrastructure.input.gamepad_watcher import GamepadWatcher
-from infrastructure.qt.overlays.home_overlay import HomeOverlay
 
 logger = logging.getLogger(__name__)
 
@@ -25,31 +28,37 @@ class Application:
     """
     Connects all application components and handles global events:
       - BTN_MODE → builds context menu and shows HomeOverlay
-      - connected_changed → synchronizes state of desktop, overlay, and tray
+      - connect / disconnect → synchronizes state of desktop, overlay, and tray
     """
 
     def __init__(
         self,
-        gamepad:     GamepadWatcher,
-        desktop:     DesktopControl,
-        action_deps: ActionDeps,
-        tray:        ConnectionIndicator,
-        wm:          WindowManager,
+        gamepad:         GamepadSignals,
+        desktop:         DesktopControl,
+        action_deps:     ActionDeps,
+        tray:            ConnectionIndicator,
+        wm:              WindowManager,
+        overlay_factory: OverlayFactory,
     ) -> None:
-        self._gamepad     = gamepad
-        self._desktop     = desktop
-        self._tray        = tray
-        self._wm          = wm
-        self._overlay: HomeOverlay | None = None
-        self._session     = SessionPolicy(view=desktop, indicator=tray)
+        self._desktop         = desktop
+        self._tray            = tray
+        self._wm              = wm
+        self._overlay_factory = overlay_factory
+        self._overlay: HomeMenuOverlay | None = None
+        self._session         = SessionPolicy(view=desktop, indicator=tray)
         # System actions (sleep/shutdown/…) run through the domain ActionRunner,
         # gating the confirmable ones on the Desktop's tracked confirm dialog.
         self._action_runner = ActionRunner(
             action_deps, make_action_confirm(desktop.confirm)
         )
 
-        gamepad.btn_mode_pressed.connect(self._on_btn_mode)
-        gamepad.connected_changed.connect(self._on_connected_changed)
+        # Observe the gamepad through the domain port; keep the unsubscribe
+        # tokens so shutdown() can detach cleanly.
+        self._subscriptions: list[Unsubscribe] = [
+            gamepad.on_btn_mode(self._on_btn_mode),
+            gamepad.on_connected(self._on_connected),
+            gamepad.on_disconnected(self._on_disconnected),
+        ]
 
     # ── Event handling ─────────────────────────────────────────────────────
 
@@ -61,16 +70,16 @@ class Application:
         Desktop. Leaving to the Desktop is handled by _return_to_desktop.
         """
         if self._overlay is not None:
-            if self._overlay.isVisible():
+            if self._overlay.is_showing():
                 self._overlay.hide_overlay()
                 return
-            self._overlay.deleteLater()
+            self._overlay.dispose()
             self._overlay = None
 
         menu = compose_home_menu(self._desktop.current_app())
 
-        self._overlay = HomeOverlay(self._gamepad)
-        self._overlay.closed.connect(self._on_overlay_closed)
+        self._overlay = self._overlay_factory.create_home_overlay()
+        self._overlay.on_closed(self._on_overlay_closed)
 
         # cancel (B button) returns to the running app when one is foreground;
         # on the bare Desktop it just closes the overlay (None).
@@ -113,12 +122,25 @@ class Application:
         self._wm.raise_windows_for_pid_exact(os.getpid())
         self._desktop.show_desktop()
 
-    def _on_connected_changed(self, connected: bool) -> None:
-        """Gamepad connected / disconnected: delegate to the session policy."""
-        self._session.gamepad_connected_changed(connected, self._overlay)
+    def _on_connected(self, _evt=None) -> None:
+        """Gamepad connected: delegate to the session policy."""
+        self._session.gamepad_connected_changed(True, self._overlay)
+
+    def _on_disconnected(self, _evt=None) -> None:
+        """Gamepad disconnected: delegate to the session policy."""
+        self._session.gamepad_connected_changed(False, self._overlay)
 
     def _on_overlay_closed(self) -> None:
         """Drop the overlay reference once it's dismissed."""
         if self._overlay is not None:
-            self._overlay.deleteLater()
+            self._overlay.dispose()
+            self._overlay = None
+
+    def shutdown(self) -> None:
+        """Detach from the gamepad and drop any open overlay (app teardown)."""
+        for unsubscribe in self._subscriptions:
+            unsubscribe()
+        self._subscriptions.clear()
+        if self._overlay is not None:
+            self._overlay.dispose()
             self._overlay = None

@@ -8,11 +8,12 @@ from PyQt6.QtWidgets import (
     QWidget, QPushButton, QVBoxLayout, QLabel, QSizePolicy,
 )
 
+from domain.shared.event_emitter import Unsubscribe
 from domain.input.pad_control import PadControl
 from domain.input.vocabulary import Event
 from domain.menu.cursor import MenuCursor
 from domain.menu.item import MenuItem
-from domain.shell.session_collaborators import Dismissable
+from domain.shell.overlay import HomeMenuOverlay
 from infrastructure.audio import sound_player
 from infrastructure.audio.feedback import SoundFeedback
 from infrastructure.qt.ui import styles
@@ -24,7 +25,7 @@ logger = logging.getLogger(__name__)
 class _Meta(type(QWidget), _ProtocolMeta): pass
 
 
-class HomeOverlay(QWidget, Dismissable, metaclass=_Meta):
+class HomeOverlay(QWidget, HomeMenuOverlay, metaclass=_Meta):
     """
     Full-screen menu overlay shown when BTN_MODE is pressed.
 
@@ -149,6 +150,18 @@ class HomeOverlay(QWidget, Dismissable, metaclass=_Meta):
         self.hide()
         self.closed.emit()
 
+    # ── HomeMenuOverlay port (Qt lifecycle behind a framework-agnostic API) ──
+
+    def is_showing(self) -> bool:
+        return self.isVisible()
+
+    def on_closed(self, handler: Callable[[], None]) -> Unsubscribe:
+        self.closed.connect(handler)
+        return Unsubscribe(lambda: self.closed.disconnect(handler))
+
+    def dispose(self) -> None:
+        self.deleteLater()
+
     def _dismiss(self) -> None:
         """Close the overlay and restore the previous context (on_cancel)."""
         sound_player.play("popup_close")
@@ -239,3 +252,17 @@ class HomeOverlay(QWidget, Dismissable, metaclass=_Meta):
                 styles.home_menu_item_selected() if i == index
                 else styles.home_menu_item_normal()
             )
+
+
+class HomeOverlayFactory:
+    """Builds Home Overlays bound to the gamepad (the OverlayFactory port).
+
+    Holds the `PadControl` so the controller can create a fresh overlay per
+    BTN_MODE press without knowing the widget or its gamepad wiring.
+    """
+
+    def __init__(self, gamepad: PadControl) -> None:
+        self._gamepad = gamepad
+
+    def create_home_overlay(self) -> HomeMenuOverlay:
+        return HomeOverlay(self._gamepad)

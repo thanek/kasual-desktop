@@ -8,8 +8,8 @@ from PyQt6.QtWidgets import QWidget, QVBoxLayout, QApplication
 from domain.catalog.app import App
 from domain.shell.desktop_state import DesktopState
 from domain.input.vocabulary import Event
+from domain.input.pad_control import PadControl
 from domain.catalog.target import AppTarget, Target
-from infrastructure.input.gamepad_watcher import GamepadWatcher
 from infrastructure.qt.overlays.base_overlay import BaseOverlay
 from infrastructure.qt.overlays.confirm_dialog import ConfirmDialog
 from infrastructure.qt.overlays.info_dialog import InfoDialog
@@ -66,7 +66,7 @@ class Desktop(QWidget, DesktopView, DesktopShell, DesktopControl, metaclass=_Met
     def __init__(
         self,
         apps: list[App],
-        gamepad: GamepadWatcher,
+        gamepad: PadControl,
         window_manager: KWinWindowManager,
     ):
         super().__init__()
@@ -311,12 +311,12 @@ class Desktop(QWidget, DesktopView, DesktopShell, DesktopControl, metaclass=_Met
             return False
         key = event.key()
         # Escape in tiles mode with no overlay open → open Home Overlay (same
-        # signal as BTN_MODE short press). In topbar mode Escape still falls
+        # request as a BTN_MODE short press). In topbar mode Escape still falls
         # through to the key map and injects "cancel" to return to tiles.
         if (key == Qt.Key.Key_Escape
                 and self._nav.in_tiles
                 and self._gamepad.top_handler() == self._handle_pad):
-            self._gamepad.btn_mode_pressed.emit()
+            self._gamepad.trigger_btn_mode()
             return True
         mapped = _KEY_MAP.get(key)
         if mapped:

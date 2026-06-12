@@ -128,9 +128,9 @@ class TestTranslateKeys:
         assert ecodes.BTN_SOUTH not in held
 
     def test_start_plus_select_emits_btn_mode(self, mock_gamepad):
-        """BTN_START wciśnięty gdy BTN_SELECT trzymany → sygnał btn_mode_pressed."""
+        """BTN_START wciśnięty gdy BTN_SELECT trzymany → zdarzenie BTN_MODE."""
         fired = []
-        mock_gamepad.btn_mode_pressed.connect(lambda: fired.append(True))
+        mock_gamepad.on_btn_mode(lambda: fired.append(True))
         held = {ecodes.BTN_SELECT}
         mock_gamepad._translate(ev(ecodes.EV_KEY, ecodes.BTN_START, 1), held, {"x": None, "y": None}, [])
         assert fired == [True]
@@ -280,6 +280,6 @@ class TestBtnModeLogic:
 
     def test_recall_is_wired_to_btn_mode_signal(self, mock_gamepad):
         fired = []
-        mock_gamepad.btn_mode_pressed.connect(lambda: fired.append(True))
+        mock_gamepad.on_btn_mode(lambda: fired.append(True))
         mock_gamepad._recall.press(kasual_active=True, trigger="BTN_MODE_HOLD_1S")
         assert fired == [True]

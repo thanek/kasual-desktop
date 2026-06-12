@@ -17,6 +17,7 @@ from app import Application
 from infrastructure.audio import sound_player
 from infrastructure.input.gamepad_watcher import GamepadWatcher
 from infrastructure.qt.desktop import Desktop
+from infrastructure.qt.overlays.home_overlay import HomeOverlayFactory
 from infrastructure.qt.ui.log_viewer import LogViewer
 from infrastructure.qt.ui.tray import SystemTray
 from infrastructure.system.app_config import load_apps
@@ -92,8 +93,10 @@ def main() -> None:
         action_deps=ActionDeps(desktop=desktop, power=SystemdPowerControl()),
         tray=tray,
         wm=wm,
+        overlay_factory=HomeOverlayFactory(gamepad),
     )
     wm.start_periodic_refresh(3000)
+    app.aboutToQuit.connect(controller.shutdown)
 
     QTimer.singleShot(0, sound_player.init)
 
