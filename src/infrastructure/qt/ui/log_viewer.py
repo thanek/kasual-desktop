@@ -1,11 +1,12 @@
 import logging
-import os
 
 from PyQt6.QtCore import QTimer
 from PyQt6.QtGui import QFont
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QPlainTextEdit, QLabel,
 )
+
+from domain.shared.log_provider import LogProvider
 
 logger = logging.getLogger(__name__)
 
@@ -34,12 +35,16 @@ QPushButton:hover {
 
 
 class LogViewer(QWidget):
-    """Window displaying log file contents with auto-scroll to the bottom."""
+    """Window displaying log contents with auto-scroll to the bottom.
 
-    def __init__(self, log_file: str, parent=None):
+    Pure presentation: it polls a domain `LogProvider` for fresh text and
+    renders it; the provider owns *what* to serve and when (change detection),
+    and where the bytes come from (the injected source).
+    """
+
+    def __init__(self, provider: LogProvider, parent=None):
         super().__init__(parent)
-        self._log_file  = log_file
-        self._last_size = -1
+        self._provider = provider
 
         self.setWindowTitle(self.tr("Kasual – Logs"))
         self.resize(900, 500)
@@ -75,7 +80,7 @@ class LogViewer(QWidget):
         layout = QHBoxLayout(header)
         layout.setContentsMargins(12, 0, 12, 0)
 
-        lbl = QLabel(f"📄 {os.path.basename(self._log_file)}")
+        lbl = QLabel(f"📄 {self._provider.name}")
         lbl.setStyleSheet("color: #8b949e; font-size: 12px; background: transparent;")
         layout.addWidget(lbl)
         layout.addStretch()
@@ -89,35 +94,23 @@ class LogViewer(QWidget):
     # ── Refreshing ────────────────────────────────────────────────────────
 
     def _refresh(self) -> None:
-        if not os.path.exists(self._log_file):
+        content = self._provider.poll()
+        if content is None:
             return
-        size = os.path.getsize(self._log_file)
-        if size == self._last_size:
-            return
-        self._last_size = size
-        try:
-            with open(self._log_file, "r", encoding="utf-8", errors="replace") as f:
-                content = f.read()
-            self._text.setPlainText(content)
-            self._scroll_to_bottom()
-        except OSError as e:
-            logger.warning("Could not read log file: %s", e)
+        self._text.setPlainText(content)
+        self._scroll_to_bottom()
 
     def _scroll_to_bottom(self) -> None:
         sb = self._text.verticalScrollBar()
         sb.setValue(sb.maximum())
 
     def _clear_log(self) -> None:
-        try:
-            open(self._log_file, "w").close()
-            self._text.clear()
-            self._last_size = 0
-        except OSError as e:
-            logger.warning("Could not clear log file: %s", e)
+        self._provider.clear()
+        self._text.clear()
 
     # ── Show with forced refresh ──────────────────────────────────────────
 
     def showEvent(self, event) -> None:
         super().showEvent(event)
-        self._last_size = -1
+        self._provider.invalidate()
         self._refresh()

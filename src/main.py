@@ -20,6 +20,8 @@ from infrastructure.qt.desktop import Desktop
 from infrastructure.qt.overlays.home_overlay import HomeOverlayFactory
 from infrastructure.qt.ui.log_viewer import LogViewer
 from infrastructure.qt.ui.tray import SystemTray
+from infrastructure.system.file_log_source import FileLogSource
+from domain.shared.log_provider import LogProvider
 from infrastructure.system.app_config import load_apps
 from infrastructure.system.power import SystemdPowerControl
 from domain.system.actions import ActionDeps
@@ -80,7 +82,7 @@ def main() -> None:
     wm = KWinWindowManager()
     desktop = Desktop(apps=apps, gamepad=gamepad, window_manager=wm)
 
-    log_viewer = LogViewer(str(log_file))
+    log_viewer = LogViewer(LogProvider(FileLogSource(str(log_file))))
     tray = SystemTray(
         on_show=lambda: (sound_player.play("start"), desktop.show_desktop()),
         on_logs=log_viewer.show,
