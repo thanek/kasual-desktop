@@ -8,6 +8,7 @@ from PyQt6.QtWidgets import (
 
 from domain.input.pad_control import PadControl
 from domain.input.vocabulary import Event
+from domain.menu.cursor import MenuCursor
 from domain.shared.feedback import Cue, Feedback
 from infrastructure.qt.ui import styles
 from .base_overlay import BaseOverlay
@@ -31,7 +32,14 @@ class ConfirmDialog(BaseOverlay):
         super().__init__(gamepad, self._handle_pad, feedback, parent)
         self._on_confirmed = on_confirmed
         self._on_cancelled = on_cancelled
-        self._focus_yes    = True
+        self._cursor = MenuCursor(
+            count=lambda: 2,
+            render=self._refresh_buttons,
+            on_activate=self._on_activate,
+            on_dismiss=self._cancel,
+            feedback=feedback,
+            wrap=True,
+        )
 
         outer = QVBoxLayout(self)
         outer.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -62,22 +70,30 @@ class ConfirmDialog(BaseOverlay):
         layout.addLayout(btn_row)
 
         outer.addWidget(card)
-        self._refresh_buttons()
+        self._cursor.reset(0)
 
         self._feedback.play(Cue.POPUP_OPEN)
         self._show()
 
+    # ── Focus state (backed by cursor index) ───────────────────────────────
+
+    @property
+    def _focus_yes(self) -> bool:
+        return self._cursor.index == 0
+
+    @_focus_yes.setter
+    def _focus_yes(self, value: bool) -> None:
+        self._cursor.index = 0 if value else 1
+
     # ── Gamepad handler ────────────────────────────────────────────────────
 
     def _handle_pad(self, event: str) -> None:
-        if event == Event.SELECT:
-            self._confirm() if self._focus_yes else self._cancel()
-        elif event in (Event.CANCEL, Event.CLOSE):
-            self._cancel()
-        elif event in (Event.LEFT, Event.RIGHT):
-            self._focus_yes = not self._focus_yes
-            self._refresh_buttons()
-            self._feedback.play(Cue.CURSOR)
+        if event == Event.LEFT:
+            self._cursor.handle_pad(Event.UP)
+        elif event == Event.RIGHT:
+            self._cursor.handle_pad(Event.DOWN)
+        else:
+            self._cursor.handle_pad(event)
 
     # ── Keyboard ───────────────────────────────────────────────────────────
 
@@ -85,15 +101,23 @@ class ConfirmDialog(BaseOverlay):
         self._cancel()
 
     def keyPressEvent(self, event: QKeyEvent) -> None:
-        if event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
-            self._confirm() if self._focus_yes else self._cancel()
-        elif event.key() == Qt.Key.Key_Escape:
-            self._cancel()
-        elif event.key() in (Qt.Key.Key_Left, Qt.Key.Key_Right):
-            self._focus_yes = not self._focus_yes
-            self._refresh_buttons()
+        key = event.key()
+        if key in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
+            self._cursor.handle_pad(Event.SELECT)
+        elif key == Qt.Key.Key_Escape:
+            self._cursor.handle_pad(Event.CANCEL)
+        elif key == Qt.Key.Key_Left:
+            self._cursor.handle_pad(Event.UP)
+        elif key == Qt.Key.Key_Right:
+            self._cursor.handle_pad(Event.DOWN)
 
     # ── Actions ────────────────────────────────────────────────────────────
+
+    def _on_activate(self, index: int) -> None:
+        if index == 0:
+            self._confirm()
+        else:
+            self._cancel()
 
     def _confirm(self) -> None:
         if self._dismiss(sound=Cue.SELECT):
@@ -103,10 +127,10 @@ class ConfirmDialog(BaseOverlay):
         if self._dismiss(sound=Cue.POPUP_CLOSE):
             self._on_cancelled()
 
-    def _refresh_buttons(self) -> None:
+    def _refresh_buttons(self, index: int) -> None:
         self._btn_yes.setStyleSheet(
-            styles.dialog_focused() if self._focus_yes else styles.dialog_idle()
+            styles.dialog_focused() if index == 0 else styles.dialog_idle()
         )
         self._btn_no.setStyleSheet(
-            styles.dialog_idle() if self._focus_yes else styles.dialog_focused()
+            styles.dialog_idle() if index == 0 else styles.dialog_focused()
         )
