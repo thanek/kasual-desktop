@@ -10,7 +10,7 @@ from pathlib import Path
 os.environ.setdefault("QT_QPA_PLATFORM", "wayland")
 os.environ.setdefault("QT_WAYLAND_SHELL_INTEGRATION", "layer-shell")
 
-from PyQt6.QtCore import QLocale, QTimer, QTranslator
+from PyQt6.QtCore import QTimer
 from PyQt6.QtWidgets import QApplication
 
 from application import Application
@@ -18,20 +18,17 @@ from infrastructure.audio.feedback import SoundFeedback
 from infrastructure.input.gamepad_watcher import GamepadWatcher
 from infrastructure.qt.desktop import build_desktop
 from infrastructure.qt.overlays.home_overlay import HomeOverlayFactory
-from infrastructure.qt.ui.log_viewer import LogViewer
 from infrastructure.qt.ui.tray import SystemTray
-from infrastructure.system.file_log_source import FileLogSource
-from domain.shared.log_provider import LogProvider
 from infrastructure.system.app_config import load_apps
 from infrastructure.system.app_manager import AppManager
+from infrastructure.system.log_viewer_launcher import LogViewerLauncher
 from infrastructure.system.power import SystemdPowerControl
 from infrastructure.system.volume import PactlVolumeControl
 from infrastructure.qt.scheduler import QtScheduler
 from infrastructure.system.kde_wallpaper import KdeSystemWallpaper
 from domain.system.actions import ActionDeps
 from infrastructure.system.window_manager import KWinWindowManager
-from infrastructure.qt.i18n import QtTranslator
-from support import i18n
+from infrastructure.qt.i18n import install_translations
 
 logger = logging.getLogger(__name__)
 
@@ -70,17 +67,7 @@ def main() -> None:
     app.setApplicationName("Kasual Desktop")
     app.setQuitOnLastWindowClosed(False)
 
-    locale_dir = str(Path(__file__).parent.parent / "locale")
-    translator = QTranslator(app)
-    if translator.load(QLocale.system(), "kasual", "_", locale_dir, ".qm"):
-        app.installTranslator(translator)
-        logger.info("Loaded translation: %s", QLocale.system().name())
-    else:
-        logger.info("No .qm file for localization: %s", QLocale.system().name())
-
-    # Route the app's `support.i18n.translate` calls through Qt's translation
-    # system now that the QApplication (and any QTranslator) exists.
-    i18n.use(QtTranslator())
+    install_translations(app, str(Path(__file__).parent.parent / "locale"))
 
     gamepad = GamepadWatcher()
     wm = KWinWindowManager()
@@ -94,10 +81,15 @@ def main() -> None:
         process_manager=AppManager(),
     )
 
-    log_viewer = LogViewer(LogProvider(FileLogSource(str(log_file))))
+    # The log viewer runs in its own process so it is a normal xdg window, not a
+    # layer-shell surface (see LogViewerLauncher).
+    log_viewer = LogViewerLauncher(
+        log_file=str(log_file),
+        entry=Path(__file__).parent / "log_viewer_main.py",
+    )
     tray = SystemTray(
         on_show=lambda: (feedback.play("start"), desktop.show_desktop()),
-        on_logs=log_viewer.show,
+        on_logs=log_viewer.open,
         on_quit=app.quit,
     )
 
@@ -111,6 +103,7 @@ def main() -> None:
     )
     wm.start_periodic_refresh(3000)
     app.aboutToQuit.connect(controller.shutdown)
+    app.aboutToQuit.connect(log_viewer.close)
 
     QTimer.singleShot(0, feedback.init)
 
