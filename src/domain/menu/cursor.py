@@ -19,7 +19,7 @@ from __future__ import annotations
 from collections.abc import Callable
 
 from domain.input.vocabulary import Event
-from domain.shared.feedback import Feedback
+from domain.shared.feedback import Cue, Feedback
 
 
 class MenuCursor:
@@ -70,7 +70,7 @@ class MenuCursor:
         if index != self._index:
             self._index = index
             self._render(self._index)
-            self._feedback.play("cursor")
+            self._feedback.play(Cue.CURSOR)
 
     def _move(self, delta: int) -> None:
         n = self._count()
@@ -83,4 +83,4 @@ class MenuCursor:
         if new != self._index:
             self._index = new
             self._render(self._index)
-            self._feedback.play("cursor")
+            self._feedback.play(Cue.CURSOR)

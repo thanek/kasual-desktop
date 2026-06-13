@@ -18,7 +18,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from domain.shell.desktop_state import DesktopState
-from domain.shared.feedback import Feedback
+from domain.shared.feedback import Cue, Feedback
 
 if TYPE_CHECKING:
     from domain.shell.desktop_view import DesktopView
@@ -42,7 +42,7 @@ class Desktop:
 
     def pause(self) -> None:
         """Minimize the Desktop to the tray, staying ready to resume."""
-        self._feedback.play("exit")
+        self._feedback.play(Cue.EXIT)
         self._state.pause()
         self._view.pause_overlays()
         self._view.release_input()
@@ -52,7 +52,7 @@ class Desktop:
         """Come back after the controller reconnects, without resetting foreground."""
         was_paused = self._state.resume()
         self._view.take_input()
-        self._feedback.play("start")
+        self._feedback.play(Cue.START)
         self._view.show_fullscreen()
         if was_paused:
             self._view.resume_overlays()

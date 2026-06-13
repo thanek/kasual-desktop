@@ -407,6 +407,11 @@ class KWinWindowManager(QObject, WindowManager, metaclass=_Meta):
         self._timeout_guard.stop()
         self._cleanup_script(script_path, plugin)
 
+        # Redundant while layer-shell is active: our own surfaces aren't
+        # normalWindow, so _LIST_SCRIPT already drops them. Kept for the fallback
+        # path — if make_layer_surface() fails (pip-bundled / non-system Qt), our
+        # windows render as normal xdg toplevels and would otherwise show up in
+        # our own list.
         our_pid = os.getpid()
         windows = [w for w in windows if w.get('pid') != our_pid]
 

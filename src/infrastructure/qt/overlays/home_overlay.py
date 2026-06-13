@@ -13,7 +13,7 @@ from domain.input.pad_control import PadControl
 from domain.input.vocabulary import Event
 from domain.menu.cursor import MenuCursor
 from domain.menu.item import MenuItem
-from domain.shared.feedback import Feedback
+from domain.shared.feedback import Cue, Feedback
 from domain.shell.overlay import HomeMenuOverlay
 from infrastructure.qt.ui import styles
 from infrastructure.qt.ui.layer_shell import make_layer_surface, Layer, Anchor, Keyboard
@@ -134,7 +134,7 @@ class HomeOverlay(QWidget, HomeMenuOverlay, metaclass=_Meta):
         self._rebuild_buttons(items)
         self._cursor.reset(0)
         self._gamepad.push_handler(self._handle_pad)
-        self._feedback.play("popup_open")
+        self._feedback.play(Cue.POPUP_OPEN)
         self.showFullScreen()
         self.raise_()
         # Deliberately NOT activateWindow(): grabbing Wayland activation would
@@ -164,7 +164,7 @@ class HomeOverlay(QWidget, HomeMenuOverlay, metaclass=_Meta):
 
     def _dismiss(self) -> None:
         """Close the overlay and restore the previous context (on_cancel)."""
-        self._feedback.play("popup_close")
+        self._feedback.play(Cue.POPUP_CLOSE)
         self.hide_overlay()
         if self._on_cancel:
             self._on_cancel()
@@ -230,7 +230,7 @@ class HomeOverlay(QWidget, HomeMenuOverlay, metaclass=_Meta):
 
     def _activate(self, idx: int) -> None:
         item = self._items[idx]
-        self._feedback.play("select")
+        self._feedback.play(Cue.SELECT)
         self.hide_overlay()
         if self._on_select is not None:
             self._on_select(item)

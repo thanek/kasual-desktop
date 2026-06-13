@@ -10,7 +10,7 @@ from domain.input.pad_control import PadControl
 from domain.input.vocabulary import Event
 from domain.menu.cursor import MenuCursor
 from domain.menu.item import MenuItem
-from domain.shared.feedback import Feedback
+from domain.shared.feedback import Cue, Feedback
 from infrastructure.qt.ui import styles
 
 logger = logging.getLogger(__name__)
@@ -83,7 +83,7 @@ class TilePopoverMenu(QWidget):
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self._cursor.reset(0)
         self._gamepad.push_handler(self._handle_pad)
-        self._feedback.play("popup_open")
+        self._feedback.play(Cue.POPUP_OPEN)
         QApplication.instance().installEventFilter(self)
 
     def show_above(self, tile: QWidget) -> None:
@@ -113,7 +113,7 @@ class TilePopoverMenu(QWidget):
             self._gamepad.pop_handler(self._handle_pad)
             QApplication.instance().removeEventFilter(self)
             if play_sound:
-                self._feedback.play("popup_close")
+                self._feedback.play(Cue.POPUP_CLOSE)
             self.closed.emit()
             self.hide()
             self.deleteLater()

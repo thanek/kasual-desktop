@@ -7,7 +7,7 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QWidget
 
 from domain.input.pad_control import PadControl
-from domain.shared.feedback import Feedback
+from domain.shared.feedback import Cue, Feedback
 from infrastructure.qt.ui import styles
 from infrastructure.qt.ui.layer_shell import make_layer_surface, Layer, Anchor, Keyboard
 
@@ -92,7 +92,7 @@ class BaseOverlay(QWidget):
         self._card = styles.make_card(width)
         return self._card
 
-    def _dismiss(self, *, sound: str | None = None) -> bool:
+    def _dismiss(self, *, sound: Cue | None = None) -> bool:
         """Tear the overlay down once: deregister the pad handler, hide, delete.
 
         Returns False if it was already closed, so callers can guard one-shot

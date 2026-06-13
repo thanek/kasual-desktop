@@ -16,7 +16,7 @@ from collections.abc import Callable
 from domain.input.pad_control import PadControl
 from domain.input.vocabulary import Event
 from domain.navigation.bar_views import TileFocusView, TopBarView
-from domain.shared.feedback import Feedback
+from domain.shared.feedback import Cue, Feedback
 
 
 class FocusNavigator:
@@ -48,10 +48,10 @@ class FocusNavigator:
         if self._mode == "tiles":
             if event == Event.LEFT:
                 if self._tilebar.move(-1):
-                    self._feedback.play("cursor")
+                    self._feedback.play(Cue.CURSOR)
             elif event == Event.RIGHT:
                 if self._tilebar.move(+1):
-                    self._feedback.play("cursor")
+                    self._feedback.play(Cue.CURSOR)
             elif event == Event.UP and self._topbar.count:
                 self._mode = "topbar"
                 self._topbar_index = 0
@@ -84,7 +84,7 @@ class FocusNavigator:
 
     def _moved(self) -> None:
         self.render()
-        self._feedback.play("cursor")
+        self._feedback.play(Cue.CURSOR)
 
     # ── Mouse hover (delegated from the Desktop slots) ───────────────────────
 
@@ -94,7 +94,7 @@ class FocusNavigator:
             self._mode = "tiles"
             self._topbar.set_selected(None)
             self._tilebar.set_focused(True, scroll=False)
-        self._feedback.play("cursor")
+        self._feedback.play(Cue.CURSOR)
 
     def hover_topbar(self, idx: int) -> None:
         """Pointer entered top-bar button *idx*."""

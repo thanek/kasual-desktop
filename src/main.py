@@ -25,6 +25,7 @@ from infrastructure.system.log_viewer_launcher import LogViewerLauncher
 from infrastructure.system.power import SystemdPowerControl
 from infrastructure.system.volume import PactlVolumeControl
 from infrastructure.qt.scheduler import QtScheduler
+from domain.shared.feedback import Cue
 from infrastructure.system.kde_wallpaper import KdeSystemWallpaper
 from domain.system.actions import ActionDeps
 from infrastructure.system.window_manager import KWinWindowManager
@@ -88,7 +89,7 @@ def main() -> None:
         entry=Path(__file__).parent / "log_viewer_main.py",
     )
     tray = SystemTray(
-        on_show=lambda: (feedback.play("start"), desktop.show_desktop()),
+        on_show=lambda: (feedback.play(Cue.START), desktop.show_desktop()),
         on_logs=log_viewer.open,
         on_quit=app.quit,
     )

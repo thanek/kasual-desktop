@@ -8,7 +8,7 @@ from PyQt6.QtWidgets import (
 
 from domain.input.pad_control import PadControl
 from domain.input.vocabulary import Event
-from domain.shared.feedback import Feedback
+from domain.shared.feedback import Cue, Feedback
 from infrastructure.qt.ui import styles
 from .base_overlay import BaseOverlay
 
@@ -64,7 +64,7 @@ class ConfirmDialog(BaseOverlay):
         outer.addWidget(card)
         self._refresh_buttons()
 
-        self._feedback.play("popup_open")
+        self._feedback.play(Cue.POPUP_OPEN)
         self._show()
 
     # ── Gamepad handler ────────────────────────────────────────────────────
@@ -77,7 +77,7 @@ class ConfirmDialog(BaseOverlay):
         elif event in (Event.LEFT, Event.RIGHT):
             self._focus_yes = not self._focus_yes
             self._refresh_buttons()
-            self._feedback.play("cursor")
+            self._feedback.play(Cue.CURSOR)
 
     # ── Keyboard ───────────────────────────────────────────────────────────
 
@@ -96,11 +96,11 @@ class ConfirmDialog(BaseOverlay):
     # ── Actions ────────────────────────────────────────────────────────────
 
     def _confirm(self) -> None:
-        if self._dismiss(sound=Event.SELECT):
+        if self._dismiss(sound=Cue.SELECT):
             self._on_confirmed()
 
     def _cancel(self) -> None:
-        if self._dismiss(sound="popup_close"):
+        if self._dismiss(sound=Cue.POPUP_CLOSE):
             self._on_cancelled()
 
     def _refresh_buttons(self) -> None:

@@ -31,7 +31,7 @@ from domain.lifecycle.process_manager import ProcessManager
 from domain.lifecycle.prompts import Prompts
 from domain.lifecycle.tile_bar_view import TileBarView
 from domain.lifecycle.window_manager import WindowManager
-from domain.shared.feedback import Feedback
+from domain.shared.feedback import Cue, Feedback
 from domain.shared.scheduler import Scheduler
 from domain.shell.desktop_view import DesktopView
 
@@ -109,7 +109,7 @@ class AppLifecycle(AppControl):
             self.restore_app(target)
         else:
             logger.info("Launching application %d", idx)
-            self._feedback.play("select")
+            self._feedback.play(Cue.SELECT)
             # Minimize other already-running apps to prevent virtual pad interference
             self.arrange_windows()
             trigger = self._apps[idx].recall_menu_trigger
@@ -138,7 +138,7 @@ class AppLifecycle(AppControl):
             self.request_close_app(item.target)
 
     def restore_app(self, target: Target) -> None:
-        self._feedback.play("select")
+        self._feedback.play(Cue.SELECT)
         if isinstance(target, AppTarget):
             idx = target.index
             trigger = self._apps[idx].recall_menu_trigger

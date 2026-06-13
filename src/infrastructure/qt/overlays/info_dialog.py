@@ -8,7 +8,7 @@ from PyQt6.QtWidgets import (
 
 from domain.input.pad_control import PadControl
 from domain.input.vocabulary import Event
-from domain.shared.feedback import Feedback
+from domain.shared.feedback import Cue, Feedback
 from infrastructure.qt.ui import styles
 from .base_overlay import BaseOverlay
 
@@ -53,7 +53,7 @@ class InfoDialog(BaseOverlay):
 
         outer.addWidget(card)
 
-        self._feedback.play("popup_open")
+        self._feedback.play(Cue.POPUP_OPEN)
         self._show()
 
     def _handle_pad(self, event: str) -> None:
@@ -65,5 +65,5 @@ class InfoDialog(BaseOverlay):
             self._confirm()
 
     def _confirm(self) -> None:
-        if self._dismiss(sound=Event.SELECT):
+        if self._dismiss(sound=Cue.SELECT):
             self._on_confirmed()

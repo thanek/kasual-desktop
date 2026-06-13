@@ -19,14 +19,14 @@ from pathlib import Path
 from PyQt6.QtCore import QByteArray, QBuffer, QIODevice
 from PyQt6.QtMultimedia import QAudio, QAudioFormat, QAudioSink
 
-from domain.shared.feedback import Feedback
+from domain.shared.feedback import Cue, Feedback
 
 logger = logging.getLogger(__name__)
 
 # sounds/ lives at the repo root; this file sits at src/infrastructure/audio/,
 # so the root is four levels up (parents[3]).
 _SOUNDS_DIR = Path(__file__).resolve().parents[3] / "sounds"
-_SOUND_NAMES = ("cursor", "exit", "popup_open", "popup_close", "select", "start")
+_SOUND_NAMES = tuple(c.value for c in Cue)
 
 
 def _convert_24_to_16(data: bytes) -> bytes:
@@ -91,7 +91,7 @@ class SoundFeedback(Feedback):
                 self._loaded[name] = result
                 logger.debug("Loaded sound: %s", name)
 
-    def play(self, cue: str) -> None:
+    def play(self, cue: Cue) -> None:
         """Plays a previously loaded cue (no-op if unknown or not yet init()ed)."""
         entry = self._loaded.get(cue)
         if entry is None:

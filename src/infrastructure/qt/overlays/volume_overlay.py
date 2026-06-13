@@ -7,7 +7,7 @@ from PyQt6.QtWidgets import (
 
 from domain.input.pad_control import PadControl
 from domain.input.vocabulary import Event
-from domain.shared.feedback import Feedback
+from domain.shared.feedback import Cue, Feedback
 from domain.system.volume_control import VolumeControl
 from .base_overlay import BaseOverlay
 
@@ -77,7 +77,7 @@ class VolumeOverlay(BaseOverlay):
 
         outer.addWidget(card)
 
-        self._feedback.play("popup_open")
+        self._feedback.play(Cue.POPUP_OPEN)
         self._show()
 
     # ── Gamepad handler ────────────────────────────────────────────────────
@@ -95,7 +95,7 @@ class VolumeOverlay(BaseOverlay):
         self._slider.setValue(self._volume)
         self._value_lbl.setText(f"{self._volume}%")
         self._control.set(self._volume)
-        self._feedback.play("cursor")
+        self._feedback.play(Cue.CURSOR)
 
     # ── Keyboard ───────────────────────────────────────────────────────────
 
@@ -114,6 +114,6 @@ class VolumeOverlay(BaseOverlay):
     # ── Closing ────────────────────────────────────────────────────────────
 
     def _close(self) -> None:
-        if self._dismiss(sound="popup_close"):
+        if self._dismiss(sound=Cue.POPUP_CLOSE):
             self.closed.emit()
 
