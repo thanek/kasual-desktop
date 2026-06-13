@@ -16,7 +16,7 @@ from PyQt6.QtWidgets import QApplication
 from application import Application
 from infrastructure.audio.feedback import SoundFeedback
 from infrastructure.input.gamepad_watcher import GamepadWatcher
-from infrastructure.qt.desktop import Desktop
+from infrastructure.qt.desktop import build_desktop
 from infrastructure.qt.overlays.home_overlay import HomeOverlayFactory
 from infrastructure.qt.ui.log_viewer import LogViewer
 from infrastructure.qt.ui.tray import SystemTray
@@ -87,7 +87,7 @@ def main() -> None:
     feedback = SoundFeedback()
     # One PowerControl shared by the Desktop's action runner and the Application.
     power = SystemdPowerControl()
-    desktop = Desktop(
+    desktop = build_desktop(
         apps=apps, gamepad=gamepad, window_manager=wm,
         wallpaper=KdeSystemWallpaper(), feedback=feedback,
         volume=PactlVolumeControl(), power=power, scheduler=QtScheduler(),

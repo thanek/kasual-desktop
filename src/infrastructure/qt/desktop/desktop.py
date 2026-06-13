@@ -21,12 +21,9 @@ from domain.shared.scheduler import Scheduler
 from domain.lifecycle.process_manager import ProcessManager
 from domain.lifecycle.window_manager import WindowManager
 from infrastructure.qt.ui.layer_shell import make_layer_surface, Layer, Anchor, Keyboard
-from domain.system.action_view import make_action_confirm
 from domain.shell.desktop import Desktop as DesktopCoordinator
 from domain.lifecycle.app_lifecycle import AppLifecycle
-from domain.lifecycle.prompts import LocalizedPrompts
 from domain.navigation.focus_navigator import FocusNavigator
-from domain.system.actions import ActionDeps
 from domain.system.runner import ActionRunner
 from domain.menu.entry import CLOSE, LAUNCH, RESTORE
 from domain.menu.tile import compose_tile_menu
@@ -36,7 +33,6 @@ from domain.shell.desktop_view import DesktopView
 from domain.shell.desktop_control import DesktopControl
 from domain.system.desktop_shell import DesktopShell
 from domain.shell.wallpaper import SystemWallpaper
-from .deferred_hide import DeferredHide
 from .tile_bar import TileBar
 from .topbar import TopBar
 
@@ -123,44 +119,14 @@ class Desktop(QWidget, DesktopView, DesktopShell, DesktopControl, metaclass=_Met
         main.addWidget(self._tilebar)
         main.addStretch(1)
 
-        self._nav = FocusNavigator(
-            self._tilebar, self._topbar,
-            on_tile_menu=self._show_tile_popover, feedback=self._feedback,
-        )
-
-        # The Desktop stays on screen after launching an app until that app's
-        # window is actually mapped, then hides to reveal it.
-        self._deferred_hide = DeferredHide(
-            self._wm, self._app_manager, self._apps, on_hide=self.hide
-        )
-        # App launch/restore/close/exit orchestration lives off the widget in a
-        # testable coordinator; the Desktop is just its DesktopView. The pad
+        # Domain coordinators are assembled by the package builder (build_desktop)
+        # and injected via attach(); the widget itself stays a pure view. The pad
         # handler identity stays owned here so push/pop on the gamepad stack
         # matches the eventFilter's comparisons.
-        self._lifecycle = AppLifecycle(
-            view=self,
-            gamepad=self._gamepad,
-            window_manager=self._wm,
-            app_manager=self._app_manager,
-            apps=self._apps,
-            foreground=self._foreground,
-            deferred_hide=self._deferred_hide,
-            tilebar=self._tilebar,
-            pad_handler=self._handle_pad,
-            scheduler=self._scheduler,
-            feedback=self._feedback,
-            prompts=LocalizedPrompts(),
-        )
-        # Coordinates show/pause/resume of the Desktop surface (this widget = view).
-        self._desktop = DesktopCoordinator(
-            state=self._state, view=self, feedback=self._feedback,
-        )
-        self._tilebar.activated.connect(self._lifecycle.on_tile_activated)
-        self._tilebar.windows_changed.connect(self._lifecycle.check_active_dyn_gone)
-        self._app_manager.on_finished(
-            lambda e: self._lifecycle.on_app_finished(e.idx))
-        self._app_manager.on_launch_failed(
-            lambda e: self._lifecycle.on_app_launch_failed(e.idx, e.error))
+        self._nav:           'FocusNavigator | None'     = None
+        self._lifecycle:     'AppLifecycle | None'       = None
+        self._desktop:       'DesktopCoordinator | None' = None
+        self._action_runner: 'ActionRunner | None'       = None
 
         self._status_timer = QTimer(self)
         self._status_timer.timeout.connect(self._tilebar.refresh_status)
@@ -168,18 +134,35 @@ class Desktop(QWidget, DesktopView, DesktopShell, DesktopControl, metaclass=_Met
 
         self._wallpaper: 'QPixmap | None' = self._load_wallpaper_pixmap()
 
-        self._action_runner = ActionRunner(
-            ActionDeps(desktop=self, power=self._power),
-            make_action_confirm(
-                lambda q, cb: self._show_confirm(question=q, on_confirmed=cb)
-            ),
-        )
-
         self._wm.on_windows_updated(self._tilebar.update_windows)
 
-        QApplication.instance().installEventFilter(self)
+        # Desktop is not shown at startup — build_desktop wires it via attach(),
+        # then it is revealed on the connected_changed(True) signal.
 
-        # Desktop is not shown at startup — we wait for the connected_changed(True) signal
+    def attach(
+        self,
+        nav: FocusNavigator,
+        lifecycle: AppLifecycle,
+        desktop_coordinator: DesktopCoordinator,
+        action_runner: ActionRunner,
+    ) -> None:
+        """Inject the domain coordinators assembled by build_desktop and wire the
+        orchestration signals. Called once, before the Desktop is ever shown, so
+        the widget's handlers — which delegate to these coordinators — never fire
+        with them unset."""
+        self._nav           = nav
+        self._lifecycle     = lifecycle
+        self._desktop       = desktop_coordinator
+        self._action_runner = action_runner
+
+        self._tilebar.activated.connect(self._lifecycle.on_tile_activated)
+        self._tilebar.windows_changed.connect(self._lifecycle.check_active_dyn_gone)
+        self._app_manager.on_finished(
+            lambda e: self._lifecycle.on_app_finished(e.idx))
+        self._app_manager.on_launch_failed(
+            lambda e: self._lifecycle.on_app_launch_failed(e.idx, e.error))
+
+        QApplication.instance().installEventFilter(self)
 
     # ── Public API ─────────────────────────────────────────────────────────
 

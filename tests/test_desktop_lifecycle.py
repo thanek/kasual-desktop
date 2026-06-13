@@ -43,9 +43,9 @@ def _make_desktop(mock_gamepad):
     wm.on_windows_updated = MagicMock()
     wm.refresh_now = MagicMock()
 
-    from infrastructure.qt.desktop import Desktop
+    from infrastructure.qt.desktop import build_desktop
     from infrastructure.system.app_manager import AppManager
-    return Desktop(
+    return build_desktop(
         apps=[], gamepad=mock_gamepad, window_manager=wm,
         wallpaper=_NoWallpaper(), feedback=MagicMock(),
         volume=_FakeVolume(), power=_FakePower(), scheduler=_FakeScheduler(),
