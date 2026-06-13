@@ -13,7 +13,7 @@ os.environ.setdefault("QT_WAYLAND_SHELL_INTEGRATION", "layer-shell")
 from PyQt6.QtCore import QLocale, QTimer, QTranslator
 from PyQt6.QtWidgets import QApplication
 
-from app import Application
+from application import Application
 from infrastructure.audio.feedback import SoundFeedback
 from infrastructure.input.gamepad_watcher import GamepadWatcher
 from infrastructure.qt.desktop import Desktop

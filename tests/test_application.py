@@ -5,7 +5,7 @@ The controller is pure wiring (no Qt): it subscribes to the gamepad through the
 routes activated menu items. Here we drive it entirely over fakes.
 """
 
-from app import Application
+from application import Application
 from domain.shared.event_emitter import EventEmitter
 from domain.input.gamepad_events import (
     BtnModePressed, GamepadConnected, GamepadDisconnected,
