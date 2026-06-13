@@ -15,10 +15,11 @@ from infrastructure.qt.overlays.confirm_dialog import ConfirmDialog
 from infrastructure.qt.overlays.info_dialog import InfoDialog
 from infrastructure.qt.overlays.tile_popover import TilePopoverMenu
 from infrastructure.qt.overlays.volume_overlay import VolumeOverlay
-from infrastructure.system.app_manager import AppManager
-from infrastructure.system.power import SystemdPowerControl
-from infrastructure.system.volume import PactlVolumeControl
-from infrastructure.system.window_manager import KWinWindowManager
+from domain.system.volume_control import VolumeControl
+from domain.system.power_control import PowerControl
+from domain.shared.scheduler import Scheduler
+from domain.lifecycle.process_manager import ProcessManager
+from domain.lifecycle.window_manager import WindowManager
 from infrastructure.qt.ui.layer_shell import make_layer_surface, Layer, Anchor, Keyboard
 from domain.system.action_view import make_action_confirm
 from domain.shell.desktop import Desktop as DesktopCoordinator
@@ -30,7 +31,6 @@ from domain.system.runner import ActionRunner
 from domain.menu.entry import CLOSE, LAUNCH, RESTORE
 from domain.menu.tile import compose_tile_menu
 from domain.shared.feedback import Feedback
-from infrastructure.qt.scheduler import QtScheduler
 from typing import _ProtocolMeta  # type: ignore[attr-defined]
 from domain.shell.desktop_view import DesktopView
 from domain.shell.desktop_control import DesktopControl
@@ -67,9 +67,13 @@ class Desktop(QWidget, DesktopView, DesktopShell, DesktopControl, metaclass=_Met
         self,
         apps: list[App],
         gamepad: PadControl,
-        window_manager: KWinWindowManager,
+        window_manager: WindowManager,
         wallpaper: SystemWallpaper,
         feedback: Feedback,
+        volume: VolumeControl,
+        power: PowerControl,
+        scheduler: Scheduler,
+        process_manager: ProcessManager,
     ):
         super().__init__()
         self._apps        = apps
@@ -77,8 +81,10 @@ class Desktop(QWidget, DesktopView, DesktopShell, DesktopControl, metaclass=_Met
         self._wm          = window_manager
         self._system_wallpaper = wallpaper
         self._feedback    = feedback
-        self._app_manager = AppManager(self)
-        self._volume_control = PactlVolumeControl()
+        self._app_manager = process_manager
+        self._volume_control = volume
+        self._power       = power
+        self._scheduler   = scheduler
         self._confirm_dialog = None
         self._volume_overlay = None
         self._tile_popover   = None
@@ -141,7 +147,7 @@ class Desktop(QWidget, DesktopView, DesktopShell, DesktopControl, metaclass=_Met
             deferred_hide=self._deferred_hide,
             tilebar=self._tilebar,
             pad_handler=self._handle_pad,
-            scheduler=QtScheduler(),
+            scheduler=self._scheduler,
             feedback=self._feedback,
             prompts=LocalizedPrompts(),
         )
@@ -161,7 +167,7 @@ class Desktop(QWidget, DesktopView, DesktopShell, DesktopControl, metaclass=_Met
         self._wallpaper: 'QPixmap | None' = self._load_wallpaper_pixmap()
 
         self._action_runner = ActionRunner(
-            ActionDeps(desktop=self, power=SystemdPowerControl()),
+            ActionDeps(desktop=self, power=self._power),
             make_action_confirm(
                 lambda q, cb: self._show_confirm(question=q, on_confirmed=cb)
             ),
@@ -176,7 +182,7 @@ class Desktop(QWidget, DesktopView, DesktopShell, DesktopControl, metaclass=_Met
     # ── Public API ─────────────────────────────────────────────────────────
 
     @property
-    def app_manager(self) -> AppManager:
+    def app_manager(self) -> ProcessManager:
         return self._app_manager
 
     def show_desktop(self) -> None:

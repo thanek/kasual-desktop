@@ -23,7 +23,10 @@ from infrastructure.qt.ui.tray import SystemTray
 from infrastructure.system.file_log_source import FileLogSource
 from domain.shared.log_provider import LogProvider
 from infrastructure.system.app_config import load_apps
+from infrastructure.system.app_manager import AppManager
 from infrastructure.system.power import SystemdPowerControl
+from infrastructure.system.volume import PactlVolumeControl
+from infrastructure.qt.scheduler import QtScheduler
 from infrastructure.system.kde_wallpaper import KdeSystemWallpaper
 from domain.system.actions import ActionDeps
 from infrastructure.system.window_manager import KWinWindowManager
@@ -82,9 +85,13 @@ def main() -> None:
     gamepad = GamepadWatcher()
     wm = KWinWindowManager()
     feedback = SoundFeedback()
+    # One PowerControl shared by the Desktop's action runner and the Application.
+    power = SystemdPowerControl()
     desktop = Desktop(
         apps=apps, gamepad=gamepad, window_manager=wm,
         wallpaper=KdeSystemWallpaper(), feedback=feedback,
+        volume=PactlVolumeControl(), power=power, scheduler=QtScheduler(),
+        process_manager=AppManager(),
     )
 
     log_viewer = LogViewer(LogProvider(FileLogSource(str(log_file))))
@@ -97,7 +104,7 @@ def main() -> None:
     controller = Application(
         gamepad=gamepad,
         desktop=desktop,
-        action_deps=ActionDeps(desktop=desktop, power=SystemdPowerControl()),
+        action_deps=ActionDeps(desktop=desktop, power=power),
         tray=tray,
         wm=wm,
         overlay_factory=HomeOverlayFactory(gamepad, feedback),

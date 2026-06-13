@@ -12,6 +12,31 @@ class _NoWallpaper:
         return None
 
 
+class _FakeVolume:
+    """VolumeControl port — no pactl I/O."""
+
+    def get(self):
+        return 50
+
+    def set(self, percent):
+        pass
+
+
+class _FakePower:
+    """PowerControl port — no systemctl I/O."""
+
+    def suspend(self): ...
+    def reboot(self): ...
+    def poweroff(self): ...
+
+
+class _FakeScheduler:
+    """Scheduler port — fires nothing (no QTimer)."""
+
+    def call_later(self, delay_ms, callback):
+        pass
+
+
 def _make_desktop(mock_gamepad):
     """Tworzy Desktop z minimalnym zestawem mocków."""
     wm = MagicMock()
@@ -20,9 +45,12 @@ def _make_desktop(mock_gamepad):
     wm.refresh_now = MagicMock()
 
     from infrastructure.qt.desktop import Desktop
+    from infrastructure.system.app_manager import AppManager
     return Desktop(
         apps=[], gamepad=mock_gamepad, window_manager=wm,
         wallpaper=_NoWallpaper(), feedback=MagicMock(),
+        volume=_FakeVolume(), power=_FakePower(), scheduler=_FakeScheduler(),
+        process_manager=AppManager(),
     )
 
 
