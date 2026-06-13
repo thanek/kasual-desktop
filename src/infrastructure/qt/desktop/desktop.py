@@ -157,8 +157,10 @@ class Desktop(QWidget, DesktopView, DesktopShell, DesktopControl, metaclass=_Met
         )
         self._tilebar.activated.connect(self._lifecycle.on_tile_activated)
         self._tilebar.windows_changed.connect(self._lifecycle.check_active_dyn_gone)
-        self._app_manager.app_finished.connect(self._lifecycle.on_app_finished)
-        self._app_manager.app_launch_failed.connect(self._lifecycle.on_app_launch_failed)
+        self._app_manager.on_finished(
+            lambda e: self._lifecycle.on_app_finished(e.idx))
+        self._app_manager.on_launch_failed(
+            lambda e: self._lifecycle.on_app_launch_failed(e.idx, e.error))
 
         self._status_timer = QTimer(self)
         self._status_timer.timeout.connect(self._tilebar.refresh_status)

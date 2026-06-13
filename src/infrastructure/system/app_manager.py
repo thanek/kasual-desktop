@@ -7,9 +7,13 @@ import time
 from collections.abc import Mapping, Sequence
 from typing import _ProtocolMeta  # type: ignore[attr-defined]
 
+from collections.abc import Callable
+
 from PyQt6.QtCore import QObject, QTimer, pyqtSignal
 
 from domain.lifecycle.process_manager import ProcessManager
+from domain.lifecycle.app_events import AppStarted, AppFinished, AppLaunchFailed
+from domain.shared.event_emitter import EventEmitter, Unsubscribe
 
 logger = logging.getLogger(__name__)
 
@@ -22,19 +26,37 @@ class AppManager(QObject, ProcessManager, metaclass=_Meta):
     """Manages multiple concurrently running applications.
 
     Implements the `ProcessManager` port the app-lifecycle coordinator drives.
+    Lifecycle events are exposed as framework-agnostic ``EventEmitter``s (the
+    ``on_*`` port methods) rather than ``pyqtSignal``s, so the domain observes
+    process state without the Qt machinery leaking through the port.
     """
 
-    app_started       = pyqtSignal(int)        # idx
-    app_finished      = pyqtSignal(int)        # idx
-    app_launch_failed = pyqtSignal(int, str)   # idx, error message
-
-    # Internal signal: monitor thread → main Qt thread
+    # Internal signal: monitor thread → main Qt thread. Kept as a pyqtSignal
+    # because it is the cross-thread marshalling bridge — Qt delivers it queued
+    # onto the GUI thread, and only then does the EventEmitter fan out (emit is
+    # synchronous in the calling thread, so the hop must happen before it).
     _proc_ended = pyqtSignal(int, int)   # idx, exit_code
 
     def __init__(self, parent: QObject | None = None):
         super().__init__(parent)
         self._processes: dict[int, subprocess.Popen] = {}
+        self._started_emitter       = EventEmitter[AppStarted]()
+        self._finished_emitter      = EventEmitter[AppFinished]()
+        self._launch_failed_emitter = EventEmitter[AppLaunchFailed]()
         self._proc_ended.connect(self._on_finished)
+
+    # ── ProcessManager lifecycle events ──────────────────────────────────────
+
+    def on_started(self, handler: Callable[[AppStarted], None]) -> Unsubscribe:
+        return self._started_emitter.subscribe(handler)
+
+    def on_finished(self, handler: Callable[[AppFinished], None]) -> Unsubscribe:
+        return self._finished_emitter.subscribe(handler)
+
+    def on_launch_failed(
+        self, handler: Callable[[AppLaunchFailed], None]
+    ) -> Unsubscribe:
+        return self._launch_failed_emitter.subscribe(handler)
 
     # ── API ────────────────────────────────────────────────────────────────
 
@@ -80,19 +102,19 @@ class AppManager(QObject, ProcessManager, metaclass=_Meta):
         except FileNotFoundError:
             msg = f"Command not found: {command}"
             logger.error(msg)
-            self.app_launch_failed.emit(idx, msg)
+            self._launch_failed_emitter.emit(AppLaunchFailed(idx, msg))
             return False
         except PermissionError:
             msg = f"Permission denied: {command}"
             logger.error(msg)
-            self.app_launch_failed.emit(idx, msg)
+            self._launch_failed_emitter.emit(AppLaunchFailed(idx, msg))
             return False
 
         self._processes[idx] = proc
         threading.Thread(
             target=self._monitor, args=(idx,), daemon=True
         ).start()
-        self.app_started.emit(idx)
+        self._started_emitter.emit(AppStarted(idx))
         return True
 
     def terminate(self, idx: int) -> None:
@@ -162,4 +184,4 @@ class AppManager(QObject, ProcessManager, metaclass=_Meta):
     def _on_finished(self, idx: int, exit_code: int) -> None:
         logger.info("Application %d ended (exit code=%d)", idx, exit_code)
         self._processes.pop(idx, None)
-        self.app_finished.emit(idx)
+        self._finished_emitter.emit(AppFinished(idx))

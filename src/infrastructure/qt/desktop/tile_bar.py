@@ -12,7 +12,7 @@ from domain.catalog.app import App
 from domain.catalog.target import Target, target_at_index
 from domain.catalog.window import Window
 from domain.catalog.window_rules import external_windows, resolve_recall_trigger
-from infrastructure.system.app_manager import AppManager
+from domain.lifecycle.process_manager import ProcessManager
 from infrastructure.system.window_manager import to_window
 from infrastructure.qt.ui import styles
 from domain.lifecycle.tile_bar_view import TileBarView
@@ -59,7 +59,7 @@ class TileBar(QScrollArea, TileBarView, TileFocusView, metaclass=_Meta):
     tile_hovered     = pyqtSignal(int)
     tile_context_menu = pyqtSignal()
 
-    def __init__(self, apps: list[App], app_manager: AppManager, parent: QWidget | None = None) -> None:
+    def __init__(self, apps: list[App], app_manager: ProcessManager, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._apps          = apps
         self._app_manager   = app_manager

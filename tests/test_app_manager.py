@@ -156,7 +156,7 @@ class TestLaunch:
     def test_emits_app_started(self, qapp):
         am = _make_manager()
         received = []
-        am.app_started.connect(lambda idx: received.append(idx))
+        am.on_started(lambda e: received.append(e.idx))
         self._launch(am, idx=3)
         assert received == [3]
 
@@ -198,7 +198,7 @@ class TestLaunch:
     def test_returns_false_and_emits_failed_on_missing_command(self, qapp):
         am = _make_manager()
         failed = []
-        am.app_launch_failed.connect(lambda idx, msg: failed.append((idx, msg)))
+        am.on_launch_failed(lambda e: failed.append((e.idx, e.error)))
         with patch("infrastructure.system.app_manager.subprocess.Popen", side_effect=FileNotFoundError):
             assert am.launch(2, "/no/such/app") is False
         assert failed and failed[0][0] == 2
@@ -230,7 +230,7 @@ class TestOnFinished:
     def test_emits_app_finished(self, qapp):
         am = _make_manager()
         received = []
-        am.app_finished.connect(lambda idx: received.append(idx))
+        am.on_finished(lambda e: received.append(e.idx))
         am._on_finished(5, 0)
         assert received == [5]
 

@@ -7,7 +7,7 @@ from PyQt6.QtCore import QObject, QTimer
 
 from domain.catalog.app import App
 from domain.catalog.window_rules import app_window_present
-from infrastructure.system.app_manager import AppManager
+from domain.lifecycle.process_manager import ProcessManager
 from infrastructure.system.window_manager import (
     KWinWindowManager, expand_pid_tree, to_window,
 )
@@ -38,7 +38,7 @@ class DeferredHide(QObject, LaunchHide, metaclass=_Meta):
     def __init__(
         self,
         wm:          KWinWindowManager,
-        app_manager: AppManager,
+        app_manager: ProcessManager,
         apps:        list[App],
         on_hide:     Callable[[], None],
         parent:      QObject | None = None,
