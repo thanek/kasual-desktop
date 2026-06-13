@@ -52,7 +52,8 @@ def target_at_index(
     parent-chain walk and /proc read behind it stay in infrastructure)."""
     if index < len(apps):
         return AppTarget(index=index, name=apps[index].name)
-    window = windows[index - len(apps)] if index - len(apps) < len(windows) else None
+    win_idx = index - len(apps)
+    window = windows[win_idx] if win_idx < len(windows) else None
     if window is None:
         return None
     return WindowTarget(window_id=window.id, name=window.title, trigger=trigger_for(window.pid))

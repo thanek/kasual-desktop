@@ -153,9 +153,11 @@ class AppLifecycle(AppControl):
     def arrange_windows(self, activate_pid: int | None = None) -> None:
         """Activate windows for activate_pid and minimize all other running apps."""
         all_pids = set(self._app_manager.all_running_pids())
-        if activate_pid:
+        exclude: set[int] = set()
+        if activate_pid is not None:
             self._wm.activate_windows_for_pids({activate_pid})
-        other_pids = all_pids - ({activate_pid} if activate_pid else set())
+            exclude = {activate_pid}
+        other_pids = all_pids - exclude
         if other_pids:
             self._wm.minimize_windows_for_pids(other_pids)
 

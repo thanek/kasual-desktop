@@ -64,6 +64,11 @@ class Application:
 
     # ── Event handling ─────────────────────────────────────────────────────
 
+    def _close_overlay(self) -> None:
+        if self._overlay is not None:
+            self._overlay.dispose()
+            self._overlay = None
+
     def _on_btn_mode(self) -> None:
         """BTN_MODE: show the Home Overlay over whatever is on screen.
 
@@ -75,8 +80,7 @@ class Application:
             if self._overlay.is_showing():
                 self._overlay.hide_overlay()
                 return
-            self._overlay.dispose()
-            self._overlay = None
+            self._close_overlay()
 
         menu = compose_home_menu(self._app_control.current_app())
 
@@ -134,15 +138,11 @@ class Application:
 
     def _on_overlay_closed(self) -> None:
         """Drop the overlay reference once it's dismissed."""
-        if self._overlay is not None:
-            self._overlay.dispose()
-            self._overlay = None
+        self._close_overlay()
 
     def shutdown(self) -> None:
         """Detach from the gamepad and drop any open overlay (app teardown)."""
         for unsubscribe in self._subscriptions:
             unsubscribe()
         self._subscriptions.clear()
-        if self._overlay is not None:
-            self._overlay.dispose()
-            self._overlay = None
+        self._close_overlay()
