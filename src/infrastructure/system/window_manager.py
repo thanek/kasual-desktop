@@ -336,6 +336,10 @@ class KWinWindowManager(QObject, WindowManager, metaclass=_Meta):
         script = _ACTIVATE_BY_PIDS_SCRIPT.format(pids=json.dumps([pid]))
         self._run_fire_and_forget(script, tag='activate_pid_exact')
 
+    def raise_self(self) -> None:
+        """Bring the Kasual Desktop's own window to the front (our process pid)."""
+        self.raise_windows_for_pid_exact(os.getpid())
+
     def raise_windows_for_pid_exact(self, pid: int) -> None:
         """Raise windows owned by *pid* exactly above other windows.
 

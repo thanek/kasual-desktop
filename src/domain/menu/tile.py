@@ -11,10 +11,25 @@ Mirrors `domain.menu.home` — the Home Overlay's twin. Labels keep the "Desktop
 translation context so the existing locale entries keep resolving.
 """
 
+from collections.abc import Callable
+
 from domain.catalog.target import AppTarget, Target
 from domain.menu.entry import CLOSE, LAUNCH, RESTORE
 from domain.menu.item import MenuItem
 from support.i18n import translate
+
+
+def tile_menu_for(
+    target: Target, is_running: Callable[[int], bool]
+) -> list[MenuItem]:
+    """Compose the tile Popover for *target*, resolving its running state.
+
+    The running check is only meaningful for an :class:`AppTarget` (queried via
+    *is_running* by index); an open :class:`WindowTarget` is by definition already
+    running. Keeps that rule in the domain rather than in the Qt widget.
+    """
+    running = is_running(target.index) if isinstance(target, AppTarget) else True
+    return compose_tile_menu(target, running)
 
 
 def compose_tile_menu(target: Target, is_running: bool) -> list[MenuItem]:

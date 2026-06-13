@@ -112,7 +112,7 @@ class FakeDesktop:
     def foreground_pid(self):
         return self._foreground
 
-    def confirm(self, question, on_confirmed):
+    def show_confirm(self, question, on_confirmed, on_cancelled=None):
         on_confirmed()
 
     # SessionView
@@ -138,8 +138,8 @@ class FakeWM:
     def minimize_windows_for_pids(self, pids):
         self.minimized.append(pids)
 
-    def raise_windows_for_pid_exact(self, pid):
-        self.raised.append(pid)
+    def raise_self(self):
+        self.raised.append("self")
 
 
 class FakeTray:
@@ -165,6 +165,7 @@ def make_app(desktop=None, gamepad=None, factory=None, tray=None, wm=None):
     controller = Application(
         gamepad=gamepad,
         desktop=desktop,
+        app_control=desktop,
         action_deps=ActionDeps(desktop=desktop, power=FakePower()),
         tray=tray,
         wm=wm,

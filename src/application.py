@@ -5,13 +5,13 @@ factory, the session collaborators) — no `infrastructure.*` imports.
 """
 
 import logging
-import os
 
 from domain.menu.entry import CLOSE_APP, RETURN_TO_APP, RETURN_TO_DESKTOP
 from domain.menu.home import compose_home_menu
 from domain.menu.item import MenuItem
 from domain.shared.event_emitter import Unsubscribe
 from domain.input.gamepad_signals import GamepadSignals
+from domain.lifecycle.app_control import AppControl
 from domain.lifecycle.window_manager import WindowManager
 from domain.shell.desktop_control import DesktopControl
 from domain.shell.overlay import HomeMenuOverlay, OverlayFactory
@@ -35,12 +35,14 @@ class Application:
         self,
         gamepad:         GamepadSignals,
         desktop:         DesktopControl,
+        app_control:     AppControl,
         action_deps:     ActionDeps,
         tray:            ConnectionIndicator,
         wm:              WindowManager,
         overlay_factory: OverlayFactory,
     ) -> None:
         self._desktop         = desktop
+        self._app_control     = app_control
         self._tray            = tray
         self._wm              = wm
         self._overlay_factory = overlay_factory
@@ -49,7 +51,7 @@ class Application:
         # System actions (sleep/shutdown/…) run through the domain ActionRunner,
         # gating the confirmable ones on the Desktop's tracked confirm dialog.
         self._action_runner = ActionRunner(
-            action_deps, make_action_confirm(desktop.confirm)
+            action_deps, make_action_confirm(desktop.show_confirm)
         )
 
         # Observe the gamepad through the domain port; keep the unsubscribe
@@ -76,7 +78,7 @@ class Application:
             self._overlay.dispose()
             self._overlay = None
 
-        menu = compose_home_menu(self._desktop.current_app())
+        menu = compose_home_menu(self._app_control.current_app())
 
         self._overlay = self._overlay_factory.create_home_overlay()
         self._overlay.on_closed(self._on_overlay_closed)
@@ -84,7 +86,7 @@ class Application:
         # cancel (B button) returns to the running app when one is foreground;
         # on the bare Desktop it just closes the overlay (None).
         on_cancel = (
-            (lambda t=menu.cancel_restores: self._desktop.restore_app(t))
+            (lambda t=menu.cancel_restores: self._app_control.restore_app(t))
             if menu.cancel_restores is not None else None
         )
         self._overlay.show_overlay(
@@ -94,13 +96,13 @@ class Application:
     def _dispatch_home(self, item: MenuItem) -> None:
         """Perform the behaviour for an activated Home Overlay item."""
         if item.action == RETURN_TO_APP:
-            self._desktop.restore_app(item.target)
+            self._app_control.restore_app(item.target)
         elif item.action == CLOSE_APP:
-            self._desktop.request_close_app(item.target)
+            self._app_control.request_close_app(item.target)
         elif item.action == RETURN_TO_DESKTOP:
             # From a running app we leave it (minimize + raise KD); on the bare
             # Desktop we just bring KD to the front.
-            if self._desktop.current_app() is not None:
+            if self._app_control.current_app() is not None:
                 self._return_to_desktop()
             else:
                 self._desktop.show_desktop()
@@ -116,10 +118,10 @@ class Application:
         minimize the foreground app and raise ourselves via KWin. To be
         revisited in Phase 2 once the Desktop's show/hide model lands.
         """
-        pid = self._desktop.foreground_pid()
+        pid = self._app_control.foreground_pid()
         if pid is not None:
             self._wm.minimize_windows_for_pids({pid})
-        self._wm.raise_windows_for_pid_exact(os.getpid())
+        self._wm.raise_self()
         self._desktop.show_desktop()
 
     def _on_connected(self, _evt=None) -> None:

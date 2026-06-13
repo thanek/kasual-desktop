@@ -9,7 +9,6 @@ from domain.catalog.catalog import AppCatalog
 from domain.shell.desktop_state import DesktopState
 from domain.input.vocabulary import Event
 from domain.input.pad_control import PadControl
-from domain.catalog.target import AppTarget, Target
 from infrastructure.qt.overlays.base_overlay import BaseOverlay
 from infrastructure.qt.overlays.confirm_dialog import ConfirmDialog
 from infrastructure.qt.overlays.info_dialog import InfoDialog
@@ -18,6 +17,7 @@ from infrastructure.qt.overlays.volume_overlay import VolumeOverlay
 from domain.system.volume_control import VolumeControl
 from domain.system.power_control import PowerControl
 from domain.shared.scheduler import Scheduler
+from domain.lifecycle.app_control import AppControl
 from domain.lifecycle.process_manager import ProcessManager
 from domain.lifecycle.window_manager import WindowManager
 from infrastructure.qt.ui.layer_shell import make_layer_surface, Layer, Anchor, Keyboard
@@ -25,8 +25,7 @@ from domain.shell.desktop import Desktop as DesktopCoordinator
 from domain.lifecycle.app_lifecycle import AppLifecycle
 from domain.navigation.focus_navigator import FocusNavigator
 from domain.system.runner import ActionRunner
-from domain.menu.entry import CLOSE, LAUNCH, RESTORE
-from domain.menu.tile import compose_tile_menu
+from domain.menu.tile import tile_menu_for
 from domain.shared.feedback import Feedback
 from typing import _ProtocolMeta  # type: ignore[attr-defined]
 from domain.shell.desktop_view import DesktopView
@@ -170,6 +169,14 @@ class Desktop(QWidget, DesktopView, DesktopShell, DesktopControl, metaclass=_Met
     def app_manager(self) -> ProcessManager:
         return self._app_manager
 
+    @property
+    def app_control(self) -> AppControl:
+        """The app-lifecycle coordinator as the Application controller drives it
+        (restore/close/current/foreground). Exposed so the wiring root hands the
+        coordinator straight to the Application instead of routing through the
+        Desktop widget."""
+        return self._lifecycle
+
     def show_desktop(self) -> None:
         """Show the desktop without interrupting the running application."""
         self._desktop.show_desktop()
@@ -186,27 +193,6 @@ class Desktop(QWidget, DesktopView, DesktopShell, DesktopControl, metaclass=_Met
     def _active_overlays(self) -> list[BaseOverlay]:
         """Active overlays (those that can be paused/resumed)."""
         return [o for o in (self._volume_overlay, self._confirm_dialog) if o is not None]
-
-    def current_app(self) -> Target | None:
-        """Returns the currently active foreground Target, or None if on desktop."""
-        return self._foreground.current
-
-    def foreground_pid(self) -> int | None:
-        """OS pid of the current foreground app, if one is a running App tile."""
-        app = self.current_app()
-        if isinstance(app, AppTarget):
-            return self._app_manager.running_pid(app.index)
-        return None
-
-    def restore_app(self, target: Target) -> None:
-        """Bring an already-running app back to the foreground (public API used
-        by the Home Overlay). Delegates to the lifecycle coordinator."""
-        self._lifecycle.restore_app(target)
-
-    def request_close_app(self, target: Target) -> None:
-        """Ask to close an app, with a confirm dialog (public API used by the
-        Home Overlay and the tile popover). Delegates to the coordinator."""
-        self._lifecycle.request_close_app(target)
 
     # ── DesktopView port (driven by AppLifecycle) ───────────────────────────
 
@@ -355,20 +341,17 @@ class Desktop(QWidget, DesktopView, DesktopShell, DesktopControl, metaclass=_Met
     def _show_tile_popover(self) -> None:
         """Show a context popover above the focused tile.
 
-        The whole menu (which items, their labels) is composed by
-        domain.compose_tile_menu; here we only render it and dispatch the chosen
-        item's action.
+        The menu (which items, their running-state rule) and the behaviour of the
+        chosen item are the domain's: `tile_menu_for` composes it and the lifecycle
+        coordinator's `dispatch_tile_action` performs it. Here we only render and
+        position the popover and report activation.
         """
         ctx = self._tilebar.current_context()
         if ctx is None:
             return
-        is_running = (
-            self._tilebar.is_tile_running(ctx.index)
-            if isinstance(ctx, AppTarget) else True
-        )
         popover = TilePopoverMenu(
-            items=compose_tile_menu(ctx, is_running),
-            on_select=self._dispatch_tile,
+            items=tile_menu_for(ctx, self._tilebar.is_tile_running),
+            on_select=self._lifecycle.dispatch_tile_action,
             gamepad=self._gamepad,
             feedback=self._feedback,
             parent=self,
@@ -380,19 +363,6 @@ class Desktop(QWidget, DesktopView, DesktopShell, DesktopControl, metaclass=_Met
     def _on_tile_popover_closed(self) -> None:
         self._tile_popover = None
 
-    def _dispatch_tile(self, item) -> None:
-        """Perform the behaviour for an activated tile Popover item."""
-        if item.action in (LAUNCH, RESTORE):
-            self._tilebar.select_current()
-        elif item.action == CLOSE:
-            self._close_focused_tile()
-
-    def _close_focused_tile(self) -> None:
-        """Close the application represented by the currently focused tile."""
-        app = self._tilebar.current_context()
-        if app is not None:
-            self.request_close_app(app)
-
     def _close_active_dialog(self) -> None:
         if self._confirm_dialog is not None:
             logger.warning("Dialog window still active after app ending – forcing to close")
@@ -400,12 +370,6 @@ class Desktop(QWidget, DesktopView, DesktopShell, DesktopControl, metaclass=_Met
             self._confirm_dialog = None
 
     # ── Confirmation dialogs ───────────────────────────────────────────────
-
-    def confirm(self, question: str, on_confirmed: Callable[[], None]) -> None:
-        """Public entry for confirmable actions triggered from outside the
-        Desktop (e.g. the Home Overlay's system actions), so the dialog is
-        tracked in self._confirm_dialog exactly like the topbar's."""
-        self._show_confirm(question=question, on_confirmed=on_confirmed)
 
     def _show_confirm(
         self,

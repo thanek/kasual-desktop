@@ -187,6 +187,10 @@ class TileBar(QScrollArea, TileBarView, TileFocusView, metaclass=_Meta):
     def set_static_closing(self, idx: int) -> None:
         self._tiles[idx].set_closing()
 
+    def is_closing(self, idx: int) -> bool:
+        """True if the static app tile at *idx* is shutting down."""
+        return idx < len(self._tiles) and self._tiles[idx].is_closing()
+
     def has_dynamic_window(self, win_id: str) -> bool:
         return any(wid == win_id for wid, _, _ in self._dynamic_tiles)
 
@@ -329,12 +333,6 @@ class TileBar(QScrollArea, TileBarView, TileFocusView, metaclass=_Meta):
             self._dyn_separator = None
 
     def _activate_index(self, idx: int) -> None:
-        n_static = len(self._tiles)
-        # Ignore activation while a static app is shutting down — proc.poll() still
-        # reports it as running, so a restore would hide the Desktop and try to
-        # activate a window that's about to disappear.
-        if idx < n_static and self._tiles[idx].is_closing():
-            return
         ctx = self._context_for_index(idx)
         if ctx is not None:
             self.activated.emit(ctx)

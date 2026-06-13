@@ -88,6 +88,7 @@ def _make(apps=None, visible=False):
     foreground = ForegroundState()
     deferred_hide = MagicMock()
     tilebar = MagicMock()
+    tilebar.is_closing.return_value = False
     pad = object()  # sentinel pad-handler identity
     scheduler = FakeScheduler()
     feedback = MagicMock()
@@ -151,6 +152,48 @@ class TestOnTileActivated:
         c.am.launch.return_value = False
         c.lc.on_tile_activated(AppTarget(index=0, name="App"))
         c.dh.arm.assert_not_called()
+
+    def test_closing_app_activation_is_ignored(self):
+        """Activating an app tile mid-shutdown is a no-op (the relocated guard)."""
+        c = _make()
+        c.tilebar.is_closing.return_value = True
+        c.lc.on_tile_activated(AppTarget(index=0, name="App"))
+        assert c.fg.is_idle()              # foreground untouched
+        c.am.launch.assert_not_called()
+        c.am.is_running.assert_not_called()
+        assert c.view.hidden == 0
+
+
+# ── dispatch_tile_action (tile Popover) ──────────────────────────────────────
+
+class TestDispatchTileAction:
+    def test_launch_activates_target(self):
+        from domain.menu.entry import LAUNCH
+        from domain.menu.item import MenuItem
+        c = _make()
+        c.am.is_running.return_value = False
+        c.am.launch.return_value = True
+        target = AppTarget(index=0, name="App")
+        c.lc.dispatch_tile_action(MenuItem("Launch", LAUNCH, target=target))
+        c.am.launch.assert_called_once()
+        assert c.fg.current == target
+
+    def test_restore_activates_target(self):
+        from domain.menu.entry import RESTORE
+        from domain.menu.item import MenuItem
+        c = _make()
+        c.am.is_running.return_value = True
+        target = AppTarget(index=0, name="App")
+        c.lc.dispatch_tile_action(MenuItem("Restore", RESTORE, target=target))
+        assert c.view.hidden == 1          # restore hides the desktop
+
+    def test_close_requests_close(self):
+        from domain.menu.entry import CLOSE
+        from domain.menu.item import MenuItem
+        c = _make()
+        target = AppTarget(index=0, name="App")
+        c.lc.dispatch_tile_action(MenuItem("Close", CLOSE, target=target))
+        assert c.view.confirm is not None  # request_close_app opened a confirm
 
 
 # ── restore_app ─────────────────────────────────────────────────────────────
@@ -321,7 +364,7 @@ class TestRequestCloseApp:
         _, _, on_cancelled = c.view.confirm
         on_cancelled()
         # restore_desktop_view path raises the desktop via KWin
-        c.wm.raise_windows_for_pid_exact.assert_called_once()
+        c.wm.raise_self.assert_called_once()
         assert c.view.hidden == 0
 
     def test_cancel_over_app_restores_app(self):

@@ -96,6 +96,7 @@ def main() -> None:
     controller = Application(
         gamepad=gamepad,
         desktop=desktop,
+        app_control=desktop.app_control,
         action_deps=ActionDeps(desktop=desktop, power=power),
         tray=tray,
         wm=wm,

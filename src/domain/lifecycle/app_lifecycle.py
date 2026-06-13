@@ -16,7 +16,6 @@ gamepad handler stack stays consistent with the rest of the widget.
 from __future__ import annotations
 
 import logging
-import os
 from collections.abc import Callable
 
 from domain.catalog.catalog import AppCatalog
@@ -24,7 +23,10 @@ from domain.input.vocabulary import Trigger
 from domain.shell.foreground import ForegroundState
 from domain.catalog.target import AppTarget, Target, WindowTarget
 from domain.input.pad_control import PadControl
+from domain.lifecycle.app_control import AppControl
 from domain.lifecycle.launch_hide import LaunchHide
+from domain.menu.entry import CLOSE, LAUNCH, RESTORE
+from domain.menu.item import MenuItem
 from domain.lifecycle.process_manager import ProcessManager
 from domain.lifecycle.prompts import Prompts
 from domain.lifecycle.tile_bar_view import TileBarView
@@ -36,11 +38,12 @@ from domain.shell.desktop_view import DesktopView
 logger = logging.getLogger(__name__)
 
 
-class AppLifecycle:
+class AppLifecycle(AppControl):
     """Coordinates launching, restoring, closing and exit-handling of apps.
 
     Owns no Qt widgets; reads/writes the shared `ForegroundState` and drives the
-    Desktop through the `DesktopView` port.
+    Desktop through the `DesktopView` port. Implements `AppControl`, the port the
+    `Application` controller drives for foreground-app operations.
     """
 
     def __init__(
@@ -71,10 +74,30 @@ class AppLifecycle:
         self._feedback      = feedback
         self._prompts       = prompts
 
+    # ── AppControl queries (driven by the Application controller) ────────────
+
+    def current_app(self) -> Target | None:
+        """The foreground Target, or None on the bare Desktop."""
+        return self._foreground.current
+
+    def foreground_pid(self) -> int | None:
+        """OS pid of the foreground app, if one is a running App tile."""
+        target = self._foreground.current
+        if isinstance(target, AppTarget):
+            return self._app_manager.running_pid(target.index)
+        return None
+
     # ── Launch / restore ────────────────────────────────────────────────────
 
     def on_tile_activated(self, target: Target) -> None:
-        """A tile (static app or open window) was chosen via gamepad or click."""
+        """A tile (static app or open window) was chosen via gamepad, click or
+        the tile Popover."""
+        # Ignore activation while a static app is shutting down — proc.poll() still
+        # reports it as running, so a restore would hide the Desktop and try to
+        # activate a window that's about to disappear. Covers every activation
+        # path (click / select_current / popover) at the single domain entry.
+        if isinstance(target, AppTarget) and self._tilebar.is_closing(target.index):
+            return
         self._foreground.set(target)
         if not isinstance(target, AppTarget):
             self.restore_app(target)
@@ -105,6 +128,14 @@ class AppLifecycle:
                 # is actually mapped, so the DE desktop never flashes through the
                 # start-up gap. Re-shown by on_app_finished.
                 self._deferred_hide.arm(idx)
+
+    def dispatch_tile_action(self, item: MenuItem) -> None:
+        """Perform the behaviour for an activated tile-Popover item — the twin of
+        the Home Overlay's dispatch, kept in the domain rather than the widget."""
+        if item.action in (LAUNCH, RESTORE):
+            self.on_tile_activated(item.target)
+        elif item.action == CLOSE:
+            self.request_close_app(item.target)
 
     def restore_app(self, target: Target) -> None:
         self._feedback.play("select")
@@ -255,4 +286,4 @@ class AppLifecycle:
         # Wayland focus-stealing prevention can ignore Qt's activateWindow
         # when another app (still dying) holds focus. Force Desktop to the
         # top of the stack via KWin scripting.
-        self._wm.raise_windows_for_pid_exact(os.getpid())
+        self._wm.raise_self()
