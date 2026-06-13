@@ -14,7 +14,7 @@ from infrastructure.qt.overlays.confirm_dialog import ConfirmDialog
 from infrastructure.qt.overlays.info_dialog import InfoDialog
 from infrastructure.qt.overlays.tile_popover import TilePopoverMenu
 from infrastructure.qt.overlays.volume_overlay import VolumeOverlay
-from domain.system.volume_control import VolumeControl
+from domain.system.volume import VolumeControl
 from domain.system.power_control import PowerControl
 from domain.shared.scheduler import Scheduler
 from domain.lifecycle.app_control import AppControl

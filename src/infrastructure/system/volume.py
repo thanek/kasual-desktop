@@ -3,18 +3,17 @@
 import logging
 import subprocess
 
-from domain.system.volume_control import VolumeControl
+from domain.system.volume import Volume, VolumeControl
 
 logger = logging.getLogger(__name__)
 
-_SINK    = "@DEFAULT_SINK@"
-_DEFAULT = 50   # fallback when the sink volume can't be read
+_SINK = "@DEFAULT_SINK@"
 
 
 class PactlVolumeControl(VolumeControl):
     """Implements the VolumeControl port for the default sink via ``pactl``."""
 
-    def get(self) -> int:
+    def get(self) -> Volume:
         try:
             out = subprocess.check_output(
                 ["pactl", "get-sink-volume", _SINK],
@@ -23,16 +22,15 @@ class PactlVolumeControl(VolumeControl):
             # e.g. "Volume: front-left: 52428 / 80% / ..."
             for part in out.split():
                 if part.endswith("%"):
-                    return int(part.rstrip("%"))
+                    return Volume(int(part.rstrip("%")))
         except Exception:
             pass
-        return _DEFAULT
+        return Volume(Volume.DEFAULT)
 
-    def set(self, percent: int) -> None:
-        percent = max(0, min(100, percent))
+    def set(self, volume: Volume) -> None:
         try:
             subprocess.Popen(
-                ["pactl", "set-sink-volume", _SINK, f"{percent}%"],
+                ["pactl", "set-sink-volume", _SINK, f"{volume.value}%"],
                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
             )
         except Exception as exc:

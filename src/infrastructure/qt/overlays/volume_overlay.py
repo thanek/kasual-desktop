@@ -8,10 +8,8 @@ from PyQt6.QtWidgets import (
 from domain.input.pad_control import PadControl
 from domain.input.vocabulary import Event
 from domain.shared.feedback import Cue, Feedback
-from domain.system.volume_control import VolumeControl
+from domain.system.volume import Volume, VolumeControl
 from .base_overlay import BaseOverlay
-
-STEP = 5   # % na jeden krok
 
 
 class VolumeOverlay(BaseOverlay):
@@ -22,7 +20,7 @@ class VolumeOverlay(BaseOverlay):
     def __init__(self, gamepad: PadControl, volume: VolumeControl, feedback: Feedback, parent: QWidget | None = None):
         super().__init__(gamepad, self._handle_pad, feedback, parent)
         self._control = volume
-        self._volume  = self._control.get()
+        self._volume: Volume = self._control.get()
 
         outer = QVBoxLayout(self)
         outer.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -48,7 +46,7 @@ class VolumeOverlay(BaseOverlay):
         # Slider
         self._slider = QSlider(Qt.Orientation.Horizontal)
         self._slider.setRange(0, 100)
-        self._slider.setValue(self._volume)
+        self._slider.setValue(self._volume.value)
         self._slider.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self._slider.setStyleSheet("""
             QSlider::groove:horizontal {
@@ -65,7 +63,7 @@ class VolumeOverlay(BaseOverlay):
         layout.addWidget(self._slider)
 
         # Value
-        self._value_lbl = QLabel(f"{self._volume}%")
+        self._value_lbl = QLabel(f"{self._volume.value}%")
         self._value_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._value_lbl.setStyleSheet("font-size: 32px; color: white; background: transparent;")
         layout.addWidget(self._value_lbl)
@@ -84,16 +82,16 @@ class VolumeOverlay(BaseOverlay):
 
     def _handle_pad(self, event: str) -> None:
         if event == Event.LEFT:
-            self._change(-STEP)
+            self._change(-Volume.STEP)
         elif event == Event.RIGHT:
-            self._change(STEP)
+            self._change(Volume.STEP)
         elif event in (Event.SELECT, Event.CANCEL, Event.CLOSE):
             self._close()
 
     def _change(self, delta: int) -> None:
-        self._volume = max(0, min(100, self._volume + delta))
-        self._slider.setValue(self._volume)
-        self._value_lbl.setText(f"{self._volume}%")
+        self._volume = self._volume.adjusted(delta)
+        self._slider.setValue(self._volume.value)
+        self._value_lbl.setText(f"{self._volume.value}%")
         self._control.set(self._volume)
         self._feedback.play(Cue.CURSOR)
 
@@ -105,9 +103,9 @@ class VolumeOverlay(BaseOverlay):
     def keyPressEvent(self, event: QKeyEvent) -> None:
         key = event.key()
         if key == Qt.Key.Key_Left:
-            self._change(-STEP)
+            self._change(-Volume.STEP)
         elif key == Qt.Key.Key_Right:
-            self._change(STEP)
+            self._change(Volume.STEP)
         elif key in (Qt.Key.Key_Return, Qt.Key.Key_Enter, Qt.Key.Key_Escape):
             self._close()
 

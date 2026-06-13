@@ -30,7 +30,7 @@ from domain.system.action_view import make_action_confirm
 from domain.system.actions import ActionDeps
 from domain.system.power_control import PowerControl
 from domain.system.runner import ActionRunner
-from domain.system.volume_control import VolumeControl
+from domain.system.volume import VolumeControl
 
 from .deferred_hide import DeferredHide
 from .desktop import Desktop

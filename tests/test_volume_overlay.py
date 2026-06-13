@@ -12,12 +12,14 @@ VolumeControl jest wstrzykiwany jako mock — testy nie wywołują pactl.
 
 from unittest.mock import MagicMock
 
+from domain.system.volume import Volume
+
 
 def _make_overlay(mock_gamepad, volume=50):
     """Tworzy VolumeOverlay ze wstrzykniętym, zamockowanym VolumeControl."""
     from infrastructure.qt.overlays.volume_overlay import VolumeOverlay
     control = MagicMock()
-    control.get.return_value = volume
+    control.get.return_value = Volume(volume)
     return VolumeOverlay(gamepad=mock_gamepad, volume=control, feedback=MagicMock())
 
 
@@ -26,7 +28,7 @@ def _make_overlay(mock_gamepad, volume=50):
 class TestInit:
     def test_volume_read_from_system(self, mock_gamepad):
         overlay = _make_overlay(mock_gamepad, volume=73)
-        assert overlay._volume == 73
+        assert overlay._volume.value == 73
 
     def test_slider_initialized_to_volume(self, mock_gamepad):
         overlay = _make_overlay(mock_gamepad, volume=65)
@@ -47,22 +49,22 @@ class TestVolumeChange:
     def test_right_increases_by_step(self, mock_gamepad):
         overlay = _make_overlay(mock_gamepad, volume=50)
         overlay._handle_pad("right")
-        assert overlay._volume == 55
+        assert overlay._volume.value == 55
 
     def test_left_decreases_by_step(self, mock_gamepad):
         overlay = _make_overlay(mock_gamepad, volume=50)
         overlay._handle_pad("left")
-        assert overlay._volume == 45
+        assert overlay._volume.value == 45
 
     def test_volume_clamped_at_max(self, mock_gamepad):
         overlay = _make_overlay(mock_gamepad, volume=98)
         overlay._handle_pad("right")
-        assert overlay._volume == 100
+        assert overlay._volume.value == 100
 
     def test_volume_clamped_at_min(self, mock_gamepad):
         overlay = _make_overlay(mock_gamepad, volume=2)
         overlay._handle_pad("left")
-        assert overlay._volume == 0
+        assert overlay._volume.value == 0
 
     def test_slider_updated_after_change(self, mock_gamepad):
         overlay = _make_overlay(mock_gamepad, volume=50)
@@ -77,14 +79,14 @@ class TestVolumeChange:
     def test_set_called_on_control_with_new_value(self, mock_gamepad):
         overlay = _make_overlay(mock_gamepad, volume=50)
         overlay._change(5)
-        overlay._control.set.assert_called_once_with(55)
+        overlay._control.set.assert_called_once_with(Volume(55))
 
     def test_multiple_changes_accumulate(self, mock_gamepad):
         overlay = _make_overlay(mock_gamepad, volume=50)
         overlay._change(10)
         overlay._change(10)
         overlay._change(-5)
-        assert overlay._volume == 65
+        assert overlay._volume.value == 65
 
 
 # ── Zamknięcie ─────────────────────────────────────────────────────────────────
