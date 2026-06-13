@@ -286,16 +286,14 @@ class Desktop(QWidget, DesktopView, DesktopShell, DesktopControl, metaclass=_Met
 
     def changeEvent(self, event) -> None:
         super().changeEvent(event)
-        if event.type() == QEvent.Type.ActivationChange:
+        if event.type() == QEvent.Type.ActivationChange and self.isActiveWindow():
             # When KWin gives us focus back (e.g. the app we ceded the pad to
-            # has closed) and nobody owns the handler stack, reclaim pad control.
+            # has closed) delegate the reactivate decision to the domain layer.
             # Edge-triggered on focus gain, so it never fires while an app is
             # foreground (we are not active then). This covers apps launched via
             # a forwarder — e.g. `steam steam://...`, whose launcher process
             # exits immediately, so the normal app_finished path runs too early.
-            if self.isActiveWindow() and self._foreground.is_idle() \
-                    and self._gamepad.top_handler() is None:
-                self._lifecycle.reactivate_desktop()
+            self._lifecycle.on_focus_gained()
 
     # ── Gamepad handler ────────────────────────────────────────────────────
 
@@ -303,13 +301,18 @@ class Desktop(QWidget, DesktopView, DesktopShell, DesktopControl, metaclass=_Met
         if event.type() != QEvent.Type.KeyPress or not self.isActiveWindow():
             return False
         key = event.key()
-        # Escape in tiles mode with no overlay open → open Home Overlay (same
-        # request as a BTN_MODE short press). In topbar mode Escape still falls
-        # through to the key map and injects "cancel" to return to tiles.
+        # Escape in tiles mode with no overlay open → open Home Overlay via
+        # domain event (ESCAPE_HOME). The top_handler guard restricts this to
+        # when the Desktop itself owns the pad: layer-shell overlays keep the
+        # Desktop the active Qt window (keyboard=NONE, no activateWindow), so
+        # this filter still fires while one is open — but then their handler is
+        # on top and Escape must fall through to _KEY_MAP → CANCEL, which they
+        # handle. In topbar mode Escape likewise falls through to "cancel" to
+        # return to tiles.
         if (key == Qt.Key.Key_Escape
                 and self._nav.in_tiles
                 and self._gamepad.top_handler() == self._handle_pad):
-            self._gamepad.trigger_btn_mode()
+            self._gamepad.inject(Event.ESCAPE_HOME)
             return True
         mapped = _KEY_MAP.get(key)
         if mapped:
@@ -350,7 +353,7 @@ class Desktop(QWidget, DesktopView, DesktopShell, DesktopControl, metaclass=_Met
         if ctx is None:
             return
         popover = TilePopoverMenu(
-            items=tile_menu_for(ctx, self._tilebar.is_tile_running),
+            items=tile_menu_for(ctx, lambda idx: self._tilebar.is_tile_running(idx, self._tilebar.last_windows)),
             on_select=self._lifecycle.dispatch_tile_action,
             gamepad=self._gamepad,
             feedback=self._feedback,

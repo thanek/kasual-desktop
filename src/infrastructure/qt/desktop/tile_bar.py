@@ -2,6 +2,7 @@
 
 import logging
 import os
+from collections.abc import Sequence
 from typing import _ProtocolMeta  # type: ignore[attr-defined]
 
 from PyQt6.QtCore import Qt, QPoint, QTimer, pyqtSignal
@@ -11,7 +12,7 @@ from PyQt6.QtWidgets import QWidget, QHBoxLayout, QScrollArea, QApplication
 from domain.catalog.catalog import AppCatalog
 from domain.catalog.target import Target, target_at_index
 from domain.catalog.window import Window
-from domain.catalog.window_rules import external_windows, resolve_recall_trigger
+from domain.catalog.window_rules import external_windows, is_app_running, resolve_recall_trigger
 from domain.lifecycle.process_manager import ProcessManager
 from infrastructure.qt.ui import styles
 from domain.lifecycle.tile_bar_view import TileBarView
@@ -131,6 +132,11 @@ class TileBar(QScrollArea, TileBarView, TileFocusView, metaclass=_Meta):
         self.setWidget(container)
         self._render_tiles()
 
+    @property
+    def last_windows(self) -> list[Window]:
+        """The last window list from KWin (as domain Windows)."""
+        return self._last_windows
+
     # ── Navigation / focus ──────────────────────────────────────────────────
 
     def move(self, delta: int) -> bool:
@@ -196,20 +202,13 @@ class TileBar(QScrollArea, TileBarView, TileFocusView, metaclass=_Meta):
 
     # ── Status refresh ──────────────────────────────────────────────────────
 
-    def is_tile_running(self, idx: int) -> bool:
-        """True if the static tile at *idx* is running — either via AppManager
-        (launched by Kasual) or via a visible KWin window (launched externally
-        or after a self-relaunch that lost the process-group link)."""
-        if self._app_manager.is_running(idx):
-            return True
-        if self._last_windows and idx < len(self._apps):
-            app = self._apps[idx]
-            return any(w.matches_app(app) for w in self._last_windows)
-        return False
+    def is_tile_running(self, idx: int, windows: Sequence[Window]) -> bool:
+        """True if the static tile at *idx* is running — delegated to domain."""
+        return is_app_running(idx, self._apps, windows, self._app_manager.is_running)
 
     def refresh_status(self) -> None:
         for i, tile in enumerate(self._tiles):
-            tile.set_running(self.is_tile_running(i))
+            tile.set_running(self.is_tile_running(i, self._last_windows))
 
     # ── Dynamic tiles (currently open windows) ─────────────────────────────
 

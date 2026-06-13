@@ -50,23 +50,23 @@ def bar(qapp, apps, app_manager):
 class TestIsTileRunning:
     def test_true_when_app_manager_reports_running(self, bar, app_manager):
         app_manager.is_running.return_value = True
-        assert bar.is_tile_running(0) is True
+        assert bar.is_tile_running(0, bar._last_windows) is True
 
     def test_true_on_resource_class_match(self, bar):
         bar.update_windows([_win(resource_class="Steam")])
-        assert bar.is_tile_running(0) is True       # Steam tile
+        assert bar.is_tile_running(0, bar._last_windows) is True       # Steam tile
 
     def test_true_on_desktop_file_match(self, bar):
         bar.update_windows([_win(resource_class="x", desktop_file="firefox.desktop")])
-        assert bar.is_tile_running(1) is True       # Firefox tile
+        assert bar.is_tile_running(1, bar._last_windows) is True       # Firefox tile
 
     def test_false_when_no_window_matches(self, bar):
         bar.update_windows([_win(resource_class="gedit")])
-        assert bar.is_tile_running(0) is False
-        assert bar.is_tile_running(1) is False
+        assert bar.is_tile_running(0, bar._last_windows) is False
+        assert bar.is_tile_running(1, bar._last_windows) is False
 
     def test_false_with_no_windows(self, bar):
-        assert bar.is_tile_running(0) is False
+        assert bar.is_tile_running(0, bar._last_windows) is False
 
 
 # ── Managed-window filtering (windows of our apps don't get a dynamic tile) ──

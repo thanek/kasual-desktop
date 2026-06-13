@@ -54,6 +54,29 @@ def app_window_present(
     return any(w.pid in owned_pids or w.matches_app(app) for w in windows)
 
 
+def is_app_running(
+    idx:        int,
+    apps:       Sequence[App],
+    windows:    Sequence[Window],
+    is_process_running: Callable[[int], bool],
+) -> bool:
+    """True if the app at *idx* is running — either via its process or via a
+    visible window.
+
+    This is the domain definition of "running" for a static app tile. The
+    process check (e.g. tracking by AppManager) is injected as *is_process_running*;
+    the window-presence fallback uses ``Window.matches_app`` to cover cases where
+    the app was launched externally or lost its process-group link (e.g. after a
+    self-relaunch).
+    """
+    if is_process_running(idx):
+        return True
+    if idx < len(apps):
+        app = apps[idx]
+        return any(w.matches_app(app) for w in windows)
+    return False
+
+
 def resolve_recall_trigger(
     pid:        int,
     pid_to_app: Mapping[int, App],

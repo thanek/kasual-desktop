@@ -265,7 +265,18 @@ class AppLifecycle(AppControl):
                 # rebind here too — same delay as the AppManager path.
                 self._scheduler.call_later(1000, self._gamepad.refresh)
 
-    # ── Reactivation ────────────────────────────────────────────────────────
+    # ── Focus / Reactivation ────────────────────────────────────────────────
+
+    def on_focus_gained(self) -> None:
+        """Decide whether to reactivate the desktop after the window regains focus.
+
+        Called from the Qt event loop when the Desktop window regains activation
+        (e.g. after the app that ceded pad control has closed).  The decision
+        logic — *foreground idle AND no gamepad handler active* — lives here so
+        the infrastructure layer only signals the event.
+        """
+        if self._foreground.is_idle() and self._gamepad.top_handler() is None:
+            self.reactivate_desktop()
 
     def reactivate_desktop(self) -> None:
         """Restore Desktop input control and bring it to the front.

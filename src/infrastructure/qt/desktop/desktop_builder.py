@@ -64,6 +64,7 @@ def build_desktop(
     nav = FocusNavigator(
         widget._tilebar, widget._topbar,
         on_tile_menu=widget._show_tile_popover, feedback=feedback,
+        gamepad=gamepad,
     )
 
     # The Desktop stays on screen after launching an app until that app's window

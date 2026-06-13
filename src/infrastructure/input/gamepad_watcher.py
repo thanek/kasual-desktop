@@ -127,6 +127,14 @@ class GamepadWatcher(QObject, PadControl, GamepadSignals, metaclass=_Meta):
         """
         self._btn_mode_hop.emit()
 
+    def trigger_home(self) -> None:
+        """Open the Home overlay (keyboard shortcut equivalent of BTN_MODE).
+
+        Delegates to ``trigger_btn_mode`` which routes through the same
+        GUI-thread hop and observer chain as a real gamepad press.
+        """
+        self.trigger_btn_mode()
+
     def set_app_btn_mode_trigger(self, trigger: str) -> None:
         """Set the BTN_MODE recall trigger for the currently active app.
 

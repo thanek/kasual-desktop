@@ -13,6 +13,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
+from domain.input.pad_control import PadControl
 from domain.input.vocabulary import Event
 from domain.navigation.bar_views import TileFocusView, TopBarView
 from domain.shared.feedback import Feedback
@@ -25,11 +26,13 @@ class FocusNavigator:
         topbar: TopBarView,
         on_tile_menu: Callable[[], None],
         feedback: Feedback,
+        gamepad: PadControl | None = None,
     ) -> None:
         self._tilebar      = tilebar
         self._topbar       = topbar
         self._on_tile_menu = on_tile_menu   # Event.CLOSE in tiles → context popover
         self._feedback     = feedback
+        self._gamepad      = gamepad
         self._mode         = "tiles"        # "tiles" | "topbar"
         self._topbar_index = 0
 
@@ -57,6 +60,8 @@ class FocusNavigator:
                 self._tilebar.select_current()
             elif event == Event.CLOSE:
                 self._on_tile_menu()
+            elif event == Event.ESCAPE_HOME and self._gamepad is not None:
+                self._gamepad.trigger_home()
 
         elif self._mode == "topbar":
             if event == Event.LEFT:

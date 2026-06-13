@@ -16,10 +16,12 @@ def _make(topbar_count=3):
     topbar.count = topbar_count
     on_tile_menu = MagicMock()
     feedback = MagicMock()
+    gamepad = MagicMock()
     nav = FocusNavigator(
         tilebar, topbar, on_tile_menu=on_tile_menu, feedback=feedback,
+        gamepad=gamepad,
     )
-    return nav, tilebar, topbar, on_tile_menu
+    return nav, tilebar, topbar, on_tile_menu, gamepad
 
 
 class TestBasics:
@@ -30,57 +32,57 @@ class TestBasics:
 
 class TestPadInTiles:
     def test_left_moves_tilebar(self):
-        nav, tilebar, _, _ = _make()
+        nav, tilebar, *_ = _make()
         nav.handle_pad("left")
         tilebar.move.assert_called_once_with(-1)
 
     def test_right_moves_tilebar(self):
-        nav, tilebar, _, _ = _make()
+        nav, tilebar, *_ = _make()
         nav.handle_pad("right")
         tilebar.move.assert_called_once_with(+1)
 
     def test_select_activates_current_tile(self):
-        nav, tilebar, _, _ = _make()
+        nav, tilebar, *_ = _make()
         nav.handle_pad("select")
         tilebar.select_current.assert_called_once()
 
     def test_close_opens_tile_menu(self):
-        nav, _, _, on_tile_menu = _make()
+        nav, _, _, on_tile_menu, *_ = _make()
         nav.handle_pad("close")
         on_tile_menu.assert_called_once()
 
     def test_up_switches_to_topbar(self):
-        nav, _, _, _ = _make(topbar_count=3)
+        nav, *_ = _make(topbar_count=3)
         nav.handle_pad("up")
         assert nav.in_tiles is False
 
     def test_up_ignored_when_no_topbar_buttons(self):
-        nav, _, _, _ = _make(topbar_count=0)
+        nav, *_ = _make(topbar_count=0)
         nav.handle_pad("up")
         assert nav.in_tiles is True
 
 
 class TestPadInTopbar:
     def _in_topbar(self, topbar_count=3):
-        nav, tilebar, topbar, menu = _make(topbar_count)
+        nav, tilebar, topbar, *_ = _make(topbar_count)
         nav.handle_pad("up")          # enter topbar at index 0
-        return nav, tilebar, topbar, menu
+        return nav, tilebar, topbar
 
     def test_right_increments_index_modulo(self):
-        nav, _, topbar, _ = self._in_topbar(topbar_count=3)
+        nav, _, topbar = self._in_topbar(topbar_count=3)
         nav.handle_pad("right")
         nav.handle_pad("select")
         topbar.trigger.assert_called_once_with(1)
 
     def test_right_wraps_around(self):
-        nav, _, topbar, _ = self._in_topbar(topbar_count=2)
+        nav, _, topbar = self._in_topbar(topbar_count=2)
         nav.handle_pad("right")
         nav.handle_pad("right")       # 0 → 1 → 0
         nav.handle_pad("select")
         topbar.trigger.assert_called_once_with(0)
 
     def test_left_wraps_to_last(self):
-        nav, _, topbar, _ = self._in_topbar(topbar_count=3)
+        nav, _, topbar = self._in_topbar(topbar_count=3)
         nav.handle_pad("left")        # 0 → 2
         nav.handle_pad("select")
         topbar.trigger.assert_called_once_with(2)
@@ -98,13 +100,13 @@ class TestPadInTopbar:
 
 class TestRenderAndHover:
     def test_render_tiles_highlights_tilebar(self):
-        nav, tilebar, topbar, _ = _make()
+        nav, tilebar, topbar, *_ = _make()
         nav.render()
         tilebar.set_focused.assert_called_with(True)
         topbar.set_selected.assert_called_with(None)
 
     def test_render_topbar_highlights_button(self):
-        nav, tilebar, topbar, _ = _make()
+        nav, tilebar, topbar, *_ = _make()
         nav.handle_pad("up")
         nav.handle_pad("right")       # index 1
         nav.render()
@@ -112,7 +114,7 @@ class TestRenderAndHover:
         topbar.set_selected.assert_called_with(1)
 
     def test_hover_topbar_sets_index(self):
-        nav, _, topbar, _ = _make()
+        nav, _, topbar, *_ = _make()
         nav.hover_topbar(2)
         nav.handle_pad("select")
         topbar.trigger.assert_called_once_with(2)
@@ -124,7 +126,28 @@ class TestRenderAndHover:
         assert nav.in_tiles is True
 
     def test_focus_topbar_switches_and_renders(self):
-        nav, tilebar, topbar, _ = _make()
+        nav, tilebar, topbar, *_ = _make()
         nav.focus_topbar()
         assert nav.in_tiles is False
         tilebar.set_focused.assert_called_with(False)
+
+
+class TestEscapeHome:
+    def test_escape_home_triggers_gamepad_when_in_tiles(self):
+        nav, _, _, _, gamepad = _make()
+        nav.handle_pad("escape_home")
+        gamepad.trigger_home.assert_called_once()
+
+    def test_escape_home_ignored_when_in_topbar(self):
+        nav, _, _, _, gamepad = _make()
+        nav.handle_pad("up")          # enter topbar
+        nav.handle_pad("escape_home")
+        gamepad.trigger_home.assert_not_called()
+
+    def test_escape_home_noop_without_gamepad(self):
+        nav = FocusNavigator(
+            MagicMock(), MagicMock(),
+            on_tile_menu=MagicMock(), feedback=MagicMock(),
+            gamepad=None,
+        )
+        nav.handle_pad("escape_home")  # should not raise

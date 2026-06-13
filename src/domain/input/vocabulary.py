@@ -14,13 +14,14 @@ from enum import StrEnum
 class Event(StrEnum):
     """A directional / action input event, independent of device or key code."""
 
-    UP     = "up"
-    DOWN   = "down"
-    LEFT   = "left"
-    RIGHT  = "right"
-    SELECT = "select"
-    CANCEL = "cancel"
-    CLOSE  = "close"
+    UP         = "up"
+    DOWN       = "down"
+    LEFT       = "left"
+    RIGHT      = "right"
+    SELECT     = "select"
+    CANCEL     = "cancel"
+    CLOSE      = "close"
+    ESCAPE_HOME = "escape_home"
 
 
 class Trigger(StrEnum):
