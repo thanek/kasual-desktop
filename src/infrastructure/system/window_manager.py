@@ -19,13 +19,16 @@ import tempfile
 
 from typing import _ProtocolMeta  # type: ignore[attr-defined]
 
-from PyQt6.QtCore import QObject, QTimer, pyqtSignal, pyqtSlot
+from collections.abc import Callable
+
+from PyQt6.QtCore import QObject, QTimer, pyqtSlot
 from PyQt6.QtDBus import (
     QDBusConnection, QDBusInterface, QDBusMessage,
 )
 
 from domain.catalog.window import Window
 from domain.lifecycle.window_manager import WindowManager
+from domain.shared.event_emitter import EventEmitter, Unsubscribe
 
 logger = logging.getLogger(__name__)
 
@@ -239,10 +242,12 @@ class KWinWindowManager(QObject, WindowManager, metaclass=_Meta):
     Implements the `WindowManager` port the app-lifecycle coordinator drives.
     """
 
-    windows_updated = pyqtSignal(list)   # list[dict]: id, title, pid
-
     def __init__(self, parent: QObject | None = None) -> None:
         super().__init__(parent)
+        # Framework-agnostic observer hub: fans out the refreshed list as domain
+        # Windows. Driven on the GUI thread (the D-Bus window-list callback runs
+        # there), so EventEmitter's synchronous emit needs no thread-hop.
+        self._windows_emitter: EventEmitter[list[Window]] = EventEmitter()
         bus = QDBusConnection.sessionBus()
         self._kwin      = QDBusInterface(_KWIN_SVC, _KWIN_PATH, _KWIN_IFACE, bus)
         self._scripting = QDBusInterface(_KWIN_SVC, _SCRI_PATH, _SCRI_IFACE, bus)
@@ -349,6 +354,11 @@ class KWinWindowManager(QObject, WindowManager, metaclass=_Meta):
         internal; callers in the application layer get the domain value object)."""
         return [to_window(w) for w in self._cache.values()]
 
+    def on_windows_updated(
+        self, handler: Callable[[list[Window]], None]
+    ) -> Unsubscribe:
+        return self._windows_emitter.subscribe(handler)
+
     def close(self) -> None:
         self.stop_refresh()
         if self._host:
@@ -400,7 +410,7 @@ class KWinWindowManager(QObject, WindowManager, metaclass=_Meta):
             (w['id'] for w in windows if w.get('active')), None
         )
         self._cache = {w['id']: w for w in windows}
-        self.windows_updated.emit(list(self._cache.values()))
+        self._windows_emitter.emit(self.cached_windows())
         logger.debug('Windows list: %d, active: %s', len(self._cache), self._active_window_id)
 
     def _on_script_timeout(self) -> None:

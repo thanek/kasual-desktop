@@ -13,11 +13,12 @@ from PyQt6.QtCore import QPoint
 
 from infrastructure.qt.desktop.tile_bar import TileBar
 from domain.catalog.app import App
+from domain.catalog.window import Window
 
 
-def _win(id_: str, title: str = "App") -> dict:
-    """Minimalny słownik okna — pid=0 omija getpgid i sprawdzenia AppManagera."""
-    return {'id': id_, 'title': title, 'pid': 0, 'desktopFile': '', 'resourceClass': ''}
+def _win(id_: str, title: str = "App") -> Window:
+    """Minimalne okno domenowe — pid=0 omija getpgid i sprawdzenia AppManagera."""
+    return Window(id=id_, title=title, pid=0)
 
 
 @pytest.fixture

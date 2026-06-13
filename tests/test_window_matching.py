@@ -12,13 +12,14 @@ from unittest.mock import MagicMock, patch
 from domain.input.vocabulary import Trigger
 from infrastructure.qt.desktop.tile_bar import TileBar
 from domain.catalog.app import App
+from domain.catalog.window import Window
 
 
 def _win(id_="1", title="App", pid=0, desktop_file="", resource_class=""):
-    return {
-        "id": id_, "title": title, "pid": pid,
-        "desktopFile": desktop_file, "resourceClass": resource_class,
-    }
+    return Window(
+        id=id_, title=title, pid=pid,
+        desktop_file=desktop_file, resource_class=resource_class,
+    )
 
 
 @pytest.fixture

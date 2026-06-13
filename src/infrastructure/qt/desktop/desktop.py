@@ -175,7 +175,7 @@ class Desktop(QWidget, DesktopView, DesktopShell, DesktopControl, metaclass=_Met
             ),
         )
 
-        self._wm.windows_updated.connect(self._tilebar.update_windows)
+        self._wm.on_windows_updated(self._tilebar.update_windows)
 
         QApplication.instance().installEventFilter(self)
 

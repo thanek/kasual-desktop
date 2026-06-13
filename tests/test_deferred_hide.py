@@ -11,6 +11,7 @@ import pytest
 
 from infrastructure.qt.desktop.deferred_hide import DeferredHide
 from domain.catalog.app import App
+from domain.catalog.window import Window
 
 
 def _make(apps=None, running_pid=None):
@@ -24,7 +25,7 @@ def _make(apps=None, running_pid=None):
 
 
 def _win(pid=0, rc="", df=""):
-    return {"pid": pid, "resourceClass": rc, "desktopFile": df}
+    return Window(id="w", title="", pid=pid, resource_class=rc, desktop_file=df)
 
 
 class TestAppWindowPresent:
@@ -51,7 +52,7 @@ class TestArmCancel:
         dh, wm, _, _ = _make()
         dh.arm(0)
         assert dh.is_armed is True
-        wm.windows_updated.connect.assert_called_once()
+        wm.on_windows_updated.assert_called_once()
         wm.refresh_now.assert_called()
 
     def test_cancel_clears(self, qapp):

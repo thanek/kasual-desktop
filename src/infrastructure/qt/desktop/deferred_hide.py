@@ -6,11 +6,12 @@ from typing import _ProtocolMeta  # type: ignore[attr-defined]
 from PyQt6.QtCore import QObject, QTimer
 
 from domain.catalog.app import App
+from domain.catalog.window import Window
 from domain.catalog.window_rules import app_window_present
 from domain.lifecycle.process_manager import ProcessManager
-from infrastructure.system.window_manager import (
-    KWinWindowManager, expand_pid_tree, to_window,
-)
+from domain.lifecycle.window_manager import WindowManager
+from domain.shared.event_emitter import Unsubscribe
+from infrastructure.system.window_manager import expand_pid_tree
 from domain.lifecycle.launch_hide import LaunchHide
 
 _POLL_INTERVAL_MS = 150
@@ -37,7 +38,7 @@ class DeferredHide(QObject, LaunchHide, metaclass=_Meta):
 
     def __init__(
         self,
-        wm:          KWinWindowManager,
+        wm:          WindowManager,
         app_manager: ProcessManager,
         apps:        list[App],
         on_hide:     Callable[[], None],
@@ -49,8 +50,9 @@ class DeferredHide(QObject, LaunchHide, metaclass=_Meta):
         self._apps        = apps
         self._on_hide     = on_hide
 
-        self._idx:      int | None = None
-        self._grace_ms: int        = 0
+        self._idx:      int | None         = None
+        self._grace_ms: int                = 0
+        self._unsub:    Unsubscribe | None = None   # active windows_updated subscription
 
         # Poll the window list quickly while waiting for the app's window.
         self._poll = QTimer(self)
@@ -77,7 +79,7 @@ class DeferredHide(QObject, LaunchHide, metaclass=_Meta):
         self.cancel()
         self._idx = idx
         self._grace_ms = self._apps[idx].launch_hide_grace_ms
-        self._wm.windows_updated.connect(self._on_windows)
+        self._unsub = self._wm.on_windows_updated(self._on_windows)
         self._poll.start()
         self._guard.start(_GUARD_TIMEOUT_MS)
         self._wm.refresh_now()
@@ -92,7 +94,7 @@ class DeferredHide(QObject, LaunchHide, metaclass=_Meta):
 
     # ── Internal ─────────────────────────────────────────────────────────────
 
-    def _on_windows(self, windows: list[dict]) -> None:
+    def _on_windows(self, windows: list[Window]) -> None:
         idx = self._idx
         if idx is None or not self._app_window_present(idx, windows):
             return
@@ -102,17 +104,15 @@ class DeferredHide(QObject, LaunchHide, metaclass=_Meta):
         else:
             self._hide_now()
 
-    def _app_window_present(self, idx: int, windows: list[dict]) -> bool:
+    def _app_window_present(self, idx: int, windows: list[Window]) -> bool:
         """True if `windows` contains a window belonging to launched app `idx`.
 
         The presence rule (PID subtree or app-identity match) lives in the
-        domain; this supplies its infrastructure inputs — the launch's PID
-        subtree (/proc) and the KWin dict→Window adaptation."""
+        domain; this supplies its one infrastructure input — the launch's PID
+        subtree (/proc)."""
         pid   = self._app_manager.running_pid(idx)
         owned = expand_pid_tree({pid}) if pid else set()
-        return app_window_present(
-            [to_window(w) for w in windows], self._apps[idx], owned,
-        )
+        return app_window_present(windows, self._apps[idx], owned)
 
     def _force(self) -> None:
         """Safety-timeout path: hide even if no window was detected."""
@@ -124,10 +124,9 @@ class DeferredHide(QObject, LaunchHide, metaclass=_Meta):
         self._on_hide()
 
     def _stop_watch(self) -> None:
-        """Stop the poll/guard and disconnect (keeps a queued grace hide)."""
+        """Stop the poll/guard and unsubscribe (keeps a queued grace hide)."""
         self._poll.stop()
         self._guard.stop()
-        try:
-            self._wm.windows_updated.disconnect(self._on_windows)
-        except TypeError:
-            pass
+        if self._unsub is not None:
+            self._unsub()
+            self._unsub = None

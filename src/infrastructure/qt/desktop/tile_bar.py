@@ -13,7 +13,6 @@ from domain.catalog.target import Target, target_at_index
 from domain.catalog.window import Window
 from domain.catalog.window_rules import external_windows, resolve_recall_trigger
 from domain.lifecycle.process_manager import ProcessManager
-from infrastructure.system.window_manager import to_window
 from infrastructure.qt.ui import styles
 from domain.lifecycle.tile_bar_view import TileBarView
 from domain.navigation.bar_views import TileFocusView
@@ -210,8 +209,8 @@ class TileBar(QScrollArea, TileBarView, TileFocusView, metaclass=_Meta):
 
     # ── Dynamic tiles (currently open windows) ─────────────────────────────
 
-    def update_windows(self, raw_windows: list[dict]) -> None:
-        """Rebuild the dynamic tile section from the KWin window list.
+    def update_windows(self, windows: list[Window]) -> None:
+        """Rebuild the dynamic tile section from the refreshed window list.
 
         Filters out windows belonging to an application launched by AppManager —
         they are already represented by a static tile. Emits ``windows_changed``
@@ -219,7 +218,6 @@ class TileBar(QScrollArea, TileBarView, TileFocusView, metaclass=_Meta):
         coordinator can re-check active state — e.g. reactivate the desktop when
         the last open window closes.
         """
-        windows = [to_window(w) for w in raw_windows]
         self._last_windows = windows
 
         # Which windows earn a dynamic tile — the "external window" rule lives in

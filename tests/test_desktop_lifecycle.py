@@ -40,8 +40,7 @@ class _FakeScheduler:
 def _make_desktop(mock_gamepad):
     """Tworzy Desktop z minimalnym zestawem mocków."""
     wm = MagicMock()
-    wm.windows_updated = MagicMock()
-    wm.windows_updated.connect = MagicMock()
+    wm.on_windows_updated = MagicMock()
     wm.refresh_now = MagicMock()
 
     from infrastructure.qt.desktop import Desktop
