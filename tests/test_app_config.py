@@ -98,7 +98,7 @@ class TestLoadApps:
                "[Desktop Entry]\nType=Application\nName=X\n")
         _write(apps_root, "noname.desktop",
                "[Desktop Entry]\nType=Application\nExec=x\n")
-        assert load_apps() == []
+        assert list(load_apps()) == []
 
     def test_bad_file_is_skipped(self, apps_root):
         _write(apps_root, "junk.desktop", "this is not a desktop file at all")
@@ -108,4 +108,4 @@ class TestLoadApps:
 
     def test_missing_dir_returns_empty(self, tmp_path, monkeypatch):
         monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "does-not-exist"))
-        assert load_apps() == []
+        assert list(load_apps()) == []

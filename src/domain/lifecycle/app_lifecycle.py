@@ -19,7 +19,7 @@ import logging
 import os
 from collections.abc import Callable
 
-from domain.catalog.app import App
+from domain.catalog.catalog import AppCatalog
 from domain.input.vocabulary import Trigger
 from domain.shell.foreground import ForegroundState
 from domain.catalog.target import AppTarget, Target, WindowTarget
@@ -49,7 +49,7 @@ class AppLifecycle:
         gamepad: PadControl,
         window_manager: WindowManager,
         app_manager: ProcessManager,
-        apps: list[App],
+        apps: AppCatalog,
         foreground: ForegroundState,
         deferred_hide: LaunchHide,
         tilebar: TileBarView,

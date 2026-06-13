@@ -15,6 +15,7 @@ import os
 from pathlib import Path
 
 from domain.catalog.app import App
+from domain.catalog.catalog import AppCatalog
 
 logger = logging.getLogger(__name__)
 
@@ -25,18 +26,21 @@ def apps_dir() -> Path:
     return Path(base) / "kasual-desktop" / "apps"
 
 
-def load_apps() -> list[App]:
-    """Return the ordered list of :class:`App` definitions found in :func:`apps_dir`.
+def load_apps() -> AppCatalog:
+    """Return the :class:`AppCatalog` built from the ``.desktop`` files in :func:`apps_dir`.
 
-    Malformed or hidden entries are skipped; one bad file never aborts the whole
-    load. The directory is created if missing so the user has a place to drop files.
+    This adapter does the I/O — find and parse the files into ``(order, source,
+    App)`` entries — and hands them to :meth:`AppCatalog.from_entries`, which owns
+    the placement rule. Malformed or hidden entries are skipped; one bad file
+    never aborts the whole load. The directory is created if missing so the user
+    has a place to drop files.
     """
     directory = apps_dir()
     try:
         directory.mkdir(parents=True, exist_ok=True)
     except OSError as exc:
         logger.error("Cannot create apps dir %s: %s", directory, exc)
-        return []
+        return AppCatalog()
 
     logger.info("Loading apps from %s", directory)
     entries: list[tuple[int, str, App]] = []
@@ -51,10 +55,9 @@ def load_apps() -> list[App]:
         order, app = parsed
         entries.append((order, path.name, app))
 
-    entries.sort(key=lambda e: (e[0], e[1]))
-    apps = [app for _, _, app in entries]
-    logger.info("Loaded %d app(s)", len(apps))
-    return apps
+    catalog = AppCatalog.from_entries(entries)
+    logger.info("Loaded %d app(s)", len(catalog))
+    return catalog
 
 
 def _parse_desktop(path: Path) -> "tuple[int, App] | None":

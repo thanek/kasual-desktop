@@ -15,7 +15,7 @@ collaborators (``_tilebar``/``_topbar``/``_foreground``/``_state``/``_handle_pad
 ``_show_tile_popover``/``_show_confirm``) without widening the widget's public API.
 """
 
-from domain.catalog.app import App
+from domain.catalog.catalog import AppCatalog
 from domain.input.pad_control import PadControl
 from domain.lifecycle.app_lifecycle import AppLifecycle
 from domain.lifecycle.process_manager import ProcessManager
@@ -38,7 +38,7 @@ from .desktop import Desktop
 
 def build_desktop(
     *,
-    apps: list[App],
+    apps: AppCatalog,
     gamepad: PadControl,
     window_manager: WindowManager,
     wallpaper: SystemWallpaper,
