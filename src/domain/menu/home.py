@@ -17,7 +17,7 @@ from domain.menu.entry import CLOSE_APP, RETURN_TO_APP, RETURN_TO_DESKTOP
 from domain.menu.item import MenuItem
 from domain.shared.text import truncate
 from domain.system.action_view import system_action_items
-from support.i18n import translate
+from domain.shared.i18n import translate
 
 
 @dataclass(frozen=True)

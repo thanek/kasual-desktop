@@ -16,7 +16,7 @@ from collections.abc import Callable
 from domain.catalog.target import AppTarget, Target
 from domain.menu.entry import CLOSE, LAUNCH, RESTORE
 from domain.menu.item import MenuItem
-from support.i18n import translate
+from domain.shared.i18n import translate
 
 
 def tile_menu_for(

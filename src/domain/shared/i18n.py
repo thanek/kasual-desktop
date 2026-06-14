@@ -1,4 +1,4 @@
-"""Translation as a domain-facing service — beside `domain`, not under it.
+"""Translation port and service locator for the domain layer.
 
 The rest of the app localizes user-facing text without importing PyQt6: it calls
 the module-level `translate(context, text)`, which delegates to whatever

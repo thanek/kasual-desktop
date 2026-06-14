@@ -24,7 +24,7 @@ from domain.notifications.center import NotificationCenter
 from domain.notifications.view import relative_age
 from domain.shared.feedback import Cue, Feedback
 from domain.shared.text import truncate
-from support.i18n import translate
+from domain.shared.i18n import translate
 from .base_overlay import BaseOverlay
 
 _MAX_ROWS        = 12     # how many recent notifications to show

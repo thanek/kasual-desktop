@@ -3,7 +3,7 @@
 Pure, Qt-free. Decides *which* glyph the top bar shows for a kind and *what* the
 info popup reads, given a `NetworkStatus`. Lives in the domain because it is the
 feature's vocabulary, not an adapter — its only outward need is translation,
-taken through `support.i18n.translate` (the calls double as extraction markers,
+taken through `domain.shared.i18n.translate` (the calls double as extraction markers,
 exactly like `domain.system.action_view`).
 """
 
@@ -11,7 +11,7 @@ from dataclasses import dataclass
 
 from domain.network.status import NetworkKind, NetworkStatus
 from domain.shared.text import truncate
-from support.i18n import translate
+from domain.shared.i18n import translate
 
 # qtawesome glyphs (verified available); swap here without touching adapters.
 _ICONS = {

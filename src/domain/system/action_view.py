@@ -7,7 +7,7 @@ catalog marks as needing one). This is the "HOW it looks/reads"; the "WHAT it is
 
 It lives in the domain because it is the vocabulary of the actions, not an
 adapter — its only outward need is translation, which it gets through the
-`support.i18n` port rather than from Qt directly.
+`domain.shared.i18n` port rather than from Qt directly.
 
 `make_action_confirm` bridges the two: the `ActionRunner` calls back with an
 action *key*; this resolves the localized question for that key and hands it to
@@ -22,7 +22,7 @@ from domain.system.actions import (
     BRIGHTNESS, HIDE_DESKTOP, NETWORK, NOTIFICATIONS, RESTART, SHUTDOWN, SLEEP,
     VOLUME,
 )
-from support.i18n import translate
+from domain.shared.i18n import translate
 
 
 @dataclass(frozen=True)

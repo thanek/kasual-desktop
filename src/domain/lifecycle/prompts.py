@@ -2,7 +2,7 @@
 
 The lifecycle drives these prompts; they used to sit behind a port in an
 infrastructure adapter only because building a localized string meant importing
-Qt. With translation behind the `support.i18n` port, the message vocabulary —
+Qt. With translation behind the `domain.shared.i18n` port, the message vocabulary —
 the wording and its translation context — is plain domain logic and lives here.
 The port stays so callers can substitute it (e.g. fakes in tests).
 """
@@ -10,7 +10,7 @@ The port stays so callers can substitute it (e.g. fakes in tests).
 from typing import Protocol
 
 from domain.shared.text import truncate
-from support.i18n import translate
+from domain.shared.i18n import translate
 
 
 class Prompts(Protocol):
@@ -21,7 +21,7 @@ class Prompts(Protocol):
 
 
 class LocalizedPrompts(Prompts):
-    """Default `Prompts`: source strings localized through `support.i18n`.
+    """Default `Prompts`: source strings localized through `domain.shared.i18n`.
 
     The translation context ("Desktop") is kept stable so the existing locale
     entries (locale/kasual_*.ts) keep resolving."""

@@ -7,7 +7,7 @@ from PyQt6.QtGui import QIcon
 from PyQt6.QtWidgets import QSystemTrayIcon, QMenu
 
 from domain.shell.session_collaborators import ConnectionIndicator
-from support.i18n import translate
+from domain.shared.i18n import translate
 
 
 class SystemTray(ConnectionIndicator):

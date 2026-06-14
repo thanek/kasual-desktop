@@ -3,14 +3,14 @@
 Pure, Qt-free. Turns a notification's arrival time into a short, localized
 "how long ago" label, in coarse buckets (just now / N min / N h / a date).
 Lives in the domain because it is the wording of the feature, not an adapter —
-its only outward need is translation, taken through the `support.i18n` port
+its only outward need is translation, taken through the `domain.shared.i18n` port
 (the `translate(context, text)` calls double as extraction markers, exactly as
 `domain.system.action_view` does).
 """
 
 from datetime import datetime
 
-from support.i18n import translate
+from domain.shared.i18n import translate
 
 _MINUTE = 60
 _HOUR   = 60 * _MINUTE
