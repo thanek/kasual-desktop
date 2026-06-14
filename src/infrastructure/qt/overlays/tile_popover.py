@@ -150,6 +150,21 @@ class TilePopoverMenu(QWidget):
     def _on_hover(self, idx: int) -> None:
         self._cursor.hover(idx)
 
+    def pause(self) -> None:
+        if not self._closed:
+            self._gamepad.pop_handler(self._handle_pad)
+
+    def resume(self) -> None:
+        if not self._closed:
+            self._gamepad.push_handler(self._handle_pad)
+
+    def cancel(self) -> None:
+        if not self._closed:
+            self._gamepad.pop_handler(self._handle_pad)
+            self._closed = True
+            self.hide()
+            self.deleteLater()
+
     def _render_selection(self, index: int) -> None:
         for i, btn in enumerate(self._buttons):
             if i == index:

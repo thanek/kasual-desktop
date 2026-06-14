@@ -5,7 +5,7 @@ Testujemy:
   - rejestracja/wyrejestrowanie handlera pada
   - nawigacja padem: select (tak/nie), cancel/close, left/right
   - guard podwójnego zamknięcia (_closed)
-  - force_close(): zamknięcie bez wywołania callbacków
+  - cancel(): zamknięcie bez wywołania callbacków
 
 Widget jest tworzony w trybie offscreen – showFullScreen() nie wymaga
 prawdziwego wyświetlacza.
@@ -131,17 +131,17 @@ class TestDoubleCloseGuard:
         assert dlg._closed is True
 
 
-# ── force_close ────────────────────────────────────────────────────────────────
+# ── cancel ────────────────────────────────────────────────────────────────
 
-class TestForceClose:
+class TestCancel:
     def test_sets_closed_flag(self, mock_gamepad):
         dlg = _make_dialog(mock_gamepad)
-        dlg.force_close()
+        dlg.cancel()
         assert dlg._closed is True
 
     def test_deregisters_handler(self, mock_gamepad):
         dlg = _make_dialog(mock_gamepad)
-        dlg.force_close()
+        dlg.cancel()
         assert dlg._handle_pad not in mock_gamepad._stack
 
     def test_does_not_call_any_callback(self, mock_gamepad):
@@ -151,13 +151,13 @@ class TestForceClose:
             on_confirmed=lambda: confirmed.append(True),
             on_cancelled=lambda: cancelled.append(True),
         )
-        dlg.force_close()
+        dlg.cancel()
         assert confirmed == [] and cancelled == []
 
     def test_idempotent_second_call_does_not_raise(self, mock_gamepad):
         dlg = _make_dialog(mock_gamepad)
-        dlg.force_close()
-        dlg.force_close()   # nie powinno rzucać
+        dlg.cancel()
+        dlg.cancel()   # nie powinno rzucać
         assert dlg._closed is True
 
 

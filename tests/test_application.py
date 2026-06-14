@@ -96,6 +96,7 @@ class FakeDesktop:
         self.hidden = 0
         self.volume_opened = 0
         self.brightness_opened = 0
+        self.dismiss_overlays_calls = 0
 
     # DesktopControl
     def current_app(self):
@@ -109,6 +110,9 @@ class FakeDesktop:
 
     def show_desktop(self):
         self.show_desktop_calls += 1
+
+    def dismiss_overlays(self):
+        self.dismiss_overlays_calls += 1
 
     def foreground_pid(self):
         return self._foreground
@@ -221,6 +225,21 @@ class TestBtnModeOverlay:
         gamepad.fire_btn_mode()
         _, _, on_cancel = factory.created[0].shown_with
         assert on_cancel is None
+
+    def test_raising_overlay_dismisses_other_overlays(self):
+        # A fresh Home Overlay supersedes any volume/brightness/etc. overlay on
+        # screen: it dismisses them (cancelling their action) before showing.
+        _, desktop, gamepad, _, _, _ = make_app()
+        gamepad.fire_btn_mode()
+        assert desktop.dismiss_overlays_calls == 1
+
+    def test_toggle_off_does_not_dismiss_other_overlays(self):
+        # Hiding an already-showing Home Overlay is a toggle, not a fresh raise,
+        # so it leaves the other overlays alone.
+        _, desktop, gamepad, _, _, _ = make_app()
+        gamepad.fire_btn_mode()   # show (dismiss #1)
+        gamepad.fire_btn_mode()   # toggle off
+        assert desktop.dismiss_overlays_calls == 1
 
 
 # ── _dispatch_home routing ───────────────────────────────────────────────────

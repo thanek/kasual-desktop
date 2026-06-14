@@ -69,7 +69,10 @@ def test_launch_from_popover_over_idle_app_tile_launches_it():
 
 def test_minimizing_the_desktop_then_reconnecting_round_trips():
     feedback = MagicMock()
-    coord = Desktop(state=DesktopState(), view=MagicMock(), feedback=feedback)
+    coord = Desktop(
+        state=DesktopState(), view=MagicMock(), feedback=feedback,
+        overlays=MagicMock(),
+    )
     coord.show_desktop()
     # The user chose "Minimize Desktop": an exit sound, and it goes away
     coord.pause()

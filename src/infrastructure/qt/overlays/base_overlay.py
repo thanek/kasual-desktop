@@ -109,8 +109,9 @@ class BaseOverlay(QWidget):
         self.deleteLater()
         return True
 
-    def force_close(self) -> None:
-        """Close without callbacks (e.g. when the underlying app vanished).
+    def cancel(self) -> None:
+        """Close without callbacks, dropping any pending action (group dismiss,
+        or when the underlying app vanished).
 
         Idempotent and tolerant of an already-closed overlay: still ensures the
         widget is hidden and scheduled for deletion."""
