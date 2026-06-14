@@ -62,6 +62,7 @@ class _NotifyArgs:
     """The fields we lift out of a `Notify` method call."""
 
     app_name: str
+    app_icon: str
     summary:  str
     body:     str
 
@@ -80,7 +81,7 @@ def _parse_notify_args(arg_lines: list[str]) -> _NotifyArgs | None:
     app_icon, summary, body, actions, hints, expire_timeout. We collect the
     *top-level* (depth 0) scalar values in order — arrays/dicts (actions, hints)
     are skipped by depth tracking, so their nested strings never pollute the
-    positions — then read app_name at 0, summary at 3, body at 4.
+    positions — then read app_name at 0, app_icon at 2, summary at 3, body at 4.
     """
     depth = 0
     scalars: list[str] = []
@@ -101,6 +102,7 @@ def _parse_notify_args(arg_lines: list[str]) -> _NotifyArgs | None:
         return None
     return _NotifyArgs(
         app_name=_unquote(scalars[0]),
+        app_icon=_unquote(scalars[2]),
         summary=_unquote(scalars[3]),
         body=_unquote(scalars[4]),
     )
@@ -227,7 +229,9 @@ class KdeNotificationMonitor(QObject, NotificationSource, metaclass=_Meta):
                         app_name=args.app_name or "?",
                         summary=args.summary,
                         body=args.body,
-                        icon=None,   # app icons are theme names/paths, not qta glyphs
+                        # freedesktop app_icon hint (theme name or path); the
+                        # overlay resolves it to a QIcon, falling back to app_name.
+                        icon=args.app_icon or None,
                         timestamp=datetime.now(),
                     )
                 )

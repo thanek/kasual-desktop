@@ -18,4 +18,7 @@ class Notification:
     summary:   str
     timestamp: datetime
     body:      str        = ""
-    icon:      str | None = None   # qtawesome glyph; None where unknown
+    # freedesktop app-icon hint: an icon-theme name or a file path/URI, as sent
+    # in the Notify call. None where the sender gave none. The Qt overlay resolves
+    # it to an actual icon (falling back to the app name).
+    icon:      str | None = None

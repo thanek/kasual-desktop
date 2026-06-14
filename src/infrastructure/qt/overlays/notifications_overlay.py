@@ -7,11 +7,12 @@ lifetime — and reuses the domain `MenuCursor` for selection, exactly like the
 Home Overlay, so navigation semantics live in the domain, not here.
 """
 
+import os
 from datetime import datetime
 
 import qtawesome as qta
-from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtGui import QKeyEvent
+from PyQt6.QtCore import Qt, QUrl, pyqtSignal
+from PyQt6.QtGui import QIcon, QKeyEvent, QPixmap
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QFrame, QScrollArea, QSizePolicy,
 )
@@ -28,6 +29,54 @@ from .base_overlay import BaseOverlay
 
 _MAX_ROWS        = 12     # how many recent notifications to show
 _LIST_MAX_HEIGHT = 560    # px; the list scrolls only past this height
+_ICON_SIZE       = 40     # px; per-row app-icon side
+
+
+def _icon_name_candidates(icon_hint: str | None, app_name: str) -> list[str]:
+    """Ordered, de-duplicated names to try when resolving a notification's icon.
+
+    Pure (no Qt) so it is unit-testable: the freedesktop ``app_icon`` hint first,
+    then the application name (as-is and lower-cased) as a theme-icon name."""
+    out: list[str] = []
+    seen: set[str] = set()
+
+    def add(name: str | None) -> None:
+        if not name:
+            return
+        name = name.strip()
+        if name and name not in seen:
+            seen.add(name)
+            out.append(name)
+
+    add(icon_hint)
+    add(app_name)
+    add(app_name.lower() if app_name else None)
+    return out
+
+
+def _load_icon(name: str) -> QIcon | None:
+    """A QIcon for a theme name or a file path/URI, or None if it resolves to
+    nothing. Mirrors WindowIconResolver._icon_from_name, plus ``file://`` URIs."""
+    if name.startswith("file://"):
+        name = QUrl(name).toLocalFile() or name[len("file://"):]
+    if os.path.isabs(name):
+        icon = QIcon(name)
+        return icon if not icon.isNull() else None
+    if QIcon.hasThemeIcon(name):
+        return QIcon.fromTheme(name)
+    return None
+
+
+def _resolve_icon_pixmap(icon_hint: str | None, app_name: str, size: int) -> QPixmap:
+    """A ``size``×``size`` app icon for a notification — the sender's hint, then
+    the app name, then a neutral bell glyph so every row carries an icon."""
+    for name in _icon_name_candidates(icon_hint, app_name):
+        icon = _load_icon(name)
+        if icon is not None and not icon.isNull():
+            pixmap = icon.pixmap(size, size)
+            if not pixmap.isNull():
+                return pixmap
+    return qta.icon("fa5s.bell", color="#9aa0aa").pixmap(size, size)
 
 # Row background, scoped to #notifrow so the child labels (transparent) are
 # untouched. Selection just swaps the frame's background + border.
@@ -191,9 +240,20 @@ class NotificationsOverlay(BaseOverlay):
         # Clicking a row selects it (mouse parity with the gamepad cursor).
         row.mousePressEvent = lambda _e, i=idx: self._cursor.hover(i)
 
-        v = QVBoxLayout(row)
-        v.setContentsMargins(16, 10, 16, 10)
+        h = QHBoxLayout(row)
+        h.setContentsMargins(16, 10, 16, 10)
+        h.setSpacing(12)
+
+        icon_lbl = QLabel()
+        icon_lbl.setPixmap(_resolve_icon_pixmap(n.icon, n.app_name, _ICON_SIZE))
+        icon_lbl.setFixedSize(_ICON_SIZE, _ICON_SIZE)
+        icon_lbl.setStyleSheet("background: transparent;")
+        h.addWidget(icon_lbl, 0, Qt.AlignmentFlag.AlignTop)
+
+        v = QVBoxLayout()
+        v.setContentsMargins(0, 0, 0, 0)
         v.setSpacing(2)
+        h.addLayout(v, 1)
 
         meta_row = QHBoxLayout()
         meta_row.setContentsMargins(0, 0, 0, 0)

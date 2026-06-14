@@ -66,6 +66,7 @@ class TestParseNotifyArgs:
         args = _parse_notify_args(lines)
         assert args is not None
         assert args.app_name == "Spotify"
+        assert args.app_icon == "spotify"
         assert args.summary == "Now Playing"
         assert args.body == "Song - Artist"
 
@@ -80,6 +81,7 @@ class TestParseNotifyBlocks:
         # header proves it finished. The noise signal is ignored.
         assert [a.app_name for a in found] == ["Spotify"]
         assert found[0].summary == "Now Playing"
+        assert found[0].app_icon == "spotify"
         assert "KMail" in leftover
 
     def test_no_header_yet_keeps_everything(self):
