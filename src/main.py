@@ -28,6 +28,7 @@ from infrastructure.qt.scheduler import QtScheduler
 from domain.shared.feedback import Cue
 from infrastructure.system.kde_wallpaper import KdeSystemWallpaper
 from infrastructure.system.kde_notifications import KdeNotificationMonitor
+from infrastructure.system.network_manager import NMNetworkMonitor
 from domain.notifications.center import NotificationCenter
 from domain.system.actions import ActionDeps
 from infrastructure.system.window_manager import KWinWindowManager
@@ -97,6 +98,13 @@ def main() -> None:
     notification_monitor.on_notification(
         lambda _n: desktop.refresh_notification_badge()
     )
+
+    # Network status indicator: the concrete adapter (NetworkManager) is the only
+    # NM-aware piece; everything downstream depends on the domain NetworkMonitor
+    # port, so it can be swapped for another backend at this seam.
+    network_monitor = NMNetworkMonitor()
+    network_monitor.on_changed(desktop.update_network_status)
+    desktop.update_network_status(network_monitor.current())
 
     # The log viewer runs in its own process so it is a normal xdg window, not a
     # layer-shell surface (see LogViewerLauncher).

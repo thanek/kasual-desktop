@@ -74,43 +74,114 @@
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/domain/system/action_view.py" line="40" />
-        <source>Volume</source>
+        <location filename="../src/domain/system/action_view.py" line="42" />
+        <location filename="../src/domain/network/view.py" line="35" />
+        <source>Network</source>
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/domain/system/action_view.py" line="44" />
-        <source>Sleep</source>
+        <location filename="../src/domain/network/view.py" line="43" />
+        <source>Status</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/domain/network/view.py" line="44" />
+        <source>Not connected</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/domain/network/view.py" line="48" />
+        <source>Type</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/domain/network/view.py" line="55" />
+        <source>Signal</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/domain/network/view.py" line="57" />
+        <source>IP address</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/domain/network/view.py" line="59" />
+        <source>Interface</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/domain/notifications/view.py" line="24" />
+        <source>just now</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/domain/notifications/view.py" line="26" />
+        <source>{0} min ago</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/domain/notifications/view.py" line="28" />
+        <source>{0} h ago</source>
         <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/domain/system/action_view.py" line="46" />
+        <source>Volume</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/domain/system/action_view.py" line="50" />
+        <source>Sleep</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/domain/system/action_view.py" line="52" />
         <source>Are you sure you want to sleep?</source>
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/domain/system/action_view.py" line="49" />
+        <location filename="../src/domain/system/action_view.py" line="55" />
         <source>Restart</source>
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/domain/system/action_view.py" line="51" />
+        <location filename="../src/domain/system/action_view.py" line="57" />
         <source>Are you sure you want to restart?</source>
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/domain/system/action_view.py" line="54" />
+        <location filename="../src/domain/system/action_view.py" line="60" />
         <source>Shut Down</source>
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/domain/system/action_view.py" line="56" />
+        <location filename="../src/domain/system/action_view.py" line="62" />
         <source>Are you sure you want to shut down?</source>
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/domain/system/action_view.py" line="59" />
+        <location filename="../src/domain/system/action_view.py" line="65" />
+        <source>Notifications</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/domain/system/action_view.py" line="69" />
         <source>Minimize Desktop</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/infrastructure/qt/overlays/notifications_overlay.py" line="112" />
+        <source>Recent notifications</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/infrastructure/qt/overlays/notifications_overlay.py" line="121" />
+        <source>▲ ▼ – scroll    B/Esc – close</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/infrastructure/qt/overlays/notifications_overlay.py" line="136" />
+        <source>No notifications</source>
         <translation type="unfinished" />
     </message>
     <message>
@@ -132,7 +203,7 @@
     <name>LogViewer</name>
     <message>
         <location filename="../src/infrastructure/qt/ui/log_viewer.py" line="49" />
-        <source>Kasual – Logs</source>
+        <source>Kasual Desktop – Logs</source>
         <translation type="unfinished" />
     </message>
     <message>

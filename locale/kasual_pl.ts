@@ -75,44 +75,115 @@
         <translation>Zamknij {0}</translation>
     </message>
     <message>
-        <location filename="../src/domain/system/action_view.py" line="40" />
+        <location filename="../src/domain/system/action_view.py" line="42" />
+        <location filename="../src/domain/network/view.py" line="35" />
+        <source>Network</source>
+        <translation>Sieć</translation>
+    </message>
+    <message>
+        <location filename="../src/domain/network/view.py" line="43" />
+        <source>Status</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/domain/network/view.py" line="44" />
+        <source>Not connected</source>
+        <translation>Nie połączono</translation>
+    </message>
+    <message>
+        <location filename="../src/domain/network/view.py" line="48" />
+        <source>Type</source>
+        <translation>Typ</translation>
+    </message>
+    <message>
+        <location filename="../src/domain/network/view.py" line="55" />
+        <source>Signal</source>
+        <translation>Sygnał</translation>
+    </message>
+    <message>
+        <location filename="../src/domain/network/view.py" line="57" />
+        <source>IP address</source>
+        <translation>Adres IP</translation>
+    </message>
+    <message>
+        <location filename="../src/domain/network/view.py" line="59" />
+        <source>Interface</source>
+        <translation>Interfejs</translation>
+    </message>
+    <message>
+        <location filename="../src/domain/notifications/view.py" line="24" />
+        <source>just now</source>
+        <translation>przed chwilą</translation>
+    </message>
+    <message>
+        <location filename="../src/domain/notifications/view.py" line="26" />
+        <source>{0} min ago</source>
+        <translation>{0} min temu</translation>
+    </message>
+    <message>
+        <location filename="../src/domain/notifications/view.py" line="28" />
+        <source>{0} h ago</source>
+        <translation>{0} godz. temu</translation>
+    </message>
+    <message>
+        <location filename="../src/domain/system/action_view.py" line="46" />
         <source>Volume</source>
         <translation>Głośność</translation>
     </message>
     <message>
-        <location filename="../src/domain/system/action_view.py" line="44" />
+        <location filename="../src/domain/system/action_view.py" line="50" />
         <source>Sleep</source>
         <translation>Uśpij system</translation>
     </message>
     <message>
-        <location filename="../src/domain/system/action_view.py" line="46" />
+        <location filename="../src/domain/system/action_view.py" line="52" />
         <source>Are you sure you want to sleep?</source>
         <translation>Czy na pewno chcesz uśpić system?</translation>
     </message>
     <message>
-        <location filename="../src/domain/system/action_view.py" line="49" />
+        <location filename="../src/domain/system/action_view.py" line="55" />
         <source>Restart</source>
         <translation>Zrestartuj komputer</translation>
     </message>
     <message>
-        <location filename="../src/domain/system/action_view.py" line="51" />
+        <location filename="../src/domain/system/action_view.py" line="57" />
         <source>Are you sure you want to restart?</source>
         <translation>Czy na pewno chcesz zrestartować komputer?</translation>
     </message>
     <message>
-        <location filename="../src/domain/system/action_view.py" line="54" />
+        <location filename="../src/domain/system/action_view.py" line="60" />
         <source>Shut Down</source>
         <translation>Zamknij system</translation>
     </message>
     <message>
-        <location filename="../src/domain/system/action_view.py" line="56" />
+        <location filename="../src/domain/system/action_view.py" line="62" />
         <source>Are you sure you want to shut down?</source>
         <translation>Czy na pewno chcesz wyłączyć komputer?</translation>
     </message>
     <message>
-        <location filename="../src/domain/system/action_view.py" line="59" />
+        <location filename="../src/domain/system/action_view.py" line="65" />
+        <source>Notifications</source>
+        <translation>Powiadomienia</translation>
+    </message>
+    <message>
+        <location filename="../src/domain/system/action_view.py" line="69" />
         <source>Minimize Desktop</source>
         <translation>Minimalizuj Pulpit</translation>
+    </message>
+    <message>
+        <location filename="../src/infrastructure/qt/overlays/notifications_overlay.py" line="112" />
+        <source>Recent notifications</source>
+        <translation>Ostatnie powiadomienia</translation>
+    </message>
+    <message>
+        <location filename="../src/infrastructure/qt/overlays/notifications_overlay.py" line="121" />
+        <source>▲ ▼ – scroll    B/Esc – close</source>
+        <translation>▲ ▼ – przewiń    B/Esc – zamknij</translation>
+    </message>
+    <message>
+        <location filename="../src/infrastructure/qt/overlays/notifications_overlay.py" line="136" />
+        <source>No notifications</source>
+        <translation>Brak powiadomień</translation>
     </message>
     <message>
         <location filename="../src/infrastructure/qt/ui/tray.py" line="26" />
@@ -133,16 +204,12 @@
     <name>LogViewer</name>
     <message>
         <location filename="../src/infrastructure/qt/ui/log_viewer.py" line="49" />
-        <source>Kasual – Logs</source>
-        <translation type="unfinished" />
+        <source>Kasual Desktop – Logs</source>
+        <translation>Kasual Desktop – Logi</translation>
     </message>
     <message>
         <location filename="../src/infrastructure/qt/ui/log_viewer.py" line="88" />
         <source>Clear</source>
         <translation>Wyczyść</translation>
-    </message>
-    <message>
-        <source>Kasual Desktop – Logs</source>
-        <translation type="vanished">Kasual Desktop – Logi</translation>
     </message>
 </context></TS>

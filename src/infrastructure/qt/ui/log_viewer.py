@@ -46,7 +46,7 @@ class LogViewer(QWidget):
         super().__init__(parent)
         self._provider = provider
 
-        self.setWindowTitle(self.tr("Kasual – Logs"))
+        self.setWindowTitle(self.tr("Kasual Desktop – Logs"))
         self.resize(900, 500)
         self.setStyleSheet(_STYLE)
 

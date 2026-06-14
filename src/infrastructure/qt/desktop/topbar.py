@@ -127,6 +127,13 @@ class TopBar(QWidget, TopBarView, metaclass=_Meta):
         """Activate the button at *index* (as if clicked)."""
         self._buttons[index].click()
 
+    def set_action_icon(self, action_key: str, glyph: str) -> None:
+        """Swap an action button's icon (e.g. the live network-state glyph)."""
+        if action_key not in self._action_keys:
+            return
+        btn = self._buttons[self._action_keys.index(action_key)]
+        btn.setIcon(qta.icon(glyph, color="white"))
+
     def set_badge(self, action_key: str, count: int) -> None:
         """Show a small count badge on *action_key*'s button (hidden when 0).
 

@@ -33,7 +33,7 @@ def main() -> None:
     log_file = sys.argv[1] if len(sys.argv) > 1 else str(_DEFAULT_LOG)
 
     app = QApplication(sys.argv)
-    app.setApplicationName("Kasual – Logs")
+    app.setApplicationName("Kasual Desktop – Logs")
     install_translations(app, str(Path(__file__).parent.parent / "locale"))
 
     viewer = LogViewer(LogProvider(FileLogSource(log_file)))

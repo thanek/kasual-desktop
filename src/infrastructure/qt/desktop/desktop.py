@@ -15,8 +15,11 @@ from infrastructure.qt.overlays.info_dialog import InfoDialog
 from infrastructure.qt.overlays.tile_popover import TilePopoverMenu
 from infrastructure.qt.overlays.volume_overlay import VolumeOverlay
 from infrastructure.qt.overlays.notifications_overlay import NotificationsOverlay
+from infrastructure.qt.overlays.network_overlay import NetworkOverlay
 from domain.notifications.center import NotificationCenter
-from domain.system.actions import NOTIFICATIONS
+from domain.network import view as network_view
+from domain.network.status import NetworkStatus
+from domain.system.actions import NETWORK, NOTIFICATIONS
 from domain.system.volume import VolumeControl
 from domain.system.power_control import PowerControl
 from domain.shared.scheduler import Scheduler
@@ -85,9 +88,11 @@ class Desktop(QWidget, DesktopView, DesktopShell, DesktopControl, metaclass=_Met
         self._power       = power
         self._scheduler   = scheduler
         self._notifications = notifications
+        self._network_status = NetworkStatus.offline()
         self._confirm_dialog = None
         self._volume_overlay = None
         self._notifications_overlay = None
+        self._network_overlay = None
         self._tile_popover   = None
 
         # Desktop visibility + paused + what the BTN_MODE menu targets (foreground).
@@ -199,7 +204,8 @@ class Desktop(QWidget, DesktopView, DesktopShell, DesktopControl, metaclass=_Met
     def _active_overlays(self) -> list[BaseOverlay]:
         """Active overlays (those that can be paused/resumed)."""
         return [
-            o for o in (self._volume_overlay, self._notifications_overlay, self._confirm_dialog)
+            o for o in (self._volume_overlay, self._notifications_overlay,
+                        self._network_overlay, self._confirm_dialog)
             if o is not None
         ]
 
@@ -431,6 +437,21 @@ class Desktop(QWidget, DesktopView, DesktopShell, DesktopControl, metaclass=_Met
     def refresh_notification_badge(self) -> None:
         """Sync the notifications button badge to the count held in memory."""
         self._topbar.set_badge(NOTIFICATIONS, self._notifications.count)
+
+    def update_network_status(self, status: NetworkStatus) -> None:
+        """Store the latest network status and reflect its kind in the top-bar
+        icon (driven by the NetworkMonitor; the popup reads the stored status)."""
+        self._network_status = status
+        self._topbar.set_action_icon(NETWORK, network_view.icon_for(status.kind))
+
+    def open_network_overlay(self) -> None:
+        overlay = NetworkOverlay(self._gamepad, self._network_status, self._feedback, parent=self)
+        self._network_overlay = overlay
+        overlay.closed.connect(self._on_network_closed)
+
+    def _on_network_closed(self) -> None:
+        self._network_overlay = None
+        self._nav.focus_topbar()
 
     def open_notifications_overlay(self) -> None:
         overlay = NotificationsOverlay(self._gamepad, self._notifications, self._feedback, parent=self)

@@ -19,6 +19,7 @@ from domain.system.power_control import PowerControl
 
 # Action identities — stable keys shared with the presentation table and the
 # top-bar / home-menu renderers.
+NETWORK       = "network"
 NOTIFICATIONS = "notifications"
 VOLUME        = "volume"
 SLEEP         = "sleep"
@@ -52,5 +53,6 @@ ACTIONS: dict[str, SystemAction] = {
     RESTART:       SystemAction(True,  lambda d: d.power.reboot()),
     SHUTDOWN:      SystemAction(True,  lambda d: d.power.poweroff()),
     NOTIFICATIONS: SystemAction(False, lambda d: d.desktop.open_notifications_overlay()),
+    NETWORK:       SystemAction(False, lambda d: d.desktop.open_network_overlay()),
     HIDE_DESKTOP:  SystemAction(False, lambda d: d.desktop.pause()),
 }

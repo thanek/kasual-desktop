@@ -18,7 +18,9 @@ from collections.abc import Callable
 from dataclasses import dataclass
 
 from domain.menu.item import MenuItem
-from domain.system.actions import HIDE_DESKTOP, NOTIFICATIONS, RESTART, SHUTDOWN, SLEEP, VOLUME
+from domain.system.actions import (
+    HIDE_DESKTOP, NETWORK, NOTIFICATIONS, RESTART, SHUTDOWN, SLEEP, VOLUME,
+)
 from support.i18n import translate
 
 
@@ -58,6 +60,10 @@ PRESENTATION: dict[str, ActionView] = {
     NOTIFICATIONS: ActionView(
         translate("Kasual Desktop", "Notifications"),
         "fa5s.bell", "#ebcb8b", None,
+    ),
+    NETWORK: ActionView(
+        translate("Kasual Desktop", "Network"),
+        "fa5s.wifi", "#81a1c1", None,   # icon overridden live in the top bar
     ),
     HIDE_DESKTOP: ActionView(
         translate("Kasual Desktop", "Minimize Desktop"),
