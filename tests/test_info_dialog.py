@@ -1,12 +1,12 @@
 """
 Testy jednostkowe dla InfoDialog.
 
-InfoDialog dziedziczy zamykanie (_dismiss/force_close) i obsługę kliknięcia
+InfoDialog dziedziczy zamykanie (_dismiss/cancel) i obsługę kliknięcia
 poza kartą z BaseOverlay — te testy domykają ten współdzielony kontrakt:
   - rejestracja/wyrejestrowanie handlera pada
   - select/cancel/close → potwierdzenie + zamknięcie
   - guard podwójnego zamknięcia (_closed)
-  - force_close(): zamknięcie bez wywołania callbacku
+  - cancel(): zamknięcie bez wywołania callbacku
   - klik poza kartą nie zamyka (InfoDialog ma tylko OK)
 """
 
@@ -70,23 +70,23 @@ class TestDoubleCloseGuard:
         assert dlg._closed is True
 
 
-class TestForceClose:
+class TestCancel:
     def test_sets_closed_and_deregisters(self, mock_gamepad):
         dlg = _make_dialog(mock_gamepad)
-        dlg.force_close()
+        dlg.cancel()
         assert dlg._closed is True
         assert dlg._handle_pad not in mock_gamepad._stack
 
     def test_does_not_call_callback(self, mock_gamepad):
         called = []
         dlg = _make_dialog(mock_gamepad, on_confirmed=lambda: called.append(True))
-        dlg.force_close()
+        dlg.cancel()
         assert called == []
 
     def test_idempotent_second_call_does_not_raise(self, mock_gamepad):
         dlg = _make_dialog(mock_gamepad)
-        dlg.force_close()
-        dlg.force_close()
+        dlg.cancel()
+        dlg.cancel()
         assert dlg._closed is True
 
 

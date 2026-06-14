@@ -28,12 +28,13 @@ def _make():
     state = DesktopState(fg)
     view = FakeView()
     feedback = MagicMock()
-    return Desktop(state, view, feedback), state, view, feedback
+    overlays = MagicMock()
+    return Desktop(state, view, feedback, overlays), state, view, feedback, overlays
 
 
 class TestShowDesktop:
     def test_sequence_when_not_paused(self):
-        coord, state, view, _ = _make()
+        coord, state, view, _, _ = _make()
         coord.show_desktop()
         assert view.calls == [
             "take_input", "refresh_windows", "show_fullscreen", "activate",
@@ -42,24 +43,25 @@ class TestShowDesktop:
         assert state.visible is True
 
     def test_clears_foreground(self):
-        coord, state, _, _ = _make()
+        coord, state, _, _, _ = _make()
         state.foreground.set(AppTarget(0, "Steam"))
         coord.show_desktop()
         assert state.is_idle() is True
 
     def test_restores_overlays_when_was_paused(self):
-        coord, _, view, _ = _make()
+        coord, _, _, _, overlays = _make()
         coord.pause()
-        view.calls.clear()
+        overlays.reset_mock()
         coord.show_desktop()
-        assert "resume_overlays" in view.calls
+        overlays.resume.assert_called_once_with()
 
 
 class TestPause:
     def test_sequence(self):
-        coord, state, view, feedback = _make()
+        coord, state, view, feedback, overlays = _make()
         coord.pause()
-        assert view.calls == ["pause_overlays", "release_input", "hide_view"]
+        assert view.calls == ["release_input", "hide_view"]
+        overlays.pause.assert_called_once_with()
         assert state.paused is True
         assert state.visible is False
         feedback.play.assert_called_once_with("exit")
@@ -67,22 +69,23 @@ class TestPause:
 
 class TestResume:
     def test_sequence_when_not_paused(self):
-        coord, _, view, feedback = _make()
+        coord, _, view, feedback, overlays = _make()
         coord.resume()
         assert view.calls == ["take_input", "show_fullscreen", "activate"]
+        overlays.resume.assert_not_called()
         feedback.play.assert_called_once_with("start")
 
     def test_restores_overlays_when_was_paused(self):
-        coord, _, view, _ = _make()
+        coord, _, view, _, overlays = _make()
         coord.pause()
         view.calls.clear()
+        overlays.reset_mock()
         coord.resume()
-        assert view.calls == [
-            "take_input", "show_fullscreen", "resume_overlays", "activate",
-        ]
+        assert view.calls == ["take_input", "show_fullscreen", "activate"]
+        overlays.resume.assert_called_once_with()
 
     def test_resume_keeps_foreground(self):
-        coord, state, _, _ = _make()
+        coord, state, _, _, _ = _make()
         state.foreground.set(AppTarget(1, "X"))
         coord.resume()
         assert state.current == AppTarget(1, "X")   # resume does not clear

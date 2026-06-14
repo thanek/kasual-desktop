@@ -82,6 +82,10 @@ class Application:
                 return
             self._close_overlay()
 
+        # A fresh Home Overlay supersedes whatever is on screen: cancel the
+        # other overlays so they aren't merely covered.
+        self._desktop.dismiss_overlays()
+
         menu = compose_home_menu(self._app_control.current_app())
 
         self._overlay = self._overlay_factory.create_home_overlay()

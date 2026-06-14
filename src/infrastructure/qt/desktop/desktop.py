@@ -39,6 +39,7 @@ from domain.shared.feedback import Feedback
 from typing import _ProtocolMeta  # type: ignore[attr-defined]
 from domain.shell.desktop_view import DesktopView
 from domain.shell.desktop_control import DesktopControl
+from domain.shell.open_overlays import OpenOverlays
 from domain.system.desktop_shell import DesktopShell
 from domain.shell.wallpaper import SystemWallpaper
 from .tile_bar import TileBar
@@ -81,6 +82,7 @@ class Desktop(QWidget, DesktopView, DesktopShell, DesktopControl, metaclass=_Met
         process_manager: ProcessManager,
         notifications: NotificationCenter,
         network_control: NetworkControl,
+        overlays: OpenOverlays,
     ):
         super().__init__()
         self._apps        = apps
@@ -96,11 +98,11 @@ class Desktop(QWidget, DesktopView, DesktopShell, DesktopControl, metaclass=_Met
         self._notifications = notifications
         self._network_control = network_control
         self._network_status = NetworkStatus.offline()
+        # System-action overlays (volume/brightness/…) are tracked as a group in
+        # the domain registry; only the confirm dialog keeps a named handle, for
+        # its single-instance guard and the app-ended force-close.
+        self._overlays       = overlays
         self._confirm_dialog = None
-        self._volume_overlay = None
-        self._brightness_overlay = None
-        self._notifications_overlay = None
-        self._network_overlay = None
         self._tile_popover   = None
 
         # Desktop visibility + paused + what the BTN_MODE menu targets (foreground).
@@ -204,19 +206,16 @@ class Desktop(QWidget, DesktopView, DesktopShell, DesktopControl, metaclass=_Met
         """Hide the Desktop without disconnecting the gamepad (minimize to tray)."""
         self._desktop.pause()
 
+    def dismiss_overlays(self) -> None:
+        """Cancel every open overlay/dialog (driven when the Home Overlay takes
+        over): the registry tears down the group; the confirm handle is among
+        them, so its slot just needs clearing."""
+        self._overlays.cancel()
+        self._confirm_dialog = None
+
     def resume(self) -> None:
         """Restore the Desktop after reconnecting the gamepad — without resetting state."""
         self._desktop.resume()
-
-    @property
-    def _active_overlays(self) -> list[BaseOverlay]:
-        """Active overlays (those that can be paused/resumed)."""
-        return [
-            o for o in (self._volume_overlay, self._brightness_overlay,
-                        self._notifications_overlay, self._network_overlay,
-                        self._confirm_dialog)
-            if o is not None
-        ]
 
     # ── DesktopView port (driven by AppLifecycle) ───────────────────────────
 
@@ -240,14 +239,6 @@ class Desktop(QWidget, DesktopView, DesktopShell, DesktopControl, metaclass=_Met
 
     def refresh_windows(self) -> None:
         self._wm.refresh_now()
-
-    def pause_overlays(self) -> None:
-        for overlay in self._active_overlays:
-            overlay.pause()
-
-    def resume_overlays(self) -> None:
-        for overlay in self._active_overlays:
-            overlay.resume()
 
     def close_active_dialog(self) -> None:
         self._close_active_dialog()
@@ -384,17 +375,24 @@ class Desktop(QWidget, DesktopView, DesktopShell, DesktopControl, metaclass=_Met
             parent=self,
         )
         self._tile_popover = popover
+        self._overlays.register(popover)
         popover.closed.connect(self._on_tile_popover_closed)
         popover.show_above(self._tilebar.current_tile())
 
     def _on_tile_popover_closed(self) -> None:
+        self._overlays.forget(self._tile_popover)
         self._tile_popover = None
 
     def _close_active_dialog(self) -> None:
         if self._confirm_dialog is not None:
             logger.warning("Dialog window still active after app ending – forcing to close")
-            self._confirm_dialog.force_close()
-            self._confirm_dialog = None
+            self._confirm_dialog.cancel()
+            self._forget_confirm()
+
+    def _forget_confirm(self) -> None:
+        """Drop the confirm dialog from the registry and clear its slot."""
+        self._overlays.forget(self._confirm_dialog)
+        self._confirm_dialog = None
 
     # ── Confirmation dialogs ───────────────────────────────────────────────
 
@@ -404,18 +402,17 @@ class Desktop(QWidget, DesktopView, DesktopShell, DesktopControl, metaclass=_Met
         on_confirmed: Callable[[], None],
         on_cancelled: Callable[[], None] | None = None,
     ) -> None:
-        """Creates a ConfirmDialog and manages the lifecycle of self._confirm_dialog.
+        """Open a ConfirmDialog, ignoring the call if one is already up.
 
-        If a dialog is already open — ignores the call. The on_confirmed
-        and on_cancelled callbacks are automatically wrapped to clear
-        self._confirm_dialog before passing control.
+        The callbacks are wrapped to forget the dialog before handing control on,
+        so its slot and registry entry clear on whichever button is pressed.
         """
         if self._confirm_dialog is not None:
             return
 
         def _wrap(cb: Callable[[], None] | None) -> Callable[[], None]:
             def _inner() -> None:
-                self._confirm_dialog = None
+                self._forget_confirm()
                 if cb:
                     cb()
             return _inner
@@ -428,29 +425,28 @@ class Desktop(QWidget, DesktopView, DesktopShell, DesktopControl, metaclass=_Met
             feedback=self._feedback,
             parent=self,
         )
+        self._overlays.register(self._confirm_dialog)
 
     # ── Top bar actions ────────────────────────────────────────────────────
 
     def _topbar_action(self, action_type: str) -> None:
         self._action_runner.run(action_type)
 
-    def open_volume_overlay(self) -> None:
-        overlay = VolumeOverlay(self._gamepad, self._volume_control, self._feedback, parent=self)
-        self._volume_overlay = overlay
-        overlay.closed.connect(self._on_volume_closed)
+    def _present(self, overlay: BaseOverlay) -> None:
+        """Track a freshly opened top-bar overlay; return focus to the bar when
+        it closes. The registry then pauses/resumes/cancels it with the group."""
+        self._overlays.register(overlay)
+        overlay.closed.connect(lambda: self._on_overlay_closed(overlay))
 
-    def _on_volume_closed(self) -> None:
-        self._volume_overlay = None
+    def _on_overlay_closed(self, overlay: BaseOverlay) -> None:
+        self._overlays.forget(overlay)
         self._nav.focus_topbar()
+
+    def open_volume_overlay(self) -> None:
+        self._present(VolumeOverlay(self._gamepad, self._volume_control, self._feedback, parent=self))
 
     def open_brightness_overlay(self) -> None:
-        overlay = BrightnessOverlay(self._gamepad, self._brightness_control, self._feedback, parent=self)
-        self._brightness_overlay = overlay
-        overlay.closed.connect(self._on_brightness_closed)
-
-    def _on_brightness_closed(self) -> None:
-        self._brightness_overlay = None
-        self._nav.focus_topbar()
+        self._present(BrightnessOverlay(self._gamepad, self._brightness_control, self._feedback, parent=self))
 
     def refresh_notification_badge(self) -> None:
         """Sync the notifications button badge to the unread count in memory."""
@@ -463,16 +459,10 @@ class Desktop(QWidget, DesktopView, DesktopShell, DesktopControl, metaclass=_Met
         self._topbar.set_action_icon(NETWORK, network_view.icon_for(status.kind))
 
     def open_network_overlay(self) -> None:
-        overlay = NetworkOverlay(
+        self._present(NetworkOverlay(
             self._gamepad, self._network_status, self._network_control,
             self._feedback, parent=self,
-        )
-        self._network_overlay = overlay
-        overlay.closed.connect(self._on_network_closed)
-
-    def _on_network_closed(self) -> None:
-        self._network_overlay = None
-        self._nav.focus_topbar()
+        ))
 
     def open_notifications_overlay(self) -> None:
         # The overlay reads the unread tally (to highlight new rows) as it builds;
@@ -480,9 +470,4 @@ class Desktop(QWidget, DesktopView, DesktopShell, DesktopControl, metaclass=_Met
         overlay = NotificationsOverlay(self._gamepad, self._notifications, self._feedback, parent=self)
         self._notifications.mark_all_read()
         self.refresh_notification_badge()
-        self._notifications_overlay = overlay
-        overlay.closed.connect(self._on_notifications_closed)
-
-    def _on_notifications_closed(self) -> None:
-        self._notifications_overlay = None
-        self._nav.focus_topbar()
+        self._present(overlay)

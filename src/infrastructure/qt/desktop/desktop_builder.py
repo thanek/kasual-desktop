@@ -27,6 +27,7 @@ from domain.notifications.center import NotificationCenter
 from domain.shared.feedback import Feedback
 from domain.shared.scheduler import Scheduler
 from domain.shell.desktop import Desktop as DesktopCoordinator
+from domain.shell.open_overlays import OpenOverlays
 from domain.shell.wallpaper import SystemWallpaper
 from domain.system.action_view import make_action_confirm
 from domain.system.actions import ActionDeps
@@ -55,6 +56,9 @@ def build_desktop(
     network_control: NetworkControl,
 ) -> Desktop:
     """Build a fully wired Desktop: the view widget plus its domain coordinators."""
+    # The open-overlay group is shared: the widget feeds it (register/forget) and
+    # the coordinator pauses/resumes it as the surface hides and returns.
+    overlays = OpenOverlays()
     widget = Desktop(
         apps=apps,
         gamepad=gamepad,
@@ -68,6 +72,7 @@ def build_desktop(
         process_manager=process_manager,
         notifications=notifications,
         network_control=network_control,
+        overlays=overlays,
     )
 
     nav = FocusNavigator(
@@ -99,7 +104,7 @@ def build_desktop(
     )
     # Coordinates show/pause/resume of the Desktop surface (the widget = view).
     desktop_coordinator = DesktopCoordinator(
-        state=widget._state, view=widget, feedback=feedback,
+        state=widget._state, view=widget, feedback=feedback, overlays=overlays,
     )
     action_runner = ActionRunner(
         ActionDeps(desktop=widget, power=power),
