@@ -44,6 +44,37 @@ class TestNotificationCenter:
         assert [n.app_name for n in c.recent(2)] == ["C", "B"]
 
 
+class TestUnread:
+    def test_empty_has_no_unread(self):
+        assert NotificationCenter().unread_count == 0
+
+    def test_recording_increments_unread(self):
+        c = NotificationCenter()
+        c.record(_n("A"))
+        c.record(_n("B"))
+        assert c.unread_count == 2
+
+    def test_mark_all_read_clears_unread(self):
+        c = NotificationCenter()
+        c.record(_n("A"))
+        c.mark_all_read()
+        assert c.unread_count == 0
+        assert c.count == 1   # the notification itself is still retained
+
+    def test_unread_counts_only_since_last_read(self):
+        c = NotificationCenter()
+        c.record(_n("A"))
+        c.mark_all_read()
+        c.record(_n("B"))
+        assert c.unread_count == 1
+
+    def test_unread_never_exceeds_retained(self):
+        c = NotificationCenter(limit=3)
+        for name in ("A", "B", "C", "D", "E"):
+            c.record(_n(name))
+        assert c.unread_count == 3   # capped at the buffer size, not 5
+
+
 class TestSourceWiring:
     def test_records_from_a_source_port(self):
         """The composition root wires source.on_notification(center.record);

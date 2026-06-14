@@ -29,7 +29,7 @@ from infrastructure.qt.scheduler import QtScheduler
 from domain.shared.feedback import Cue
 from infrastructure.system.kde_wallpaper import KdeSystemWallpaper
 from infrastructure.system.kde_notifications import KdeNotificationMonitor
-from infrastructure.system.network_manager import NMNetworkMonitor
+from infrastructure.system.network_manager import NMNetworkControl, NMNetworkMonitor
 from domain.notifications.center import NotificationCenter
 from domain.system.actions import ActionDeps
 from infrastructure.system.window_manager import KWinWindowManager
@@ -93,6 +93,7 @@ def main() -> None:
         volume=PactlVolumeControl(), brightness=select_brightness_control(),
         power=power, scheduler=QtScheduler(),
         process_manager=AppManager(), notifications=notification_center,
+        network_control=NMNetworkControl(),
     )
     # Keep the top-bar notifications badge in sync with the in-memory count.
     # Subscribed after `record` above, so the count is already updated when this

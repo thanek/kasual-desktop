@@ -62,6 +62,7 @@ def _make_desktop(mock_gamepad):
         volume=_FakeVolume(), brightness=_FakeBrightness(),
         power=_FakePower(), scheduler=_FakeScheduler(),
         process_manager=AppManager(), notifications=NotificationCenter(),
+        network_control=MagicMock(),
     )
 
 

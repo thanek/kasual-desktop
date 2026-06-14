@@ -76,39 +76,55 @@
     </message>
     <message>
         <location filename="../src/domain/system/action_view.py" line="70" />
-        <location filename="../src/domain/network/view.py" line="35" />
+        <location filename="../src/domain/network/view.py" line="54" />
+        <location filename="../src/domain/network/view.py" line="37" />
         <source>Network</source>
         <translation>Sieć</translation>
     </message>
     <message>
-        <location filename="../src/domain/network/view.py" line="43" />
+        <location filename="../src/domain/network/view.py" line="45" />
         <source>Status</source>
         <translation>Status</translation>
     </message>
     <message>
-        <location filename="../src/domain/network/view.py" line="44" />
+        <location filename="../src/domain/network/view.py" line="46" />
         <source>Not connected</source>
         <translation>Nie połączono</translation>
     </message>
     <message>
-        <location filename="../src/domain/network/view.py" line="48" />
+        <location filename="../src/domain/network/view.py" line="50" />
         <source>Type</source>
         <translation>Typ</translation>
     </message>
     <message>
         <location filename="../src/domain/network/view.py" line="55" />
+        <source>Connection</source>
+        <translation>Połączenie</translation>
+    </message>
+    <message>
+        <location filename="../src/domain/network/view.py" line="58" />
         <source>Signal</source>
         <translation>Sygnał</translation>
     </message>
     <message>
-        <location filename="../src/domain/network/view.py" line="57" />
+        <location filename="../src/domain/network/view.py" line="60" />
         <source>IP address</source>
         <translation>Adres IP</translation>
     </message>
     <message>
-        <location filename="../src/domain/network/view.py" line="59" />
+        <location filename="../src/domain/network/view.py" line="62" />
         <source>Interface</source>
         <translation>Interfejs</translation>
+    </message>
+    <message>
+        <location filename="../src/domain/network/view.py" line="82" />
+        <source>Disconnect</source>
+        <translation>Rozłącz</translation>
+    </message>
+    <message>
+        <location filename="../src/domain/network/view.py" line="85" />
+        <source>Connect</source>
+        <translation>Podłącz</translation>
     </message>
     <message>
         <location filename="../src/domain/notifications/view.py" line="24" />

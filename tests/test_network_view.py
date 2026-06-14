@@ -1,7 +1,7 @@
 """Tests for the network presentation helpers (icon + popup rows)."""
 
 from domain.network.status import NetworkKind, NetworkStatus
-from domain.network.view import icon_for, info_lines, title
+from domain.network.view import connect_button, icon_for, info_lines, title
 
 
 class TestIconFor:
@@ -41,3 +41,22 @@ class TestInfoLines:
 
 def test_title():
     assert title() == "Network"
+
+
+class TestConnectButton:
+    def test_online_offers_disconnect(self):
+        b = connect_button(NetworkStatus(NetworkKind.WIFI, name="Dom"), can_reconnect=False)
+        assert b.label == "Disconnect"
+        assert b.reconnect is False
+        assert b.enabled is True
+
+    def test_offline_with_history_offers_enabled_connect(self):
+        b = connect_button(NetworkStatus.offline(), can_reconnect=True)
+        assert b.label == "Connect"
+        assert b.reconnect is True
+        assert b.enabled is True
+
+    def test_offline_without_history_disables_connect(self):
+        b = connect_button(NetworkStatus.offline(), can_reconnect=False)
+        assert b.label == "Connect"
+        assert b.enabled is False

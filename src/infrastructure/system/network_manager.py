@@ -24,6 +24,7 @@ from typing import _ProtocolMeta  # type: ignore[attr-defined]
 from PyQt6.QtCore import QObject, pyqtSlot
 from PyQt6.QtDBus import QDBusConnection, QDBusInterface, QDBusMessage, QDBusObjectPath
 
+from domain.network.control import NetworkControl
 from domain.network.monitor import NetworkMonitor
 from domain.network.status import NetworkKind, NetworkStatus
 from domain.shared.event_emitter import EventEmitter, Unsubscribe
@@ -179,3 +180,69 @@ class NMNetworkMonitor(QObject, NetworkMonitor, metaclass=_Meta):
             return socket.inet_ntoa(addr)
         except OSError:
             return None
+
+
+class NMNetworkControl(NetworkControl):
+    """`NetworkControl` over NetworkManager's system-bus D-Bus API.
+
+    `disconnect()` brings the primary connection down with `Device.Disconnect`,
+    which NM treats as a deliberate user action — it suppresses autoconnect so
+    the link stays down (a plain `DeactivateConnection` would auto-reconnect).
+    It first remembers the connection profile + device behind it, so that
+    `reconnect()` can re-`ActivateConnection` exactly that one. The memory is
+    in-process only: after a disconnect we can restore, until we do (or exit).
+    """
+
+    def __init__(self) -> None:
+        self._bus = QDBusConnection.systemBus()
+        # (connection-settings path, device path) of the last link we took down.
+        self._last: tuple[str, str] | None = None
+
+    def disconnect(self) -> None:
+        primary = self._path(_NM_PATH, _NM_IFACE, "PrimaryConnection")
+        if not primary or primary == "/":
+            return
+        connection = self._path(primary, _AC_IFACE, "Connection")
+        devices = self._paths(primary, _AC_IFACE, "Devices")
+        if connection and devices:
+            self._last = (connection, devices[0])
+        for device in devices:
+            QDBusInterface(_NM_SVC, device, _DEV_IFACE, self._bus).call("Disconnect")
+
+    def reconnect(self) -> None:
+        if self._last is None:
+            return
+        connection, device = self._last
+        QDBusInterface(_NM_SVC, _NM_PATH, _NM_IFACE, self._bus).call(
+            "ActivateConnection",
+            QDBusObjectPath(connection),
+            QDBusObjectPath(device),
+            QDBusObjectPath("/"),
+        )
+        self._last = None
+
+    def can_reconnect(self) -> bool:
+        return self._last is not None
+
+    # ── D-Bus property reads (object-path valued) ────────────────────────────
+
+    def _path(self, path: str, iface: str, prop: str) -> str:
+        value = self._get(path, iface, prop)
+        if isinstance(value, QDBusObjectPath):
+            return value.path()
+        return str(value) if value else ""
+
+    def _paths(self, path: str, iface: str, prop: str) -> list[str]:
+        value = self._get(path, iface, prop)
+        if not value:
+            return []
+        return [p.path() if isinstance(p, QDBusObjectPath) else str(p) for p in value]
+
+    def _get(self, path: str, iface: str, prop: str):
+        reply = QDBusInterface(_NM_SVC, path, _PROPS_IFACE, self._bus).call(
+            "Get", iface, prop
+        )
+        if reply.type() != QDBusMessage.MessageType.ReplyMessage:
+            return None
+        args = reply.arguments()
+        return args[0] if args else None

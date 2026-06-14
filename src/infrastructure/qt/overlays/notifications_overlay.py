@@ -35,10 +35,18 @@ _ROW_NORMAL = (
     "#notifrow { background-color: #2e3440; border-radius: 8px;"
     " border: 2px solid transparent; }"
 )
+# Unread (new since last viewed): lifted background + a left accent border, so
+# new notifications stand out from already-seen ones even when not selected.
+_ROW_UNREAD = (
+    "#notifrow { background-color: #3b4252; border-radius: 8px;"
+    " border: 2px solid transparent; border-left: 4px solid #88c0d0; }"
+)
 _ROW_SELECTED = (
     "#notifrow { background-color: #434c5e; border-radius: 8px;"
     " border: 2px solid #88c0d0; }"
 )
+
+_ACCENT = "#88c0d0"   # unread accent (border + dot)
 
 # Flat scrollbar: drop the native pseudo-3D frame, use a solid rounded track and
 # handle, and hide the arrow buttons.
@@ -80,6 +88,9 @@ class NotificationsOverlay(BaseOverlay):
     ) -> None:
         super().__init__(gamepad, self._handle_pad, feedback, parent)
         self._items = center.recent(_MAX_ROWS)
+        # The first `unread` rows are the new ones (newest-first ordering). Read
+        # before the desktop clears the tally so the highlight survives the reset.
+        self._unread = min(center.unread_count, len(self._items))
         self._rows: list[QFrame] = []
 
         # Vertical navigation lives in the domain; movement clamps at the ends
@@ -173,9 +184,10 @@ class NotificationsOverlay(BaseOverlay):
         Built from explicit labels rather than a single multi-line button so the
         summary/body always render (a QPushButton would only show the first
         line, collapsing every notify-send entry to its identical header)."""
+        unread = self._is_unread(idx)
         row = QFrame()
         row.setObjectName("notifrow")
-        row.setStyleSheet(_ROW_NORMAL)
+        row.setStyleSheet(_ROW_UNREAD if unread else _ROW_NORMAL)
         # Clicking a row selects it (mouse parity with the gamepad cursor).
         row.mousePressEvent = lambda _e, i=idx: self._cursor.hover(i)
 
@@ -183,9 +195,18 @@ class NotificationsOverlay(BaseOverlay):
         v.setContentsMargins(16, 10, 16, 10)
         v.setSpacing(2)
 
+        meta_row = QHBoxLayout()
+        meta_row.setContentsMargins(0, 0, 0, 0)
+        meta_row.setSpacing(8)
+        if unread:
+            dot = QLabel("●")
+            dot.setStyleSheet(f"font-size: 12px; color: {_ACCENT}; background: transparent;")
+            meta_row.addWidget(dot)
         meta = QLabel(f"{n.app_name}   ·   {relative_age(n.timestamp, now)}")
         meta.setStyleSheet("font-size: 13px; color: #9aa0aa; background: transparent;")
-        v.addWidget(meta)
+        meta_row.addWidget(meta)
+        meta_row.addStretch()
+        v.addLayout(meta_row)
 
         title = QLabel(truncate(n.summary or n.app_name, 60))
         title.setStyleSheet(
@@ -204,9 +225,15 @@ class NotificationsOverlay(BaseOverlay):
     def _handle_pad(self, event: str) -> None:
         self._cursor.handle_pad(event)
 
+    def _is_unread(self, idx: int) -> bool:
+        return idx < self._unread
+
     def _render_selection(self, index: int) -> None:
         for i, row in enumerate(self._rows):
-            row.setStyleSheet(_ROW_SELECTED if i == index else _ROW_NORMAL)
+            if i == index:
+                row.setStyleSheet(_ROW_SELECTED)
+            else:
+                row.setStyleSheet(_ROW_UNREAD if self._is_unread(i) else _ROW_NORMAL)
         if 0 <= index < len(self._rows):
             self._scroll.ensureWidgetVisible(self._rows[index])
 

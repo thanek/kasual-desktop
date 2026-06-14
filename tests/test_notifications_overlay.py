@@ -51,6 +51,23 @@ class TestInit:
         assert overlay._rows == []
 
 
+class TestUnreadHighlight:
+    def test_first_n_rows_marked_unread(self, mock_gamepad):
+        # "B" and "A" arrive unread; then they're read; "C" is the new one.
+        c = _center("A", "B")
+        c.mark_all_read()
+        c.record(Notification(app_name="C", summary="C body", timestamp=datetime.now()))
+        overlay = _make_overlay(mock_gamepad, c)
+        # Newest-first: row 0 is the single unread ("C"); the rest are read.
+        assert overlay._is_unread(0)
+        assert not overlay._is_unread(1)
+        assert not overlay._is_unread(2)
+
+    def test_unread_capped_to_visible_rows(self, mock_gamepad):
+        overlay = _make_overlay(mock_gamepad, _center("A", "B"))
+        assert overlay._unread == 2
+
+
 class TestClosing:
     def test_cancel_emits_closed_and_pops_handler(self, mock_gamepad):
         overlay = _make_overlay(mock_gamepad, _center("A"))

@@ -19,6 +19,7 @@ from infrastructure.qt.overlays.notifications_overlay import NotificationsOverla
 from infrastructure.qt.overlays.network_overlay import NetworkOverlay
 from domain.notifications.center import NotificationCenter
 from domain.network import view as network_view
+from domain.network.control import NetworkControl
 from domain.network.status import NetworkStatus
 from domain.system.actions import NETWORK, NOTIFICATIONS
 from domain.system.volume import VolumeControl
@@ -79,6 +80,7 @@ class Desktop(QWidget, DesktopView, DesktopShell, DesktopControl, metaclass=_Met
         scheduler: Scheduler,
         process_manager: ProcessManager,
         notifications: NotificationCenter,
+        network_control: NetworkControl,
     ):
         super().__init__()
         self._apps        = apps
@@ -92,6 +94,7 @@ class Desktop(QWidget, DesktopView, DesktopShell, DesktopControl, metaclass=_Met
         self._power       = power
         self._scheduler   = scheduler
         self._notifications = notifications
+        self._network_control = network_control
         self._network_status = NetworkStatus.offline()
         self._confirm_dialog = None
         self._volume_overlay = None
@@ -450,8 +453,8 @@ class Desktop(QWidget, DesktopView, DesktopShell, DesktopControl, metaclass=_Met
         self._nav.focus_topbar()
 
     def refresh_notification_badge(self) -> None:
-        """Sync the notifications button badge to the count held in memory."""
-        self._topbar.set_badge(NOTIFICATIONS, self._notifications.count)
+        """Sync the notifications button badge to the unread count in memory."""
+        self._topbar.set_badge(NOTIFICATIONS, self._notifications.unread_count)
 
     def update_network_status(self, status: NetworkStatus) -> None:
         """Store the latest network status and reflect its kind in the top-bar
@@ -460,7 +463,10 @@ class Desktop(QWidget, DesktopView, DesktopShell, DesktopControl, metaclass=_Met
         self._topbar.set_action_icon(NETWORK, network_view.icon_for(status.kind))
 
     def open_network_overlay(self) -> None:
-        overlay = NetworkOverlay(self._gamepad, self._network_status, self._feedback, parent=self)
+        overlay = NetworkOverlay(
+            self._gamepad, self._network_status, self._network_control,
+            self._feedback, parent=self,
+        )
         self._network_overlay = overlay
         overlay.closed.connect(self._on_network_closed)
 
@@ -469,7 +475,11 @@ class Desktop(QWidget, DesktopView, DesktopShell, DesktopControl, metaclass=_Met
         self._nav.focus_topbar()
 
     def open_notifications_overlay(self) -> None:
+        # The overlay reads the unread tally (to highlight new rows) as it builds;
+        # only then do we clear it and drop the badge — the user has now seen them.
         overlay = NotificationsOverlay(self._gamepad, self._notifications, self._feedback, parent=self)
+        self._notifications.mark_all_read()
+        self.refresh_notification_badge()
         self._notifications_overlay = overlay
         overlay.closed.connect(self._on_notifications_closed)
 
