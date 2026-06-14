@@ -24,6 +24,7 @@ from infrastructure.system.app_manager import AppManager
 from infrastructure.system.log_viewer_launcher import LogViewerLauncher
 from infrastructure.system.power import SystemdPowerControl
 from infrastructure.system.volume import PactlVolumeControl
+from infrastructure.system.brightness import select_brightness_control
 from infrastructure.qt.scheduler import QtScheduler
 from domain.shared.feedback import Cue
 from infrastructure.system.kde_wallpaper import KdeSystemWallpaper
@@ -89,7 +90,8 @@ def main() -> None:
     desktop = build_desktop(
         apps=apps, gamepad=gamepad, window_manager=wm,
         wallpaper=KdeSystemWallpaper(), feedback=feedback,
-        volume=PactlVolumeControl(), power=power, scheduler=QtScheduler(),
+        volume=PactlVolumeControl(), brightness=select_brightness_control(),
+        power=power, scheduler=QtScheduler(),
         process_manager=AppManager(), notifications=notification_center,
     )
     # Keep the top-bar notifications badge in sync with the in-memory count.

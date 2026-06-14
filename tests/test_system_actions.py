@@ -24,6 +24,11 @@ class TestDispatch:
         ActionRunner(deps, _auto_confirm).run("volume")
         deps.desktop.open_volume_overlay.assert_called_once()
 
+    def test_brightness_opens_overlay(self, qapp):
+        deps = _deps()
+        ActionRunner(deps, _auto_confirm).run("brightness")
+        deps.desktop.open_brightness_overlay.assert_called_once()
+
     def test_hide_desktop_pauses(self, qapp):
         deps = _deps()
         ActionRunner(deps, _auto_confirm).run("hide_desktop")

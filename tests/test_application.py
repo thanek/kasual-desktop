@@ -95,6 +95,7 @@ class FakeDesktop:
         self.resumed = 0
         self.hidden = 0
         self.volume_opened = 0
+        self.brightness_opened = 0
 
     # DesktopControl
     def current_app(self):
@@ -125,6 +126,9 @@ class FakeDesktop:
     # DesktopShell (system-action effects)
     def open_volume_overlay(self):
         self.volume_opened += 1
+
+    def open_brightness_overlay(self):
+        self.brightness_opened += 1
 
     def pause(self):
         pass

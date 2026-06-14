@@ -22,6 +22,16 @@ class _FakeVolume:
         pass
 
 
+class _FakeBrightness:
+    """BrightnessControl port — no backend I/O."""
+
+    def get(self):
+        return 70
+
+    def set(self, percent):
+        pass
+
+
 class _FakePower:
     """PowerControl port — no systemctl I/O."""
 
@@ -49,7 +59,8 @@ def _make_desktop(mock_gamepad):
     return build_desktop(
         apps=[], gamepad=mock_gamepad, window_manager=wm,
         wallpaper=_NoWallpaper(), feedback=MagicMock(),
-        volume=_FakeVolume(), power=_FakePower(), scheduler=_FakeScheduler(),
+        volume=_FakeVolume(), brightness=_FakeBrightness(),
+        power=_FakePower(), scheduler=_FakeScheduler(),
         process_manager=AppManager(), notifications=NotificationCenter(),
     )
 

@@ -32,6 +32,7 @@ from domain.system.actions import ActionDeps
 from domain.system.power_control import PowerControl
 from domain.system.runner import ActionRunner
 from domain.system.volume import VolumeControl
+from domain.system.brightness import BrightnessControl
 
 from .deferred_hide import DeferredHide
 from .desktop import Desktop
@@ -45,6 +46,7 @@ def build_desktop(
     wallpaper: SystemWallpaper,
     feedback: Feedback,
     volume: VolumeControl,
+    brightness: BrightnessControl,
     power: PowerControl,
     scheduler: Scheduler,
     process_manager: ProcessManager,
@@ -58,6 +60,7 @@ def build_desktop(
         wallpaper=wallpaper,
         feedback=feedback,
         volume=volume,
+        brightness=brightness,
         power=power,
         scheduler=scheduler,
         process_manager=process_manager,

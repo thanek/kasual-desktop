@@ -14,6 +14,7 @@ from infrastructure.qt.overlays.confirm_dialog import ConfirmDialog
 from infrastructure.qt.overlays.info_dialog import InfoDialog
 from infrastructure.qt.overlays.tile_popover import TilePopoverMenu
 from infrastructure.qt.overlays.volume_overlay import VolumeOverlay
+from infrastructure.qt.overlays.brightness_overlay import BrightnessOverlay
 from infrastructure.qt.overlays.notifications_overlay import NotificationsOverlay
 from infrastructure.qt.overlays.network_overlay import NetworkOverlay
 from domain.notifications.center import NotificationCenter
@@ -21,6 +22,7 @@ from domain.network import view as network_view
 from domain.network.status import NetworkStatus
 from domain.system.actions import NETWORK, NOTIFICATIONS
 from domain.system.volume import VolumeControl
+from domain.system.brightness import BrightnessControl
 from domain.system.power_control import PowerControl
 from domain.shared.scheduler import Scheduler
 from domain.lifecycle.app_control import AppControl
@@ -72,6 +74,7 @@ class Desktop(QWidget, DesktopView, DesktopShell, DesktopControl, metaclass=_Met
         wallpaper: SystemWallpaper,
         feedback: Feedback,
         volume: VolumeControl,
+        brightness: BrightnessControl,
         power: PowerControl,
         scheduler: Scheduler,
         process_manager: ProcessManager,
@@ -85,12 +88,14 @@ class Desktop(QWidget, DesktopView, DesktopShell, DesktopControl, metaclass=_Met
         self._feedback    = feedback
         self._app_manager = process_manager
         self._volume_control = volume
+        self._brightness_control = brightness
         self._power       = power
         self._scheduler   = scheduler
         self._notifications = notifications
         self._network_status = NetworkStatus.offline()
         self._confirm_dialog = None
         self._volume_overlay = None
+        self._brightness_overlay = None
         self._notifications_overlay = None
         self._network_overlay = None
         self._tile_popover   = None
@@ -204,8 +209,9 @@ class Desktop(QWidget, DesktopView, DesktopShell, DesktopControl, metaclass=_Met
     def _active_overlays(self) -> list[BaseOverlay]:
         """Active overlays (those that can be paused/resumed)."""
         return [
-            o for o in (self._volume_overlay, self._notifications_overlay,
-                        self._network_overlay, self._confirm_dialog)
+            o for o in (self._volume_overlay, self._brightness_overlay,
+                        self._notifications_overlay, self._network_overlay,
+                        self._confirm_dialog)
             if o is not None
         ]
 
@@ -432,6 +438,15 @@ class Desktop(QWidget, DesktopView, DesktopShell, DesktopControl, metaclass=_Met
 
     def _on_volume_closed(self) -> None:
         self._volume_overlay = None
+        self._nav.focus_topbar()
+
+    def open_brightness_overlay(self) -> None:
+        overlay = BrightnessOverlay(self._gamepad, self._brightness_control, self._feedback, parent=self)
+        self._brightness_overlay = overlay
+        overlay.closed.connect(self._on_brightness_closed)
+
+    def _on_brightness_closed(self) -> None:
+        self._brightness_overlay = None
         self._nav.focus_topbar()
 
     def refresh_notification_badge(self) -> None:

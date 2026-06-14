@@ -22,6 +22,7 @@ from domain.system.power_control import PowerControl
 NETWORK       = "network"
 NOTIFICATIONS = "notifications"
 VOLUME        = "volume"
+BRIGHTNESS    = "brightness"
 SLEEP         = "sleep"
 RESTART       = "restart"
 SHUTDOWN      = "shutdown"
@@ -49,6 +50,7 @@ class SystemAction:
 # Insertion order defines the top-bar button order and the home-menu order.
 ACTIONS: dict[str, SystemAction] = {
     VOLUME:        SystemAction(False, lambda d: d.desktop.open_volume_overlay()),
+    BRIGHTNESS:    SystemAction(False, lambda d: d.desktop.open_brightness_overlay()),
     SLEEP:         SystemAction(True,  lambda d: d.power.suspend()),
     RESTART:       SystemAction(True,  lambda d: d.power.reboot()),
     SHUTDOWN:      SystemAction(True,  lambda d: d.power.poweroff()),

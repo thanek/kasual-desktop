@@ -74,7 +74,7 @@
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/domain/system/action_view.py" line="42" />
+        <location filename="../src/domain/system/action_view.py" line="70" />
         <location filename="../src/domain/network/view.py" line="35" />
         <source>Network</source>
         <translation type="unfinished" />
@@ -125,47 +125,52 @@
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/domain/system/action_view.py" line="46" />
+        <location filename="../src/domain/system/action_view.py" line="43" />
         <source>Volume</source>
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/domain/system/action_view.py" line="50" />
+        <location filename="../src/domain/system/action_view.py" line="47" />
+        <source>Brightness</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/domain/system/action_view.py" line="51" />
         <source>Sleep</source>
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/domain/system/action_view.py" line="52" />
+        <location filename="../src/domain/system/action_view.py" line="53" />
         <source>Are you sure you want to sleep?</source>
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/domain/system/action_view.py" line="55" />
+        <location filename="../src/domain/system/action_view.py" line="56" />
         <source>Restart</source>
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/domain/system/action_view.py" line="57" />
+        <location filename="../src/domain/system/action_view.py" line="58" />
         <source>Are you sure you want to restart?</source>
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/domain/system/action_view.py" line="60" />
+        <location filename="../src/domain/system/action_view.py" line="61" />
         <source>Shut Down</source>
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/domain/system/action_view.py" line="62" />
+        <location filename="../src/domain/system/action_view.py" line="63" />
         <source>Are you sure you want to shut down?</source>
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/domain/system/action_view.py" line="65" />
+        <location filename="../src/domain/system/action_view.py" line="66" />
         <source>Notifications</source>
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/domain/system/action_view.py" line="69" />
+        <location filename="../src/domain/system/action_view.py" line="74" />
         <source>Minimize Desktop</source>
         <translation type="unfinished" />
     </message>

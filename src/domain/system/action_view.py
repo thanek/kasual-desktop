@@ -19,7 +19,8 @@ from dataclasses import dataclass
 
 from domain.menu.item import MenuItem
 from domain.system.actions import (
-    HIDE_DESKTOP, NETWORK, NOTIFICATIONS, RESTART, SHUTDOWN, SLEEP, VOLUME,
+    BRIGHTNESS, HIDE_DESKTOP, NETWORK, NOTIFICATIONS, RESTART, SHUTDOWN, SLEEP,
+    VOLUME,
 )
 from support.i18n import translate
 
@@ -41,6 +42,10 @@ PRESENTATION: dict[str, ActionView] = {
     VOLUME: ActionView(
         translate("Kasual Desktop", "Volume"),
         "fa5s.volume-up", "#3b4252", None,
+    ),
+    BRIGHTNESS: ActionView(
+        translate("Kasual Desktop", "Brightness"),
+        "fa5s.sun", "#434c5e", None,
     ),
     SLEEP: ActionView(
         translate("Kasual Desktop", "Sleep"),
