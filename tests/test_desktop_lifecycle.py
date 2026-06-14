@@ -45,11 +45,12 @@ def _make_desktop(mock_gamepad):
 
     from infrastructure.qt.desktop import build_desktop
     from infrastructure.system.app_manager import AppManager
+    from domain.notifications.center import NotificationCenter
     return build_desktop(
         apps=[], gamepad=mock_gamepad, window_manager=wm,
         wallpaper=_NoWallpaper(), feedback=MagicMock(),
         volume=_FakeVolume(), power=_FakePower(), scheduler=_FakeScheduler(),
-        process_manager=AppManager(),
+        process_manager=AppManager(), notifications=NotificationCenter(),
     )
 
 

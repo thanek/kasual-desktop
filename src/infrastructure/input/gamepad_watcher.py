@@ -4,7 +4,7 @@ import threading
 import time
 from typing import Callable, _ProtocolMeta  # type: ignore[attr-defined]
 
-from PyQt6.QtCore import pyqtSignal, QObject
+from PyQt6.QtCore import pyqtSignal, QObject, QTimer
 from evdev import InputDevice, InputEvent, UInput, ecodes, list_devices
 
 from domain.shared.event_emitter import EventEmitter, Unsubscribe
@@ -72,6 +72,11 @@ class GamepadWatcher(QObject, PadControl, GamepadSignals, metaclass=_Meta):
         self._app_btn_mode_trigger: str               = Trigger.CLICK
         self._device: InputDevice | None              = None
         self._refresh_requested: bool                 = False
+        # Last connection state seen on the GUI thread. Tracked so a subscriber
+        # that registers *after* the one-shot connected hop already fired (the
+        # device is grabbed within milliseconds of construction, before the
+        # controller wires up) still learns the current state — see on_connected.
+        self._connected: bool                         = False
 
         # Framework-agnostic observer hub (driven on the GUI thread by the hops).
         self._btn_mode_emitter     = EventEmitter[BtnModePressed]()
@@ -81,12 +86,20 @@ class GamepadWatcher(QObject, PadControl, GamepadSignals, metaclass=_Meta):
         self._nav_hop.connect(self._dispatch)
         self._btn_mode_hop.connect(
             lambda: self._btn_mode_emitter.emit(BtnModePressed()))
-        self._connected_hop.connect(
-            lambda: self._connected_emitter.emit(GamepadConnected()))
-        self._disconnected_hop.connect(
-            lambda: self._disconnected_emitter.emit(GamepadDisconnected()))
+        # Bound-method slots (not lambdas) so they carry this QObject as context:
+        # they latch the state on the GUI thread before fanning out.
+        self._connected_hop.connect(self._on_connected_hop)
+        self._disconnected_hop.connect(self._on_disconnected_hop)
 
         threading.Thread(target=self._loop, daemon=True, name="gamepad-watcher").start()
+
+    def _on_connected_hop(self) -> None:
+        self._connected = True
+        self._connected_emitter.emit(GamepadConnected())
+
+    def _on_disconnected_hop(self) -> None:
+        self._connected = False
+        self._disconnected_emitter.emit(GamepadDisconnected())
 
     # ── GamepadSignals port ──────────────────────────────────────────────────
 
@@ -96,7 +109,13 @@ class GamepadWatcher(QObject, PadControl, GamepadSignals, metaclass=_Meta):
     def on_connected(
         self, handler: Callable[[GamepadConnected], None]
     ) -> Unsubscribe:
-        return self._connected_emitter.subscribe(handler)
+        unsubscribe = self._connected_emitter.subscribe(handler)
+        # Replay the current state to a late subscriber: if the pad was already
+        # grabbed before this subscription, the one-shot hop fired with no
+        # listener, so deliver it now (deferred to the event loop, off __init__).
+        if self._connected:
+            QTimer.singleShot(0, lambda: handler(GamepadConnected()))
+        return unsubscribe
 
     def on_disconnected(
         self, handler: Callable[[GamepadDisconnected], None]
@@ -203,9 +222,15 @@ class GamepadWatcher(QObject, PadControl, GamepadSignals, metaclass=_Meta):
                             self._device = d
                             self._refresh_requested = False
                         found = True
+                        # uinput.device can be None (udev readback race / evdev
+                        # version differences). Read its path defensively: this
+                        # log line must NEVER throw, or it aborts the grab before
+                        # the connected signal below fires and the Desktop then
+                        # never auto-surfaces on startup.
+                        virtual_path = getattr(uinput.device, "path", "?")
                         logger.info(
                             "Grabbed: %s  →  virtual: %s",
-                            device.name, uinput.device.path,
+                            device.name, virtual_path,
                         )
                         if not was_connected:
                             was_connected = True

@@ -283,3 +283,40 @@ class TestBtnModeLogic:
         mock_gamepad.on_btn_mode(lambda: fired.append(True))
         mock_gamepad._recall.press(kasual_active=True, trigger="BTN_MODE_HOLD_1S")
         assert fired == [True]
+
+
+# ── Stan połączenia: odtwarzanie dla spóźnionego subskrybenta ──────────────────
+
+class TestConnectionStateReplay:
+    """Pad jest chwytany w ~ms od konstrukcji — często zanim kontroler się
+    zasubskrybuje. Jednorazowy hop 'connected' nie może wtedy przepaść:
+    on_connected odtwarza bieżący stan spóźnionemu subskrybentowi."""
+
+    def test_late_subscriber_gets_replayed_connected(self, mock_gamepad, qapp):
+        # Hop 'connected' pada PRZED subskrypcją (brak słuchacza).
+        mock_gamepad._on_connected_hop()
+        got = []
+        mock_gamepad.on_connected(lambda evt: got.append(evt))
+        assert got == []                 # replay jest odroczony (singleShot)
+        qapp.processEvents()
+        assert len(got) == 1             # dostarczony w następnym takcie pętli
+
+    def test_no_replay_when_never_connected(self, mock_gamepad, qapp):
+        got = []
+        mock_gamepad.on_connected(lambda evt: got.append(evt))
+        qapp.processEvents()
+        assert got == []
+
+    def test_disconnect_clears_state_so_no_replay(self, mock_gamepad, qapp):
+        mock_gamepad._on_connected_hop()
+        mock_gamepad._on_disconnected_hop()
+        got = []
+        mock_gamepad.on_connected(lambda evt: got.append(evt))
+        qapp.processEvents()
+        assert got == []
+
+    def test_live_connected_hop_still_reaches_subscriber(self, mock_gamepad):
+        got = []
+        mock_gamepad.on_connected(lambda evt: got.append(evt))
+        mock_gamepad._on_connected_hop()   # normalna ścieżka (po subskrypcji)
+        assert len(got) == 1

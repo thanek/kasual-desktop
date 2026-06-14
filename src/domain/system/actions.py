@@ -19,11 +19,12 @@ from domain.system.power_control import PowerControl
 
 # Action identities — stable keys shared with the presentation table and the
 # top-bar / home-menu renderers.
-VOLUME       = "volume"
-SLEEP        = "sleep"
-RESTART      = "restart"
-SHUTDOWN     = "shutdown"
-HIDE_DESKTOP = "hide_desktop"
+NOTIFICATIONS = "notifications"
+VOLUME        = "volume"
+SLEEP         = "sleep"
+RESTART       = "restart"
+SHUTDOWN      = "shutdown"
+HIDE_DESKTOP  = "hide_desktop"
 
 
 @dataclass
@@ -46,9 +47,10 @@ class SystemAction:
 
 # Insertion order defines the top-bar button order and the home-menu order.
 ACTIONS: dict[str, SystemAction] = {
-    VOLUME:       SystemAction(False, lambda d: d.desktop.open_volume_overlay()),
-    SLEEP:        SystemAction(True,  lambda d: d.power.suspend()),
-    RESTART:      SystemAction(True,  lambda d: d.power.reboot()),
-    SHUTDOWN:     SystemAction(True,  lambda d: d.power.poweroff()),
-    HIDE_DESKTOP: SystemAction(False, lambda d: d.desktop.pause()),
+    VOLUME:        SystemAction(False, lambda d: d.desktop.open_volume_overlay()),
+    SLEEP:         SystemAction(True,  lambda d: d.power.suspend()),
+    RESTART:       SystemAction(True,  lambda d: d.power.reboot()),
+    SHUTDOWN:      SystemAction(True,  lambda d: d.power.poweroff()),
+    NOTIFICATIONS: SystemAction(False, lambda d: d.desktop.open_notifications_overlay()),
+    HIDE_DESKTOP:  SystemAction(False, lambda d: d.desktop.pause()),
 }

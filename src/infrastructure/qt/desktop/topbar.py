@@ -69,7 +69,9 @@ class TopBar(QWidget, TopBarView, metaclass=_Meta):
         layout.addStretch(1)
 
         self._colors = [PRESENTATION[k].color for k in ACTIONS]
+        self._action_keys = list(ACTIONS)
         self._buttons: list[QPushButton] = []
+        self._badges: dict[str, QLabel] = {}   # per-action count badge (lazy)
         btn_area = QWidget()
         btn_area.setFixedWidth(btns_total)
         btn_area.setStyleSheet("background: transparent;")
@@ -124,6 +126,37 @@ class TopBar(QWidget, TopBarView, metaclass=_Meta):
     def trigger(self, index: int) -> None:
         """Activate the button at *index* (as if clicked)."""
         self._buttons[index].click()
+
+    def set_badge(self, action_key: str, count: int) -> None:
+        """Show a small count badge on *action_key*'s button (hidden when 0).
+
+        A red pill in the button's top-right corner, kept inside the button
+        bounds so Qt's child-clipping never trims it. Used for the notification
+        count; generic over actions."""
+        if action_key not in self._action_keys:
+            return
+        btn = self._buttons[self._action_keys.index(action_key)]
+        badge = self._badges.get(action_key)
+        if badge is None:
+            badge = QLabel(btn)
+            badge.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            self._badges[action_key] = badge
+
+        if count <= 0:
+            badge.hide()
+            return
+
+        # Fixed circle so two-digit counts never widen it into a pill; cap the
+        # text at "9+" to keep it inside a 20px badge.
+        badge.setText(str(count) if count <= 9 else "9+")
+        badge.setStyleSheet(
+            "background-color: #bf616a; color: white; font-size: 10px;"
+            " font-weight: bold; border-radius: 10px;"
+        )
+        badge.setFixedSize(20, 20)
+        badge.move(BTN_SIZE - 20 - 2, 2)
+        badge.show()
+        badge.raise_()
 
     # ── Clock ───────────────────────────────────────────────────────────────
 

@@ -130,10 +130,12 @@ class Application:
 
     def _on_connected(self, _evt=None) -> None:
         """Gamepad connected: delegate to the session policy."""
+        logger.info("Gamepad connected — surfacing the Desktop")
         self._session.gamepad_connected_changed(True, self._overlay)
 
     def _on_disconnected(self, _evt=None) -> None:
         """Gamepad disconnected: delegate to the session policy."""
+        logger.info("Gamepad disconnected — hiding the Desktop")
         self._session.gamepad_connected_changed(False, self._overlay)
 
     def _on_overlay_closed(self) -> None:

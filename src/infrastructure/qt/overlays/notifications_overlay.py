@@ -1,0 +1,233 @@
+"""Full-screen overlay listing the most recent system notifications.
+
+Read-only (MVP): renders `NotificationCenter.recent(...)` as a scrollable list,
+navigable by gamepad/keyboard, dismissed with B/Esc (or A). Mirrors
+`VolumeOverlay` — a `BaseOverlay` managing its own layer-shell surface and pad
+lifetime — and reuses the domain `MenuCursor` for selection, exactly like the
+Home Overlay, so navigation semantics live in the domain, not here.
+"""
+
+from datetime import datetime
+
+import qtawesome as qta
+from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtGui import QKeyEvent
+from PyQt6.QtWidgets import (
+    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QFrame, QScrollArea, QSizePolicy,
+)
+
+from domain.input.pad_control import PadControl
+from domain.input.vocabulary import Event
+from domain.menu.cursor import MenuCursor
+from domain.notifications.center import NotificationCenter
+from domain.notifications.view import relative_age
+from domain.shared.feedback import Cue, Feedback
+from domain.shared.text import truncate
+from support.i18n import translate
+from .base_overlay import BaseOverlay
+
+_MAX_ROWS        = 12     # how many recent notifications to show
+_LIST_MAX_HEIGHT = 560    # px; the list scrolls only past this height
+
+# Row background, scoped to #notifrow so the child labels (transparent) are
+# untouched. Selection just swaps the frame's background + border.
+_ROW_NORMAL = (
+    "#notifrow { background-color: #2e3440; border-radius: 8px;"
+    " border: 2px solid transparent; }"
+)
+_ROW_SELECTED = (
+    "#notifrow { background-color: #434c5e; border-radius: 8px;"
+    " border: 2px solid #88c0d0; }"
+)
+
+# Flat scrollbar: drop the native pseudo-3D frame, use a solid rounded track and
+# handle, and hide the arrow buttons.
+_SCROLL_STYLE = """
+    QScrollArea { background: transparent; border: none; }
+    QScrollBar:vertical {
+        background: #2e3440;
+        width: 10px;
+        margin: 0;
+        border: none;
+        border-radius: 5px;
+    }
+    QScrollBar::handle:vertical {
+        background: #4c566a;
+        min-height: 30px;
+        border: none;
+        border-radius: 5px;
+    }
+    QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+        height: 0; border: none; background: none;
+    }
+    QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {
+        background: none;
+    }
+"""
+
+
+class NotificationsOverlay(BaseOverlay):
+    """Full-screen overlay with the recent-notifications list."""
+
+    closed = pyqtSignal()
+
+    def __init__(
+        self,
+        gamepad: PadControl,
+        center: NotificationCenter,
+        feedback: Feedback,
+        parent: QWidget | None = None,
+    ) -> None:
+        super().__init__(gamepad, self._handle_pad, feedback, parent)
+        self._items = center.recent(_MAX_ROWS)
+        self._rows: list[QFrame] = []
+
+        # Vertical navigation lives in the domain; movement clamps at the ends
+        # (wrap=False), A/B/Esc dismiss (read-only list — no per-item action).
+        self._cursor = MenuCursor(
+            count=lambda: len(self._rows),
+            render=self._render_selection,
+            on_activate=lambda _idx: self._close(),
+            on_dismiss=self._close,
+            feedback=feedback,
+            wrap=False,
+        )
+
+        outer = QVBoxLayout(self)
+        outer.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+        card = self.build_card(640)
+        # Hug the content vertically (like the Home Overlay) so a short list does
+        # not leave a tall empty card — the height tracks the number of rows.
+        card.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Maximum)
+        layout = QVBoxLayout(card)
+        layout.setContentsMargins(36, 28, 36, 28)
+        layout.setSpacing(18)
+
+        # Title
+        title_row = QHBoxLayout()
+        icon_lbl = QLabel()
+        icon_lbl.setPixmap(qta.icon("fa5s.bell", color="white").pixmap(28, 28))
+        icon_lbl.setStyleSheet("background: transparent;")
+        title = QLabel(translate("Kasual Desktop", "Recent notifications"))
+        title.setStyleSheet("font-size: 24px; color: white; background: transparent;")
+        title_row.addWidget(icon_lbl)
+        title_row.addWidget(title)
+        title_row.addStretch()
+        layout.addLayout(title_row)
+
+        layout.addWidget(self._build_list())
+
+        hint = QLabel(translate("Kasual Desktop", "▲ ▼ – scroll    B/Esc – close"))
+        hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        hint.setStyleSheet("font-size: 14px; color: #888; background: transparent;")
+        layout.addWidget(hint)
+
+        outer.addWidget(card)
+
+        self._cursor.reset(0)
+        self._feedback.play(Cue.POPUP_OPEN)
+        self._show()
+
+    # ── Building the list ────────────────────────────────────────────────────
+
+    def _build_list(self) -> QWidget:
+        if not self._items:
+            empty = QLabel(translate("Kasual Desktop", "No notifications"))
+            empty.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            empty.setStyleSheet(
+                "font-size: 18px; color: #aaa; background: transparent; padding: 40px;"
+            )
+            return empty
+
+        now = datetime.now()
+        container = QWidget()
+        container.setStyleSheet("background: transparent;")
+        col = QVBoxLayout(container)
+        col.setContentsMargins(0, 0, 0, 0)
+        col.setSpacing(8)
+        col.setAlignment(Qt.AlignmentFlag.AlignTop)
+
+        for i, n in enumerate(self._items):
+            row = self._make_row(n, now, i)
+            col.addWidget(row)
+            self._rows.append(row)
+
+        scroll = QScrollArea()
+        scroll.setWidget(container)
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QScrollArea.Shape.NoFrame)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        scroll.setStyleSheet(_SCROLL_STYLE)
+        # Size the viewport to the rows, capped: a few notifications give a short
+        # card; a long list stops growing at _LIST_MAX_HEIGHT and scrolls.
+        container.ensurePolished()
+        content_h = container.sizeHint().height()
+        scroll.setFixedHeight(min(content_h, _LIST_MAX_HEIGHT))
+        self._scroll = scroll
+        return scroll
+
+    def _make_row(self, n, now: datetime, idx: int) -> QFrame:
+        """One notification row: app + time (meta), summary (title) and body.
+
+        Built from explicit labels rather than a single multi-line button so the
+        summary/body always render (a QPushButton would only show the first
+        line, collapsing every notify-send entry to its identical header)."""
+        row = QFrame()
+        row.setObjectName("notifrow")
+        row.setStyleSheet(_ROW_NORMAL)
+        # Clicking a row selects it (mouse parity with the gamepad cursor).
+        row.mousePressEvent = lambda _e, i=idx: self._cursor.hover(i)
+
+        v = QVBoxLayout(row)
+        v.setContentsMargins(16, 10, 16, 10)
+        v.setSpacing(2)
+
+        meta = QLabel(f"{n.app_name}   ·   {relative_age(n.timestamp, now)}")
+        meta.setStyleSheet("font-size: 13px; color: #9aa0aa; background: transparent;")
+        v.addWidget(meta)
+
+        title = QLabel(truncate(n.summary or n.app_name, 60))
+        title.setStyleSheet(
+            "font-size: 18px; color: white; font-weight: bold; background: transparent;"
+        )
+        v.addWidget(title)
+
+        if n.body:
+            body = QLabel(truncate(n.body, 80))
+            body.setStyleSheet("font-size: 15px; color: #cfd3da; background: transparent;")
+            v.addWidget(body)
+        return row
+
+    # ── Navigation (delegated to the domain cursor) ──────────────────────────
+
+    def _handle_pad(self, event: str) -> None:
+        self._cursor.handle_pad(event)
+
+    def _render_selection(self, index: int) -> None:
+        for i, row in enumerate(self._rows):
+            row.setStyleSheet(_ROW_SELECTED if i == index else _ROW_NORMAL)
+        if 0 <= index < len(self._rows):
+            self._scroll.ensureWidgetVisible(self._rows[index])
+
+    _KEY_MAP = {
+        Qt.Key.Key_Up:     Event.UP,
+        Qt.Key.Key_Down:   Event.DOWN,
+        Qt.Key.Key_Return: Event.SELECT,
+        Qt.Key.Key_Enter:  Event.SELECT,
+        Qt.Key.Key_Escape: Event.CANCEL,
+    }
+
+    def keyPressEvent(self, event: QKeyEvent) -> None:
+        mapped = self._KEY_MAP.get(event.key())
+        if mapped is not None:
+            self._cursor.handle_pad(mapped)
+
+    def _on_outside_click(self) -> None:
+        self._close()
+
+    # ── Closing ──────────────────────────────────────────────────────────────
+
+    def _close(self) -> None:
+        if self._dismiss(sound=Cue.POPUP_CLOSE):
+            self.closed.emit()

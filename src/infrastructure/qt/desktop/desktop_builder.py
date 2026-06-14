@@ -22,6 +22,7 @@ from domain.lifecycle.process_manager import ProcessManager
 from domain.lifecycle.prompts import LocalizedPrompts
 from domain.lifecycle.window_manager import WindowManager
 from domain.navigation.focus_navigator import FocusNavigator
+from domain.notifications.center import NotificationCenter
 from domain.shared.feedback import Feedback
 from domain.shared.scheduler import Scheduler
 from domain.shell.desktop import Desktop as DesktopCoordinator
@@ -47,6 +48,7 @@ def build_desktop(
     power: PowerControl,
     scheduler: Scheduler,
     process_manager: ProcessManager,
+    notifications: NotificationCenter,
 ) -> Desktop:
     """Build a fully wired Desktop: the view widget plus its domain coordinators."""
     widget = Desktop(
@@ -59,6 +61,7 @@ def build_desktop(
         power=power,
         scheduler=scheduler,
         process_manager=process_manager,
+        notifications=notifications,
     )
 
     nav = FocusNavigator(

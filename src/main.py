@@ -27,6 +27,8 @@ from infrastructure.system.volume import PactlVolumeControl
 from infrastructure.qt.scheduler import QtScheduler
 from domain.shared.feedback import Cue
 from infrastructure.system.kde_wallpaper import KdeSystemWallpaper
+from infrastructure.system.kde_notifications import KdeNotificationMonitor
+from domain.notifications.center import NotificationCenter
 from domain.system.actions import ActionDeps
 from infrastructure.system.window_manager import KWinWindowManager
 from infrastructure.qt.i18n import install_translations
@@ -48,7 +50,8 @@ def _setup_logging() -> Path:
     file_handler = logging.FileHandler(log_file, encoding="utf-8")
     file_handler.setFormatter(fmt)
 
-    logging.basicConfig(level=logging.INFO, handlers=[stream_handler, file_handler])
+    level = logging.DEBUG if os.environ.get("KASUAL_DEBUG") else logging.INFO
+    logging.basicConfig(level=level, handlers=[stream_handler, file_handler])
     return log_file
 
 
@@ -75,11 +78,24 @@ def main() -> None:
     feedback = SoundFeedback()
     # One PowerControl shared by the Desktop's action runner and the Application.
     power = SystemdPowerControl()
+
+    # Recent-notifications feature: the KDE monitor (source port) feeds the
+    # platform-agnostic NotificationCenter, which the Desktop's overlay reads.
+    notification_center = NotificationCenter()
+    notification_monitor = KdeNotificationMonitor()
+    notification_monitor.on_notification(notification_center.record)
+
     desktop = build_desktop(
         apps=apps, gamepad=gamepad, window_manager=wm,
         wallpaper=KdeSystemWallpaper(), feedback=feedback,
         volume=PactlVolumeControl(), power=power, scheduler=QtScheduler(),
-        process_manager=AppManager(),
+        process_manager=AppManager(), notifications=notification_center,
+    )
+    # Keep the top-bar notifications badge in sync with the in-memory count.
+    # Subscribed after `record` above, so the count is already updated when this
+    # runs; delivered on the GUI thread by the monitor's signal hop.
+    notification_monitor.on_notification(
+        lambda _n: desktop.refresh_notification_badge()
     )
 
     # The log viewer runs in its own process so it is a normal xdg window, not a
@@ -104,7 +120,12 @@ def main() -> None:
         overlay_factory=HomeOverlayFactory(gamepad, feedback),
     )
     wm.start_periodic_refresh(3000)
+    # Start the notification monitor only once the event loop is running, so its
+    # subprocess spawn can never sit on the critical startup path (e.g. delaying
+    # the gamepad-connected activation). It is non-essential to bring-up.
+    QTimer.singleShot(0, notification_monitor.start)
     app.aboutToQuit.connect(controller.shutdown)
+    app.aboutToQuit.connect(notification_monitor.stop)
     app.aboutToQuit.connect(log_viewer.close)
 
     QTimer.singleShot(0, feedback.init)

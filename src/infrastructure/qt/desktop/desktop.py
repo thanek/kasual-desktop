@@ -14,6 +14,9 @@ from infrastructure.qt.overlays.confirm_dialog import ConfirmDialog
 from infrastructure.qt.overlays.info_dialog import InfoDialog
 from infrastructure.qt.overlays.tile_popover import TilePopoverMenu
 from infrastructure.qt.overlays.volume_overlay import VolumeOverlay
+from infrastructure.qt.overlays.notifications_overlay import NotificationsOverlay
+from domain.notifications.center import NotificationCenter
+from domain.system.actions import NOTIFICATIONS
 from domain.system.volume import VolumeControl
 from domain.system.power_control import PowerControl
 from domain.shared.scheduler import Scheduler
@@ -69,6 +72,7 @@ class Desktop(QWidget, DesktopView, DesktopShell, DesktopControl, metaclass=_Met
         power: PowerControl,
         scheduler: Scheduler,
         process_manager: ProcessManager,
+        notifications: NotificationCenter,
     ):
         super().__init__()
         self._apps        = apps
@@ -80,8 +84,10 @@ class Desktop(QWidget, DesktopView, DesktopShell, DesktopControl, metaclass=_Met
         self._volume_control = volume
         self._power       = power
         self._scheduler   = scheduler
+        self._notifications = notifications
         self._confirm_dialog = None
         self._volume_overlay = None
+        self._notifications_overlay = None
         self._tile_popover   = None
 
         # Desktop visibility + paused + what the BTN_MODE menu targets (foreground).
@@ -192,7 +198,10 @@ class Desktop(QWidget, DesktopView, DesktopShell, DesktopControl, metaclass=_Met
     @property
     def _active_overlays(self) -> list[BaseOverlay]:
         """Active overlays (those that can be paused/resumed)."""
-        return [o for o in (self._volume_overlay, self._confirm_dialog) if o is not None]
+        return [
+            o for o in (self._volume_overlay, self._notifications_overlay, self._confirm_dialog)
+            if o is not None
+        ]
 
     # ── DesktopView port (driven by AppLifecycle) ───────────────────────────
 
@@ -417,4 +426,17 @@ class Desktop(QWidget, DesktopView, DesktopShell, DesktopControl, metaclass=_Met
 
     def _on_volume_closed(self) -> None:
         self._volume_overlay = None
+        self._nav.focus_topbar()
+
+    def refresh_notification_badge(self) -> None:
+        """Sync the notifications button badge to the count held in memory."""
+        self._topbar.set_badge(NOTIFICATIONS, self._notifications.count)
+
+    def open_notifications_overlay(self) -> None:
+        overlay = NotificationsOverlay(self._gamepad, self._notifications, self._feedback, parent=self)
+        self._notifications_overlay = overlay
+        overlay.closed.connect(self._on_notifications_closed)
+
+    def _on_notifications_closed(self) -> None:
+        self._notifications_overlay = None
         self._nav.focus_topbar()
