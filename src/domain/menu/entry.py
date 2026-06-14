@@ -1,4 +1,4 @@
-"""The shared action vocabulary of Kasual's menus.
+"""The shared action vocabulary of Kasual Desktop's menus.
 
 One place naming every menu *action* the Home Overlay and the tile Popover can
 offer. The composition rules (which actions appear when, with what label/icon)

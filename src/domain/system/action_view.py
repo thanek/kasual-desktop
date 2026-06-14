@@ -37,26 +37,26 @@ class ActionView:
 # (see home_overlay / make_action_confirm); don't drop that step.
 PRESENTATION: dict[str, ActionView] = {
     VOLUME: ActionView(
-        translate("Kasual", "Volume"),
+        translate("Kasual Desktop", "Volume"),
         "fa5s.volume-up", "#3b4252", None,
     ),
     SLEEP: ActionView(
-        translate("Kasual", "Sleep"),
+        translate("Kasual Desktop", "Sleep"),
         "fa5s.moon", "#4c566a",
-        translate("Kasual", "Are you sure you want to sleep?"),
+        translate("Kasual Desktop", "Are you sure you want to sleep?"),
     ),
     RESTART: ActionView(
-        translate("Kasual", "Restart"),
+        translate("Kasual Desktop", "Restart"),
         "fa5s.redo-alt", "#5e81ac",
-        translate("Kasual", "Are you sure you want to restart?"),
+        translate("Kasual Desktop", "Are you sure you want to restart?"),
     ),
     SHUTDOWN: ActionView(
-        translate("Kasual", "Shut Down"),
+        translate("Kasual Desktop", "Shut Down"),
         "fa5s.power-off", "#bf616a",
-        translate("Kasual", "Are you sure you want to shut down?"),
+        translate("Kasual Desktop", "Are you sure you want to shut down?"),
     ),
     HIDE_DESKTOP: ActionView(
-        translate("Kasual", "Minimize Desktop"),
+        translate("Kasual Desktop", "Minimize Desktop"),
         "fa5s.window-minimize", "#d580ff", None,
     ),
 }
@@ -69,7 +69,7 @@ def system_action_items() -> list[MenuItem]:
     label is localized here (the PRESENTATION strings are marker sources)."""
     return [
         MenuItem(
-            label=translate("Kasual", view.label),
+            label=translate("Kasual Desktop", view.label),
             action=key,
             icon=view.icon,
         )
@@ -84,6 +84,6 @@ def make_action_confirm(
     on_confirmed) callback the ActionRunner expects, resolving the localized
     question for the key."""
     def confirm(action_key: str, on_confirmed: Callable[[], None]) -> None:
-        question = translate("Kasual", PRESENTATION[action_key].confirm_question)
+        question = translate("Kasual Desktop", PRESENTATION[action_key].confirm_question)
         show_confirm(question, on_confirmed)
     return confirm

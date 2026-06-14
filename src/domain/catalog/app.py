@@ -1,8 +1,8 @@
 """Domain model for a configured, launchable application.
 
 Pure Python — no Qt, no I/O. The freedesktop ``.desktop`` format is part of the
-problem domain (Kasual is a launcher of freedesktop app definitions), so the
-*rules* for turning a ``[Desktop Entry]`` into an :class:`App` live here, in
+problem domain (Kasual Desktop is a launcher of freedesktop app definitions), so
+the *rules* for turning a ``[Desktop Entry]`` into an :class:`App` live here, in
 :meth:`App.from_desktop_entry`. Only the file/``configparser`` I/O stays in the
 ``system.app_config`` adapter, which feeds raw key→value mappings to this.
 """
@@ -49,8 +49,8 @@ class App:
     def from_desktop_entry(cls, entry: Mapping[str, str]) -> "tuple[int, App] | None":
         """Build an :class:`App` from a freedesktop ``[Desktop Entry]`` mapping.
 
-        Applies the standard's rules as Kasual uses them: skip entries that are
-        not application tiles, strip Exec field codes, read the ``X-Kasual-*``
+        Applies the standard's rules as Kasual Desktop uses them: skip entries that
+        are not application tiles, strip Exec field codes, read the ``X-Kasual-*``
         extensions, fall back to defaults. Returns ``(order, app)`` — *order* is
         the placement key (``X-Kasual-Order``, default :data:`ORDER_DEFAULT`).
 

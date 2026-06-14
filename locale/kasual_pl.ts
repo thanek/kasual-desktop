@@ -4,12 +4,12 @@
 <context>
     <name>ConfirmDialog</name>
     <message>
-        <location filename="../src/infrastructure/qt/overlays/confirm_dialog.py" line="52" />
+        <location filename="../src/infrastructure/qt/overlays/confirm_dialog.py" line="61" />
         <source>Yes</source>
         <translation>Tak</translation>
     </message>
     <message>
-        <location filename="../src/infrastructure/qt/overlays/confirm_dialog.py" line="53" />
+        <location filename="../src/infrastructure/qt/overlays/confirm_dialog.py" line="62" />
         <source>No</source>
         <translation>Nie</translation>
     </message>
@@ -29,36 +29,36 @@
         <translation>Nie udało się uruchomić aplikacji: {0}</translation>
     </message>
     <message>
-        <location filename="../src/domain/menu/tile.py" line="27" />
+        <location filename="../src/domain/menu/tile.py" line="42" />
         <source>Launch</source>
         <translation>Uruchom</translation>
     </message>
     <message>
-        <location filename="../src/domain/menu/tile.py" line="29" />
+        <location filename="../src/domain/menu/tile.py" line="44" />
         <source>Restore</source>
         <translation>Przywróć</translation>
     </message>
     <message>
-        <location filename="../src/domain/menu/tile.py" line="30" />
+        <location filename="../src/domain/menu/tile.py" line="45" />
         <source>Close</source>
         <translation>Zamknij</translation>
     </message>
 </context><context>
     <name>HomeOverlay</name>
     <message>
-        <location filename="../src/infrastructure/qt/overlays/home_overlay.py" line="97" />
+        <location filename="../src/infrastructure/qt/overlays/home_overlay.py" line="98" />
         <source>Kasual Desktop</source>
         <translation type="unfinished" />
     </message>
 </context><context>
     <name>InfoDialog</name>
     <message>
-        <location filename="../src/infrastructure/qt/overlays/info_dialog.py" line="46" />
+        <location filename="../src/infrastructure/qt/overlays/info_dialog.py" line="47" />
         <source>OK</source>
         <translation type="unfinished" />
     </message>
 </context><context>
-    <name>Kasual</name>
+    <name>Kasual Desktop</name>
     <message>
         <location filename="../src/domain/menu/home.py" line="33" />
         <source>Return to Desktop</source>
@@ -132,13 +132,17 @@
 </context><context>
     <name>LogViewer</name>
     <message>
-        <location filename="../src/infrastructure/qt/ui/log_viewer.py" line="44" />
+        <location filename="../src/infrastructure/qt/ui/log_viewer.py" line="49" />
         <source>Kasual – Logs</source>
-        <translation>Kasual – Logi</translation>
+        <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/infrastructure/qt/ui/log_viewer.py" line="83" />
+        <location filename="../src/infrastructure/qt/ui/log_viewer.py" line="88" />
         <source>Clear</source>
         <translation>Wyczyść</translation>
+    </message>
+    <message>
+        <source>Kasual Desktop – Logs</source>
+        <translation type="vanished">Kasual Desktop – Logi</translation>
     </message>
 </context></TS>

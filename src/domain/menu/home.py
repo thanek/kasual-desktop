@@ -30,7 +30,7 @@ class HomeMenu:
 
 
 def _return_to_desktop_item() -> MenuItem:
-    return MenuItem(translate("Kasual", "Return to Desktop"), RETURN_TO_DESKTOP, "fa5s.home")
+    return MenuItem(translate("Kasual Desktop", "Return to Desktop"), RETURN_TO_DESKTOP, "fa5s.home")
 
 
 def compose_home_menu(foreground: Target | None) -> HomeMenu:
@@ -44,11 +44,11 @@ def compose_home_menu(foreground: Target | None) -> HomeMenu:
     return HomeMenu(
         items=[
             MenuItem(
-                translate("Kasual", "Return to {0}").format(name),
+                translate("Kasual Desktop", "Return to {0}").format(name),
                 RETURN_TO_APP, "fa5s.times", target=foreground,
             ),
             MenuItem(
-                translate("Kasual", "Close {0}").format(name),
+                translate("Kasual Desktop", "Close {0}").format(name),
                 CLOSE_APP, "fa5s.times-circle", target=foreground,
             ),
             _return_to_desktop_item(),

@@ -23,12 +23,12 @@ class SystemTray(ConnectionIndicator):
         self._tray.setToolTip("Kasual Desktop")
 
         menu = QMenu()
-        show_action = menu.addAction(translate("Kasual", "Show Desktop"))
+        show_action = menu.addAction(translate("Kasual Desktop", "Show Desktop"))
         show_action.triggered.connect(on_show)
-        logs_action = menu.addAction(translate("Kasual", "Logs"))
+        logs_action = menu.addAction(translate("Kasual Desktop", "Logs"))
         logs_action.triggered.connect(on_logs)
         menu.addSeparator()
-        quit_action = menu.addAction(translate("Kasual", "Quit"))
+        quit_action = menu.addAction(translate("Kasual Desktop", "Quit"))
         quit_action.triggered.connect(on_quit)
 
         self._tray.setContextMenu(menu)

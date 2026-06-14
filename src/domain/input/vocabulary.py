@@ -1,4 +1,5 @@
-"""Abstract input vocabulary — the framework-independent Kasual input domain.
+"""Abstract input vocabulary — the framework-independent Kasual Desktop input
+   domain.
 
 The set of navigation/action events the UI reacts to, and the BTN_MODE recall
 triggers, as a single source of truth. The gamepad adapter (evdev) *produces*

@@ -1,6 +1,10 @@
 #!/bin/bash
 
 cd `dirname $0`
+if [ ! -f venv/bin/activate ]; then
+    echo "No venv directory. Run ./install.sh first" >&2
+    exit 1
+fi
 source venv/bin/activate
 # Use the SYSTEM PyQt6 (Qt 6.9) for layer-shell, not ~/.local pip PyQt6 (Qt 6.11).
 export PYTHONNOUSERSITE=1
