@@ -61,9 +61,9 @@ class App:
         """
         if entry.get("Type", "Application") != "Application":
             return None
-        if (entry.get("NoDisplay") or "").strip().lower() == "true":
+        if _bool_entry(entry, "NoDisplay"):
             return None
-        if (entry.get("Hidden") or "").strip().lower() == "true":
+        if _bool_entry(entry, "Hidden"):
             return None
 
         name     = (entry.get("Name") or "").strip()
@@ -79,16 +79,24 @@ class App:
             name=name,
             command=command,
             args=tuple(args),
-            icon=(entry.get("X-Kasual-Icon") or "").strip() or None,
-            icon_theme=(entry.get("Icon") or "").strip() or None,
-            color=(entry.get("X-Kasual-Color") or "").strip() or "#2e3440",
-            recall_menu_trigger=(entry.get("X-Kasual-RecallMenuTrigger") or "").strip()
+            icon=_str_entry(entry, "X-Kasual-Icon"),
+            icon_theme=_str_entry(entry, "Icon"),
+            color=_str_entry(entry, "X-Kasual-Color") or "#2e3440",
+            recall_menu_trigger=_str_entry(entry, "X-Kasual-RecallMenuTrigger")
                                 or Trigger.CLICK,
             launch_hide_grace_ms=_parse_int(entry.get("X-Kasual-HideGraceMs"), 0),
             env=_parse_env(entry.get("X-Kasual-Env")),
         )
         order = _parse_int(entry.get("X-Kasual-Order"), ORDER_DEFAULT)
         return order, app
+
+
+def _bool_entry(entry: Mapping[str, str], key: str) -> bool:
+    return (entry.get(key) or "").strip().lower() == "true"
+
+
+def _str_entry(entry: Mapping[str, str], key: str) -> str | None:
+    return (entry.get(key) or "").strip() or None
 
 
 def _parse_exec(exec_str: str) -> "tuple[str | None, list[str]]":

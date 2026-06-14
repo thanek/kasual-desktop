@@ -8,8 +8,7 @@ screen, so the domain refuses to dim below ``MIN``.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import ClassVar
-from typing import Protocol
+from typing import ClassVar, Protocol
 
 
 @dataclass(frozen=True)
