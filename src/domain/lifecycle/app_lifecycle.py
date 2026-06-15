@@ -19,6 +19,7 @@ import logging
 from collections.abc import Callable
 
 from domain.catalog.catalog import AppCatalog
+from domain.catalog.window_rules import active_unmanaged_window
 from domain.input.vocabulary import Trigger
 from domain.shell.foreground import ForegroundState
 from domain.catalog.target import AppTarget, Target, WindowTarget
@@ -77,8 +78,36 @@ class AppLifecycle(AppControl):
     # ── AppControl queries (driven by the Application controller) ────────────
 
     def current_app(self) -> Target | None:
-        """The foreground Target, or None on the bare Desktop."""
-        return self._foreground.current
+        """The foreground Target, or None on the bare Desktop.
+
+        When the foreground app has spawned a distinct active window — e.g. a
+        game launched by Steam, which runs in its own top-level window while the
+        foreground stays the Steam tile — that window is reported instead, so the
+        Home Overlay names it and Cancel returns to it rather than to the
+        launcher underneath.
+        """
+        target = self._foreground.current
+        if isinstance(target, AppTarget):
+            spawned = self._active_spawned_window(target)
+            if spawned is not None:
+                return spawned
+        return target
+
+    def _active_spawned_window(self, target: AppTarget) -> WindowTarget | None:
+        window = active_unmanaged_window(self._wm.cached_windows(), self._apps)
+        if window is None:
+            return None
+        # The game inherits its launcher's recall trigger (e.g. Steam's HOLD_1S),
+        # so BTN_MODE behaves the same whether the launcher or its game is front.
+        app = self._apps[target.index]
+        logger.debug(
+            "Recall over %s: active window unmanaged → targeting %r (id=%s)",
+            target.name, window.title, window.id,
+        )
+        return WindowTarget(
+            window_id=window.id, name=window.title,
+            trigger=app.recall_menu_trigger,
+        )
 
     def foreground_pid(self) -> int | None:
         """OS pid of the foreground app, if one is a running App tile."""

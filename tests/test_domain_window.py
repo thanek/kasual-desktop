@@ -6,7 +6,9 @@ Pure rules, no Qt/KWin/proc — the process-parent lookup is injected.
 from domain.catalog.app import App
 from domain.catalog.target import AppTarget, WindowTarget, target_at_index
 from domain.catalog.window import Window
-from domain.catalog.window_rules import app_window_present, external_windows, resolve_recall_trigger
+from domain.catalog.window_rules import (
+    active_unmanaged_window, app_window_present, external_windows, resolve_recall_trigger,
+)
 from domain.input.vocabulary import Trigger
 
 
@@ -63,6 +65,37 @@ class TestExternalWindows:
         managed = _win(resource_class="Steam", pid=2)
         ext2 = _win(resource_class="vlc", pid=3)
         assert external_windows([ext1, managed, ext2], self.APPS, self._never_owned) == [ext1, ext2]
+
+
+class TestActiveUnmanagedWindow:
+    """The active window that matches no configured app — e.g. a Steam game."""
+
+    APPS = [App(name="Steam", command="steam")]
+
+    def test_active_window_matching_no_app(self):
+        game = Window(id="g", title="Game", pid=200, active=True,
+                      resource_class="steam_app_1")
+        assert active_unmanaged_window([game], self.APPS) == game
+
+    def test_active_window_matching_an_app_is_managed(self):
+        own = Window(id="s", title="Steam", pid=100, active=True,
+                     resource_class="steam")
+        assert active_unmanaged_window([own], self.APPS) is None
+
+    def test_no_active_window(self):
+        win = Window(id="g", title="Game", pid=200, active=False,
+                     resource_class="steam_app_1")
+        assert active_unmanaged_window([win], self.APPS) is None
+
+    def test_active_pid_zero_window_is_ignored(self):
+        win = Window(id="g", title="Game", pid=0, active=True,
+                     resource_class="steam_app_1")
+        assert active_unmanaged_window([win], self.APPS) is None
+
+    def test_picks_active_among_many(self):
+        bg   = Window(id="s", title="Steam", pid=100, active=False, resource_class="steam")
+        game = Window(id="g", title="Game", pid=200, active=True, resource_class="steam_app_1")
+        assert active_unmanaged_window([bg, game], self.APPS) == game
 
 
 class TestAppWindowPresent:

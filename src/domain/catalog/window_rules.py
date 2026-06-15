@@ -77,6 +77,29 @@ def is_app_running(
     return False
 
 
+def active_unmanaged_window(
+    windows: Sequence[Window],
+    apps:    Sequence[App],
+) -> Window | None:
+    """The active window that belongs to no configured app.
+
+    Covers a launcher (e.g. Steam in Big Picture) whose game runs in its own
+    top-level window: that window is active but matches none of our app tiles, so
+    reporting it lets the Home Overlay name and return to the game rather than to
+    the launcher underneath. Returns None when the active window *is* one of our
+    apps (its own window is up front) or when nothing is active.
+
+    Identity-based rather than process-based on purpose: a Steam-launched game
+    may run in its own process session, so ``getpgid`` against Steam's launcher
+    pid does not reliably attribute it — but it never matches the ``steam`` app
+    tile, which is the signal we actually need.
+    """
+    active = next((w for w in windows if w.active and w.pid), None)
+    if active is None or any(active.matches_app(app) for app in apps):
+        return None
+    return active
+
+
 def resolve_recall_trigger(
     pid:        int,
     pid_to_app: Mapping[int, App],

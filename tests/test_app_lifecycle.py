@@ -93,6 +93,9 @@ def _make(apps=None, visible=False):
     scheduler = FakeScheduler()
     feedback = MagicMock()
     prompts = FakePrompts()
+    # Default: no open windows, so current_app() never overrides the foreground
+    # unless a test sets cached_windows explicitly.
+    wm.cached_windows.return_value = []
     lc = AppLifecycle(
         view=view,
         gamepad=gamepad,
@@ -112,6 +115,66 @@ def _make(apps=None, visible=False):
         apps=apps, fg=foreground, dh=deferred_hide, tilebar=tilebar, pad=pad,
         scheduler=scheduler, feedback=feedback, prompts=prompts,
     )
+
+
+# ── current_app ─────────────────────────────────────────────────────────────
+
+class TestCurrentApp:
+    def test_idle_is_none(self):
+        c = _make()
+        assert c.lc.current_app() is None
+
+    def test_plain_app_returned_when_no_spawned_window(self):
+        c = _make()
+        target = AppTarget(index=0, name="App")
+        c.fg.set(target)
+        c.am.running_pid.return_value = 100
+        c.wm.cached_windows.return_value = []
+        assert c.lc.current_app() == target
+
+    def test_active_unmanaged_window_reports_it(self):
+        """Steam (foreground) launched a game in its own window — a window that
+        matches no app tile: BTN_MODE should target the game, inheriting Steam's
+        recall trigger."""
+        c = _make(apps=[_app(command="steam", trigger=Trigger.HOLD_1S)])
+        c.fg.set(AppTarget(index=0, name="Steam"))
+        c.wm.cached_windows.return_value = [
+            Window(id="g1", title="Witcher 3", pid=200, active=True,
+                   resource_class="steam_app_292030"),
+            Window(id="s1", title="Steam", pid=100, active=False,
+                   resource_class="steam"),
+        ]
+        result = c.lc.current_app()
+        assert result == WindowTarget(
+            window_id="g1", name="Witcher 3", trigger=Trigger.HOLD_1S
+        )
+
+    def test_own_window_active_keeps_app_target(self):
+        """Steam's own window is active → it matches the Steam tile, no override."""
+        c = _make(apps=[_app(command="steam")])
+        target = AppTarget(index=0, name="Steam")
+        c.fg.set(target)
+        c.wm.cached_windows.return_value = [
+            Window(id="s1", title="Steam", pid=100, active=True,
+                   resource_class="steam"),
+        ]
+        assert c.lc.current_app() == target
+
+    def test_no_active_window_keeps_app_target(self):
+        c = _make(apps=[_app(command="steam")])
+        target = AppTarget(index=0, name="Steam")
+        c.fg.set(target)
+        c.wm.cached_windows.return_value = [
+            Window(id="s1", title="Steam", pid=100, active=False,
+                   resource_class="steam"),
+        ]
+        assert c.lc.current_app() == target
+
+    def test_window_target_foreground_passes_through(self):
+        c = _make()
+        target = WindowTarget(window_id="w1", name="Win", trigger=Trigger.CLICK)
+        c.fg.set(target)
+        assert c.lc.current_app() == target
 
 
 # ── on_tile_activated ───────────────────────────────────────────────────────
