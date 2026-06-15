@@ -6,7 +6,7 @@ factory, the session collaborators) — no `infrastructure.*` imports.
 
 import logging
 
-from domain.menu.entry import CLOSE_APP, RETURN_TO_APP, RETURN_TO_DESKTOP
+from domain.menu.entry import CLOSE_APP, RETURN_TO_APP, RETURN_TO_DESKTOP, TOGGLE_HUD
 from domain.menu.home import compose_home_menu
 from domain.menu.item import MenuItem
 from domain.shared.event_emitter import Unsubscribe
@@ -19,6 +19,7 @@ from domain.shell.session import SessionPolicy
 from domain.shell.session_collaborators import ConnectionIndicator
 from domain.system.actions import ActionDeps
 from domain.system.action_view import make_action_confirm
+from domain.system.hud import HudControl, toggle_hud
 from domain.system.runner import ActionRunner
 
 logger = logging.getLogger(__name__)
@@ -40,12 +41,14 @@ class Application:
         tray:            ConnectionIndicator,
         wm:              WindowManager,
         overlay_factory: OverlayFactory,
+        hud:             HudControl,
     ) -> None:
         self._desktop         = desktop
         self._app_control     = app_control
         self._tray            = tray
         self._wm              = wm
         self._overlay_factory = overlay_factory
+        self._hud             = hud
         self._overlay: HomeMenuOverlay | None = None
         self._session         = SessionPolicy(view=desktop, indicator=tray)
         # System actions (sleep/shutdown/…) run through the domain ActionRunner,
@@ -86,7 +89,7 @@ class Application:
         # other overlays so they aren't merely covered.
         self._desktop.dismiss_overlays()
 
-        menu = compose_home_menu(self._app_control.current_app())
+        menu = compose_home_menu(self._app_control.current_app(), self._hud)
 
         self._overlay = self._overlay_factory.create_home_overlay()
         self._overlay.on_closed(self._on_overlay_closed)
@@ -107,6 +110,10 @@ class Application:
             self._app_control.restore_app(item.target)
         elif item.action == CLOSE_APP:
             self._app_control.request_close_app(item.target)
+        elif item.action == TOGGLE_HUD:
+            # The overlay merely floats over the live app, so flipping the HUD
+            # and closing reveals the same app with its HUD changed.
+            toggle_hud(self._hud)
         elif item.action == RETURN_TO_DESKTOP:
             # From a running app we leave it (minimize + raise KD); on the bare
             # Desktop we just bring KD to the front.

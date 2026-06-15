@@ -26,6 +26,7 @@ from infrastructure.system.power import SystemdPowerControl
 from infrastructure.system.volume import PactlVolumeControl
 from infrastructure.system.brightness import select_brightness_control
 from infrastructure.qt.scheduler import QtScheduler
+from infrastructure.mangohud import MangoHudControl
 from domain.shared.feedback import Cue
 from infrastructure.system.kde_wallpaper import KdeSystemWallpaper
 from infrastructure.system.kde_notifications import KdeNotificationMonitor
@@ -129,6 +130,7 @@ def main() -> None:
         tray=tray,
         wm=wm,
         overlay_factory=HomeOverlayFactory(gamepad, feedback),
+        hud=MangoHudControl(),
     )
     wm.start_periodic_refresh(3000)
     # Start the notification monitor only once the event loop is running, so its
