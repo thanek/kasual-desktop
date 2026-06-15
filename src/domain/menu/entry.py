@@ -11,6 +11,7 @@ glossary.
 RETURN_TO_APP     = "return_to_app"
 CLOSE_APP         = "close_app"
 RETURN_TO_DESKTOP = "return_to_desktop"
+TOGGLE_HUD        = "toggle_hud"
 
 # ── Tile Popover actions ─────────────────────────────────────────────────────
 LAUNCH  = "launch"

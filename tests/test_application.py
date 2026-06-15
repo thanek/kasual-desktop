@@ -10,7 +10,7 @@ from domain.shared.event_emitter import EventEmitter
 from domain.input.gamepad_events import (
     BtnModePressed, GamepadConnected, GamepadDisconnected,
 )
-from domain.menu.entry import CLOSE_APP, RETURN_TO_APP, RETURN_TO_DESKTOP
+from domain.menu.entry import CLOSE_APP, RETURN_TO_APP, RETURN_TO_DESKTOP, TOGGLE_HUD
 from domain.menu.item import MenuItem
 from domain.system.actions import ActionDeps, VOLUME
 from domain.catalog.app import App
@@ -164,12 +164,26 @@ class FakePower:
     def poweroff(self): ...
 
 
-def make_app(desktop=None, gamepad=None, factory=None, tray=None, wm=None):
+class FakeHud:
+    """HudControl port — records enable/disable and starts unavailable."""
+
+    def __init__(self, available=False, enabled=True):
+        self.available = available
+        self.enabled = enabled
+
+    def is_available(self): return self.available
+    def is_enabled(self): return self.enabled
+    def enable(self): self.enabled = True
+    def disable(self): self.enabled = False
+
+
+def make_app(desktop=None, gamepad=None, factory=None, tray=None, wm=None, hud=None):
     desktop = desktop or FakeDesktop()
     gamepad = gamepad or FakeGamepad()
     factory = factory or FakeOverlayFactory()
     tray = tray or FakeTray()
     wm = wm or FakeWM()
+    hud = hud or FakeHud()
     controller = Application(
         gamepad=gamepad,
         desktop=desktop,
@@ -178,6 +192,7 @@ def make_app(desktop=None, gamepad=None, factory=None, tray=None, wm=None):
         tray=tray,
         wm=wm,
         overlay_factory=factory,
+        hud=hud,
     )
     return controller, desktop, gamepad, factory, tray, wm
 
@@ -275,6 +290,14 @@ class TestDispatchHome:
         controller, desktop, *_ = make_app()
         controller._dispatch_home(MenuItem("Vol", VOLUME))
         assert desktop.volume_opened == 1
+
+    def test_toggle_hud_flips_state(self):
+        hud = FakeHud(available=True, enabled=True)
+        controller, *_ = make_app(hud=hud)
+        controller._dispatch_home(MenuItem("Disable HUD", TOGGLE_HUD))
+        assert hud.enabled is False
+        controller._dispatch_home(MenuItem("Enable HUD", TOGGLE_HUD))
+        assert hud.enabled is True
 
 
 # ── connect / disconnect → session policy ────────────────────────────────────
