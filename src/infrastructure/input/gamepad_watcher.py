@@ -8,6 +8,7 @@ from PyQt6.QtCore import pyqtSignal, QObject, QTimer
 from evdev import InputDevice, InputEvent, UInput, ecodes, list_devices
 
 from domain.shared.event_emitter import EventEmitter, Unsubscribe
+from domain.input.direction_repeat import DirectionRepeat
 from domain.input.focus_stack import InputFocusStack
 from domain.input.gamepad_events import (
     BtnModePressed, GamepadConnected, GamepadDisconnected,
@@ -68,6 +69,8 @@ class GamepadWatcher(QObject, PadControl, GamepadSignals, metaclass=_Meta):
         super().__init__(parent)
         self._stack = InputFocusStack()   # who receives navigation events (LIFO)
         self._recall = RecallTrigger(on_recall=self._btn_mode_hop.emit)
+        self._repeat = DirectionRepeat()  # auto-fire for a held direction
+
         self._lock = threading.Lock()
         self._app_btn_mode_trigger: str               = Trigger.CLICK
         self._device: InputDevice | None              = None
@@ -182,6 +185,24 @@ class GamepadWatcher(QObject, PadControl, GamepadSignals, metaclass=_Meta):
     def _dispatch(self, event: str) -> None:
         self._stack.dispatch(event)
 
+    def _emit_due_repeats(self) -> None:
+        """Re-emit a held direction when its next auto-repeat is due.
+
+        Only while our UI is in control: when the foreground app owns the pad it
+        provides its own key-repeat, so synthetic repeats would double up.
+        """
+        if not self._stack.suppressed:
+            return
+        direction = self._repeat.due()
+        if direction is not None:
+            self._nav_hop.emit(direction)
+
+    def _repeat_timeout(self, default: float) -> float:
+        """Shorten the blocking read so a pending auto-repeat fires on time."""
+        if not self._stack.suppressed:
+            return default
+        return self._repeat.next_timeout(default)
+
     def _loop(self) -> None:
         device: InputDevice | None = None
         uinput: UInput | None      = None
@@ -200,6 +221,7 @@ class GamepadWatcher(QObject, PadControl, GamepadSignals, metaclass=_Meta):
             if device is None:
                 held.clear()
                 stick["x"] = stick["y"] = None
+                self._repeat.clear()
 
                 if uinput is not None:
                     try:
@@ -265,6 +287,7 @@ class GamepadWatcher(QObject, PadControl, GamepadSignals, metaclass=_Meta):
                         if refresh_now:
                             logger.info("Gamepad refresh — closing %s and rescanning", device.path)
                             self._recall.cancel()
+                            self._repeat.clear()
                             refresh_started_at = time.monotonic()
                             try:
                                 device.close()
@@ -276,9 +299,12 @@ class GamepadWatcher(QObject, PadControl, GamepadSignals, metaclass=_Meta):
                             break
 
                         # Block on the fd but wake periodically so the refresh
-                        # flag is observable. read_loop() would block forever.
-                        r, _, _ = select.select([device.fd], [], [], SELECT_TIMEOUT)
+                        # flag is observable, and sooner when a held direction's
+                        # next auto-repeat is due. read_loop() would block forever.
+                        timeout = self._repeat_timeout(SELECT_TIMEOUT)
+                        r, _, _ = select.select([device.fd], [], [], timeout)
                         if not r:
+                            self._emit_due_repeats()
                             continue
 
                         for ev in device.read():
@@ -321,8 +347,13 @@ class GamepadWatcher(QObject, PadControl, GamepadSignals, metaclass=_Meta):
                                     uinput.write(ev.type, ev.code, ev.value)
                                 self._translate(ev, held, stick, pending)
 
+                        # A held direction repeats even while the analog stick
+                        # streams events (so we never reach the `not r` branch).
+                        self._emit_due_repeats()
+
                 except OSError:
                     self._recall.cancel()
+                    self._repeat.clear()
                     logger.info("Gamepad disconnected")
                     device = None
                     with self._lock:
@@ -360,18 +391,18 @@ class GamepadWatcher(QObject, PadControl, GamepadSignals, metaclass=_Meta):
         # _handle_stick_axis with threshold and hysteresis. The asymmetry is intentional.
         if ev.code == ecodes.ABS_HAT0X:
             if ev.value == -1:
-                stick["x"] = Event.LEFT;  pending.append(Event.LEFT)
+                self._press_direction(stick, "x", Event.LEFT, pending)
             elif ev.value == 1:
-                stick["x"] = Event.RIGHT; pending.append(Event.RIGHT)
+                self._press_direction(stick, "x", Event.RIGHT, pending)
             else:
-                stick["x"] = None
+                self._release_direction(stick, "x")
         elif ev.code == ecodes.ABS_HAT0Y:
             if ev.value == -1:
-                stick["y"] = Event.UP;    pending.append(Event.UP)
+                self._press_direction(stick, "y", Event.UP, pending)
             elif ev.value == 1:
-                stick["y"] = Event.DOWN;  pending.append(Event.DOWN)
+                self._press_direction(stick, "y", Event.DOWN, pending)
             else:
-                stick["y"] = None
+                self._release_direction(stick, "y")
         elif ev.code == ecodes.ABS_X:
             self._handle_stick_axis(ev.value, "x", Event.LEFT, Event.RIGHT, stick, pending)
         elif ev.code == ecodes.ABS_Y:
@@ -387,13 +418,24 @@ class GamepadWatcher(QObject, PadControl, GamepadSignals, metaclass=_Meta):
         pending: list,
     ) -> None:
         if value < -STICK_THRESHOLD and stick[axis] != neg_event:
-            stick[axis] = neg_event
-            pending.append(neg_event)
+            self._press_direction(stick, axis, neg_event, pending)
         elif value > STICK_THRESHOLD and stick[axis] != pos_event:
-            stick[axis] = pos_event
-            pending.append(pos_event)
+            self._press_direction(stick, axis, pos_event, pending)
         elif abs(value) < STICK_RESET:
-            stick[axis] = None
+            self._release_direction(stick, axis)
+
+    def _press_direction(self, stick: dict, axis: str, direction: str, pending: list) -> None:
+        """A direction became active: queue it, track it, and arm auto-repeat."""
+        stick[axis] = direction
+        pending.append(direction)
+        self._repeat.press(direction)
+
+    def _release_direction(self, stick: dict, axis: str) -> None:
+        """The direction held on this axis was released: stop its auto-repeat."""
+        previous = stick[axis]
+        stick[axis] = None
+        if previous is not None:
+            self._repeat.release(previous)
 
     @staticmethod
     def _is_gamepad(device: InputDevice) -> bool:
