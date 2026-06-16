@@ -77,6 +77,7 @@ class PadListener(threading.Thread):
 def main() -> None:
     app = QApplication(sys.argv)
     window = QMainWindow()
+    window.setWindowTitle("YouTube")
 
     profile = QWebEngineProfile("youtube-tv", app)
     profile.setHttpUserAgent(
