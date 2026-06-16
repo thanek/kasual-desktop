@@ -92,26 +92,39 @@ class TestForegroundApp:
 
 
 class TestHudToggleOverApp:
-    def test_offered_before_return_to_desktop_when_available(self):
-        menu = compose_home_menu(AppTarget(index=0, name="Steam"), FakeHud(available=True))
+    def test_offered_before_return_to_desktop_when_game(self):
+        menu = compose_home_menu(
+            AppTarget(index=0, name="Steam"), FakeHud(available=True), foreground_is_game=True,
+        )
         assert [i.action for i in menu.items] == [
             RETURN_TO_APP, CLOSE_APP, TOGGLE_HUD, RETURN_TO_DESKTOP,
         ]
 
     def test_hidden_when_unavailable(self):
-        menu = compose_home_menu(AppTarget(index=0, name="Steam"), FakeHud(available=False))
+        menu = compose_home_menu(
+            AppTarget(index=0, name="Steam"), FakeHud(available=False), foreground_is_game=True,
+        )
+        assert all(i.action != TOGGLE_HUD for i in menu.items)
+
+    def test_hidden_when_not_a_game(self):
+        # Available HUD, but the foreground isn't a game — the toggle stays hidden.
+        menu = compose_home_menu(
+            AppTarget(index=0, name="Browser"), FakeHud(available=True), foreground_is_game=False,
+        )
         assert all(i.action != TOGGLE_HUD for i in menu.items)
 
     def test_reads_disable_while_hud_on(self):
         menu = compose_home_menu(
-            AppTarget(index=0, name="Steam"), FakeHud(available=True, enabled=True),
+            AppTarget(index=0, name="Steam"),
+            FakeHud(available=True, enabled=True), foreground_is_game=True,
         )
         hud_item = next(i for i in menu.items if i.action == TOGGLE_HUD)
         assert hud_item.label == "Disable HUD"
 
     def test_reads_enable_while_hud_off(self):
         menu = compose_home_menu(
-            AppTarget(index=0, name="Steam"), FakeHud(available=True, enabled=False),
+            AppTarget(index=0, name="Steam"),
+            FakeHud(available=True, enabled=False), foreground_is_game=True,
         )
         hud_item = next(i for i in menu.items if i.action == TOGGLE_HUD)
         assert hud_item.label == "Enable HUD"

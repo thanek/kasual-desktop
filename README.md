@@ -8,6 +8,7 @@ Kasual Desktop is an interactive, graphical "launcher/desktop" interface, design
 - **Dynamic Launcher**: Manage applications with simple `.desktop` files in `~/.config/kasual-desktop/apps/`.
 - **Overlay System**: Advanced support for system overlays (e.g., notifications, menus) that run on top of application windows.
 - **System Integration**: Support for window management (KWin/Wayland) and integration with system notification services.
+- **In-Game HUD Toggle**: Show or hide the [MangoHud](https://github.com/flightlessmango/MangoHud) performance overlay for games, straight from the controller menu (see [In-Game HUD](#-in-game-hud-mangohud)).
 - **Advanced Audio System**: Support for system sounds and audio feedback.
 - **Seamless KDE Integration**: Optimized for use within the KDE Plasma ecosystem.
 
@@ -132,6 +133,7 @@ X-Kasual-Env=MANGOHUD=1;FOO=bar     # extra environment variables (optional)
 | `Name` | Tile label (required) |
 | `Exec` | Command + arguments (required; `%`-field codes are stripped) |
 | `Icon` | Themed icon name, used when `X-Kasual-Icon` is absent |
+| `Categories` | freedesktop categories; include `Game` to mark the tile as a game (enables the [in-game HUD toggle](#-in-game-hud-mangohud)) |
 | `X-Kasual-Icon` | [qtawesome](https://github.com/spyder-ide/qtawesome) glyph name (takes precedence over `Icon`) |
 | `X-Kasual-Color` | Tile background colour (default `#2e3440`) |
 | `X-Kasual-RecallMenuTrigger` | `BTN_MODE_CLICK` (default) or `BTN_MODE_HOLD_1S` |
@@ -145,6 +147,53 @@ X-Kasual-Env=MANGOHUD=1;FOO=bar     # extra environment variables (optional)
 > cloned repo, so `Exec` must be an **absolute** path (e.g.
 > `/home/you/kasual/apps/yt/yt.sh`) — relative paths do not resolve from
 > `~/.config`. See `examples/apps/youtube.desktop` and `files.desktop`.
+
+## 🎚️ In-Game HUD (MangoHud)
+
+Over a running **game**, the Home Overlay (opened with `BTN_MODE`) offers an
+**Enable HUD / Disable HUD** entry that shows or hides the
+[MangoHud](https://github.com/flightlessmango/MangoHud) performance overlay. The
+label always reflects the current state, so you know whether a press will turn
+it on or off.
+
+### Requirements
+
+- **MangoHud installed** — the Vulkan/OpenGL overlay (v0.8.x recommended). The
+  apt package is often too old; building from source may be necessary.
+- **A MangoHud config file at `~/.config/MangoHud/MangoHud.conf`.** Its presence
+  gates the whole feature — with no file, the toggle never appears (an empty
+  file is enough). This is the file Kasual edits to show/hide the HUD.
+- **MangoHud actually injected into your games**, via any of:
+  - a global `MANGOHUD=1` in your environment (covers Vulkan games),
+  - `mangohud %command%` in a game's **Steam** launch options,
+  - the **Heroic**/**Lutris** "MangoHud" wrapper toggle,
+  - or per-tile `X-Kasual-Env=MANGOHUD=1` in the app's `.desktop`.
+
+  Note: `MANGOHUD=1` alone only injects into **Vulkan** apps; OpenGL games need
+  the `mangohud` wrapper (`LD_PRELOAD`).
+
+### When the toggle appears
+
+Only over a **game** — never on the bare desktop or over ordinary apps. A
+foreground counts as a game when either:
+
+- its process descends from a known launcher/runtime — **Steam, Heroic, Lutris,
+  Gamescope, Wine/Proton, Bottles** — so games launched through them are
+  detected automatically; or
+- its tile's `.desktop` declares **`Categories=Game`** — use this for standalone
+  game tiles that are *not* started through one of those launchers.
+
+### How toggling works
+
+The toggle comments/uncomments the `no_display` line in
+`~/.config/MangoHud/MangoHud.conf`. MangoHud watches this file (via `inotify`)
+and reloads it on every change, so the HUD appears or disappears **immediately**
+— on already-running games as well as newly-launched ones.
+
+> **Caveat:** a per-game **FPS limit set in Steam** injects
+> `MANGOHUD_CONFIG=...,no_display=1`. MangoHud re-applies `MANGOHUD_CONFIG` on
+> each reload (it takes precedence over the file), so that override re-wins and
+> can keep the HUD hidden regardless of this toggle.
 
 ## 📜 License
 

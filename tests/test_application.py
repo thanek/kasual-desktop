@@ -117,6 +117,9 @@ class FakeDesktop:
     def foreground_pid(self):
         return self._foreground
 
+    def foreground_is_game(self):
+        return getattr(self, "_is_game", False)
+
     def show_confirm(self, question, on_confirmed, on_cancelled=None):
         on_confirmed()
 

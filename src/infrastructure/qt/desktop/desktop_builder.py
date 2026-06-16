@@ -36,6 +36,8 @@ from domain.system.runner import ActionRunner
 from domain.system.volume import VolumeControl
 from domain.system.brightness import BrightnessControl
 
+from infrastructure.system.proc import parent_pid, process_name
+
 from .deferred_hide import DeferredHide
 from .desktop import Desktop
 
@@ -101,6 +103,8 @@ def build_desktop(
         scheduler=scheduler,
         feedback=feedback,
         prompts=LocalizedPrompts(),
+        parent_of=parent_pid,
+        process_name_of=process_name,
     )
     # Coordinates show/pause/resume of the Desktop surface (the widget = view).
     desktop_coordinator = DesktopCoordinator(

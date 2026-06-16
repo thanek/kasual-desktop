@@ -78,7 +78,7 @@ def _app(command="prog", trigger=Trigger.CLICK):
     return App(name="App", command=command, recall_menu_trigger=trigger)
 
 
-def _make(apps=None, visible=False):
+def _make(apps=None, visible=False, parent_of=None, process_name_of=None):
     view = FakeView(visible=visible)
     gamepad = MagicMock()
     gamepad.top_handler.return_value = None
@@ -109,6 +109,8 @@ def _make(apps=None, visible=False):
         scheduler=scheduler,
         feedback=feedback,
         prompts=prompts,
+        parent_of=parent_of if parent_of is not None else (lambda _p: None),
+        process_name_of=process_name_of if process_name_of is not None else (lambda _p: None),
     )
     return SimpleNamespace(
         lc=lc, view=view, gamepad=gamepad, wm=wm, am=app_manager,
@@ -146,7 +148,7 @@ class TestCurrentApp:
         ]
         result = c.lc.current_app()
         assert result == WindowTarget(
-            window_id="g1", name="Witcher 3", trigger=Trigger.HOLD_1S
+            window_id="g1", name="Witcher 3", trigger=Trigger.HOLD_1S, pid=200
         )
 
     def test_own_window_active_keeps_app_target(self):
@@ -437,3 +439,65 @@ class TestRequestCloseApp:
         _, _, on_cancelled = c.view.confirm
         on_cancelled()
         assert c.view.hidden == 1          # restore_app hides the desktop again
+
+
+# ── foreground_is_game (gates the in-game HUD toggle) ────────────────────────
+
+def _game_app():
+    return App(name="Game", command="game", categories=("Game",))
+
+
+class TestForegroundIsGame:
+    def test_idle_is_not_a_game(self):
+        assert _make().lc.foreground_is_game() is False
+
+    def test_category_game_tile_qualifies(self):
+        # No spawned window → falls back to the tile's Categories=Game (signal C).
+        c = _make(apps=[_game_app()])
+        c.fg.set(AppTarget(index=0, name="Game", is_game=True))
+        c.wm.cached_windows.return_value = []
+        assert c.lc.foreground_is_game() is True
+
+    def test_plain_app_tile_does_not_qualify(self):
+        c = _make(apps=[_app()])
+        c.fg.set(AppTarget(index=0, name="App"))
+        c.wm.cached_windows.return_value = []
+        assert c.lc.foreground_is_game() is False
+
+    def test_steam_spawned_game_window_qualifies(self):
+        # Steam tile in front, game running in its own unmanaged window whose
+        # process descends from a launcher (signal B).
+        c = _make(
+            apps=[_app(command="steam")],
+            process_name_of={500: "reaper"}.get,
+            parent_of={500: 1}.get,
+        )
+        c.fg.set(AppTarget(index=0, name="Steam"))
+        c.wm.cached_windows.return_value = [
+            Window(id="g1", title="KCD", pid=500, active=True, resource_class="kcd"),
+        ]
+        assert c.lc.foreground_is_game() is True
+
+    def test_steam_ui_without_game_does_not_qualify(self):
+        # Steam's own window active (no spawned game) → launcher UI, not a game.
+        c = _make(
+            apps=[_app(command="steam")],
+            process_name_of={100: "steam"}.get,
+            parent_of={100: 1}.get,
+        )
+        c.fg.set(AppTarget(index=0, name="Steam"))
+        c.wm.cached_windows.return_value = [
+            Window(id="s1", title="Steam", pid=100, active=True, resource_class="steam"),
+        ]
+        assert c.lc.foreground_is_game() is False
+
+    def test_external_window_target_under_launcher_qualifies(self):
+        # A directly-activated external game-window tile, classified by its pid.
+        c = _make(process_name_of={500: "steam"}.get, parent_of={500: 1}.get)
+        c.fg.set(WindowTarget(window_id="g1", name="KCD", pid=500))
+        assert c.lc.foreground_is_game() is True
+
+    def test_external_window_target_not_a_game(self):
+        c = _make(process_name_of={500: "firefox"}.get, parent_of={500: 1}.get)
+        c.fg.set(WindowTarget(window_id="w1", name="Firefox", pid=500))
+        assert c.lc.foreground_is_game() is False

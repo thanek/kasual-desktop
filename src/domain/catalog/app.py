@@ -38,12 +38,20 @@ class App:
     recall_menu_trigger:  str               = Trigger.CLICK
     launch_hide_grace_ms: int               = 0
     env:                  Mapping[str, str] = field(default_factory=dict)
+    categories:           tuple[str, ...]   = ()      # freedesktop Categories
 
     @property
     def command_basename(self) -> str:
         """Lowercased basename of the command — used to match KWin windows
         (resourceClass / desktopFile) back to this app."""
         return os.path.basename(self.command).lower()
+
+    @property
+    def is_game(self) -> bool:
+        """True for a game tile — carries the standard freedesktop ``Game``
+        category. Gates the in-game HUD toggle for the tile's own window even
+        before the MangoHud layer is detected (see :mod:`domain.system.hud`)."""
+        return "Game" in self.categories
 
     @classmethod
     def from_desktop_entry(cls, entry: Mapping[str, str]) -> "tuple[int, App] | None":
@@ -86,6 +94,7 @@ class App:
                                 or Trigger.CLICK,
             launch_hide_grace_ms=_parse_int(entry.get("X-Kasual-HideGraceMs"), 0),
             env=_parse_env(entry.get("X-Kasual-Env")),
+            categories=_parse_categories(entry.get("Categories")),
         )
         order = _parse_int(entry.get("X-Kasual-Order"), ORDER_DEFAULT)
         return order, app
@@ -125,6 +134,14 @@ def _parse_env(raw: str | None) -> dict:
         if key:
             env[key] = value
     return env
+
+
+def _parse_categories(raw: str | None) -> tuple[str, ...]:
+    """Parse a freedesktop ``Categories`` value (``Game;ActionGame;``) into a
+    tuple, dropping the empty trailing field the spec's semicolons leave behind."""
+    if not raw:
+        return ()
+    return tuple(part for part in (p.strip() for p in raw.split(";")) if part)
 
 
 def _parse_int(raw: str | None, default: int) -> int:

@@ -25,6 +25,8 @@ class TestDefaults:
         assert app.recall_menu_trigger == "BTN_MODE_CLICK"
         assert app.launch_hide_grace_ms == 0
         assert app.env == {}
+        assert app.categories == ()
+        assert app.is_game is False
 
     def test_is_immutable(self):
         import dataclasses
@@ -88,6 +90,7 @@ class TestFromDesktopEntry:
             "X-Kasual-HideGraceMs": "500",
             "X-Kasual-Env": "MANGOHUD=1",
             "X-Kasual-Order": "10",
+            "Categories": "Game;ActionGame;",
         })
         assert order == 10
         assert app.name == "Steam"
@@ -98,6 +101,8 @@ class TestFromDesktopEntry:
         assert app.recall_menu_trigger == "BTN_MODE_HOLD_1S"
         assert app.launch_hide_grace_ms == 500
         assert app.env == {"MANGOHUD": "1"}
+        assert app.categories == ("Game", "ActionGame")
+        assert app.is_game is True
 
     def test_defaults_and_order_default(self):
         order, app = App.from_desktop_entry(
@@ -110,6 +115,8 @@ class TestFromDesktopEntry:
         assert app.recall_menu_trigger == "BTN_MODE_CLICK"
         assert app.launch_hide_grace_ms == 0
         assert app.env == {}
+        assert app.categories == ()
+        assert app.is_game is False
 
     def test_icon_theme_used_without_kasual_icon(self):
         _, app = App.from_desktop_entry(

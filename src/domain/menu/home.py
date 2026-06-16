@@ -35,19 +35,23 @@ def _return_to_desktop_item() -> MenuItem:
     return MenuItem(translate("Kasual Desktop", "Return to Desktop"), RETURN_TO_DESKTOP, "fa5s.home")
 
 
-def compose_home_menu(foreground: Target | None, hud: HudControl) -> HomeMenu:
+def compose_home_menu(
+    foreground: Target | None, hud: HudControl, foreground_is_game: bool = False
+) -> HomeMenu:
     """Compose the Home Overlay menu for the current foreground target.
 
     Over a running app the HUD toggle is offered too — but only when ``hud``
-    reports a HUD is configured (see :func:`domain.system.hud.hud_menu_item`); on
-    the bare Desktop it never appears."""
+    reports a HUD is configured *and* ``foreground_is_game`` (a launcher-spawned
+    game window or a ``Categories=Game`` tile); see
+    :func:`domain.system.hud.hud_menu_item`. On the bare Desktop it never
+    appears."""
     if foreground is None:
         return HomeMenu(
             items=[_return_to_desktop_item(), *system_action_items()],
             cancel_restores=None,
         )
     name = truncate(foreground.name, 22)
-    hud_item = hud_menu_item(hud)
+    hud_item = hud_menu_item(hud, foreground_is_game)
     return HomeMenu(
         items=[
             MenuItem(

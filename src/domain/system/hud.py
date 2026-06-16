@@ -8,8 +8,11 @@ sits behind the :class:`HudControl` port, implemented in
 stay a pure, Qt-free, filesystem-free domain citizen.
 
 The toggle is offered only over a running app (the Home Overlay's "game mode"
-branch) and only where a HUD is actually configured; see
-:func:`domain.menu.home.compose_home_menu`.
+branch), only where a HUD is actually configured, and only where the foreground
+is a *game* — ``foreground_is_game`` decided upstream (process descends from a
+known launcher, or a ``Categories=Game`` tile); see
+:func:`domain.menu.home.compose_home_menu` and
+:meth:`domain.lifecycle.app_lifecycle.AppLifecycle.foreground_is_game`.
 """
 
 from __future__ import annotations
@@ -34,12 +37,15 @@ class HudControl(Protocol):
     def disable(self) -> None: ...
 
 
-def hud_menu_item(hud: HudControl) -> MenuItem | None:
-    """The HUD toggle as a menu item, or ``None`` when the feature is unavailable.
+def hud_menu_item(hud: HudControl, foreground_is_game: bool) -> MenuItem | None:
+    """The HUD toggle as a menu item, or ``None`` when it should not be offered.
 
-    Reads as "Disable HUD" while the HUD is on and "Enable HUD" while it is off,
-    so the label always names what a press will do."""
+    Offered only when the HUD is configured *and* the foreground is a game. Reads
+    as "Disable HUD" while the HUD is on and "Enable HUD" while it is off, so the
+    label always names what a press will do."""
     if not hud.is_available():
+        return None
+    if not foreground_is_game:
         return None
     if hud.is_enabled():
         return MenuItem(translate("Kasual Desktop", "Disable HUD"), TOGGLE_HUD, "fa5s.eye-slash")

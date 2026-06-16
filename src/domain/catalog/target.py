@@ -14,10 +14,15 @@ from ..input.vocabulary import Trigger
 
 @dataclass(frozen=True)
 class AppTarget:
-    """A configured app tile, identified by its index in the app list."""
+    """A configured app tile, identified by its index in the app list.
 
-    index: int
-    name:  str
+    ``is_game`` carries the tile's ``Categories=Game`` flag so the Home Overlay
+    can offer the HUD toggle for a game tile's own window (see
+    :mod:`domain.system.hud`)."""
+
+    index:   int
+    name:    str
+    is_game: bool = False
 
 
 @dataclass(frozen=True)
@@ -25,12 +30,15 @@ class WindowTarget:
     """An externally-launched window tile, identified by its KWin window id.
 
     Carries the recall trigger inherited from the owning app (e.g. a game
-    launched by Steam inherits Steam's BTN_MODE_HOLD_1S).
+    launched by Steam inherits Steam's BTN_MODE_HOLD_1S) and the owning OS pid,
+    used to classify the window as a game by process ancestry (see
+    :func:`domain.catalog.window_rules.descends_from_launcher`).
     """
 
     window_id: str
     name:      str
     trigger:   str = Trigger.CLICK
+    pid:       int = 0
 
 
 # A foreground target is either a configured app or an external window.
@@ -51,9 +59,12 @@ def target_at_index(
     it inherits (``trigger_for`` resolves a window's pid to its trigger — the
     parent-chain walk and /proc read behind it stay in infrastructure)."""
     if index < len(apps):
-        return AppTarget(index=index, name=apps[index].name)
+        return AppTarget(index=index, name=apps[index].name, is_game=apps[index].is_game)
     win_idx = index - len(apps)
     window = windows[win_idx] if win_idx < len(windows) else None
     if window is None:
         return None
-    return WindowTarget(window_id=window.id, name=window.title, trigger=trigger_for(window.pid))
+    return WindowTarget(
+        window_id=window.id, name=window.title,
+        trigger=trigger_for(window.pid), pid=window.pid,
+    )

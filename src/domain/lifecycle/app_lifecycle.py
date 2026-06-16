@@ -19,7 +19,7 @@ import logging
 from collections.abc import Callable
 
 from domain.catalog.catalog import AppCatalog
-from domain.catalog.window_rules import active_unmanaged_window
+from domain.catalog.window_rules import active_unmanaged_window, descends_from_launcher
 from domain.input.vocabulary import Trigger
 from domain.shell.foreground import ForegroundState
 from domain.catalog.target import AppTarget, Target, WindowTarget
@@ -61,6 +61,8 @@ class AppLifecycle(AppControl):
         scheduler: Scheduler,
         feedback: Feedback,
         prompts: Prompts,
+        parent_of: Callable[[int], int | None] = lambda _pid: None,
+        process_name_of: Callable[[int], str | None] = lambda _pid: None,
     ):
         self._view          = view
         self._gamepad       = gamepad
@@ -74,6 +76,10 @@ class AppLifecycle(AppControl):
         self._scheduler     = scheduler
         self._feedback      = feedback
         self._prompts       = prompts
+        # /proc readers for the game-detection ancestry walk (foreground_is_game);
+        # injected so the coordinator stays Qt-free and filesystem-free.
+        self._parent_of        = parent_of
+        self._process_name_of  = process_name_of
 
     # ── AppControl queries (driven by the Application controller) ────────────
 
@@ -106,7 +112,7 @@ class AppLifecycle(AppControl):
         )
         return WindowTarget(
             window_id=window.id, name=window.title,
-            trigger=app.recall_menu_trigger,
+            trigger=app.recall_menu_trigger, pid=window.pid,
         )
 
     def foreground_pid(self) -> int | None:
@@ -115,6 +121,27 @@ class AppLifecycle(AppControl):
         if isinstance(target, AppTarget):
             return self._app_manager.running_pid(target.index)
         return None
+
+    def foreground_is_game(self) -> bool:
+        """Whether the foreground is a game — gating the in-game HUD toggle.
+
+        A game is either a launcher-spawned window whose process descends from a
+        known launcher (Steam/Heroic/Lutris/…; the active unmanaged window, or a
+        directly-activated external-window tile), or a configured tile carrying
+        ``Categories=Game``. The launcher's own UI (e.g. Steam) is an ``AppTarget``
+        without that category, so it correctly does not qualify."""
+        target = self._foreground.current
+        if isinstance(target, WindowTarget):
+            return bool(target.pid) and self._descends_from_launcher(target.pid)
+        if isinstance(target, AppTarget):
+            window = active_unmanaged_window(self._wm.cached_windows(), self._apps)
+            if window is not None and window.pid:
+                return self._descends_from_launcher(window.pid)
+            return self._apps[target.index].is_game
+        return False
+
+    def _descends_from_launcher(self, pid: int) -> bool:
+        return descends_from_launcher(pid, self._process_name_of, self._parent_of)
 
     # ── Launch / restore ────────────────────────────────────────────────────
 
