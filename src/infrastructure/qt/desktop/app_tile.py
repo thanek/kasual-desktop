@@ -1,8 +1,9 @@
 """Single application tile displayed on the desktop tile bar."""
 
 import qtawesome as qta
-from PyQt6.QtCore import (Qt, QSize, QPoint,
-                          QPropertyAnimation, QSequentialAnimationGroup, QPauseAnimation,
+from PyQt6.QtCore import (Qt, QSize, QPoint, QEasingCurve,
+                          QPropertyAnimation, QVariantAnimation,
+                          QSequentialAnimationGroup, QPauseAnimation,
                           pyqtSignal)
 from PyQt6.QtGui import QCursor, QFont, QFontMetrics
 from PyQt6.QtWidgets import QWidget, QToolButton, QLabel
@@ -21,6 +22,8 @@ BAR_MARGIN    = 12
 
 MARQUEE_MS_PER_PX = 30    # scroll speed
 MARQUEE_PAUSE_MS  = 900   # hold at each end before reversing
+
+SCALE_ANIM_MS = 160       # grow/shrink when (de)selected
 
 # Centering offset of the normal button within the always-fixed TILE_SEL_* slot.
 # When selected the button fills the slot (offset 0,0); when not selected it sits
@@ -55,6 +58,12 @@ class AppTile(QWidget):
 
         self._full_name   = full_name if full_name is not None else name
         self._is_selected = False
+        # Fraction (0=normal, 1=selected) of the grow/shrink animation. Driving a
+        # single scalar lets one animation interpolate button size and icon size
+        # together so the highlighted tile swells and the unhighlighted one
+        # settles back smoothly instead of snapping.
+        self._scale_t    = 0.0
+        self._scale_anim: QVariantAnimation | None          = None
         self._marquee_seq: QSequentialAnimationGroup | None = None
         self._marquee_clip = QWidget(self)
         self._marquee_clip.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
@@ -107,18 +116,19 @@ class AppTile(QWidget):
             return
         self._is_selected = selected
         if selected:
-            self._refit(TILE_SEL_W, TILE_SEL_H, ICON_SIZE_SEL)
             self._btn.setStyleSheet(styles.tile_selected())
             self._apply_shadow(selected=True)
-            self._start_marquee()
+            # Marquee waits for the grow to finish so the scrolling title is laid
+            # out against the tile's final (selected) size, not a mid-animation one.
+            self._animate_scale(to_selected=True)
         else:
             if self._marquee_seq is not None:
                 self._marquee_seq.stop()
                 self._marquee_seq = None
             self._marquee_clip.hide()
-            self._refit(TILE_W, TILE_H, ICON_SIZE)
             self._btn.setStyleSheet(styles.tile_normal(self._color))
             self._apply_shadow(selected=False)
+            self._animate_scale(to_selected=False)
 
     def set_running(self, running: bool) -> None:
         if not running:
@@ -155,6 +165,29 @@ class AppTile(QWidget):
         self._status_bar.setFixedSize(bar_w, BAR_H)
         self._status_bar.move(ox + (w - bar_w) // 2, oy + h - BAR_H - BAR_MARGIN)
 
+    def _animate_scale(self, to_selected: bool) -> None:
+        """Interpolate the button/icon size between normal and selected."""
+        target = 1.0 if to_selected else 0.0
+        if self._scale_anim is not None:
+            self._scale_anim.stop()
+        anim = QVariantAnimation(self)
+        anim.setStartValue(self._scale_t)
+        anim.setEndValue(target)
+        anim.setDuration(SCALE_ANIM_MS)
+        anim.setEasingCurve(QEasingCurve.Type.OutCubic)
+        anim.valueChanged.connect(self._apply_scale)
+        if to_selected:
+            anim.finished.connect(self._start_marquee)
+        anim.start()
+        self._scale_anim = anim
+
+    def _apply_scale(self, t) -> None:
+        self._scale_t = float(t)
+        w    = round(TILE_W    + (TILE_SEL_W    - TILE_W)    * self._scale_t)
+        h    = round(TILE_H    + (TILE_SEL_H    - TILE_H)    * self._scale_t)
+        icon = round(ICON_SIZE + (ICON_SIZE_SEL - ICON_SIZE) * self._scale_t)
+        self._refit(w, h, icon)
+
     def _show_status_bar(self, color: str) -> None:
         self._status_bar.setStyleSheet(
             f"background-color: {color}; border-radius: {BAR_H // 2}px; border: 1px solid #0b140e;"
@@ -163,6 +196,10 @@ class AppTile(QWidget):
         self._status_bar.show()
 
     def _start_marquee(self) -> None:
+        # Reached from the grow animation's `finished`; a deselect mid-grow stops
+        # that animation, so bail unless the tile is still the selected one.
+        if not self._is_selected:
+            return
         clip_x = 4
         clip_y = 12 + ICON_SIZE_SEL + 4
         clip_w = TILE_SEL_W - 8

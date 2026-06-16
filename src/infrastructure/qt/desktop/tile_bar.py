@@ -5,7 +5,7 @@ import os
 from collections.abc import Sequence
 from typing import _ProtocolMeta  # type: ignore[attr-defined]
 
-from PyQt6.QtCore import Qt, QPoint, QTimer, pyqtSignal
+from PyQt6.QtCore import Qt, QPoint, QTimer, QEasingCurve, QPropertyAnimation, pyqtSignal
 from PyQt6.QtGui import QCursor, QIcon
 from PyQt6.QtWidgets import QWidget, QHBoxLayout, QScrollArea, QApplication
 
@@ -27,6 +27,7 @@ class _Meta(type(QScrollArea), _ProtocolMeta):
     """Combined metaclass so a QWidget can declare it implements a Protocol port."""
 
 _DYN_TILE_MAX_TITLE = 22   # Maximum length of a dynamic tile title
+_SCROLL_ANIM_MS     = 220  # glide duration when centering the focused tile
 
 
 def _get_ppid(pid: int) -> int | None:
@@ -67,6 +68,7 @@ class TileBar(QScrollArea, TileBarView, TileFocusView, metaclass=_Meta):
 
         self._tile_index = 0
         self._focused    = True   # tiles own focus at startup
+        self._scroll_anim: QPropertyAnimation | None = None
         # Hover suppression armed when the Desktop (re)appears, so a tile sitting
         # under a stationary cursor doesn't grab selection via the synthetic
         # enterEvent Qt delivers when the window maps under the pointer.
@@ -188,7 +190,20 @@ class TileBar(QScrollArea, TileBarView, TileFocusView, metaclass=_Meta):
         vp_w = self.viewport().width()
         # tile.x() is relative to the container; center it in the viewport.
         target = tile.x() + tile.width() // 2 - vp_w // 2
-        self.horizontalScrollBar().setValue(max(0, target))
+        self._animate_scroll_to(max(0, target))
+
+    def _animate_scroll_to(self, target: int) -> None:
+        """Glide the horizontal scrollbar to *target* instead of jumping."""
+        bar = self.horizontalScrollBar()
+        if self._scroll_anim is not None:
+            self._scroll_anim.stop()
+        anim = QPropertyAnimation(bar, b"value", self)
+        anim.setStartValue(bar.value())
+        anim.setEndValue(target)
+        anim.setDuration(_SCROLL_ANIM_MS)
+        anim.setEasingCurve(QEasingCurve.Type.OutCubic)
+        anim.start()
+        self._scroll_anim = anim
 
     def set_static_closing(self, idx: int) -> None:
         self._tiles[idx].set_closing()
