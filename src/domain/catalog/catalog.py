@@ -16,6 +16,36 @@ from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, replace
 
 from domain.catalog.app import App
+from domain.input.vocabulary import Trigger
+
+
+def _inherit_steam_recall_trigger(apps: list[App]) -> list[App]:
+    """Give each Steam game tile the Steam launcher tile's recall trigger, unless
+    it set one of its own.
+
+    Steam game tiles (``steam steam://rungameid/<id>``) are launched through the
+    Steam client tile (``steam.desktop``), so BTN_MODE should behave the same
+    over a game as over Steam itself — e.g. its ``X-Kasual-RecallMenuTrigger=
+    BTN_MODE_HOLD_1S`` hold-to-recall. A game keeps its own trigger when it
+    declares one; "no setting" is the default :data:`Trigger.CLICK` (the same
+    sentinel ``App.to_desktop_entry`` omits when serialising), so a game left at
+    the default inherits, and one explicitly configured does not.
+
+    Pure: the inheritance lives only in the in-memory catalog and is never
+    written back to the game's ``.desktop`` file.
+    """
+    launcher = next(
+        (a for a in apps if a.command_basename == "steam" and a.steam_app_id is None),
+        None,
+    )
+    if launcher is None or launcher.recall_menu_trigger == Trigger.CLICK:
+        return apps
+    return [
+        replace(app, recall_menu_trigger=launcher.recall_menu_trigger)
+        if app.steam_app_id is not None and app.recall_menu_trigger == Trigger.CLICK
+        else app
+        for app in apps
+    ]
 
 
 @dataclass(frozen=True)
@@ -32,7 +62,8 @@ class AppCatalog(Sequence[App]):
         broken by ``source`` so the result is stable and predictable.
         """
         ordered = sorted(entries, key=lambda e: (e[0], e[1]))
-        return cls(tuple(app for _, _, app in ordered))
+        apps = _inherit_steam_recall_trigger([app for _, _, app in ordered])
+        return cls(tuple(apps))
 
     def swapped(self, i: int, j: int) -> "AppCatalog":
         """Return a new catalog with the apps at positions *i* and *j* exchanged.

@@ -18,8 +18,11 @@ from __future__ import annotations
 import logging
 from collections.abc import Callable
 
+from domain.catalog.app import App
 from domain.catalog.catalog import AppCatalog
-from domain.catalog.window_rules import active_unmanaged_window, descends_from_launcher
+from domain.catalog.window_rules import (
+    active_unmanaged_window, descends_from_launcher, is_app_running,
+)
 from domain.input.vocabulary import Trigger
 from domain.shell.foreground import ForegroundState
 from domain.catalog.target import AppTarget, Target, WindowTarget
@@ -145,6 +148,15 @@ class AppLifecycle(AppControl):
 
     # ── Launch / restore ────────────────────────────────────────────────────
 
+    def _is_running(self, idx: int) -> bool:
+        """Window-aware running check, matching the tile Popover's launch/restore
+        label (both go through :func:`is_app_running`). So a Steam game whose
+        forwarder process has exited — but whose window is still up — restores
+        rather than relaunching, and never depends on the shared Steam process."""
+        return is_app_running(
+            idx, self._apps, self._wm.cached_windows(), self._app_manager.is_running
+        )
+
     def on_tile_activated(self, target: Target) -> None:
         """A tile (static app or open window) was chosen via gamepad, click or
         the tile Popover."""
@@ -160,7 +172,7 @@ class AppLifecycle(AppControl):
             return
 
         idx = target.index
-        if self._app_manager.is_running(idx):
+        if self._is_running(idx):
             logger.info("Restoring application %d", idx)
             self.restore_app(target)
         else:
@@ -197,14 +209,40 @@ class AppLifecycle(AppControl):
         self._feedback.play(Cue.SELECT)
         if isinstance(target, AppTarget):
             idx = target.index
-            trigger = self._apps[idx].recall_menu_trigger
-            self._gamepad.set_app_btn_mode_trigger(trigger)
-            self.arrange_windows(self._app_manager.running_pid(idx))
+            app = self._apps[idx]
+            self._gamepad.set_app_btn_mode_trigger(app.recall_menu_trigger)
+            self._raise_app(idx, app)
         else:
             self._gamepad.set_app_btn_mode_trigger(target.trigger)
             self._wm.activate_window(target.window_id)
         self._gamepad.pop_handler(self._pad_handler)
         self._view.hide_view()
+
+    def _raise_app(self, idx: int, app: App) -> None:
+        """Bring app *idx* to the front, minimizing the other running apps.
+
+        Ordinary apps are raised by their tracked process pid. A Steam game,
+        though, runs in its own ``steam_app_<id>`` window while the tracked
+        process is the shared Steam client — activating that process surfaces
+        Steam, not the game (and minimizing it by pid-subtree would sweep the
+        game window down with it). So a game is raised by its window identity,
+        and the Steam process tree is left out of the minimize set.
+        """
+        if app.steam_app_id is None:
+            self.arrange_windows(self._app_manager.running_pid(idx))
+            return
+        own_windows = [w.id for w in self._wm.cached_windows() if w.matches_app(app)]
+        if not own_windows:
+            # Window not mapped yet (game still loading) — fall back to the
+            # process so something sensible (the Steam client) comes forward.
+            self.arrange_windows(self._app_manager.running_pid(idx))
+            return
+        for win_id in own_windows:
+            self._wm.activate_window(win_id)
+        others = set(self._app_manager.all_running_pids())
+        others.discard(self._app_manager.running_pid(idx))
+        if others:
+            self._wm.minimize_windows_for_pids(others)
 
     def arrange_windows(self, activate_pid: int | None = None) -> None:
         """Activate windows for activate_pid and minimize all other running apps."""
@@ -229,8 +267,14 @@ class AppLifecycle(AppControl):
             self.restore_desktop_view()
             if isinstance(target, AppTarget):
                 idx = target.index
+                app = self._apps[idx]
                 self._tilebar.set_static_closing(idx)
-                if self._app_manager.is_running(idx):
+                if app.steam_app_id is not None:
+                    # The tracked process is the shared Steam client, not the
+                    # game — terminating it would quit all of Steam. Close the
+                    # game's own steam_app_<id> window instead.
+                    self._close_app_windows(idx)
+                elif self._app_manager.is_running(idx):
                     self._app_manager.terminate(idx)
                 else:
                     # App was launched via a forwarder (e.g. `steam steam://...`)
@@ -265,7 +309,7 @@ class AppLifecycle(AppControl):
         """
         app = self._apps[idx]
         matched = [w.id for w in self._wm.cached_windows() if w.matches_app(app)]
-        logger.info("Closing app %d via windows %s (cmd=%s)", idx, matched, app.command_basename)
+        logger.info("Closing app %d via windows %s (keys=%s)", idx, matched, app.window_match_keys)
         for win_id in matched:
             self._wm.close_window(win_id)
         self._scheduler.call_later(1500, self._wm.refresh_now)

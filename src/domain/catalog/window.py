@@ -25,9 +25,11 @@ class Window:
     def matches_app(self, app: App) -> bool:
         """True if this window belongs to *app* by identity, via either key:
         the resourceClass or the desktopFile basename matched against the app's
-        command basename. Two keys because each handles cases the other misses
-        (e.g. Steam self-relaunching loses one but keeps the other)."""
-        cmd = app.command_basename
-        rc  = self.resource_class.lower()
-        df  = os.path.splitext(self.desktop_file.lower())[0]
-        return rc == cmd or df == cmd
+        identity keys. Two window keys because each handles cases the other misses
+        (e.g. Steam self-relaunching loses one but keeps the other); the app side
+        is usually its command basename but a Steam game tile narrows it to its
+        own ``steam_app_<id>`` so games don't all share the ``steam`` identity."""
+        keys = app.window_match_keys
+        rc   = self.resource_class.lower()
+        df   = os.path.splitext(self.desktop_file.lower())[0]
+        return rc in keys or df in keys

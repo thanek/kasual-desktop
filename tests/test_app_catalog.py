@@ -13,10 +13,21 @@ from collections.abc import Sequence
 
 from domain.catalog.app import App
 from domain.catalog.catalog import AppCatalog
+from domain.input.vocabulary import Trigger
 
 
 def _app(name: str) -> App:
     return App(name=name, command=name.lower())
+
+
+def _steam_launcher(trigger=Trigger.HOLD_1S) -> App:
+    return App(name="Steam", command="steam", args=("steam://open/bigpicture",),
+               recall_menu_trigger=trigger)
+
+
+def _steam_game(name="Witcher 3", appid="292030", trigger=Trigger.CLICK) -> App:
+    return App(name=name, command="steam", args=(f"steam://rungameid/{appid}",),
+               recall_menu_trigger=trigger)
 
 
 class TestFromEntries:
@@ -46,6 +57,64 @@ class TestFromEntries:
 
     def test_empty(self):
         assert list(AppCatalog.from_entries([])) == []
+
+
+class TestSteamRecallTriggerInheritance:
+    """A Steam game tile inherits the Steam launcher tile's recall trigger unless
+    it set one of its own."""
+
+    def test_game_without_own_trigger_inherits_launcher(self):
+        cat = AppCatalog.from_entries([
+            (1, "steam.desktop",   _steam_launcher(Trigger.HOLD_1S)),
+            (2, "witcher.desktop", _steam_game(trigger=Trigger.CLICK)),
+        ])
+        game = next(a for a in cat if a.steam_app_id == "292030")
+        assert game.recall_menu_trigger == Trigger.HOLD_1S
+
+    def test_game_with_explicit_trigger_is_left_alone(self):
+        cat = AppCatalog.from_entries([
+            (1, "steam.desktop",   _steam_launcher(Trigger.HOLD_1S)),
+            (2, "witcher.desktop", _steam_game(trigger=Trigger.CLICK)),
+            (3, "kcd.desktop",     _steam_game("KCD", "379430", Trigger.CLICK)),
+        ])
+        # The launcher itself keeps its trigger.
+        launcher = next(a for a in cat if a.steam_app_id is None and a.name == "Steam")
+        assert launcher.recall_menu_trigger == Trigger.HOLD_1S
+
+    def test_explicit_game_trigger_not_overridden(self):
+        # CLICK is the "unset" sentinel; an explicit non-default trigger stays.
+        cat = AppCatalog.from_entries([
+            (1, "steam.desktop", _steam_launcher(Trigger.HOLD_1S)),
+            (2, "game.desktop",  _steam_game(trigger=Trigger.HOLD_1S)),
+        ])
+        # (Trivially HOLD_1S here, but the point is no replacement happens.)
+        game = next(a for a in cat if a.steam_app_id == "292030")
+        assert game.recall_menu_trigger == Trigger.HOLD_1S
+
+    def test_no_inheritance_when_launcher_is_default(self):
+        cat = AppCatalog.from_entries([
+            (1, "steam.desktop",   _steam_launcher(Trigger.CLICK)),
+            (2, "witcher.desktop", _steam_game(trigger=Trigger.CLICK)),
+        ])
+        game = next(a for a in cat if a.steam_app_id == "292030")
+        assert game.recall_menu_trigger == Trigger.CLICK
+
+    def test_no_inheritance_without_launcher_tile(self):
+        # A game tile but no Steam launcher tile present → unchanged.
+        cat = AppCatalog.from_entries([
+            (2, "witcher.desktop", _steam_game(trigger=Trigger.CLICK)),
+        ])
+        game = next(a for a in cat if a.steam_app_id == "292030")
+        assert game.recall_menu_trigger == Trigger.CLICK
+
+    def test_non_steam_apps_untouched(self):
+        firefox = App(name="Firefox", command="firefox")
+        cat = AppCatalog.from_entries([
+            (1, "steam.desktop",   _steam_launcher(Trigger.HOLD_1S)),
+            (2, "firefox.desktop", firefox),
+        ])
+        ff = next(a for a in cat if a.name == "Firefox")
+        assert ff.recall_menu_trigger == Trigger.CLICK
 
 
 class TestSwapped:

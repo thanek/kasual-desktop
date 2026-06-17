@@ -8,7 +8,7 @@ from domain.catalog.target import AppTarget, WindowTarget, target_at_index
 from domain.catalog.window import Window
 from domain.catalog.window_rules import (
     active_unmanaged_window, app_window_present, descends_from_launcher,
-    external_windows, resolve_recall_trigger,
+    external_windows, is_app_running, resolve_recall_trigger,
 )
 from domain.input.vocabulary import Trigger
 
@@ -34,6 +34,24 @@ class TestMatchesApp:
     def test_empty_window_does_not_match(self):
         app = App(name="Steam", command="steam")
         assert _win().matches_app(app) is False
+
+    def test_steam_game_matches_only_its_own_app_window(self):
+        # A `steam steam://rungameid/<id>` tile is identified by steam_app_<id>,
+        # not the shared `steam` client window.
+        witcher = App(name="Wiedźmin 3", command="steam",
+                      args=("steam://rungameid/292030",))
+        assert _win(resource_class="steam_app_292030").matches_app(witcher) is True
+        # The Steam client window must NOT light up a game tile…
+        assert _win(resource_class="steam").matches_app(witcher) is False
+        # …and a different game's window must not either.
+        assert _win(resource_class="steam_app_379430").matches_app(witcher) is False
+
+    def test_steam_bigpicture_tile_matches_the_client_window(self):
+        # The Steam launcher tile keeps the plain `steam` identity.
+        steam = App(name="Steam", command="steam",
+                    args=("steam://open/bigpicture",))
+        assert _win(resource_class="steam").matches_app(steam) is True
+        assert _win(resource_class="steam_app_292030").matches_app(steam) is False
 
 
 class TestExternalWindows:
@@ -66,6 +84,41 @@ class TestExternalWindows:
         managed = _win(resource_class="Steam", pid=2)
         ext2 = _win(resource_class="vlc", pid=3)
         assert external_windows([ext1, managed, ext2], self.APPS, self._never_owned) == [ext1, ext2]
+
+
+class TestIsAppRunning:
+    """The domain definition of "running" for a static app tile."""
+
+    def test_running_by_process(self):
+        apps = [App(name="Firefox", command="firefox")]
+        assert is_app_running(0, apps, [], lambda i: True) is True
+
+    def test_running_by_window_when_process_dead(self):
+        apps = [App(name="Firefox", command="firefox")]
+        win = _win(resource_class="firefox", pid=9)
+        assert is_app_running(0, apps, [win], lambda i: False) is True
+
+    def test_not_running_without_process_or_window(self):
+        apps = [App(name="Firefox", command="firefox")]
+        assert is_app_running(0, apps, [], lambda i: False) is False
+
+    def test_steam_game_ignores_shared_process(self):
+        # The tracked process is the shared Steam client (is_process_running
+        # True) — the game tile is only "running" while its own window exists.
+        witcher = App(name="Wiedźmin 3", command="steam",
+                      args=("steam://rungameid/292030",))
+        assert is_app_running(0, [witcher], [], lambda i: True) is False
+
+    def test_steam_game_running_when_its_window_present(self):
+        witcher = App(name="Wiedźmin 3", command="steam",
+                      args=("steam://rungameid/292030",))
+        game = _win(resource_class="steam_app_292030", pid=200)
+        client = _win(resource_class="steam", pid=100)
+        assert is_app_running(0, [witcher], [client], lambda i: True) is False
+        assert is_app_running(0, [witcher], [game, client], lambda i: True) is True
+
+    def test_out_of_range_is_not_running(self):
+        assert is_app_running(5, [], [], lambda i: True) is False
 
 
 class TestActiveUnmanagedWindow:

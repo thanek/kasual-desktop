@@ -8,6 +8,7 @@ the *rules* for turning a ``[Desktop Entry]`` into an :class:`App` live here, in
 """
 
 import os
+import re
 import shlex
 from dataclasses import dataclass, field
 from collections.abc import Mapping
@@ -23,6 +24,12 @@ _FIELD_CODES = {
 
 # Apps without X-Kasual-Order sort after explicitly-ordered ones (ties: filename).
 ORDER_DEFAULT = 10_000
+
+# A Steam game launched through the `steam steam://rungameid/<id>` forwarder runs
+# in its own top-level window whose KWin resourceClass is `steam_app_<id>`. The
+# game id is extracted from the launch arguments so each game tile can be matched
+# to *its* window rather than the shared `steam` client.
+_STEAM_RUNGAMEID = re.compile(r"steam://rungameid/(\d+)")
 
 
 @dataclass(frozen=True)
@@ -45,6 +52,37 @@ class App:
         """Lowercased basename of the command — used to match KWin windows
         (resourceClass / desktopFile) back to this app."""
         return os.path.basename(self.command).lower()
+
+    @property
+    def steam_app_id(self) -> str | None:
+        """The Steam AppID this tile launches, if it is a `steam steam://
+        rungameid/<id>` forwarder tile — else None.
+
+        Steam games share the `steam` command, so every game tile has the same
+        ``command_basename`` ("steam"). The AppID is what tells them apart.
+        """
+        if self.command_basename != "steam":
+            return None
+        for token in self.args:
+            match = _STEAM_RUNGAMEID.search(token)
+            if match:
+                return match.group(1)
+        return None
+
+    @property
+    def window_match_keys(self) -> tuple[str, ...]:
+        """Identity strings a KWin window's resourceClass / desktopFile basename
+        is matched against to attribute the window to this app.
+
+        Normally just the command basename. A Steam game tile, however, matches
+        only its own ``steam_app_<id>`` window — never the bare ``steam`` client
+        whose window stays open behind *every* running game. Matching on the
+        shared ``steam`` basename would light up every Steam tile at once.
+        """
+        appid = self.steam_app_id
+        if appid is not None:
+            return (f"steam_app_{appid}",)
+        return (self.command_basename,)
 
     @property
     def is_game(self) -> bool:

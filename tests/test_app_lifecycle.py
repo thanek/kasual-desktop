@@ -78,6 +78,13 @@ def _app(command="prog", trigger=Trigger.CLICK):
     return App(name="App", command=command, recall_menu_trigger=trigger)
 
 
+def _steam_game_app(appid="292030", trigger=Trigger.CLICK):
+    """A `steam steam://rungameid/<id>` tile — its window identity is
+    steam_app_<id>, while its tracked process is the shared Steam client."""
+    return App(name="Witcher 3", command="steam",
+               args=(f"steam://rungameid/{appid}",), recall_menu_trigger=trigger)
+
+
 def _make(apps=None, visible=False, parent_of=None, process_name_of=None):
     view = FakeView(visible=visible)
     gamepad = MagicMock()
@@ -200,6 +207,20 @@ class TestOnTileActivated:
         c.am.launch.assert_not_called()
         assert c.view.hidden == 1  # restore hides the desktop
 
+    def test_steam_game_restores_via_window_when_forwarder_exited(self):
+        # The `steam steam://...` forwarder has exited (AppManager: not running),
+        # but the game window is still up — choosing the tile must restore the
+        # game, not relaunch it.
+        c = _make(apps=[_steam_game_app()])
+        c.am.is_running.return_value = False
+        c.wm.cached_windows.return_value = [
+            Window(id="g1", title="Witcher 3", pid=200, resource_class="steam_app_292030"),
+        ]
+        c.lc.on_tile_activated(AppTarget(index=0, name="Witcher 3"))
+        c.am.launch.assert_not_called()
+        c.wm.activate_window.assert_called_once_with("g1")
+        assert c.view.hidden == 1
+
     def test_idle_app_launches_and_arms_hide(self):
         c = _make(apps=[_app(trigger=Trigger.HOLD_1S)])
         c.am.is_running.return_value = False
@@ -280,6 +301,45 @@ class TestRestoreApp:
         c.gamepad.set_app_btn_mode_trigger.assert_called_once_with(Trigger.HOLD_1S)
         c.wm.activate_window.assert_called_once_with("w9")
         assert c.view.hidden == 1
+
+    def test_steam_game_raised_by_window_identity_not_process(self):
+        # The shared Steam process must not be activated — its steam_app_<id>
+        # window is brought to the front instead, so we land on the game.
+        c = _make(apps=[_steam_game_app()])
+        c.am.running_pid.return_value = None      # forwarder already exited
+        c.am.all_running_pids.return_value = []
+        c.wm.cached_windows.return_value = [
+            Window(id="g1", title="Witcher 3", pid=200, resource_class="steam_app_292030"),
+            Window(id="s1", title="Steam",     pid=100, resource_class="steam"),
+        ]
+        c.lc.restore_app(AppTarget(index=0, name="Witcher 3"))
+        c.wm.activate_window.assert_called_once_with("g1")
+        c.wm.activate_windows_for_pids.assert_not_called()
+        assert c.view.hidden == 1
+
+    def test_steam_game_minimizes_others_but_spares_the_steam_tree(self):
+        # The game is a descendant of the Steam process tree, so the tracked
+        # Steam pid is left out of the minimize set (pid-subtree expansion would
+        # otherwise sweep the game window down too).
+        c = _make(apps=[_steam_game_app()])
+        c.am.running_pid.return_value = 100       # the shared Steam client pid
+        c.am.all_running_pids.return_value = [100, 555]
+        c.wm.cached_windows.return_value = [
+            Window(id="g1", title="Witcher 3", pid=200, resource_class="steam_app_292030"),
+        ]
+        c.lc.restore_app(AppTarget(index=0, name="Witcher 3"))
+        c.wm.activate_window.assert_called_once_with("g1")
+        c.wm.minimize_windows_for_pids.assert_called_once_with({555})
+
+    def test_steam_game_falls_back_to_process_when_window_not_mapped(self):
+        # Game still loading (no steam_app_<id> window yet) — surface the Steam
+        # client rather than nothing.
+        c = _make(apps=[_steam_game_app()])
+        c.am.running_pid.return_value = 100
+        c.am.all_running_pids.return_value = [100]
+        c.wm.cached_windows.return_value = []
+        c.lc.restore_app(AppTarget(index=0, name="Witcher 3"))
+        c.wm.activate_windows_for_pids.assert_called_once_with({100})
 
 
 # ── arrange_windows ─────────────────────────────────────────────────────────
@@ -412,6 +472,22 @@ class TestRequestCloseApp:
         on_confirmed()
         c.am.terminate.assert_not_called()
         c.wm.close_window.assert_called_once_with("win1")
+
+    def test_steam_game_close_closes_window_and_spares_steam(self):
+        # Even with the shared Steam client alive, closing a game must close the
+        # game's own window — never terminate the Steam process.
+        c = _make(apps=[_steam_game_app()], visible=True)
+        c.am.is_running.return_value = True
+        c.wm.cached_windows.return_value = [
+            Window(id="g1", title="Witcher 3", pid=200, resource_class="steam_app_292030"),
+            Window(id="s1", title="Steam",     pid=100, resource_class="steam"),
+        ]
+        c.lc.request_close_app(AppTarget(index=0, name="Witcher 3"))
+        _, on_confirmed, _ = c.view.confirm
+        on_confirmed()
+        c.am.terminate.assert_not_called()
+        c.wm.close_window.assert_called_once_with("g1")
+        c.tilebar.set_static_closing.assert_called_once_with(0)
 
     def test_confirm_closes_window_target(self):
         c = _make()

@@ -7,12 +7,13 @@ the tile's ``.desktop`` ``X-Kasual-Color``.
 
 # Mostly Nord-derived swatches; edit freely — the picker renders whatever is here.
 TILE_COLORS: tuple[str, ...] = (
-    "#2C2F33", # ⬛
-    "#DD2E44", # 🟥
     "#3B88C3", # 🟦
+    "#DD2E44", # 🟥
     "#F4900C", # 🟨
-    "#744E3B", # 🟫
     "#78B159", # 🟩
     "#AA8ED6", # 🟪
+    "#E67E22", # 🟧
+    "#2C2F33", # ⬛
+    "#744E3B", # 🟫
     "#ffffff", # white
 )

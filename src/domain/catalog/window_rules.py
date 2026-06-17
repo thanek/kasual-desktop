@@ -68,13 +68,20 @@ def is_app_running(
     the window-presence fallback uses ``Window.matches_app`` to cover cases where
     the app was launched externally or lost its process-group link (e.g. after a
     self-relaunch).
+
+    A Steam game tile is the exception: the tracked process is the shared Steam
+    client (the `steam steam://...` forwarder), which outlives the game and is
+    common to every game tile — so its presence says nothing about *this* game.
+    Such a tile is "running" only while its own ``steam_app_<id>`` window exists.
     """
+    if idx >= len(apps):
+        return False
+    app = apps[idx]
+    if app.steam_app_id is not None:
+        return any(w.matches_app(app) for w in windows)
     if is_process_running(idx):
         return True
-    if idx < len(apps):
-        app = apps[idx]
-        return any(w.matches_app(app) for w in windows)
-    return False
+    return any(w.matches_app(app) for w in windows)
 
 
 def active_unmanaged_window(
