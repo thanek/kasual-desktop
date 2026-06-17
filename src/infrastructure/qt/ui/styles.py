@@ -76,6 +76,21 @@ def tile_selected() -> str:
     """
 
 
+def tile_moving() -> str:
+    """The focused tile while in move mode — selected, with a dashed accent border."""
+    return f"""
+        QToolButton {{
+            font-size: 18px;
+            font-weight: bold;
+            color: black;
+            background-color: {COLOR_ACCENT};
+            border: 3px dashed white;
+            border-radius: 38px;
+            padding: 12px 8px 16px 8px;
+        }}
+    """
+
+
 def topbar_normal(color: str) -> str:
     return f"""
         QPushButton {{

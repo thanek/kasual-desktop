@@ -10,13 +10,13 @@ from PyQt6.QtGui import QCursor, QIcon
 from PyQt6.QtWidgets import QWidget, QHBoxLayout, QScrollArea, QApplication
 
 from domain.catalog.catalog import AppCatalog
-from domain.catalog.target import Target, target_at_index
+from domain.catalog.target import AppTarget, Target, target_at_index
 from domain.catalog.window import Window
 from domain.catalog.window_rules import external_windows, is_app_running, resolve_recall_trigger
 from domain.lifecycle.process_manager import ProcessManager
 from infrastructure.qt.ui import styles
 from domain.lifecycle.tile_bar_view import TileBarView
-from domain.navigation.bar_views import TileFocusView
+from domain.navigation.bar_views import TileFocusView, TileReorderView
 from .app_tile import AppTile, TILE_H, TILE_SEL_H
 from .window_icons import WindowIconResolver
 
@@ -42,10 +42,11 @@ def _get_ppid(pid: int) -> int | None:
     return None
 
 
-class TileBar(QScrollArea, TileBarView, TileFocusView, metaclass=_Meta):
+class TileBar(QScrollArea, TileBarView, TileFocusView, TileReorderView, metaclass=_Meta):
     """Scrollable row of tiles: configured apps first, then open-window tiles.
 
-    Implements `TileBarView` (app-lifecycle) and `TileFocusView` (focus navigation).
+    Implements `TileBarView` (app-lifecycle), `TileFocusView` (focus navigation) and
+    `TileReorderView` (move mode).
 
     Navigation between the tile bar and the top bar lives in the Desktop
     coordinator; this widget only renders the highlight it is told to own via
@@ -125,9 +126,12 @@ class TileBar(QScrollArea, TileBarView, TileFocusView, metaclass=_Meta):
                 color=app.color,
                 qicon=qicon,
             )
-            tile.clicked.connect(lambda idx=i: self._activate_index(idx))
-            tile.hovered.connect(lambda idx=i: self._on_tile_hovered(idx))
-            tile.right_clicked.connect(lambda idx=i: self._on_tile_right_clicked(idx))
+            # Bind to the tile, not a fixed index: move mode reorders the static
+            # tiles, so each tile resolves its current position on demand
+            # (_static_index_of) and a swap needs no reconnecting.
+            tile.clicked.connect(lambda t=tile: self._activate_index(self._static_index_of(t)))
+            tile.hovered.connect(lambda t=tile: self._on_tile_hovered(self._static_index_of(t)))
+            tile.right_clicked.connect(lambda t=tile: self._on_tile_right_clicked(self._static_index_of(t)))
             self._tile_layout.addWidget(tile)
             self._tiles.append(tile)
 
@@ -179,6 +183,44 @@ class TileBar(QScrollArea, TileBarView, TileFocusView, metaclass=_Meta):
     def current_tile(self) -> AppTile | None:
         tiles = self._all_tiles()
         return tiles[self._tile_index] if 0 <= self._tile_index < len(tiles) else None
+
+    def current_is_app(self) -> bool:
+        """True if the focused tile is a static app tile (not a dynamic window)."""
+        return isinstance(self.current_context(), AppTarget)
+
+    # ── Move mode (TileReorderView) ──────────────────────────────────────────
+
+    def app_tile_count(self) -> int:
+        return len(self._tiles)
+
+    def current_app_index(self) -> int:
+        return self._tile_index
+
+    def swap_app_tiles(self, i: int, j: int) -> None:
+        """Exchange the static app tiles at positions *i* and *j*, on screen and in
+        the in-memory catalog, and keep the focus on the moved tile."""
+        if not (0 <= i < len(self._tiles) and 0 <= j < len(self._tiles)):
+            return
+        self._apps = self._apps.swapped(i, j)
+        self._tiles[i], self._tiles[j] = self._tiles[j], self._tiles[i]
+        # Re-seat both widgets at their new layout positions (static tiles occupy
+        # layout items 0..n-1, ahead of the separator and dynamic tiles).
+        lo, hi = sorted((i, j))
+        self._tile_layout.removeWidget(self._tiles[lo])
+        self._tile_layout.removeWidget(self._tiles[hi])
+        self._tile_layout.insertWidget(lo, self._tiles[lo])
+        self._tile_layout.insertWidget(hi, self._tiles[hi])
+        self._tile_index = j
+        self._render_tiles()
+
+    def set_move_mode(self, active: bool) -> None:
+        tile = self.current_tile()
+        if isinstance(tile, AppTile):
+            tile.set_moving(active)
+
+    def _static_index_of(self, tile: AppTile) -> int:
+        """Current position of a static app *tile* (it shifts during move mode)."""
+        return self._tiles.index(tile)
 
     def center_current(self) -> None:
         if not self._focused:

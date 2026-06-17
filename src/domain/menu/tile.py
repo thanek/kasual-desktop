@@ -14,7 +14,7 @@ translation context so the existing locale entries keep resolving.
 from collections.abc import Callable
 
 from domain.catalog.target import AppTarget, Target
-from domain.menu.entry import CLOSE, LAUNCH, RESTORE
+from domain.menu.entry import CLOSE, LAUNCH, MOVE, RESTORE
 from domain.menu.item import MenuItem
 from domain.shared.i18n import translate
 
@@ -44,3 +44,13 @@ def compose_tile_menu(target: Target, is_running: bool) -> list[MenuItem]:
         MenuItem(translate("Desktop", "Restore"), RESTORE, target=target),
         MenuItem(translate("Desktop", "Close"), CLOSE, target=target),
     ]
+
+
+def tile_management_menu(target: Target) -> list[MenuItem]:
+    """Compose the Tile Management Popover for *target* (the Start-button menu).
+
+    A sibling of :func:`tile_menu_for`: rather than launch/restore/close, it offers
+    actions that manage the tile itself. For now the sole entry is *Move*, which the
+    presenter turns into the tile's move mode.
+    """
+    return [MenuItem(translate("Desktop", "Move"), MOVE, target=target)]

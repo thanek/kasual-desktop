@@ -16,6 +16,7 @@ from pathlib import Path
 
 from domain.catalog.app import App
 from domain.catalog.catalog import AppCatalog
+from domain.menu.ports import TileOrderStore
 from domain.provisioning.candidate import CandidateApp
 from domain.provisioning.ports import AppProvisioning
 
@@ -119,6 +120,86 @@ class DesktopAppProvisioning(AppProvisioning):
             provisioned_marker().touch()
         except OSError as exc:
             logger.error("Cannot create provisioning marker: %s", exc)
+
+
+class DesktopTileOrderStore(TileOrderStore):
+    """Persist a tile reorder by rewriting ``X-Kasual-Order`` in the ``.desktop`` files.
+
+    The write side of the catalog's placement rule: it re-derives the same
+    ``(order, filename)`` ordering :class:`AppCatalog` renders, swaps the two
+    positions, then renumbers every file's ``X-Kasual-Order`` to its new sequential
+    position. Renumbering (rather than just exchanging two values) keeps the persisted
+    order unambiguous even when files previously shared an order value. The rewrite is
+    line-based so every other key and comment in the file is left untouched.
+    """
+
+    def swap(self, i: int, j: int) -> None:
+        ordered = _ordered_desktop_paths()
+        if not (0 <= i < len(ordered) and 0 <= j < len(ordered)):
+            logger.warning("Tile order swap out of range: %d/%d of %d", i, j, len(ordered))
+            return
+        ordered[i], ordered[j] = ordered[j], ordered[i]
+        for new_order, path in enumerate(ordered):
+            try:
+                _rewrite_order(path, new_order)
+            except OSError as exc:
+                # One failed write must not abort the rest (mirrors load_apps/provision).
+                logger.error("Cannot rewrite order in %s: %s", path, exc)
+
+
+def _ordered_desktop_paths() -> list[Path]:
+    """The valid app ``.desktop`` files, in the catalog's render order.
+
+    Applies the same filter (skip non-tiles/malformed) and ordering
+    (``(X-Kasual-Order, filename)``) as :func:`load_apps` /
+    :meth:`AppCatalog.from_entries`, so a position here matches a tile index.
+    """
+    directory = apps_dir()
+    if not directory.is_dir():
+        return []
+    entries: list[tuple[int, Path]] = []
+    for path in directory.glob("*.desktop"):
+        try:
+            parsed = _parse_desktop(path)
+        except Exception as exc:
+            logger.warning("Skipping %s: %s", path.name, exc)
+            continue
+        if parsed is None:
+            continue
+        order, _ = parsed
+        entries.append((order, path))
+    entries.sort(key=lambda e: (e[0], e[1].name))
+    return [path for _, path in entries]
+
+
+def _is_order_line(line: str) -> bool:
+    """True if *line* assigns ``X-Kasual-Order`` (with or without surrounding spaces)."""
+    stripped = line.strip()
+    if not stripped.startswith("X-Kasual-Order"):
+        return False
+    return stripped[len("X-Kasual-Order"):].lstrip().startswith("=")
+
+
+def _rewrite_order(path: Path, order: int) -> None:
+    """Set ``X-Kasual-Order`` in *path* to *order*, preserving every other line.
+
+    Replaces the existing assignment in place; if the key is absent, appends it (the
+    files carry a single ``[Desktop Entry]`` section)."""
+    lines = path.read_text(encoding="utf-8").splitlines(keepends=True)
+    new_line = f"X-Kasual-Order={order}\n"
+    out: list[str] = []
+    replaced = False
+    for line in lines:
+        if _is_order_line(line):
+            out.append(new_line)
+            replaced = True
+        else:
+            out.append(line)
+    if not replaced:
+        if out and not out[-1].endswith("\n"):
+            out[-1] += "\n"
+        out.append(new_line)
+    path.write_text("".join(out), encoding="utf-8")
 
 
 def _write_desktop(path: Path, entry: dict[str, str]) -> None:

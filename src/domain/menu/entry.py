@@ -17,3 +17,6 @@ TOGGLE_HUD        = "toggle_hud"
 LAUNCH  = "launch"
 RESTORE = "restore"
 CLOSE   = "close"
+
+# ── Tile Management Popover actions ──────────────────────────────────────────
+MOVE    = "move"

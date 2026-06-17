@@ -21,7 +21,9 @@ from domain.lifecycle.app_lifecycle import AppLifecycle
 from domain.lifecycle.process_manager import ProcessManager
 from domain.lifecycle.prompts import LocalizedPrompts
 from domain.lifecycle.window_manager import WindowManager
+from domain.menu.ports import TileOrderStore
 from domain.navigation.focus_navigator import FocusNavigator
+from domain.navigation.tile_mover import TileMover
 from domain.network.control import NetworkControl
 from domain.notifications.center import NotificationCenter
 from domain.shared.feedback import Feedback
@@ -56,6 +58,7 @@ def build_desktop(
     process_manager: ProcessManager,
     notifications: NotificationCenter,
     network_control: NetworkControl,
+    order_store: TileOrderStore,
 ) -> Desktop:
     """Build a fully wired Desktop: the view widget plus its domain coordinators."""
     # The open-overlay group is shared: the widget feeds it (register/forget) and
@@ -80,7 +83,13 @@ def build_desktop(
     nav = FocusNavigator(
         widget._tilebar, widget._topbar,
         on_tile_menu=widget._show_tile_popover, feedback=feedback,
+        on_tile_manage=widget._show_tile_management_popover,
         gamepad=gamepad,
+    )
+
+    # Move mode: slides a focused app tile past its neighbours, persisting the order.
+    tile_mover = TileMover(
+        view=widget._tilebar, store=order_store, gamepad=gamepad, feedback=feedback,
     )
 
     # The Desktop stays on screen after launching an app until that app's window
@@ -117,5 +126,5 @@ def build_desktop(
         ),
     )
 
-    widget.attach(nav, lifecycle, desktop_coordinator, action_runner)
+    widget.attach(nav, lifecycle, desktop_coordinator, action_runner, tile_mover)
     return widget

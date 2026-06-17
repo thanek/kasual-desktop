@@ -34,6 +34,17 @@ class AppCatalog(Sequence[App]):
         ordered = sorted(entries, key=lambda e: (e[0], e[1]))
         return cls(tuple(app for _, _, app in ordered))
 
+    def swapped(self, i: int, j: int) -> "AppCatalog":
+        """Return a new catalog with the apps at positions *i* and *j* exchanged.
+
+        Pure (the catalog is immutable): the tile bar's move mode uses this to
+        reorder app tiles, with the parallel ``.desktop`` ``X-Kasual-Order`` rewrite
+        handled by the persistence adapter.
+        """
+        apps = list(self.apps)
+        apps[i], apps[j] = apps[j], apps[i]
+        return AppCatalog(tuple(apps))
+
     def __getitem__(self, index):
         return self.apps[index]
 

@@ -130,6 +130,10 @@ class AppTile(QWidget):
             self._apply_shadow(selected=False)
             self._animate_scale(to_selected=False)
 
+    def set_moving(self, moving: bool) -> None:
+        """Toggle the move-mode cue on this (selected) tile's button."""
+        self._btn.setStyleSheet(styles.tile_moving() if moving else styles.tile_selected())
+
     def set_running(self, running: bool) -> None:
         if not running:
             self._closing = False

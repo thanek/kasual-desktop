@@ -10,7 +10,7 @@ import pytest
 from domain.catalog.app import App
 from domain.provisioning.candidate import CandidateApp
 from infrastructure.system.app_config import (
-    DesktopAppProvisioning, load_apps, provisioned_marker,
+    DesktopAppProvisioning, DesktopTileOrderStore, load_apps, provisioned_marker,
 )
 
 
@@ -172,3 +172,65 @@ class TestDesktopAppProvisioning:
         DesktopAppProvisioning().provision([])
         assert list(load_apps()) == []
         assert DesktopAppProvisioning().is_provisioned() is True
+
+
+# ── DesktopTileOrderStore ───────────────────────────────────────────────────
+
+class TestTileOrderStore:
+    def _write_app(self, apps_root, filename, name, order):
+        _write(apps_root, filename, (
+            "# Kasual Desktop app entry\n"
+            "[Desktop Entry]\n"
+            "Type=Application\n"
+            f"Name={name}\n"
+            f"Exec={name.lower()}\n"
+            f"X-Kasual-Order={order}\n"
+        ))
+
+    def test_swap_reorders_loaded_catalog(self, apps_root):
+        self._write_app(apps_root, "a.desktop", "A", 0)
+        self._write_app(apps_root, "b.desktop", "B", 1)
+        self._write_app(apps_root, "c.desktop", "C", 2)
+
+        DesktopTileOrderStore().swap(0, 2)
+
+        assert [a.name for a in load_apps()] == ["C", "B", "A"]
+
+    def test_adjacent_swap_persists(self, apps_root):
+        self._write_app(apps_root, "a.desktop", "A", 0)
+        self._write_app(apps_root, "b.desktop", "B", 1)
+
+        DesktopTileOrderStore().swap(0, 1)
+
+        assert [a.name for a in load_apps()] == ["B", "A"]
+
+    def test_renumbers_sequentially_even_with_shared_orders(self, apps_root):
+        # All share order 0 → catalog ties broken by filename: A, B, C.
+        self._write_app(apps_root, "a.desktop", "A", 0)
+        self._write_app(apps_root, "b.desktop", "B", 0)
+        self._write_app(apps_root, "c.desktop", "C", 0)
+
+        DesktopTileOrderStore().swap(0, 1)   # A <-> B
+
+        assert [a.name for a in load_apps()] == ["B", "A", "C"]
+
+    def test_preserves_other_keys(self, apps_root):
+        _write(apps_root, "a.desktop", (
+            "[Desktop Entry]\n"
+            "Type=Application\n"
+            "Name=A\n"
+            "Exec=a\n"
+            "X-Kasual-Color=#123456\n"
+            "X-Kasual-Order=0\n"
+        ))
+        self._write_app(apps_root, "b.desktop", "B", 1)
+
+        DesktopTileOrderStore().swap(0, 1)
+
+        a = next(app for app in load_apps() if app.name == "A")
+        assert a.color == "#123456"
+
+    def test_out_of_range_is_a_noop(self, apps_root):
+        self._write_app(apps_root, "a.desktop", "A", 0)
+        DesktopTileOrderStore().swap(0, 5)
+        assert [a.name for a in load_apps()] == ["A"]

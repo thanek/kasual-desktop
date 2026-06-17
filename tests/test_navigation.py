@@ -15,12 +15,14 @@ def _make(topbar_count=3):
     topbar = MagicMock()
     topbar.count = topbar_count
     on_tile_menu = MagicMock()
+    on_tile_manage = MagicMock()
     feedback = MagicMock()
     gamepad = MagicMock()
     nav = FocusNavigator(
         tilebar, topbar, on_tile_menu=on_tile_menu, feedback=feedback,
-        gamepad=gamepad,
+        on_tile_manage=on_tile_manage, gamepad=gamepad,
     )
+    nav._test_on_tile_manage = on_tile_manage
     return nav, tilebar, topbar, on_tile_menu, gamepad
 
 
@@ -50,6 +52,11 @@ class TestPadInTiles:
         nav, _, _, on_tile_menu, *_ = _make()
         nav.handle_pad("close")
         on_tile_menu.assert_called_once()
+
+    def test_manage_opens_management_popover(self):
+        nav, *_ = _make()
+        nav.handle_pad("manage")
+        nav._test_on_tile_manage.assert_called_once()
 
     def test_up_switches_to_topbar(self):
         nav, *_ = _make(topbar_count=3)

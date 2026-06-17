@@ -135,6 +135,21 @@ class TestTranslateKeys:
         mock_gamepad._translate(ev(ecodes.EV_KEY, ecodes.BTN_START, 1), held, {"x": None, "y": None}, [])
         assert fired == [True]
 
+    def test_btn_start_alone_emits_manage(self, mock_gamepad):
+        """BTN_START bez BTN_SELECT → otwarcie popovera zarządzania kaflem."""
+        result = self._translate_with_handler(
+            mock_gamepad, ev(ecodes.EV_KEY, ecodes.BTN_START, 1)
+        )
+        assert result == ["manage"]
+
+    def test_btn_start_alone_does_not_emit_btn_mode(self, mock_gamepad):
+        fired = []
+        mock_gamepad.on_btn_mode(lambda: fired.append(True))
+        self._translate_with_handler(
+            mock_gamepad, ev(ecodes.EV_KEY, ecodes.BTN_START, 1)
+        )
+        assert fired == []
+
 
 # ── _translate — DPAD (EV_ABS HAT) ───────────────────────────────────────────
 

@@ -48,6 +48,23 @@ class TestFromEntries:
         assert list(AppCatalog.from_entries([])) == []
 
 
+class TestSwapped:
+    def test_exchanges_two_positions(self):
+        cat = AppCatalog((_app("A"), _app("B"), _app("C")))
+        out = cat.swapped(0, 2)
+        assert [a.name for a in out] == ["C", "B", "A"]
+
+    def test_adjacent_swap(self):
+        cat = AppCatalog((_app("A"), _app("B"), _app("C")))
+        out = cat.swapped(0, 1)
+        assert [a.name for a in out] == ["B", "A", "C"]
+
+    def test_leaves_original_untouched(self):
+        cat = AppCatalog((_app("A"), _app("B")))
+        cat.swapped(0, 1)
+        assert [a.name for a in cat] == ["A", "B"]
+
+
 class TestSequenceBehaviour:
     def test_is_a_sequence(self):
         assert isinstance(AppCatalog(), Sequence)

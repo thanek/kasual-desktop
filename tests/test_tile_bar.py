@@ -13,6 +13,7 @@ from PyQt6.QtCore import QPoint
 
 from infrastructure.qt.desktop.tile_bar import TileBar
 from domain.catalog.app import App
+from domain.catalog.catalog import AppCatalog
 from domain.catalog.window import Window
 
 
@@ -116,7 +117,7 @@ class TestWindowsChangedSignal:
 
 @pytest.fixture
 def bar_with_tiles(qapp, app_manager):
-    apps = [App(name=f"App {i}", command="x") for i in range(3)]
+    apps = AppCatalog(tuple(App(name=f"App {i}", command="x") for i in range(3)))
     return TileBar(apps=apps, app_manager=app_manager)
 
 
@@ -153,3 +154,36 @@ class TestHoverSuppression:
         bar = bar_with_tiles
         bar._on_tile_hovered(2)
         assert bar._tile_index == 2
+
+
+# ── Move mode (TileReorderView) ─────────────────────────────────────────────────
+
+class TestSwapAppTiles:
+    def test_swap_reorders_catalog_and_follows_selection(self, bar_with_tiles):
+        bar = bar_with_tiles
+        names_before = [t._full_name for t in bar._tiles]   # App 0, App 1, App 2
+        bar.swap_app_tiles(0, 1)
+        assert [a.name for a in bar._apps] == ["App 1", "App 0", "App 2"]
+        # The two widgets exchanged positions in the list.
+        assert bar._tiles[0]._full_name == names_before[1]
+        assert bar._tiles[1]._full_name == names_before[0]
+        # Selection follows the moved tile to its new position.
+        assert bar._tile_index == 1
+
+    def test_swap_keeps_widgets_clickable_at_new_index(self, bar_with_tiles):
+        bar = bar_with_tiles
+        bar.swap_app_tiles(0, 2)
+        # The tile now sitting at position 0 resolves its own current index.
+        assert bar._static_index_of(bar._tiles[0]) == 0
+        assert bar._static_index_of(bar._tiles[2]) == 2
+
+    def test_app_tile_count_and_current_index(self, bar_with_tiles):
+        bar = bar_with_tiles
+        bar.move(2)
+        assert bar.app_tile_count() == 3
+        assert bar.current_app_index() == 2
+
+    def test_out_of_range_swap_is_noop(self, bar_with_tiles):
+        bar = bar_with_tiles
+        bar.swap_app_tiles(0, 9)
+        assert [a.name for a in bar._apps] == ["App 0", "App 1", "App 2"]

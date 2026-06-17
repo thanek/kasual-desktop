@@ -33,8 +33,11 @@ from infrastructure.qt.ui.layer_shell import make_layer_surface, Layer, Anchor, 
 from domain.shell.desktop import Desktop as DesktopCoordinator
 from domain.lifecycle.app_lifecycle import AppLifecycle
 from domain.navigation.focus_navigator import FocusNavigator
+from domain.navigation.tile_mover import TileMover
 from domain.system.runner import ActionRunner
-from domain.menu.tile import tile_menu_for
+from domain.menu.entry import MOVE
+from domain.menu.item import MenuItem
+from domain.menu.tile import tile_management_menu, tile_menu_for
 from domain.shared.feedback import Feedback
 from typing import _ProtocolMeta  # type: ignore[attr-defined]
 from domain.shell.desktop_view import DesktopView
@@ -59,6 +62,7 @@ _KEY_MAP = {
     Qt.Key.Key_Enter:  Event.SELECT,
     Qt.Key.Key_Escape: Event.CANCEL,
     Qt.Key.Key_Q:      Event.CLOSE,
+    Qt.Key.Key_F2:     Event.MANAGE,
 }
 
 
@@ -147,6 +151,7 @@ class Desktop(QWidget, DesktopView, DesktopShell, DesktopControl, metaclass=_Met
         self._lifecycle:     'AppLifecycle | None'       = None
         self._desktop:       'DesktopCoordinator | None' = None
         self._action_runner: 'ActionRunner | None'       = None
+        self._tile_mover:    'TileMover | None'          = None
 
         self._status_timer = QTimer(self)
         self._status_timer.timeout.connect(self._tilebar.refresh_status)
@@ -165,6 +170,7 @@ class Desktop(QWidget, DesktopView, DesktopShell, DesktopControl, metaclass=_Met
         lifecycle: AppLifecycle,
         desktop_coordinator: DesktopCoordinator,
         action_runner: ActionRunner,
+        tile_mover: TileMover,
     ) -> None:
         """Inject the domain coordinators assembled by build_desktop and wire the
         orchestration signals. Called once, before the Desktop is ever shown, so
@@ -174,6 +180,7 @@ class Desktop(QWidget, DesktopView, DesktopShell, DesktopControl, metaclass=_Met
         self._lifecycle     = lifecycle
         self._desktop       = desktop_coordinator
         self._action_runner = action_runner
+        self._tile_mover    = tile_mover
 
         self._tilebar.activated.connect(self._lifecycle.on_tile_activated)
         self._tilebar.windows_changed.connect(self._lifecycle.check_active_dyn_gone)
@@ -209,9 +216,12 @@ class Desktop(QWidget, DesktopView, DesktopShell, DesktopControl, metaclass=_Met
     def dismiss_overlays(self) -> None:
         """Cancel every open overlay/dialog (driven when the Home Overlay takes
         over): the registry tears down the group; the confirm handle is among
-        them, so its slot just needs clearing."""
+        them, so its slot just needs clearing. Move mode is not a registered
+        overlay (it owns a pushed pad handler), so it is cancelled explicitly."""
         self._overlays.cancel()
         self._confirm_dialog = None
+        if self._tile_mover is not None:
+            self._tile_mover.cancel()
 
     def resume(self) -> None:
         """Restore the Desktop after reconnecting the gamepad — without resetting state."""
@@ -382,6 +392,35 @@ class Desktop(QWidget, DesktopView, DesktopShell, DesktopControl, metaclass=_Met
     def _on_tile_popover_closed(self) -> None:
         self._overlays.forget(self._tile_popover)
         self._tile_popover = None
+
+    # ── Tile Management Popover (Start button) ─────────────────────────────
+
+    def _show_tile_management_popover(self) -> None:
+        """Show the Start-button management popover above the focused app tile.
+
+        Only app tiles carry a persistent order, so it is suppressed over dynamic
+        open-window tiles. Reuses the generic popover widget; the menu and the
+        chosen item's behaviour are the domain's (`tile_management_menu`, `TileMover`)."""
+        if not self._tilebar.current_is_app():
+            return
+        ctx = self._tilebar.current_context()
+        if ctx is None:
+            return
+        popover = TilePopoverMenu(
+            items=tile_management_menu(ctx),
+            on_select=self._on_manage_select,
+            gamepad=self._gamepad,
+            feedback=self._feedback,
+            parent=self,
+        )
+        self._tile_popover = popover
+        self._overlays.register(popover)
+        popover.closed.connect(self._on_tile_popover_closed)
+        popover.show_above(self._tilebar.current_tile())
+
+    def _on_manage_select(self, item: MenuItem) -> None:
+        if item.action == MOVE:
+            self._tile_mover.start()
 
     def _close_active_dialog(self) -> None:
         if self._confirm_dialog is not None:

@@ -380,8 +380,13 @@ class GamepadWatcher(QObject, PadControl, GamepadSignals, metaclass=_Meta):
                 self._nav_hop.emit(Event.CANCEL)
             elif ev.code == ecodes.BTN_WEST:
                 self._nav_hop.emit(Event.CLOSE)
-            elif ev.code == ecodes.BTN_START and ecodes.BTN_SELECT in held:
-                self._btn_mode_hop.emit()
+            elif ev.code == ecodes.BTN_START:
+                # Start+Select is the home-recall chord; Start alone opens the
+                # tile management popover (Select must be held first for the chord).
+                if ecodes.BTN_SELECT in held:
+                    self._btn_mode_hop.emit()
+                else:
+                    self._nav_hop.emit(Event.MANAGE)
         elif ev.value == 0:
             held.discard(ev.code)
 

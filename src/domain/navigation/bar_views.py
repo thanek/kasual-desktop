@@ -15,6 +15,19 @@ class TileFocusView(Protocol):
     def set_focused(self, focused: bool, scroll: bool = True) -> None: ...
 
 
+class TileReorderView(Protocol):
+    """The tile bar as the move-mode coordinator drives it (TileBar).
+
+    A narrow role-interface for reordering the static app tiles: how many there are,
+    which one is focused, swapping two of them on screen, and toggling the move-mode
+    visual cue. The parallel persistence is a separate port (TileOrderStore)."""
+
+    def app_tile_count(self) -> int: ...
+    def current_app_index(self) -> int: ...
+    def swap_app_tiles(self, i: int, j: int) -> None: ...
+    def set_move_mode(self, active: bool) -> None: ...
+
+
 class TopBarView(Protocol):
     """The top bar as focus navigation drives it (TopBar)."""
 

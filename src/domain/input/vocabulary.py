@@ -22,6 +22,7 @@ class Event(StrEnum):
     SELECT     = "select"
     CANCEL     = "cancel"
     CLOSE      = "close"
+    MANAGE     = "manage"
     ESCAPE_HOME = "escape_home"
 
 

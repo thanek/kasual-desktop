@@ -42,6 +42,11 @@
         <source>Close</source>
         <translation type="unfinished" />
     </message>
+    <message>
+        <location filename="../src/domain/menu/tile.py" line="56" />
+        <source>Move</source>
+        <translation type="unfinished" />
+    </message>
 </context><context>
     <name>HomeOverlay</name>
     <message>
@@ -59,17 +64,17 @@
 </context><context>
     <name>Kasual Desktop</name>
     <message>
-        <location filename="../src/domain/menu/home.py" line="33" />
+        <location filename="../src/domain/menu/home.py" line="35" />
         <source>Return to Desktop</source>
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/domain/menu/home.py" line="47" />
+        <location filename="../src/domain/menu/home.py" line="58" />
         <source>Return to {0}</source>
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/domain/menu/home.py" line="51" />
+        <location filename="../src/domain/menu/home.py" line="62" />
         <source>Close {0}</source>
         <translation type="unfinished" />
     </message>
@@ -191,17 +196,27 @@
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/infrastructure/qt/overlays/notifications_overlay.py" line="112" />
+        <location filename="../src/domain/system/hud.py" line="51" />
+        <source>Disable HUD</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/domain/system/hud.py" line="52" />
+        <source>Enable HUD</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/infrastructure/qt/overlays/notifications_overlay.py" line="172" />
         <source>Recent notifications</source>
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/infrastructure/qt/overlays/notifications_overlay.py" line="121" />
+        <location filename="../src/infrastructure/qt/overlays/notifications_overlay.py" line="181" />
         <source>▲ ▼ – scroll    B/Esc – close</source>
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/infrastructure/qt/overlays/notifications_overlay.py" line="136" />
+        <location filename="../src/infrastructure/qt/overlays/notifications_overlay.py" line="196" />
         <source>No notifications</source>
         <translation type="unfinished" />
     </message>
@@ -230,6 +245,18 @@
     <message>
         <location filename="../src/infrastructure/qt/ui/log_viewer.py" line="88" />
         <source>Clear</source>
+        <translation type="unfinished" />
+    </message>
+</context><context>
+    <name>OnboardingOverlay</name>
+    <message>
+        <location filename="../src/infrastructure/qt/overlays/onboarding_overlay.py" line="88" />
+        <source>Welcome — pick your apps</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/infrastructure/qt/overlays/onboarding_overlay.py" line="138" />
+        <source>Confirm</source>
         <translation type="unfinished" />
     </message>
 </context></TS>
