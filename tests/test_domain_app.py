@@ -141,3 +141,56 @@ class TestFromDesktopEntry:
     def test_malformed_raises(self, entry):
         with pytest.raises(ValueError):
             App.from_desktop_entry(entry)
+
+
+class TestToDesktopEntry:
+    """The App→freedesktop renderer — inverse of from_desktop_entry."""
+
+    def test_always_emits_type_name_exec_order(self):
+        app = App(name="Min", command="min")
+        entry = app.to_desktop_entry(order=5)
+        assert entry["Type"] == "Application"
+        assert entry["Name"] == "Min"
+        assert entry["Exec"] == "min"
+        assert entry["X-Kasual-Order"] == "5"
+
+    def test_omits_unset_optional_keys(self):
+        entry = App(name="Min", command="min").to_desktop_entry(order=1)
+        for key in ("Icon", "X-Kasual-Icon", "X-Kasual-Color",
+                    "X-Kasual-RecallMenuTrigger", "X-Kasual-HideGraceMs",
+                    "X-Kasual-Env", "Categories"):
+            assert key not in entry
+
+    def test_emits_set_keys(self):
+        app = App(
+            name="Steam", command="steam", args=("steam://open/bigpicture",),
+            icon="fa5b.steam", icon_theme="steam", color="#1b2838",
+            recall_menu_trigger="BTN_MODE_HOLD_1S", launch_hide_grace_ms=500,
+            env={"MANGOHUD": "1"}, categories=("Game",),
+        )
+        entry = app.to_desktop_entry(order=10)
+        assert entry["Icon"] == "steam"
+        assert entry["X-Kasual-Icon"] == "fa5b.steam"
+        assert entry["X-Kasual-Color"] == "#1b2838"
+        assert entry["X-Kasual-RecallMenuTrigger"] == "BTN_MODE_HOLD_1S"
+        assert entry["X-Kasual-HideGraceMs"] == "500"
+        assert entry["X-Kasual-Env"] == "MANGOHUD=1"
+        assert entry["Categories"] == "Game;"
+
+    def test_exec_requoting_survives_round_trip(self):
+        app = App(name="X", command="/opt/my app/run.sh", args=("--flag", "a b"))
+        entry = app.to_desktop_entry(order=1)
+        order, parsed = App.from_desktop_entry(entry)
+        assert parsed.command == "/opt/my app/run.sh"
+        assert parsed.args == ("--flag", "a b")
+
+    def test_round_trip_is_stable(self):
+        app = App(
+            name="Steam", command="steam", args=("steam://open/bigpicture",),
+            icon="fa5b.steam", color="#1b2838",
+            recall_menu_trigger="BTN_MODE_HOLD_1S", launch_hide_grace_ms=500,
+            env={"MANGOHUD": "1"}, categories=("Game",),
+        )
+        order, parsed = App.from_desktop_entry(app.to_desktop_entry(order=10))
+        assert order == 10
+        assert parsed == app

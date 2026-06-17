@@ -38,11 +38,14 @@ class BaseOverlay(QWidget):
         handler: Callable[[str], None],
         feedback: Feedback,
         parent: QWidget | None = None,   # accepted for API compat; always top-level
+        *,
+        keyboard: Keyboard = Keyboard.NONE,
     ) -> None:
         super().__init__()
         self._gamepad = gamepad
         self._handler = handler
         self._feedback = feedback
+        self._keyboard = keyboard
         self._closed  = False
         # Set by build_card(); used to detect clicks outside the card.
         self._card: QWidget | None = None
@@ -53,16 +56,18 @@ class BaseOverlay(QWidget):
         self.setWindowTitle("Kasual Overlay")
         self.setStyleSheet("background-color: rgba(0, 0, 0, 150);")
         # Standalone layer-shell surface above everything (incl. fullscreen games).
-        # keyboard=NONE — taking keyboard interactivity deactivates the fullscreen
-        # app underneath, which makes KWin reveal the panels it hides under
-        # fullscreen windows. These overlays are gamepad-driven (evdev), so they
-        # don't need Wayland focus.
+        # keyboard defaults to NONE — taking keyboard interactivity deactivates a
+        # fullscreen app underneath, which makes KWin reveal the panels it hides
+        # under fullscreen windows. Most overlays are gamepad-driven (evdev) and
+        # don't need Wayland focus. An overlay shown when nothing is fullscreen
+        # (e.g. first-run onboarding) can opt into keyboard input to be navigable
+        # by keyboard as well.
         make_layer_surface(
             self,
             layer=Layer.OVERLAY,
             anchors=Anchor.ALL,
             exclusive_zone=-1,
-            keyboard=Keyboard.NONE,
+            keyboard=keyboard,
         )
 
     def _show(self) -> None:
@@ -70,8 +75,12 @@ class BaseOverlay(QWidget):
         self._gamepad.push_handler(self._handler)
         self.showFullScreen()
         self.raise_()
-        # No activateWindow()/setFocus(): see make_layer_surface above — grabbing
-        # Wayland activation would uncover the DE panels behind a fullscreen app.
+        # Grab Wayland activation only when this overlay opted into keyboard input
+        # (see make_layer_surface above) — otherwise it would uncover the DE
+        # panels hidden behind a fullscreen app.
+        if self._keyboard != Keyboard.NONE:
+            self.activateWindow()
+            self.setFocus()
 
     def pause(self) -> None:
         """Temporarily hide the overlay (e.g. when the Desktop is minimized)."""

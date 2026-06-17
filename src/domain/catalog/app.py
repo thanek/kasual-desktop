@@ -99,6 +99,38 @@ class App:
         order = _parse_int(entry.get("X-Kasual-Order"), ORDER_DEFAULT)
         return order, app
 
+    def to_desktop_entry(self, order: int) -> dict[str, str]:
+        """Render this app back into a freedesktop ``[Desktop Entry]`` mapping.
+
+        The inverse of :meth:`from_desktop_entry`: it owns the App→freedesktop
+        rules, the provisioning adapter does the file I/O. Emits only the keys
+        Kasual Desktop uses, and only when they carry a non-default value, so a
+        from→to→from round-trip is stable. *order* is the placement key
+        (``X-Kasual-Order``), passed in because it is not an :class:`App` field
+        (symmetric with ``from_desktop_entry`` returning ``(order, app)``).
+        """
+        entry: dict[str, str] = {
+            "Type": "Application",
+            "Name": self.name,
+            "Exec": _join_exec(self.command, self.args),
+        }
+        if self.icon_theme is not None:
+            entry["Icon"] = self.icon_theme
+        if self.icon is not None:
+            entry["X-Kasual-Icon"] = self.icon
+        if self.color != "#2e3440":
+            entry["X-Kasual-Color"] = self.color
+        if self.recall_menu_trigger != Trigger.CLICK:
+            entry["X-Kasual-RecallMenuTrigger"] = self.recall_menu_trigger
+        if self.launch_hide_grace_ms:
+            entry["X-Kasual-HideGraceMs"] = str(self.launch_hide_grace_ms)
+        if self.env:
+            entry["X-Kasual-Env"] = ";".join(f"{k}={v}" for k, v in self.env.items())
+        if self.categories:
+            entry["Categories"] = ";".join(self.categories) + ";"
+        entry["X-Kasual-Order"] = str(order)
+        return entry
+
 
 def _bool_entry(entry: Mapping[str, str], key: str) -> bool:
     return (entry.get(key) or "").strip().lower() == "true"
@@ -118,6 +150,12 @@ def _parse_exec(exec_str: str) -> "tuple[str | None, list[str]]":
     if not cleaned:
         return None, []
     return cleaned[0], cleaned[1:]
+
+
+def _join_exec(command: str, args: tuple[str, ...]) -> str:
+    """Re-join (command, args) into a desktop ``Exec`` value, quoting each token
+    so it survives the ``shlex.split`` in :func:`_parse_exec` (the inverse)."""
+    return " ".join(shlex.quote(token) for token in (command, *args))
 
 
 def _parse_env(raw: str | None) -> dict:

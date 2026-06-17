@@ -1,0 +1,227 @@
+"""First-run app picker — the Qt side of provisioning (a ``ProvisioningView``).
+
+A full-screen layer-shell surface, same shape as the other overlays: a centred
+card listing the starter candidates, each a toggle row, plus a final Confirm
+action. Pure presentation — it renders the domain candidates, drives an
+:class:`AppSelection` for the toggle state and a :class:`MenuCursor` for
+navigation, and reports the chosen candidates through ``on_confirm``. i18n lives
+here (``tr`` on the canonical English names the domain supplies).
+
+Unlike the other overlays this one is **modal and confirm-only**: B / Escape /
+clicking the backdrop do nothing — the only way out is the Confirm action (which
+is allowed with zero apps selected). Because nothing is fullscreen on first run,
+it opts into keyboard interactivity so it is fully navigable by keyboard
+(arrows + Space to toggle) as well as gamepad and mouse.
+
+The view takes a candidate list + callbacks, so it is reusable beyond first-run
+(e.g. a future "Add apps" panel), not just for onboarding.
+"""
+
+import logging
+from collections.abc import Callable
+from typing import _ProtocolMeta  # type: ignore[attr-defined]
+
+import qtawesome as qta
+from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QKeyEvent
+from PyQt6.QtWidgets import (
+    QWidget, QPushButton, QVBoxLayout, QLabel, QSizePolicy,
+)
+
+from domain.input.pad_control import PadControl
+from domain.input.vocabulary import Event
+from domain.menu.cursor import MenuCursor
+from domain.provisioning.candidate import CandidateApp
+from domain.provisioning.ports import ProvisioningView
+from domain.provisioning.selection import AppSelection
+from domain.shared.feedback import Cue, Feedback
+from infrastructure.qt.ui import styles
+from infrastructure.qt.ui.layer_shell import Keyboard
+from .base_overlay import BaseOverlay
+
+logger = logging.getLogger(__name__)
+
+_CHECKED   = "✓"
+_UNCHECKED = "▢"
+
+
+class _Meta(type(BaseOverlay), _ProtocolMeta): pass
+
+
+class OnboardingOverlay(BaseOverlay, ProvisioningView, metaclass=_Meta):
+    """The first-run app picker. Created once via its factory, shown by
+    :meth:`present`, which feeds it the candidates and result callback."""
+
+    def __init__(self, gamepad: PadControl, feedback: Feedback) -> None:
+        # Opt into keyboard input: onboarding runs with nothing fullscreen, so
+        # grabbing focus is safe and lets the picker be driven by keyboard.
+        super().__init__(gamepad, self._handle_pad, feedback,
+                         keyboard=Keyboard.ON_DEMAND)
+        self._candidates: list[CandidateApp] = []
+        self._selection: AppSelection | None = None
+        self._on_confirm: Callable[[list[CandidateApp]], None] | None = None
+        self._rows:    list[QPushButton] = []
+        self._confirm: QPushButton | None = None
+
+        # Navigation spans the toggle rows plus the trailing Confirm action;
+        # clamped (wrap=False) like the tile popover — a fixed-length form.
+        # on_dismiss is a no-op: this overlay is confirm-only (see module docs).
+        self._cursor = MenuCursor(
+            count=lambda: len(self._rows) + 1,
+            render=self._render,
+            on_activate=self._activate,
+            on_dismiss=lambda: None,
+            feedback=feedback,
+            wrap=False,
+        )
+
+        outer = QVBoxLayout(self)
+        outer.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+        card = self.build_card(560)
+        card.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Maximum)
+        layout = QVBoxLayout(card)
+        layout.setContentsMargins(32, 32, 32, 32)
+        layout.setSpacing(8)
+        layout.setAlignment(Qt.AlignmentFlag.AlignTop)
+
+        title = QLabel(self.tr("Welcome — pick your apps"))
+        title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        title.setStyleSheet(
+            "font-size: 28px; color: #88c0d0; font-weight: bold;"
+            " background: transparent; padding-bottom: 8px;"
+        )
+        layout.addWidget(title)
+
+        self._rows_container = QWidget()
+        self._rows_container.setStyleSheet("background: transparent;")
+        self._rows_layout = QVBoxLayout(self._rows_container)
+        self._rows_layout.setContentsMargins(0, 0, 0, 0)
+        self._rows_layout.setSpacing(8)
+        layout.addWidget(self._rows_container)
+
+        outer.addWidget(card)
+
+    # ── ProvisioningView ─────────────────────────────────────────────────────
+
+    def present(
+        self,
+        candidates: list[CandidateApp],
+        on_confirm: Callable[[list[CandidateApp]], None],
+        on_cancel: Callable[[], None] | None = None,
+    ) -> None:
+        # on_cancel is part of the reusable port but unused here — this overlay
+        # is confirm-only, so there is no dismissal path to report.
+        self._candidates = list(candidates)
+        self._selection = AppSelection(self._candidates)
+        self._on_confirm = on_confirm
+        self._build_rows()
+        self._cursor.reset(0)
+        self._feedback.play(Cue.POPUP_OPEN)
+        self._show()
+
+    # ── Building ─────────────────────────────────────────────────────────────
+
+    def _build_rows(self) -> None:
+        self._rows.clear()
+        for i, candidate in enumerate(self._candidates):
+            btn = QPushButton()
+            btn.setMinimumHeight(62)
+            if candidate.app.icon:
+                btn.setIcon(qta.icon(candidate.app.icon, color="white"))
+            btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+            btn.clicked.connect(lambda _checked=False, idx=i: self._row_clicked(idx))
+            self._bind_hover(btn, i)
+            self._rows_layout.addWidget(btn)
+            self._rows.append(btn)
+
+        self._confirm = QPushButton(self.tr("Confirm"))
+        self._confirm.setMinimumHeight(62)
+        self._confirm.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self._confirm.clicked.connect(self._confirm_clicked)
+        self._bind_hover(self._confirm, len(self._candidates))   # Confirm is last
+        self._rows_layout.addWidget(self._confirm)
+
+    def _bind_hover(self, btn: QPushButton, index: int) -> None:
+        """Move the cursor onto *index* when the pointer enters *btn* (with the
+        cursor sound + repaint), so mouse hover highlights like keyboard/pad."""
+        def _enter(event) -> None:
+            QPushButton.enterEvent(btn, event)
+            self._cursor.hover(index)
+        btn.enterEvent = _enter
+
+    # ── Navigation (delegated to the domain cursor) ──────────────────────────
+
+    def _handle_pad(self, event: str) -> None:
+        self._cursor.handle_pad(event)
+
+    def keyPressEvent(self, event: QKeyEvent) -> None:
+        key = event.key()
+        if key in (Qt.Key.Key_Up,):
+            self._cursor.handle_pad(Event.UP)
+        elif key in (Qt.Key.Key_Down,):
+            self._cursor.handle_pad(Event.DOWN)
+        elif key in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
+            self._cursor.handle_pad(Event.SELECT)
+        elif key == Qt.Key.Key_Space:
+            # Space toggles the highlighted row's checkbox; a no-op on Confirm.
+            index = self._cursor.index
+            if index < len(self._rows):
+                self._toggle(index)
+
+    def _row_clicked(self, index: int) -> None:
+        """Pointer click on a row: move the cursor there, then toggle it."""
+        self._cursor.hover(index)
+        self._activate(index)
+
+    def _confirm_clicked(self) -> None:
+        self._activate(len(self._rows))   # the Confirm row is last
+
+    # ── Actions ──────────────────────────────────────────────────────────────
+
+    def _activate(self, index: int) -> None:
+        if index < len(self._rows):
+            self._toggle(index)
+        else:
+            self._confirm_selection()
+
+    def _toggle(self, index: int) -> None:
+        assert self._selection is not None
+        self._selection.toggle(index)
+        self._feedback.play(Cue.SELECT)
+        self._render(self._cursor.index)
+
+    def _confirm_selection(self) -> None:
+        assert self._selection is not None
+        chosen = self._selection.chosen()
+        if self._dismiss(sound=Cue.SELECT) and self._on_confirm is not None:
+            self._on_confirm(chosen)
+
+    # ── Rendering ────────────────────────────────────────────────────────────
+
+    def _render(self, index: int) -> None:
+        assert self._selection is not None
+        for i, btn in enumerate(self._rows):
+            mark = _CHECKED if self._selection.is_selected(i) else _UNCHECKED
+            btn.setText(f"  {mark}  {self.tr(self._candidates[i].app.name)}")
+            btn.setStyleSheet(
+                styles.home_menu_item_selected() if i == index
+                else styles.home_menu_item_normal()
+            )
+        if self._confirm is not None:
+            on_confirm_row = index == len(self._rows)
+            self._confirm.setStyleSheet(
+                styles.dialog_focused() if on_confirm_row else styles.dialog_idle()
+            )
+
+
+class OnboardingOverlayFactory:
+    """Builds the onboarding overlay bound to the gamepad + feedback, so the
+    composition root can create the view without knowing its wiring."""
+
+    def __init__(self, gamepad: PadControl, feedback: Feedback) -> None:
+        self._gamepad = gamepad
+        self._feedback = feedback
+
+    def create(self) -> OnboardingOverlay:
+        return OnboardingOverlay(self._gamepad, self._feedback)

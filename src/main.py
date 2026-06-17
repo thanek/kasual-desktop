@@ -18,8 +18,11 @@ from infrastructure.audio.feedback import SoundFeedback
 from infrastructure.input.gamepad_watcher import GamepadWatcher
 from infrastructure.qt.desktop import build_desktop
 from infrastructure.qt.overlays.home_overlay import HomeOverlayFactory
+from infrastructure.qt.overlays.onboarding_overlay import OnboardingOverlayFactory
 from infrastructure.qt.ui.tray import SystemTray
-from infrastructure.system.app_config import load_apps
+from infrastructure.system.app_config import DesktopAppProvisioning, load_apps
+from infrastructure.system.app_discovery import WhichAppDiscovery
+from domain.provisioning.provisioning import Provisioning, needs_provisioning
 from infrastructure.system.app_manager import AppManager
 from infrastructure.system.log_viewer_launcher import LogViewerLauncher
 from infrastructure.system.power import SystemdPowerControl
@@ -67,9 +70,6 @@ def main() -> None:
     log_file = _setup_logging()
     logger.info("Running Kasual Desktop")
 
-    apps = load_apps()
-    logger.info("Loaded %d apps", len(apps))
-
     app = QApplication(sys.argv)
     app.setApplicationName("Kasual Desktop")
     app.setQuitOnLastWindowClosed(False)
@@ -77,69 +77,100 @@ def main() -> None:
     install_translations(app, str(Path(__file__).parent.parent / "locale"))
 
     gamepad = GamepadWatcher()
-    wm = KWinWindowManager()
     feedback = SoundFeedback()
-    # One PowerControl shared by the Desktop's action runner and the Application.
-    power = SystemdPowerControl()
 
-    # Recent-notifications feature: the KDE monitor (source port) feeds the
-    # platform-agnostic NotificationCenter, which the Desktop's overlay reads.
-    notification_center = NotificationCenter()
-    notification_monitor = KdeNotificationMonitor()
-    notification_monitor.on_notification(notification_center.record)
-
-    desktop = build_desktop(
-        apps=apps, gamepad=gamepad, window_manager=wm,
-        wallpaper=KdeSystemWallpaper(), feedback=feedback,
-        volume=PactlVolumeControl(), brightness=select_brightness_control(),
-        power=power, scheduler=QtScheduler(),
-        process_manager=AppManager(), notifications=notification_center,
-        network_control=NMNetworkControl(),
-    )
-    # Keep the top-bar notifications badge in sync with the in-memory count.
-    # Subscribed after `record` above, so the count is already updated when this
-    # runs; delivered on the GUI thread by the monitor's signal hop.
-    notification_monitor.on_notification(
-        lambda _n: desktop.refresh_notification_badge()
+    # Provisioning: a fresh install has no apps. We detect that via an explicit
+    # marker (not dir-absence, so choosing zero apps still counts) and run
+    # onboarding *before* the session comes up — load_apps() must see whatever
+    # the user just picked. The bundled launchers resolve against the repo root.
+    provisioning = DesktopAppProvisioning()
+    provisioning_uc = Provisioning(
+        provisioning, WhichAppDiscovery(),
+        bundled_base=str(Path(__file__).parent.parent),
     )
 
-    # Network status indicator: the concrete adapter (NetworkManager) is the only
-    # NM-aware piece; everything downstream depends on the domain NetworkMonitor
-    # port, so it can be swapped for another backend at this seam.
-    network_monitor = NMNetworkMonitor()
-    network_monitor.on_changed(desktop.update_network_status)
-    desktop.update_network_status(network_monitor.current())
+    def start_session() -> None:
+        """Bring up the Desktop and controller from the (now-provisioned) apps.
 
-    # The log viewer runs in its own process so it is a normal xdg window, not a
-    # layer-shell surface (see LogViewerLauncher).
-    log_viewer = LogViewerLauncher(
-        log_file=str(log_file),
-        entry=Path(__file__).parent / "log_viewer_main.py",
-    )
-    tray = SystemTray(
-        on_show=lambda: (feedback.play(Cue.START), desktop.show_desktop()),
-        on_logs=log_viewer.open,
-        on_quit=app.quit,
-    )
+        Deferred behind onboarding via a callback continuation rather than a
+        nested QEventLoop, matching how the rest of the app defers work."""
+        apps = load_apps()
+        logger.info("Loaded %d apps", len(apps))
 
-    controller = Application(
-        gamepad=gamepad,
-        desktop=desktop,
-        app_control=desktop.app_control,
-        action_deps=ActionDeps(desktop=desktop, power=power),
-        tray=tray,
-        wm=wm,
-        overlay_factory=HomeOverlayFactory(gamepad, feedback),
-        hud=MangoHudControl(),
-    )
-    wm.start_periodic_refresh(3000)
-    # Start the notification monitor only once the event loop is running, so its
-    # subprocess spawn can never sit on the critical startup path (e.g. delaying
-    # the gamepad-connected activation). It is non-essential to bring-up.
-    QTimer.singleShot(0, notification_monitor.start)
-    app.aboutToQuit.connect(controller.shutdown)
-    app.aboutToQuit.connect(notification_monitor.stop)
-    app.aboutToQuit.connect(log_viewer.close)
+        wm = KWinWindowManager()
+        # One PowerControl shared by the Desktop's action runner and the Application.
+        power = SystemdPowerControl()
+
+        # Recent-notifications feature: the KDE monitor (source port) feeds the
+        # platform-agnostic NotificationCenter, which the Desktop's overlay reads.
+        notification_center = NotificationCenter()
+        notification_monitor = KdeNotificationMonitor()
+        notification_monitor.on_notification(notification_center.record)
+
+        desktop = build_desktop(
+            apps=apps, gamepad=gamepad, window_manager=wm,
+            wallpaper=KdeSystemWallpaper(), feedback=feedback,
+            volume=PactlVolumeControl(), brightness=select_brightness_control(),
+            power=power, scheduler=QtScheduler(),
+            process_manager=AppManager(), notifications=notification_center,
+            network_control=NMNetworkControl(),
+        )
+        # Keep the top-bar notifications badge in sync with the in-memory count.
+        # Subscribed after `record` above, so the count is already updated when
+        # this runs; delivered on the GUI thread by the monitor's signal hop.
+        notification_monitor.on_notification(
+            lambda _n: desktop.refresh_notification_badge()
+        )
+
+        # Network status indicator: the concrete adapter (NetworkManager) is the
+        # only NM-aware piece; everything downstream depends on the domain
+        # NetworkMonitor port, so it can be swapped for another backend here.
+        network_monitor = NMNetworkMonitor()
+        network_monitor.on_changed(desktop.update_network_status)
+        desktop.update_network_status(network_monitor.current())
+
+        # The log viewer runs in its own process so it is a normal xdg window,
+        # not a layer-shell surface (see LogViewerLauncher).
+        log_viewer = LogViewerLauncher(
+            log_file=str(log_file),
+            entry=Path(__file__).parent / "log_viewer_main.py",
+        )
+        tray = SystemTray(
+            on_show=lambda: (feedback.play(Cue.START), desktop.show_desktop()),
+            on_logs=log_viewer.open,
+            on_quit=app.quit,
+        )
+
+        controller = Application(
+            gamepad=gamepad,
+            desktop=desktop,
+            app_control=desktop.app_control,
+            action_deps=ActionDeps(desktop=desktop, power=power),
+            tray=tray,
+            wm=wm,
+            overlay_factory=HomeOverlayFactory(gamepad, feedback),
+            hud=MangoHudControl(),
+        )
+        wm.start_periodic_refresh(3000)
+        # Start the notification monitor only once the event loop is running, so
+        # its subprocess spawn can never sit on the critical startup path (e.g.
+        # delaying the gamepad-connected activation). Non-essential to bring-up.
+        QTimer.singleShot(0, notification_monitor.start)
+        app.aboutToQuit.connect(controller.shutdown)
+        app.aboutToQuit.connect(notification_monitor.stop)
+        app.aboutToQuit.connect(log_viewer.close)
+
+    if needs_provisioning(provisioning):
+        logger.info("First run — showing onboarding")
+        onboarding = OnboardingOverlayFactory(gamepad, feedback).create()
+        # Confirm-only (the picker has no dismissal path); confirming with zero
+        # apps still marks provisioned, so onboarding won't nag on next launch.
+        onboarding.present(
+            provisioning_uc.candidates(),
+            on_confirm=lambda chosen: (provisioning_uc.complete(chosen), start_session()),
+        )
+    else:
+        start_session()
 
     QTimer.singleShot(0, feedback.init)
 

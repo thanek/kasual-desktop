@@ -7,7 +7,11 @@ loader: directory handling, file parsing, ordering and resilience to bad files.
 
 import pytest
 
-from infrastructure.system.app_config import load_apps
+from domain.catalog.app import App
+from domain.provisioning.candidate import CandidateApp
+from infrastructure.system.app_config import (
+    DesktopAppProvisioning, load_apps, provisioned_marker,
+)
 
 
 def _write(directory, filename, content):
@@ -109,3 +113,62 @@ class TestLoadApps:
     def test_missing_dir_returns_empty(self, tmp_path, monkeypatch):
         monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "does-not-exist"))
         assert list(load_apps()) == []
+
+    def test_does_not_create_missing_dir(self, tmp_path, monkeypatch):
+        # Loading no longer has the side effect of creating the apps dir —
+        # that is provisioning's job now.
+        monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+        load_apps()
+        assert not (tmp_path / "kasual-desktop" / "apps").exists()
+
+
+# ── DesktopAppProvisioning ──────────────────────────────────────────────────
+
+class TestDesktopAppProvisioning:
+    @pytest.fixture
+    def config_home(self, tmp_path, monkeypatch):
+        """Point XDG_CONFIG_HOME at a temp dir WITHOUT pre-creating anything."""
+        monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+        return tmp_path
+
+    def _candidate(self):
+        return CandidateApp(
+            key="steam",
+            app=App(
+                name="Steam", command="steam", args=("steam://open/bigpicture",),
+                icon="fa5b.steam", color="#1b2838",
+                recall_menu_trigger="BTN_MODE_HOLD_1S", launch_hide_grace_ms=500,
+                categories=("Game",),
+            ),
+            order=10,
+            default_selected=True,
+        )
+
+    def test_not_provisioned_before(self, config_home):
+        assert DesktopAppProvisioning().is_provisioned() is False
+
+    def test_provision_creates_marker(self, config_home):
+        DesktopAppProvisioning().provision([])
+        assert provisioned_marker().exists()
+        assert DesktopAppProvisioning().is_provisioned() is True
+
+    def test_provision_writes_loadable_desktop_files(self, config_home):
+        DesktopAppProvisioning().provision([self._candidate()])
+
+        assert (config_home / "kasual-desktop" / "apps" / "steam.desktop").exists()
+        apps = load_apps()
+        assert len(apps) == 1
+        a = apps[0]
+        assert a.name == "Steam"
+        assert a.command == "steam"
+        assert a.args == ("steam://open/bigpicture",)
+        assert a.icon == "fa5b.steam"
+        assert a.color == "#1b2838"
+        assert a.recall_menu_trigger == "BTN_MODE_HOLD_1S"
+        assert a.launch_hide_grace_ms == 500
+        assert a.is_game
+
+    def test_empty_provision_yields_empty_catalog_but_marks_done(self, config_home):
+        DesktopAppProvisioning().provision([])
+        assert list(load_apps()) == []
+        assert DesktopAppProvisioning().is_provisioned() is True
