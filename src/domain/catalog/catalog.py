@@ -13,7 +13,7 @@ work as on a list, so it drops into every consumer that used ``list[App]``.
 """
 
 from collections.abc import Iterable, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from domain.catalog.app import App
 
@@ -43,6 +43,17 @@ class AppCatalog(Sequence[App]):
         """
         apps = list(self.apps)
         apps[i], apps[j] = apps[j], apps[i]
+        return AppCatalog(tuple(apps))
+
+    def with_color(self, index: int, color: str) -> "AppCatalog":
+        """Return a new catalog with the app at *index* recoloured to *color*.
+
+        Pure (the catalog and its apps are immutable): the tile bar's colour
+        change uses this, with the parallel ``.desktop`` ``X-Kasual-Color`` rewrite
+        handled by the persistence adapter.
+        """
+        apps = list(self.apps)
+        apps[index] = replace(apps[index], color=color)
         return AppCatalog(tuple(apps))
 
     def __getitem__(self, index):

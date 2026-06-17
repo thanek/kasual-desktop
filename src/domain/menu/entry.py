@@ -19,4 +19,5 @@ RESTORE = "restore"
 CLOSE   = "close"
 
 # ── Tile Management Popover actions ──────────────────────────────────────────
-MOVE    = "move"
+MOVE         = "move"
+CHANGE_COLOR = "change_color"

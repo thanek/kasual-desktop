@@ -1,6 +1,6 @@
 """Tests for the tile Popover composition rules (pure, no Qt)."""
 
-from domain.menu.entry import CLOSE, LAUNCH, MOVE, RESTORE
+from domain.menu.entry import CHANGE_COLOR, CLOSE, LAUNCH, MOVE, RESTORE
 from domain.menu.tile import compose_tile_menu, tile_management_menu, tile_menu_for
 from domain.catalog.target import AppTarget, WindowTarget
 
@@ -54,11 +54,11 @@ class TestTileMenuFor:
 
 
 class TestTileManagementMenu:
-    def test_offers_move(self):
+    def test_offers_move_and_change_color(self):
         items = tile_management_menu(AppTarget(0, "Steam"))
-        assert [i.action for i in items] == [MOVE]
+        assert [i.action for i in items] == [MOVE, CHANGE_COLOR]
 
-    def test_item_carries_target(self):
+    def test_items_carry_target(self):
         target = AppTarget(2, "Steam")
         items = tile_management_menu(target)
-        assert items[0].target == target
+        assert all(i.target == target for i in items)

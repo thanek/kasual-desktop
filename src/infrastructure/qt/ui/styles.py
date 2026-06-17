@@ -62,30 +62,33 @@ def tile_normal(color: str) -> str:
     """
 
 
-def tile_selected() -> str:
+def tile_selected(color: str) -> str:
+    """The focused tile — its own colour with a solid white selection border
+    (size still comes from the grow animation)."""
     return f"""
         QToolButton {{
             font-size: 18px;
             font-weight: bold;
-            color: black;
-            background-color: {COLOR_ACCENT};
+            color: white;
+            background-color: {color};
             border: 3px solid white;
-            border-radius: 38px;
+            border-radius: 32px;
             padding: 12px 8px 16px 8px;
         }}
     """
 
 
-def tile_moving() -> str:
-    """The focused tile while in move mode — selected, with a dashed accent border."""
+def tile_moving(color: str) -> str:
+    """The focused tile while in move mode — its normal look plus a dashed border
+    as the only move cue (size still comes from the grow animation)."""
     return f"""
         QToolButton {{
             font-size: 18px;
             font-weight: bold;
-            color: black;
-            background-color: {COLOR_ACCENT};
+            color: white;
+            background-color: {color};
             border: 3px dashed white;
-            border-radius: 38px;
+            border-radius: 32px;
             padding: 12px 8px 16px 8px;
         }}
     """

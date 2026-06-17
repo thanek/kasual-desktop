@@ -116,7 +116,7 @@ class AppTile(QWidget):
             return
         self._is_selected = selected
         if selected:
-            self._btn.setStyleSheet(styles.tile_selected())
+            self._btn.setStyleSheet(styles.tile_selected(self._color))
             self._apply_shadow(selected=True)
             # Marquee waits for the grow to finish so the scrolling title is laid
             # out against the tile's final (selected) size, not a mid-animation one.
@@ -132,7 +132,16 @@ class AppTile(QWidget):
 
     def set_moving(self, moving: bool) -> None:
         """Toggle the move-mode cue on this (selected) tile's button."""
-        self._btn.setStyleSheet(styles.tile_moving() if moving else styles.tile_selected())
+        self._btn.setStyleSheet(
+            styles.tile_moving(self._color) if moving else styles.tile_selected(self._color)
+        )
+
+    def set_color(self, color: str) -> None:
+        """Recolour the tile, keeping its current selected/normal styling so the new
+        colour shows immediately either way."""
+        self._color = color
+        style = styles.tile_selected if self._is_selected else styles.tile_normal
+        self._btn.setStyleSheet(style(color))
 
     def set_running(self, running: bool) -> None:
         if not running:
@@ -204,21 +213,37 @@ class AppTile(QWidget):
         # that animation, so bail unless the tile is still the selected one.
         if not self._is_selected:
             return
-        clip_x = 4
-        clip_y = 12 + ICON_SIZE_SEL + 4
-        clip_w = TILE_SEL_W - 8
-        clip_h = TILE_SEL_H - 16 - BAR_H - BAR_MARGIN - 4 - clip_y
-        self._marquee_clip.setGeometry(clip_x, clip_y, clip_w, clip_h)
-        self._marquee_clip.setStyleSheet(f"background-color: {styles.COLOR_ACCENT};")
-
         font = QFont()
         font.setPixelSize(18)
         font.setBold(True)
+        fm = QFontMetrics(font)
+        text_h = fm.height()
+
+        # Match where QToolButton actually draws the title: it vertically centres the
+        # icon+gap+text block within the padded content area, so the text sits lower
+        # than a naive "right below a top-aligned icon" guess — which is what made the
+        # marquee jump up on long-named tiles relative to short-named ones.
+        gap = 4
+        content_top, content_bottom = 12, 16   # tile_* stylesheet vertical padding
+        content_h = TILE_SEL_H - content_top - content_bottom
+        block_h = ICON_SIZE_SEL + gap + text_h
+        center_offset = max(0, (content_h - block_h) // 2)
+        text_top = content_top + center_offset + ICON_SIZE_SEL + gap
+
+        clip_x = 4
+        clip_w = TILE_SEL_W - 8
+        clip_h = text_h
+        clip_y = text_top
+        self._marquee_clip.setGeometry(clip_x, clip_y, clip_w, clip_h)
+        # Blend with the tile's own background (selected tiles keep their colour now,
+        # they no longer turn accent), with the same white title text as the tile.
+        self._marquee_clip.setStyleSheet(f"background-color: {self._color};")
+
         self._marquee_lbl.setFont(font)
-        self._marquee_lbl.setStyleSheet("color: black; background: transparent;")
+        self._marquee_lbl.setStyleSheet("color: white; background: transparent;")
         self._marquee_lbl.setText(self._full_name)
 
-        text_w    = QFontMetrics(font).horizontalAdvance(self._full_name) + 16
+        text_w    = fm.horizontalAdvance(self._full_name) + 16
         max_scroll = text_w - clip_w
         self._marquee_lbl.setFixedSize(max(text_w, clip_w), clip_h)
         if max_scroll <= 0:

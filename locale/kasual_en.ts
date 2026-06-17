@@ -47,6 +47,12 @@
         <source>Move</source>
         <translation type="unfinished" />
     </message>
+    <message>
+        <location filename="../src/infrastructure/qt/overlays/tile_color_picker.py" line="61" />
+        <location filename="../src/domain/menu/tile.py" line="57" />
+        <source>Change color</source>
+        <translation type="unfinished" />
+    </message>
 </context><context>
     <name>HomeOverlay</name>
     <message>

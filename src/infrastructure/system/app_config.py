@@ -16,7 +16,7 @@ from pathlib import Path
 
 from domain.catalog.app import App
 from domain.catalog.catalog import AppCatalog
-from domain.menu.ports import TileOrderStore
+from domain.menu.ports import TileColorStore, TileOrderStore
 from domain.provisioning.candidate import CandidateApp
 from domain.provisioning.ports import AppProvisioning
 
@@ -141,10 +141,29 @@ class DesktopTileOrderStore(TileOrderStore):
         ordered[i], ordered[j] = ordered[j], ordered[i]
         for new_order, path in enumerate(ordered):
             try:
-                _rewrite_order(path, new_order)
+                _rewrite_key(path, "X-Kasual-Order", str(new_order))
             except OSError as exc:
                 # One failed write must not abort the rest (mirrors load_apps/provision).
                 logger.error("Cannot rewrite order in %s: %s", path, exc)
+
+
+class DesktopTileColorStore(TileColorStore):
+    """Persist a tile's colour by rewriting ``X-Kasual-Color`` in its ``.desktop`` file.
+
+    Resolves the *index* to a file through the same render-order mapping the order
+    store uses, then rewrites that one file's ``X-Kasual-Color`` line-based, leaving
+    every other key and comment untouched.
+    """
+
+    def set_color(self, index: int, color: str) -> None:
+        ordered = _ordered_desktop_paths()
+        if not (0 <= index < len(ordered)):
+            logger.warning("Tile colour set out of range: %d of %d", index, len(ordered))
+            return
+        try:
+            _rewrite_key(ordered[index], "X-Kasual-Color", color)
+        except OSError as exc:
+            logger.error("Cannot rewrite colour in %s: %s", ordered[index], exc)
 
 
 def _ordered_desktop_paths() -> list[Path]:
@@ -172,25 +191,25 @@ def _ordered_desktop_paths() -> list[Path]:
     return [path for _, path in entries]
 
 
-def _is_order_line(line: str) -> bool:
-    """True if *line* assigns ``X-Kasual-Order`` (with or without surrounding spaces)."""
+def _is_key_line(line: str, key: str) -> bool:
+    """True if *line* assigns *key* (with or without surrounding spaces)."""
     stripped = line.strip()
-    if not stripped.startswith("X-Kasual-Order"):
+    if not stripped.startswith(key):
         return False
-    return stripped[len("X-Kasual-Order"):].lstrip().startswith("=")
+    return stripped[len(key):].lstrip().startswith("=")
 
 
-def _rewrite_order(path: Path, order: int) -> None:
-    """Set ``X-Kasual-Order`` in *path* to *order*, preserving every other line.
+def _rewrite_key(path: Path, key: str, value: str) -> None:
+    """Set *key* in *path* to *value*, preserving every other line.
 
     Replaces the existing assignment in place; if the key is absent, appends it (the
     files carry a single ``[Desktop Entry]`` section)."""
     lines = path.read_text(encoding="utf-8").splitlines(keepends=True)
-    new_line = f"X-Kasual-Order={order}\n"
+    new_line = f"{key}={value}\n"
     out: list[str] = []
     replaced = False
     for line in lines:
-        if _is_order_line(line):
+        if _is_key_line(line, key):
             out.append(new_line)
             replaced = True
         else:

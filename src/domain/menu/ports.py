@@ -13,3 +13,15 @@ class TileOrderStore(Protocol):
     """
 
     def swap(self, i: int, j: int) -> None: ...
+
+
+class TileColorStore(Protocol):
+    """Persists a tile's colour (the write side of ``X-Kasual-Color``).
+
+    The Tile Management Popover's colour picker calls :meth:`set_color` after
+    recolouring a tile on screen, so the new colour survives a restart. *index* is
+    the tile's position in the rendered order (the ``(X-Kasual-Order, source)``-sorted
+    catalog) and the adapter rewrites that ``.desktop`` file's ``X-Kasual-Color``.
+    """
+
+    def set_color(self, index: int, color: str) -> None: ...

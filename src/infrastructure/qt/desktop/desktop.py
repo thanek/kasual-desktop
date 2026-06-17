@@ -13,6 +13,7 @@ from infrastructure.qt.overlays.base_overlay import BaseOverlay
 from infrastructure.qt.overlays.confirm_dialog import ConfirmDialog
 from infrastructure.qt.overlays.info_dialog import InfoDialog
 from infrastructure.qt.overlays.tile_popover import TilePopoverMenu
+from infrastructure.qt.overlays.tile_color_picker import TileColorPicker
 from infrastructure.qt.overlays.volume_overlay import VolumeOverlay
 from infrastructure.qt.overlays.brightness_overlay import BrightnessOverlay
 from infrastructure.qt.overlays.notifications_overlay import NotificationsOverlay
@@ -35,8 +36,10 @@ from domain.lifecycle.app_lifecycle import AppLifecycle
 from domain.navigation.focus_navigator import FocusNavigator
 from domain.navigation.tile_mover import TileMover
 from domain.system.runner import ActionRunner
-from domain.menu.entry import MOVE
+from domain.menu.entry import CHANGE_COLOR, MOVE
 from domain.menu.item import MenuItem
+from domain.menu.palette import TILE_COLORS
+from domain.menu.ports import TileColorStore
 from domain.menu.tile import tile_management_menu, tile_menu_for
 from domain.shared.feedback import Feedback
 from typing import _ProtocolMeta  # type: ignore[attr-defined]
@@ -87,6 +90,7 @@ class Desktop(QWidget, DesktopView, DesktopShell, DesktopControl, metaclass=_Met
         notifications: NotificationCenter,
         network_control: NetworkControl,
         overlays: OpenOverlays,
+        color_store: TileColorStore,
     ):
         super().__init__()
         self._apps        = apps
@@ -106,8 +110,10 @@ class Desktop(QWidget, DesktopView, DesktopShell, DesktopControl, metaclass=_Met
         # the domain registry; only the confirm dialog keeps a named handle, for
         # its single-instance guard and the app-ended force-close.
         self._overlays       = overlays
+        self._color_store    = color_store
         self._confirm_dialog = None
         self._tile_popover   = None
+        self._color_picker   = None
 
         # Desktop visibility + paused + what the BTN_MODE menu targets (foreground).
         # The foreground is shared by reference with the AppLifecycle coordinator.
@@ -220,6 +226,7 @@ class Desktop(QWidget, DesktopView, DesktopShell, DesktopControl, metaclass=_Met
         overlay (it owns a pushed pad handler), so it is cancelled explicitly."""
         self._overlays.cancel()
         self._confirm_dialog = None
+        self._color_picker = None
         if self._tile_mover is not None:
             self._tile_mover.cancel()
 
@@ -421,6 +428,38 @@ class Desktop(QWidget, DesktopView, DesktopShell, DesktopControl, metaclass=_Met
     def _on_manage_select(self, item: MenuItem) -> None:
         if item.action == MOVE:
             self._tile_mover.start()
+        elif item.action == CHANGE_COLOR:
+            self._show_color_picker()
+
+    def _show_color_picker(self) -> None:
+        """Open the palette picker for the focused app tile.
+
+        The chosen colour is applied to the tile and persisted; cancelling (B /
+        Escape / backdrop / BTN_MODE) leaves it unchanged. The capture of the tile
+        index is safe: the picker is modal, so the focus cannot move underneath it."""
+        if self._color_picker is not None or not self._tilebar.current_is_app():
+            return
+        index = self._tilebar.current_app_index()
+
+        def _on_chosen(color: str) -> None:
+            self._forget_color_picker()
+            self._tilebar.set_app_color(index, color)
+            self._color_store.set_color(index, color)
+
+        self._color_picker = TileColorPicker(
+            colors=TILE_COLORS,
+            selected=self._tilebar.current_app_color(),
+            on_select=_on_chosen,
+            on_cancel=self._forget_color_picker,
+            gamepad=self._gamepad,
+            feedback=self._feedback,
+            parent=self,
+        )
+        self._overlays.register(self._color_picker)
+
+    def _forget_color_picker(self) -> None:
+        self._overlays.forget(self._color_picker)
+        self._color_picker = None
 
     def _close_active_dialog(self) -> None:
         if self._confirm_dialog is not None:

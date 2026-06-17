@@ -218,6 +218,21 @@ class TileBar(QScrollArea, TileBarView, TileFocusView, TileReorderView, metaclas
         if isinstance(tile, AppTile):
             tile.set_moving(active)
 
+    # ── Colour (Tile Management Popover) ─────────────────────────────────────
+
+    def current_app_color(self) -> str | None:
+        """Colour of the focused app tile, or None if it is not an app tile."""
+        if 0 <= self._tile_index < len(self._tiles):
+            return self._apps[self._tile_index].color
+        return None
+
+    def set_app_color(self, index: int, color: str) -> None:
+        """Recolour the static app tile at *index*, on screen and in the catalog."""
+        if not (0 <= index < len(self._tiles)):
+            return
+        self._apps = self._apps.with_color(index, color)
+        self._tiles[index].set_color(color)
+
     def _static_index_of(self, tile: AppTile) -> int:
         """Current position of a static app *tile* (it shifts during move mode)."""
         return self._tiles.index(tile)

@@ -65,6 +65,19 @@ class TestSwapped:
         assert [a.name for a in cat] == ["A", "B"]
 
 
+class TestWithColor:
+    def test_recolours_one_app(self):
+        cat = AppCatalog((_app("A"), _app("B")))
+        out = cat.with_color(1, "#ff0000")
+        assert out[1].color == "#ff0000"
+        assert out[0].color == _app("A").color
+
+    def test_leaves_original_untouched(self):
+        cat = AppCatalog((_app("A"),))
+        cat.with_color(0, "#ff0000")
+        assert cat[0].color == _app("A").color
+
+
 class TestSequenceBehaviour:
     def test_is_a_sequence(self):
         assert isinstance(AppCatalog(), Sequence)

@@ -187,3 +187,23 @@ class TestSwapAppTiles:
         bar = bar_with_tiles
         bar.swap_app_tiles(0, 9)
         assert [a.name for a in bar._apps] == ["App 0", "App 1", "App 2"]
+
+
+class TestSetAppColor:
+    def test_recolours_catalog_and_tile(self, bar_with_tiles):
+        bar = bar_with_tiles
+        bar.set_app_color(1, "#ff0000")
+        assert bar._apps[1].color == "#ff0000"
+        assert bar._tiles[1]._color == "#ff0000"
+
+    def test_current_app_color_reflects_focus(self, bar_with_tiles):
+        bar = bar_with_tiles
+        bar.move(2)
+        bar.set_app_color(2, "#00ff00")
+        assert bar.current_app_color() == "#00ff00"
+
+    def test_out_of_range_is_noop(self, bar_with_tiles):
+        bar = bar_with_tiles
+        before = [a.color for a in bar._apps]
+        bar.set_app_color(9, "#ff0000")
+        assert [a.color for a in bar._apps] == before
