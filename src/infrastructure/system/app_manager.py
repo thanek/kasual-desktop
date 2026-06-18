@@ -35,7 +35,10 @@ class AppManager(QObject, ProcessManager, metaclass=_Meta):
     # because it is the cross-thread marshalling bridge — Qt delivers it queued
     # onto the GUI thread, and only then does the EventEmitter fan out (emit is
     # synchronous in the calling thread, so the hop must happen before it).
-    _proc_ended = pyqtSignal(int, int)   # idx, exit_code
+    # Carries the Popen itself (not its index): a tile reorder re-keys the
+    # _processes dict mid-flight, so finish/force-kill must locate the process by
+    # identity at the time it actually ends, not by the index captured at launch.
+    _proc_ended = pyqtSignal(object, int)   # proc, exit_code
 
     def __init__(self, parent: QObject | None = None):
         super().__init__(parent)
@@ -112,7 +115,7 @@ class AppManager(QObject, ProcessManager, metaclass=_Meta):
 
         self._processes[idx] = proc
         threading.Thread(
-            target=self._monitor, args=(idx,), daemon=True
+            target=self._monitor, args=(proc,), daemon=True
         ).start()
         self._started_emitter.emit(AppStarted(idx))
         return True
@@ -124,10 +127,22 @@ class AppManager(QObject, ProcessManager, metaclass=_Meta):
         logger.info("Ending app %d (SIGTERM)", idx)
         self._killpg(proc, signal.SIGTERM)
         # If the process does not terminate within 3 s — force SIGKILL. Bind the
-        # timer to *this* process object, not just idx: a close+relaunch of the
-        # same idx within the grace window swaps in a new process, and a stale
-        # idx-keyed timer would SIGKILL that freshly launched one.
-        QTimer.singleShot(3000, lambda: self._force_kill(idx, proc))
+        # timer to *this* process object, not its idx: a close+relaunch (or a tile
+        # reorder) swaps which process a given idx holds, and a stale idx-keyed
+        # timer would SIGKILL the wrong one.
+        QTimer.singleShot(3000, lambda: self._force_kill(proc))
+
+    def swap_indices(self, i: int, j: int) -> None:
+        """Exchange the tracked processes at positions *i* and *j* after a tile
+        reorder, so index-keyed lookups (is_running/running_pid/terminate) keep
+        pointing at the right app. Cleanup is keyed on process identity, so an
+        already-running monitor or force-kill timer survives this re-keying."""
+        pi = self._processes.pop(i, None)
+        pj = self._processes.pop(j, None)
+        if pi is not None:
+            self._processes[j] = pi
+        if pj is not None:
+            self._processes[i] = pj
 
     def is_running(self, idx: int | None = None) -> bool:
         """True if app *idx* is running, or if any app is running when idx is None."""
@@ -158,17 +173,17 @@ class AppManager(QObject, ProcessManager, metaclass=_Meta):
         except Exception as e:
             logger.error("killpg(%s) failed: %s", sig.name, e)
 
-    def _force_kill(self, idx: int, proc: subprocess.Popen) -> None:
-        # Only kill if this exact process is still the one registered for idx and
-        # is still alive — guards against killing a process that already exited or
-        # a different one that took idx's place after a relaunch.
-        if self._processes.get(idx) is proc and proc.poll() is None:
+    def _force_kill(self, proc: subprocess.Popen) -> None:
+        # Only kill if this exact process is still tracked and still alive —
+        # guards against killing one that already exited or a different one that
+        # took its place after a relaunch (and survives a reorder re-keying).
+        idx = self._idx_of(proc)
+        if idx is not None and proc.poll() is None:
             logger.warning("Forcing SIGKILL for application %d", idx)
             self._killpg(proc, signal.SIGKILL)
 
-    def _monitor(self, idx: int) -> None:
+    def _monitor(self, proc: subprocess.Popen) -> None:
         """Waits for the process to finish in a background thread, then signals the GUI."""
-        proc = self._processes[idx]
         # start_new_session=True → pgid == pid of the child process
         pgid = proc.pid
         proc.wait()
@@ -179,9 +194,18 @@ class AppManager(QObject, ProcessManager, metaclass=_Meta):
             except (ProcessLookupError, PermissionError):
                 break
             time.sleep(0.2)
-        self._proc_ended.emit(idx, proc.returncode)
+        self._proc_ended.emit(proc, proc.returncode)
 
-    def _on_finished(self, idx: int, exit_code: int) -> None:
+    def _on_finished(self, proc: subprocess.Popen, exit_code: int) -> None:
+        # Resolve the index now, not at launch time: a reorder may have moved this
+        # process to a different key in the meantime.
+        idx = self._idx_of(proc)
+        if idx is None:
+            return
         logger.info("Application %d ended (exit code=%d)", idx, exit_code)
         self._processes.pop(idx, None)
         self._finished_emitter.emit(AppFinished(idx))
+
+    def _idx_of(self, proc: subprocess.Popen) -> int | None:
+        """The index *proc* is currently tracked under, or None if untracked."""
+        return next((i for i, p in self._processes.items() if p is proc), None)

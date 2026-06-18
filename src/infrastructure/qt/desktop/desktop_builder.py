@@ -16,6 +16,7 @@ collaborators (``_tilebar``/``_topbar``/``_foreground``/``_state``/``_handle_pad
 """
 
 from domain.catalog.catalog import AppCatalog
+from domain.catalog.live_catalog import LiveCatalog
 from domain.input.pad_control import PadControl
 from domain.lifecycle.app_lifecycle import AppLifecycle
 from domain.lifecycle.process_manager import ProcessManager
@@ -65,8 +66,12 @@ def build_desktop(
     # The open-overlay group is shared: the widget feeds it (register/forget) and
     # the coordinator pauses/resumes it as the surface hides and returns.
     overlays = OpenOverlays()
+    # One shared, mutable order: the tile bar reorders/recolours it in place, so
+    # the lifecycle and deferred hide (which key on tile position) never drift to
+    # a stale catalog and launch/close the app that used to sit at that index.
+    live_apps = LiveCatalog(apps)
     widget = Desktop(
-        apps=apps,
+        apps=live_apps,
         gamepad=gamepad,
         window_manager=window_manager,
         wallpaper=wallpaper,
@@ -97,7 +102,7 @@ def build_desktop(
     # The Desktop stays on screen after launching an app until that app's window
     # is actually mapped, then hides to reveal it.
     deferred_hide = DeferredHide(
-        window_manager, process_manager, apps, on_hide=widget.hide,
+        window_manager, process_manager, live_apps, on_hide=widget.hide,
     )
     # App launch/restore/close/exit orchestration lives off the widget in a
     # testable coordinator; the Desktop is just its DesktopView.
@@ -106,7 +111,7 @@ def build_desktop(
         gamepad=gamepad,
         window_manager=window_manager,
         app_manager=process_manager,
-        apps=apps,
+        apps=live_apps,
         foreground=widget._foreground,
         deferred_hide=deferred_hide,
         tilebar=widget._tilebar,

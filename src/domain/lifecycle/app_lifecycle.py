@@ -19,7 +19,7 @@ import logging
 from collections.abc import Callable
 
 from domain.catalog.app import App
-from domain.catalog.catalog import AppCatalog
+from domain.catalog.live_catalog import LiveCatalog
 from domain.catalog.window_rules import (
     active_unmanaged_window, descends_from_launcher, is_app_running,
 )
@@ -56,7 +56,7 @@ class AppLifecycle(AppControl):
         gamepad: PadControl,
         window_manager: WindowManager,
         app_manager: ProcessManager,
-        apps: AppCatalog,
+        apps: LiveCatalog,
         foreground: ForegroundState,
         deferred_hide: LaunchHide,
         tilebar: TileBarView,

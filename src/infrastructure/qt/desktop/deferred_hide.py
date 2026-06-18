@@ -5,7 +5,7 @@ from typing import _ProtocolMeta  # type: ignore[attr-defined]
 
 from PyQt6.QtCore import QObject, QTimer
 
-from domain.catalog.catalog import AppCatalog
+from domain.catalog.live_catalog import LiveCatalog
 from domain.catalog.window import Window
 from domain.catalog.window_rules import app_window_present
 from domain.lifecycle.process_manager import ProcessManager
@@ -40,7 +40,7 @@ class DeferredHide(QObject, LaunchHide, metaclass=_Meta):
         self,
         wm:          WindowManager,
         app_manager: ProcessManager,
-        apps:        AppCatalog,
+        apps:        LiveCatalog,
         on_hide:     Callable[[], None],
         parent:      QObject | None = None,
     ) -> None:

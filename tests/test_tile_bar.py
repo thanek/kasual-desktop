@@ -14,6 +14,7 @@ from PyQt6.QtCore import QPoint
 from infrastructure.qt.desktop.tile_bar import TileBar
 from domain.catalog.app import App
 from domain.catalog.catalog import AppCatalog
+from domain.catalog.live_catalog import LiveCatalog
 from domain.catalog.window import Window
 
 
@@ -33,7 +34,7 @@ def app_manager():
 
 @pytest.fixture
 def bar(qapp, app_manager):
-    return TileBar(apps=[], app_manager=app_manager)
+    return TileBar(apps=LiveCatalog(AppCatalog(())), app_manager=app_manager)
 
 
 # ── Guard sygnatury ────────────────────────────────────────────────────────────
@@ -117,7 +118,7 @@ class TestWindowsChangedSignal:
 
 @pytest.fixture
 def bar_with_tiles(qapp, app_manager):
-    apps = AppCatalog(tuple(App(name=f"App {i}", command="x") for i in range(3)))
+    apps = LiveCatalog(AppCatalog(tuple(App(name=f"App {i}", command="x") for i in range(3))))
     return TileBar(apps=apps, app_manager=app_manager)
 
 

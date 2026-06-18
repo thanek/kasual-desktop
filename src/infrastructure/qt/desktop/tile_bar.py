@@ -9,7 +9,7 @@ from PyQt6.QtCore import Qt, QPoint, QTimer, QEasingCurve, QPropertyAnimation, p
 from PyQt6.QtGui import QCursor, QIcon
 from PyQt6.QtWidgets import QWidget, QHBoxLayout, QScrollArea, QApplication
 
-from domain.catalog.catalog import AppCatalog
+from domain.catalog.live_catalog import LiveCatalog
 from domain.catalog.target import AppTarget, Target, target_at_index
 from domain.catalog.window import Window
 from domain.catalog.window_rules import external_windows, is_app_running, resolve_recall_trigger
@@ -61,7 +61,7 @@ class TileBar(QScrollArea, TileBarView, TileFocusView, TileReorderView, metaclas
     tile_hovered     = pyqtSignal(int)
     tile_context_menu = pyqtSignal()
 
-    def __init__(self, apps: AppCatalog, app_manager: ProcessManager, parent: QWidget | None = None) -> None:
+    def __init__(self, apps: LiveCatalog, app_manager: ProcessManager, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._apps          = apps
         self._app_manager   = app_manager
@@ -201,7 +201,12 @@ class TileBar(QScrollArea, TileBarView, TileFocusView, TileReorderView, metaclas
         the in-memory catalog, and keep the focus on the moved tile."""
         if not (0 <= i < len(self._tiles) and 0 <= j < len(self._tiles)):
             return
-        self._apps = self._apps.swapped(i, j)
+        # The catalog is shared (LiveCatalog), so this reorder is also seen by the
+        # lifecycle/deferred-hide; the AppManager keys running processes by tile
+        # position, so its tracking must move with the tiles too — otherwise a
+        # later restore/close after a reorder would act on the wrong app.
+        self._apps.swap(i, j)
+        self._app_manager.swap_indices(i, j)
         self._tiles[i], self._tiles[j] = self._tiles[j], self._tiles[i]
         # Re-seat both widgets at their new layout positions (static tiles occupy
         # layout items 0..n-1, ahead of the separator and dynamic tiles).
@@ -230,7 +235,7 @@ class TileBar(QScrollArea, TileBarView, TileFocusView, TileReorderView, metaclas
         """Recolour the static app tile at *index*, on screen and in the catalog."""
         if not (0 <= index < len(self._tiles)):
             return
-        self._apps = self._apps.with_color(index, color)
+        self._apps.recolour(index, color)
         self._tiles[index].set_color(color)
 
     def _static_index_of(self, tile: AppTile) -> int:

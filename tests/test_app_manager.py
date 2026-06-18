@@ -8,7 +8,8 @@ Testujemy:
   - launch wielu różnych aplikacji jednocześnie
   - _on_finished (usuwa z _processes, emituje app_finished, inne procesy nienaruszone)
   - terminate(idx) — SIGTERM + harmonogram SIGKILL
-  - _force_kill(idx, proc) — SIGKILL tylko gdy idx wciąż trzyma TEN proces
+  - _force_kill(proc) — SIGKILL tylko gdy TEN proces jest wciąż śledzony
+  - swap_indices — przenosi śledzony proces po zmianie kolejności kafli
   - running_pid / all_running_pids / is_running
 
 Subprocess.Popen i threading.Thread są zawsze mockowane — testy nie
@@ -216,23 +217,34 @@ class TestLaunch:
 class TestOnFinished:
     def test_removes_process(self, qapp):
         am = _make_manager()
-        am._processes[1] = _running_proc()
-        am._on_finished(1, 0)
+        proc = _running_proc()
+        am._processes[1] = proc
+        am._on_finished(proc, 0)
         assert 1 not in am._processes
 
     def test_other_processes_remain(self, qapp):
         am = _make_manager()
-        am._processes[0] = _running_proc(pid=100)
+        ended = _running_proc(pid=100)
+        am._processes[0] = ended
         am._processes[1] = _running_proc(pid=200)
-        am._on_finished(0, 0)
+        am._on_finished(ended, 0)
         assert 1 in am._processes
 
-    def test_emits_app_finished(self, qapp):
+    def test_emits_app_finished_with_current_index(self, qapp):
+        am = _make_manager()
+        proc = _running_proc()
+        am._processes[5] = proc
+        received = []
+        am.on_finished(lambda e: received.append(e.idx))
+        am._on_finished(proc, 0)
+        assert received == [5]
+
+    def test_noop_for_untracked_process(self, qapp):
         am = _make_manager()
         received = []
         am.on_finished(lambda e: received.append(e.idx))
-        am._on_finished(5, 0)
-        assert received == [5]
+        am._on_finished(_running_proc(), 0)   # never registered
+        assert received == []
 
 
 # ── terminate / _force_kill ────────────────────────────────────────────────────
@@ -285,7 +297,18 @@ class TestForceKill:
         am._processes[0] = proc
         with patch("infrastructure.system.app_manager.os.getpgid", return_value=5678), \
              patch("infrastructure.system.app_manager.os.killpg") as mock_killpg:
-            am._force_kill(0, proc)
+            am._force_kill(proc)
+        mock_killpg.assert_called_once_with(5678, signal.SIGKILL)
+
+    def test_sends_sigkill_after_reorder_moved_the_index(self, qapp):
+        """A reorder re-keys the process; the force-kill timer (bound to the proc,
+        not its old index) must still SIGKILL it under its new key."""
+        am = _make_manager()
+        proc = _running_proc(pid=5678)
+        am._processes[3] = proc          # moved here by swap_indices after launch
+        with patch("infrastructure.system.app_manager.os.getpgid", return_value=5678), \
+             patch("infrastructure.system.app_manager.os.killpg") as mock_killpg:
+            am._force_kill(proc)
         mock_killpg.assert_called_once_with(5678, signal.SIGKILL)
 
     def test_noop_when_process_exited(self, qapp):
@@ -293,25 +316,52 @@ class TestForceKill:
         proc = _exited_proc()
         am._processes[0] = proc
         with patch("infrastructure.system.app_manager.os.killpg") as mock_killpg:
-            am._force_kill(0, proc)
+            am._force_kill(proc)
         mock_killpg.assert_not_called()
 
     def test_noop_when_no_process(self, qapp):
         am = _make_manager()
         proc = _running_proc()   # never registered under any idx
         with patch("infrastructure.system.app_manager.os.killpg") as mock_killpg:
-            am._force_kill(0, proc)
+            am._force_kill(proc)
         mock_killpg.assert_not_called()
 
-    def test_noop_when_idx_holds_a_different_process(self, qapp):
+    def test_noop_when_process_no_longer_tracked(self, qapp):
         """Regression: a close+relaunch swaps in a new process under the same
         idx; the stale force-kill timer scheduled by the previous terminate must
-        not SIGKILL the freshly launched one."""
+        not SIGKILL anything — its target is no longer tracked."""
         am = _make_manager()
-        old = _exited_proc()             # what terminate() targeted, now gone
+        old = _running_proc(pid=1111)    # what terminate() targeted, now gone
         new = _running_proc(pid=4242)    # relaunched under the same idx
         am._processes[0] = new
-        with patch("infrastructure.system.app_manager.os.getpgid", return_value=4242), \
+        with patch("infrastructure.system.app_manager.os.getpgid", return_value=1111), \
              patch("infrastructure.system.app_manager.os.killpg") as mock_killpg:
-            am._force_kill(0, old)       # stale timer fires
+            am._force_kill(old)          # stale timer fires
         mock_killpg.assert_not_called()
+
+
+# ── swap_indices (tile reorder) ─────────────────────────────────────────────────
+
+class TestSwapIndices:
+    def test_moves_running_process_to_new_index(self, qapp):
+        am = _make_manager()
+        proc = _running_proc(pid=100)
+        am._processes[0] = proc
+        am.swap_indices(0, 2)
+        assert am._processes == {2: proc}
+        assert am.running_pid(2) == 100
+        assert am.running_pid(0) is None
+
+    def test_exchanges_two_running_processes(self, qapp):
+        am = _make_manager()
+        p0 = _running_proc(pid=100)
+        p1 = _running_proc(pid=200)
+        am._processes[0] = p0
+        am._processes[1] = p1
+        am.swap_indices(0, 1)
+        assert am._processes == {0: p1, 1: p0}
+
+    def test_noop_when_neither_index_tracked(self, qapp):
+        am = _make_manager()
+        am.swap_indices(0, 1)
+        assert am._processes == {}

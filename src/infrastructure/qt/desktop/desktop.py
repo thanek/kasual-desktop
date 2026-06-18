@@ -5,7 +5,7 @@ from PyQt6.QtCore import Qt, QTimer, QEvent
 from PyQt6.QtGui import QPainter, QColor
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QApplication
 
-from domain.catalog.catalog import AppCatalog
+from domain.catalog.live_catalog import LiveCatalog
 from domain.shell.desktop_state import DesktopState
 from domain.input.vocabulary import Event
 from domain.input.pad_control import PadControl
@@ -77,7 +77,7 @@ class Desktop(QWidget, DesktopView, DesktopShell, DesktopControl, metaclass=_Met
 
     def __init__(
         self,
-        apps: AppCatalog,
+        apps: LiveCatalog,
         gamepad: PadControl,
         window_manager: WindowManager,
         wallpaper: SystemWallpaper,
