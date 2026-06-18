@@ -22,8 +22,8 @@ from collections.abc import Callable
 from typing import _ProtocolMeta  # type: ignore[attr-defined]
 
 import qtawesome as qta
-from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QKeyEvent
+from PyQt6.QtCore import Qt, QSize
+from PyQt6.QtGui import QIcon, QKeyEvent
 from PyQt6.QtWidgets import (
     QWidget, QPushButton, QVBoxLayout, QLabel, QSizePolicy,
 )
@@ -43,6 +43,9 @@ logger = logging.getLogger(__name__)
 
 _CHECKED   = "✓"
 _UNCHECKED = "▢"
+
+# Row icon size — sits comfortably within the 62px-tall toggle rows.
+_ROW_ICON_PX = 36
 
 
 class _Meta(type(BaseOverlay), _ProtocolMeta): pass
@@ -127,8 +130,10 @@ class OnboardingOverlay(BaseOverlay, ProvisioningView, metaclass=_Meta):
         for i, candidate in enumerate(self._candidates):
             btn = QPushButton()
             btn.setMinimumHeight(62)
-            if candidate.app.icon:
-                btn.setIcon(qta.icon(candidate.app.icon, color="white"))
+            icon = self._candidate_icon(candidate)
+            if icon is not None:
+                btn.setIcon(icon)
+                btn.setIconSize(QSize(_ROW_ICON_PX, _ROW_ICON_PX))
             btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
             btn.clicked.connect(lambda _checked=False, idx=i: self._row_clicked(idx))
             self._bind_hover(btn, i)
@@ -141,6 +146,21 @@ class OnboardingOverlay(BaseOverlay, ProvisioningView, metaclass=_Meta):
         self._confirm.clicked.connect(self._confirm_clicked)
         self._bind_hover(self._confirm, len(self._candidates))   # Confirm is last
         self._rows_layout.addWidget(self._confirm)
+
+    @staticmethod
+    def _candidate_icon(candidate: CandidateApp) -> QIcon | None:
+        """The row icon for a candidate, mirroring the tile bar's resolution: the
+        real themed ``Icon`` when present and resolvable, else the Font Awesome
+        glyph. Provisioning seeds only one of the two per app (see the catalog),
+        so this just renders whichever it set."""
+        app = candidate.app
+        if app.icon:
+            return qta.icon(app.icon, color="white")
+        if app.icon_theme:
+            themed = QIcon.fromTheme(app.icon_theme)
+            if not themed.isNull():
+                return themed
+        return None
 
     def _bind_hover(self, btn: QPushButton, index: int) -> None:
         """Move the cursor onto *index* when the pointer enters *btn* (with the

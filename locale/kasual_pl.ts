@@ -62,13 +62,14 @@
     <message>
         <location filename="../src/domain/menu/tile.py" line="64" />
         <source>Pin to menu</source>
-        <translation type="unfinished" />
+        <translation>Przypnij do menu</translation>
     </message>
     <message>
         <location filename="../src/infrastructure/qt/desktop/desktop.py" line="462" />
         <source>Are you sure you want to unpin
 "{0}"?</source>
-        <translation type="unfinished" />
+        <translation>Czy na pewno chcesz odpiąć
+"{0}"?</translation>
     </message>
 </context><context>
     <name>HomeOverlay</name>
@@ -221,12 +222,12 @@
     <message>
         <location filename="../src/domain/system/hud.py" line="51" />
         <source>Disable HUD</source>
-        <translation type="unfinished" />
+        <translation>Wyłącz HUD</translation>
     </message>
     <message>
         <location filename="../src/domain/system/hud.py" line="52" />
         <source>Enable HUD</source>
-        <translation type="unfinished" />
+        <translation>Włącz HUD</translation>
     </message>
     <message>
         <location filename="../src/infrastructure/qt/overlays/notifications_overlay.py" line="172" />
@@ -275,11 +276,11 @@
     <message>
         <location filename="../src/infrastructure/qt/overlays/onboarding_overlay.py" line="88" />
         <source>Welcome — pick your apps</source>
-        <translation type="unfinished" />
+        <translation>Witaj - wybierz aplikacje, z którymi wystartujesz</translation>
     </message>
     <message>
-        <location filename="../src/infrastructure/qt/overlays/onboarding_overlay.py" line="138" />
+        <location filename="../src/infrastructure/qt/overlays/onboarding_overlay.py" line="139" />
         <source>Confirm</source>
-        <translation type="unfinished" />
+        <translation>Potwierdź</translation>
     </message>
 </context></TS>

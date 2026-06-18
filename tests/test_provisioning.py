@@ -6,13 +6,17 @@ from domain.provisioning.provisioning import Provisioning, needs_provisioning
 
 
 class FakeDiscovery:
-    """An AppDiscovery whose available commands are fixed up front."""
+    """An AppDiscovery whose available commands and themed icons are fixed up front."""
 
-    def __init__(self, available: set[str]):
+    def __init__(self, available: set[str], icons: set[str] | None = None):
         self._available = available
+        self._icons = icons or set()
 
     def is_available(self, command: str) -> bool:
         return command in self._available
+
+    def system_icon(self, names: tuple[str, ...]) -> str | None:
+        return next((n for n in names if n in self._icons), None)
 
 
 class FakeProvisioning:
@@ -62,6 +66,28 @@ class TestStarterCandidates:
         assert steam.app.is_game
         assert steam.app.recall_menu_trigger == "BTN_MODE_HOLD_1S"
         assert steam.order == 10
+
+    def test_falls_back_to_glyph_when_system_has_no_real_icon(self):
+        steam = next(c for c in starter_candidates(FakeDiscovery({"steam"}), "/x")
+                     if c.key == "steam")
+        assert steam.app.icon == "fa5b.steam"
+        assert steam.app.icon_theme is None
+
+    def test_prefers_real_system_icon_over_glyph(self):
+        cands = starter_candidates(
+            FakeDiscovery({"steam"}, icons={"steam", "youtube"}), "/x")
+        steam = next(c for c in cands if c.key == "steam")
+        youtube = next(c for c in cands if c.key == "youtube")
+        assert steam.app.icon_theme == "steam" and steam.app.icon is None
+        assert youtube.app.icon_theme == "youtube" and youtube.app.icon is None
+
+    def test_heroic_uses_reverse_dns_icon_when_present(self):
+        heroic = next(
+            c for c in starter_candidates(
+                FakeDiscovery({"heroic"}, icons={"com.heroicgameslauncher.hgl"}), "/x")
+            if c.key == "heroic")
+        assert heroic.app.icon_theme == "com.heroicgameslauncher.hgl"
+        assert heroic.app.icon is None
 
 
 # ── AppSelection ──────────────────────────────────────────────────────────────

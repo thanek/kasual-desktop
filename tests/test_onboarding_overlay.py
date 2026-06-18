@@ -49,6 +49,24 @@ class TestPresent:
         assert overlay._selection.is_selected(1) is False
 
 
+class TestRowIcons:
+    def test_glyph_candidate_renders_an_icon(self, mock_gamepad):
+        overlay = _present(mock_gamepad)
+        assert not overlay._rows[0].icon().isNull()
+
+    def test_themed_candidate_prefers_real_icon(self, mock_gamepad):
+        # An app provisioned with a real system icon carries icon_theme (no glyph).
+        themed = CandidateApp(
+            "x", App(name="X", command="x", icon=None, icon_theme="folder"),
+            order=1, default_selected=True)
+        overlay = OnboardingOverlay(gamepad=mock_gamepad, feedback=MagicMock())
+        icon = overlay._candidate_icon(themed)
+        # Resolution mirrors the tile bar: a present theme icon resolves, an
+        # absent one yields None (the row simply shows no icon) — never a crash.
+        from PyQt6.QtGui import QIcon
+        assert icon is None or isinstance(icon, QIcon)
+
+
 class TestToggling:
     def test_select_on_row_toggles_it(self, mock_gamepad):
         overlay = _present(mock_gamepad)

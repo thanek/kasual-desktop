@@ -32,6 +32,14 @@ class AppDiscovery(Protocol):
 
     def is_available(self, command: str) -> bool: ...
 
+    def system_icon(self, names: tuple[str, ...]) -> str | None:
+        """The first of *names* the system icon theme actually provides, else None.
+
+        Lets provisioning prefer a real installed app icon (e.g. the genuine
+        ``steam`` logo) over the bundled Font Awesome glyph when the system has
+        one — the glyph stays as the fallback for a system that does not."""
+        ...
+
 
 class ProvisioningView(Protocol):
     """The UI surface the controller drives to let the user pick starter apps."""

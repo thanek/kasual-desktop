@@ -277,7 +277,7 @@
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/infrastructure/qt/overlays/onboarding_overlay.py" line="138" />
+        <location filename="../src/infrastructure/qt/overlays/onboarding_overlay.py" line="139" />
         <source>Confirm</source>
         <translation type="unfinished" />
     </message>

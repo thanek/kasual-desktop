@@ -8,6 +8,8 @@ docs). Names here are the canonical English strings — the view translates them
 appear only when the injected :class:`AppDiscovery` finds their command.
 """
 
+from dataclasses import replace
+
 from domain.catalog.app import App
 from domain.input.vocabulary import Trigger
 from domain.provisioning.candidate import CandidateApp
@@ -21,6 +23,16 @@ def starter_candidates(discovery: AppDiscovery, bundled_base: str) -> list[Candi
     infrastructure), used to resolve the bundled launchers' ``Exec`` — keeping
     the absolute path out of the domain.
     """
+    def with_real_icon(app: App, *icon_names: str) -> App:
+        """Prefer a real installed app icon over the bundled Font Awesome glyph.
+
+        When the system icon theme actually provides one of *icon_names* (e.g. the
+        genuine ``steam`` logo), seed the entry with that themed ``Icon`` and drop
+        the glyph, so a provisioned tile shows the real app icon. Leaves the glyph
+        in place when the system has no matching icon."""
+        found = discovery.system_icon(icon_names)
+        return replace(app, icon_theme=found, icon=None) if found else app
+
     candidates: list[CandidateApp] = [
         CandidateApp(
             key="files",
@@ -35,12 +47,12 @@ def starter_candidates(discovery: AppDiscovery, bundled_base: str) -> list[Candi
         ),
         CandidateApp(
             key="youtube",
-            app=App(
+            app=with_real_icon(App(
                 name="YouTube",
                 command=f"{bundled_base}/apps/yt/yt.sh",
                 icon="fa5b.youtube",
                 color="#c0392b",
-            ),
+            ), "youtube"),
             order=30,
             default_selected=True,
         ),
@@ -49,7 +61,7 @@ def starter_candidates(discovery: AppDiscovery, bundled_base: str) -> list[Candi
     if discovery.is_available("steam"):
         candidates.append(CandidateApp(
             key="steam",
-            app=App(
+            app=with_real_icon(App(
                 name="Steam",
                 command="steam",
                 args=("steam://open/bigpicture",),
@@ -58,7 +70,7 @@ def starter_candidates(discovery: AppDiscovery, bundled_base: str) -> list[Candi
                 recall_menu_trigger=Trigger.HOLD_1S,
                 launch_hide_grace_ms=500,
                 categories=("Game",),
-            ),
+            ), "steam"),
             order=10,
             default_selected=True,
         ))
@@ -66,7 +78,7 @@ def starter_candidates(discovery: AppDiscovery, bundled_base: str) -> list[Candi
     if discovery.is_available("heroic"):
         candidates.append(CandidateApp(
             key="heroic",
-            app=App(
+            app=with_real_icon(App(
                 name="Heroic",
                 command="heroic",
                 args=("--fullscreen",),
@@ -74,7 +86,7 @@ def starter_candidates(discovery: AppDiscovery, bundled_base: str) -> list[Candi
                 color="#c0392b",
                 recall_menu_trigger=Trigger.CLICK,
                 categories=("Game",),
-            ),
+            ), "com.heroicgameslauncher.hgl", "heroic"),
             order=20,
             default_selected=True,
         ))
