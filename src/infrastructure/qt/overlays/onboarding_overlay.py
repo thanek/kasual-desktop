@@ -37,15 +37,31 @@ from domain.provisioning.selection import AppSelection
 from domain.shared.feedback import Cue, Feedback
 from infrastructure.qt.ui import styles
 from infrastructure.qt.ui.layer_shell import Keyboard
+from infrastructure.qt.ui.toggle_switch import ToggleSwitch
 from .base_overlay import BaseOverlay
 
 logger = logging.getLogger(__name__)
 
-_CHECKED   = "✓"
-_UNCHECKED = "▢"
-
 # Row icon size — sits comfortably within the 62px-tall toggle rows.
-_ROW_ICON_PX = 36
+_ROW_ICON_PX     = 36
+# Gap from the toggle to the row's right edge.
+_TOGGLE_MARGIN_R = 24
+
+
+class _ToggleRow(QPushButton):
+    """A picker row: a full-width clickable button with an on/off
+    :class:`ToggleSwitch` anchored to its right edge. The button keeps the
+    styling, hover and click; the switch only reflects the selection state."""
+
+    def __init__(self, parent=None) -> None:
+        super().__init__(parent)
+        self.toggle = ToggleSwitch(self)
+
+    def resizeEvent(self, event) -> None:
+        super().resizeEvent(event)
+        x = self.width() - self.toggle.width() - _TOGGLE_MARGIN_R
+        y = (self.height() - self.toggle.height()) // 2
+        self.toggle.move(x, y)
 
 
 class _Meta(type(BaseOverlay), _ProtocolMeta): pass
@@ -63,7 +79,7 @@ class OnboardingOverlay(BaseOverlay, ProvisioningView, metaclass=_Meta):
         self._candidates: list[CandidateApp] = []
         self._selection: AppSelection | None = None
         self._on_confirm: Callable[[list[CandidateApp]], None] | None = None
-        self._rows:    list[QPushButton] = []
+        self._rows:    list[_ToggleRow] = []
         self._confirm: QPushButton | None = None
 
         # Navigation spans the toggle rows plus the trailing Confirm action;
@@ -126,14 +142,16 @@ class OnboardingOverlay(BaseOverlay, ProvisioningView, metaclass=_Meta):
     # ── Building ─────────────────────────────────────────────────────────────
 
     def _build_rows(self) -> None:
+        assert self._selection is not None
         self._rows.clear()
         for i, candidate in enumerate(self._candidates):
-            btn = QPushButton()
+            btn = _ToggleRow()
             btn.setMinimumHeight(62)
             icon = self._candidate_icon(candidate)
             if icon is not None:
                 btn.setIcon(icon)
                 btn.setIconSize(QSize(_ROW_ICON_PX, _ROW_ICON_PX))
+            btn.toggle.set_on(self._selection.is_selected(i), animate=False)
             btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
             btn.clicked.connect(lambda _checked=False, idx=i: self._row_clicked(idx))
             self._bind_hover(btn, i)
@@ -208,6 +226,7 @@ class OnboardingOverlay(BaseOverlay, ProvisioningView, metaclass=_Meta):
     def _toggle(self, index: int) -> None:
         assert self._selection is not None
         self._selection.toggle(index)
+        self._rows[index].toggle.set_on(self._selection.is_selected(index))
         self._feedback.play(Cue.SELECT)
         self._render(self._cursor.index)
 
@@ -220,10 +239,8 @@ class OnboardingOverlay(BaseOverlay, ProvisioningView, metaclass=_Meta):
     # ── Rendering ────────────────────────────────────────────────────────────
 
     def _render(self, index: int) -> None:
-        assert self._selection is not None
         for i, btn in enumerate(self._rows):
-            mark = _CHECKED if self._selection.is_selected(i) else _UNCHECKED
-            btn.setText(f"  {mark}  {self.tr(self._candidates[i].app.name)}")
+            btn.setText(f"  {self.tr(self._candidates[i].app.name)}")
             btn.setStyleSheet(
                 styles.home_menu_item_selected() if i == index
                 else styles.home_menu_item_normal()

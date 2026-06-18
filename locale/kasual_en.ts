@@ -272,12 +272,12 @@
 </context><context>
     <name>OnboardingOverlay</name>
     <message>
-        <location filename="../src/infrastructure/qt/overlays/onboarding_overlay.py" line="88" />
+        <location filename="../src/infrastructure/qt/overlays/onboarding_overlay.py" line="107" />
         <source>Welcome — pick your apps</source>
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/infrastructure/qt/overlays/onboarding_overlay.py" line="139" />
+        <location filename="../src/infrastructure/qt/overlays/onboarding_overlay.py" line="161" />
         <source>Confirm</source>
         <translation type="unfinished" />
     </message>

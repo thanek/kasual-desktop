@@ -57,7 +57,7 @@
     <message>
         <location filename="../src/domain/menu/tile.py" line="62" />
         <source>Unpin</source>
-        <translation type="unfinished" />
+        <translation>Odepnij z menu</translation>
     </message>
     <message>
         <location filename="../src/domain/menu/tile.py" line="64" />
@@ -274,12 +274,12 @@
 </context><context>
     <name>OnboardingOverlay</name>
     <message>
-        <location filename="../src/infrastructure/qt/overlays/onboarding_overlay.py" line="88" />
+        <location filename="../src/infrastructure/qt/overlays/onboarding_overlay.py" line="107" />
         <source>Welcome — pick your apps</source>
         <translation>Witaj - wybierz aplikacje, z którymi wystartujesz</translation>
     </message>
     <message>
-        <location filename="../src/infrastructure/qt/overlays/onboarding_overlay.py" line="139" />
+        <location filename="../src/infrastructure/qt/overlays/onboarding_overlay.py" line="161" />
         <source>Confirm</source>
         <translation>Potwierdź</translation>
     </message>

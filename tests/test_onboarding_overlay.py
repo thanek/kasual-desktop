@@ -67,6 +67,18 @@ class TestRowIcons:
         assert icon is None or isinstance(icon, QIcon)
 
 
+class TestToggleSwitches:
+    def test_switches_seed_from_default_selection(self, mock_gamepad):
+        overlay = _present(mock_gamepad)
+        assert overlay._rows[0].toggle.isChecked() is True   # files default-on
+        assert overlay._rows[1].toggle.isChecked() is False  # youtube default-off
+
+    def test_switch_reflects_toggle(self, mock_gamepad):
+        overlay = _present(mock_gamepad)
+        overlay._handle_pad("select")          # toggle row 0 off
+        assert overlay._rows[0].toggle.isChecked() is False
+
+
 class TestToggling:
     def test_select_on_row_toggles_it(self, mock_gamepad):
         overlay = _present(mock_gamepad)
