@@ -142,6 +142,11 @@ class AppTile(QWidget):
         self._color = color
         style = styles.tile_selected if self._is_selected else styles.tile_normal
         self._btn.setStyleSheet(style(color))
+        # A running marquee paints its clip with the tile colour to blend the
+        # scrolling title into the tile; recolour it too, otherwise a recolour
+        # while the marquee is showing leaves the old colour behind the text.
+        if not self._marquee_clip.isHidden():
+            self._marquee_clip.setStyleSheet(f"background-color: {color};")
 
     def set_running(self, running: bool) -> None:
         if not running:

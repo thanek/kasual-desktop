@@ -110,3 +110,23 @@ class TestHoverSuppression:
     def test_leave_records_cursor_position(self, tile):
         tile.leaveEvent(QEvent(QEvent.Type.Leave))
         assert isinstance(tile._pos_at_leave, QPoint)
+
+
+class TestSetColor:
+    def test_recolours_button(self, tile):
+        tile.set_color("#ff0000")
+        assert "#ff0000" in tile._btn.styleSheet()
+
+    def test_recolours_visible_marquee_clip(self, tile):
+        # Simulate a running marquee (long title scrolling): its clip is painted
+        # with the tile colour so the text blends into the tile.
+        tile._marquee_clip.setStyleSheet("background-color: #2e3440;")
+        tile._marquee_clip.show()
+        tile.set_color("#ff0000")
+        assert "#ff0000" in tile._marquee_clip.styleSheet()
+
+    def test_leaves_hidden_marquee_clip_untouched(self, tile):
+        tile._marquee_clip.setStyleSheet("background-color: #2e3440;")
+        tile._marquee_clip.hide()
+        tile.set_color("#ff0000")
+        assert "#ff0000" not in tile._marquee_clip.styleSheet()
