@@ -7,10 +7,9 @@ LEFT/RIGHT cycle the column within the current row; UP/DOWN move the row within
 the current column. Both axes wrap, and a vertical move into a short last row
 that lacks the current column clamps to that row's last item.
 
-Pure application logic: no Qt, no sound backend — it repaints through an injected
-``render(index)`` callback and reports intent via ``on_activate(index)`` /
-``on_dismiss``, exactly like :class:`MenuCursor`, so the same widget plumbing and
-hover/keyboard wiring apply.
+State and layout-independent behaviour (reset/hover/select/dismiss) come from the
+shared :class:`domain.menu.cursor_base.Cursor`; this adds only the 2-D movement,
+so the same widget plumbing and hover/keyboard wiring apply as for MenuCursor.
 """
 
 from __future__ import annotations
@@ -18,10 +17,11 @@ from __future__ import annotations
 from collections.abc import Callable
 
 from domain.input.vocabulary import Event
-from domain.shared.feedback import Cue, Feedback
+from domain.menu.cursor_base import Cursor
+from domain.shared.feedback import Feedback
 
 
-class GridCursor:
+class GridCursor(Cursor):
     def __init__(
         self,
         count: Callable[[], int],
@@ -31,48 +31,19 @@ class GridCursor:
         on_dismiss: Callable[[], None],
         feedback: Feedback,
     ) -> None:
-        self._count       = count
-        self._columns     = max(1, columns)
-        self._render      = render
-        self._on_activate = on_activate
-        self._on_dismiss  = on_dismiss
-        self._feedback    = feedback
-        self._index       = 0
+        super().__init__(count, render, on_activate, on_dismiss, feedback)
+        self._columns = max(1, columns)
 
-    @property
-    def index(self) -> int:
-        return self._index
-
-    @index.setter
-    def index(self, value: int) -> None:
-        """Place the selection without repaint/feedback (e.g. from a slot)."""
-        self._index = value
-
-    def reset(self, index: int = 0) -> None:
-        """Set the selection (e.g. when the picker is (re)shown) and repaint."""
-        self._index = index
-        self._render(self._index)
-
-    def handle_pad(self, event: str) -> None:
+    def _destination(self, event: str) -> int | None:
         if event == Event.LEFT:
-            self._move_to(self._horizontal(-1))
-        elif event == Event.RIGHT:
-            self._move_to(self._horizontal(+1))
-        elif event == Event.UP:
-            self._move_to(self._vertical(-1))
-        elif event == Event.DOWN:
-            self._move_to(self._vertical(+1))
-        elif event == Event.SELECT:
-            self._on_activate(self._index)
-        elif event in (Event.CANCEL, Event.CLOSE):
-            self._on_dismiss()
-
-    def hover(self, index: int) -> None:
-        """Pointer moved onto item *index* — select it (with cursor feedback)."""
-        if index != self._index:
-            self._index = index
-            self._render(self._index)
-            self._feedback.play(Cue.CURSOR)
+            return self._horizontal(-1)
+        if event == Event.RIGHT:
+            return self._horizontal(+1)
+        if event == Event.UP:
+            return self._vertical(-1)
+        if event == Event.DOWN:
+            return self._vertical(+1)
+        return None
 
     def _horizontal(self, delta: int) -> int:
         """Next column within the current row, wrapping at the row's ends."""
@@ -96,9 +67,3 @@ class GridCursor:
         row, col = divmod(self._index, cols)
         new_row = (row + delta) % rows
         return min(new_row * cols + col, n - 1)
-
-    def _move_to(self, new: int) -> None:
-        if new != self._index:
-            self._index = new
-            self._render(self._index)
-            self._feedback.play(Cue.CURSOR)

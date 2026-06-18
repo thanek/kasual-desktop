@@ -10,6 +10,9 @@ Pure application logic: no Qt, no sound backend. It repaints through an injected
 events and translated keyboard events feed `handle_pad`; the widget owns only
 presentation and the dismiss sound.
 
+The state and the layout-independent behaviour (reset/hover/select/dismiss) live
+in :class:`domain.menu.cursor_base.Cursor`; this adds only the 1-D up/down move.
+
 `wrap`: True  → up/down wrap around the ends (home menu);
         False → movement clamps at the ends (tile popover).
 """
@@ -19,10 +22,11 @@ from __future__ import annotations
 from collections.abc import Callable
 
 from domain.input.vocabulary import Event
-from domain.shared.feedback import Cue, Feedback
+from domain.menu.cursor_base import Cursor
+from domain.shared.feedback import Feedback
 
 
-class MenuCursor:
+class MenuCursor(Cursor):
     def __init__(
         self,
         count: Callable[[], int],
@@ -33,54 +37,22 @@ class MenuCursor:
         *,
         wrap: bool = False,
     ) -> None:
-        self._count       = count
-        self._render      = render
-        self._on_activate = on_activate
-        self._on_dismiss  = on_dismiss
-        self._feedback    = feedback
-        self._wrap        = wrap
-        self._index       = 0
+        super().__init__(count, render, on_activate, on_dismiss, feedback)
+        self._wrap = wrap
 
-    @property
-    def index(self) -> int:
-        return self._index
-
-    @index.setter
-    def index(self, value: int) -> None:
-        """Place the selection without repaint/feedback (e.g. from a slot)."""
-        self._index = value
-
-    def reset(self, index: int = 0) -> None:
-        """Set the selection (e.g. when the menu is (re)shown) and repaint."""
-        self._index = index
-        self._render(self._index)
-
-    def handle_pad(self, event: str) -> None:
+    def _destination(self, event: str) -> int | None:
         if event == Event.UP:
-            self._move(-1)
-        elif event == Event.DOWN:
-            self._move(+1)
-        elif event == Event.SELECT:
-            self._on_activate(self._index)
-        elif event in (Event.CANCEL, Event.CLOSE):
-            self._on_dismiss()
+            return self._shifted(-1)
+        if event == Event.DOWN:
+            return self._shifted(+1)
+        return None
 
-    def hover(self, index: int) -> None:
-        """Pointer moved onto item *index* — select it (with cursor feedback)."""
-        if index != self._index:
-            self._index = index
-            self._render(self._index)
-            self._feedback.play(Cue.CURSOR)
-
-    def _move(self, delta: int) -> None:
+    def _shifted(self, delta: int) -> int:
+        """The index *delta* steps away, wrapping or clamping at the ends. A
+        no-op (current index) when the list is empty."""
         n = self._count()
         if n == 0:
-            return
+            return self._index
         if self._wrap:
-            new = (self._index + delta) % n
-        else:
-            new = max(0, min(self._index + delta, n - 1))
-        if new != self._index:
-            self._index = new
-            self._render(self._index)
-            self._feedback.play(Cue.CURSOR)
+            return (self._index + delta) % n
+        return max(0, min(self._index + delta, n - 1))

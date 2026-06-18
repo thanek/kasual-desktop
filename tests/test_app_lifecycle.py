@@ -12,6 +12,7 @@ from unittest.mock import MagicMock
 
 from domain.input.vocabulary import Trigger
 from domain.lifecycle.app_lifecycle import AppLifecycle
+from domain.lifecycle.foreground_inspector import ForegroundInspector
 from domain.catalog.app import App
 from domain.shell.foreground import ForegroundState
 from domain.catalog.target import AppTarget, WindowTarget
@@ -103,6 +104,14 @@ def _make(apps=None, visible=False, parent_of=None, process_name_of=None):
     # Default: no open windows, so current_app() never overrides the foreground
     # unless a test sets cached_windows explicitly.
     wm.cached_windows.return_value = []
+    inspector = ForegroundInspector(
+        foreground=foreground,
+        window_manager=wm,
+        apps=apps,
+        app_manager=app_manager,
+        parent_of=parent_of if parent_of is not None else (lambda _p: None),
+        process_name_of=process_name_of if process_name_of is not None else (lambda _p: None),
+    )
     lc = AppLifecycle(
         view=view,
         gamepad=gamepad,
@@ -116,8 +125,7 @@ def _make(apps=None, visible=False, parent_of=None, process_name_of=None):
         scheduler=scheduler,
         feedback=feedback,
         prompts=prompts,
-        parent_of=parent_of if parent_of is not None else (lambda _p: None),
-        process_name_of=process_name_of if process_name_of is not None else (lambda _p: None),
+        inspector=inspector,
     )
     return SimpleNamespace(
         lc=lc, view=view, gamepad=gamepad, wm=wm, am=app_manager,

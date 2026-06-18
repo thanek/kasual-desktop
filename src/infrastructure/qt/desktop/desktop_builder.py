@@ -19,6 +19,7 @@ from domain.catalog.catalog import AppCatalog
 from domain.catalog.live_catalog import LiveCatalog
 from domain.input.pad_control import PadControl
 from domain.lifecycle.app_lifecycle import AppLifecycle
+from domain.lifecycle.foreground_inspector import ForegroundInspector
 from domain.lifecycle.process_manager import ProcessManager
 from domain.lifecycle.prompts import LocalizedPrompts
 from domain.lifecycle.window_manager import WindowManager
@@ -108,6 +109,15 @@ def build_desktop(
     )
     # App launch/restore/close/exit orchestration lives off the widget in a
     # testable coordinator; the Desktop is just its DesktopView.
+    # Read-only foreground/game introspection, split off the coordinator.
+    inspector = ForegroundInspector(
+        foreground=widget._foreground,
+        window_manager=window_manager,
+        apps=live_apps,
+        app_manager=process_manager,
+        parent_of=parent_pid,
+        process_name_of=process_name,
+    )
     lifecycle = AppLifecycle(
         view=widget,
         gamepad=gamepad,
@@ -121,8 +131,7 @@ def build_desktop(
         scheduler=scheduler,
         feedback=feedback,
         prompts=LocalizedPrompts(),
-        parent_of=parent_pid,
-        process_name_of=process_name,
+        inspector=inspector,
     )
     # Coordinates show/pause/resume of the Desktop surface (the widget = view).
     desktop_coordinator = DesktopCoordinator(
