@@ -365,3 +365,34 @@ class TestSwapIndices:
         am = _make_manager()
         am.swap_indices(0, 1)
         assert am._processes == {}
+
+
+# ── remove_index (tile unpin) ───────────────────────────────────────────────────
+
+class TestRemoveIndex:
+    def test_shifts_higher_slots_down(self, qapp):
+        am = _make_manager()
+        p1 = _running_proc(pid=100)
+        p3 = _running_proc(pid=300)
+        am._processes[1] = p1
+        am._processes[3] = p3
+        am.remove_index(2)          # nothing at 2; 3 shifts down to 2
+        assert am._processes == {1: p1, 2: p3}
+
+    def test_drops_removed_slot_without_terminating(self, qapp):
+        am = _make_manager()
+        proc = _running_proc(pid=100)
+        am._processes[0] = proc
+        with patch("infrastructure.system.app_manager.os.killpg") as mock_killpg:
+            am.remove_index(0)
+        assert am._processes == {}
+        mock_killpg.assert_not_called()     # unpinned-but-running app keeps running
+
+    def test_removed_then_lower_indices_unchanged(self, qapp):
+        am = _make_manager()
+        p0 = _running_proc(pid=100)
+        p2 = _running_proc(pid=200)
+        am._processes[0] = p0
+        am._processes[2] = p2
+        am.remove_index(1)          # 0 stays, 2 shifts to 1
+        assert am._processes == {0: p0, 1: p2}

@@ -14,7 +14,7 @@ translation context so the existing locale entries keep resolving.
 from collections.abc import Callable
 
 from domain.catalog.target import AppTarget, Target
-from domain.menu.entry import CHANGE_COLOR, CLOSE, LAUNCH, MOVE, RESTORE
+from domain.menu.entry import CHANGE_COLOR, CLOSE, LAUNCH, MOVE, PIN, RESTORE, UNPIN
 from domain.menu.item import MenuItem
 from domain.shared.i18n import translate
 
@@ -50,9 +50,15 @@ def tile_management_menu(target: Target) -> list[MenuItem]:
     """Compose the Tile Management Popover for *target* (the Start-button menu).
 
     A sibling of :func:`tile_menu_for`: rather than launch/restore/close, it offers
-    actions that manage the tile itself — moving it, and recolouring it.
+    actions that manage the tile itself. A configured app tile can be moved,
+    recoloured and unpinned (removed from the menu); an open-window tile is not
+    part of the persistent catalog, so its only management action is *pinning* it —
+    promoting it to a permanent app tile.
     """
-    return [
-        MenuItem(translate("Desktop", "Move"), MOVE, target=target),
-        MenuItem(translate("Desktop", "Change color"), CHANGE_COLOR, target=target),
-    ]
+    if isinstance(target, AppTarget):
+        return [
+            MenuItem(translate("Desktop", "Move"), MOVE, target=target),
+            MenuItem(translate("Desktop", "Change color"), CHANGE_COLOR, target=target),
+            MenuItem(translate("Desktop", "Unpin"), UNPIN, target=target),
+        ]
+    return [MenuItem(translate("Desktop", "Pin to menu"), PIN, target=target)]

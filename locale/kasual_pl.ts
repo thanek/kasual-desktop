@@ -44,15 +44,31 @@
         <translation>Zamknij</translation>
     </message>
     <message>
-        <location filename="../src/domain/menu/tile.py" line="56" />
+        <location filename="../src/domain/menu/tile.py" line="60" />
         <source>Move</source>
         <translation>Przesuń</translation>
     </message>
     <message>
-        <location filename="../src/infrastructure/qt/overlays/tile_color_picker.py" line="61" />
-        <location filename="../src/domain/menu/tile.py" line="57" />
+        <location filename="../src/infrastructure/qt/overlays/tile_color_picker.py" line="65" />
+        <location filename="../src/domain/menu/tile.py" line="61" />
         <source>Change color</source>
         <translation>Zmień kolor</translation>
+    </message>
+    <message>
+        <location filename="../src/domain/menu/tile.py" line="62" />
+        <source>Unpin</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/domain/menu/tile.py" line="64" />
+        <source>Pin to menu</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/infrastructure/qt/desktop/desktop.py" line="462" />
+        <source>Are you sure you want to unpin
+"{0}"?</source>
+        <translation type="unfinished" />
     </message>
 </context><context>
     <name>HomeOverlay</name>

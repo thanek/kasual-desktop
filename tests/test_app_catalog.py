@@ -147,6 +147,30 @@ class TestWithColor:
         assert cat[0].color == _app("A").color
 
 
+class TestAppended:
+    def test_adds_app_at_end(self):
+        cat = AppCatalog((_app("A"),))
+        out = cat.appended(_app("B"))
+        assert [a.name for a in out] == ["A", "B"]
+
+    def test_leaves_original_untouched(self):
+        cat = AppCatalog((_app("A"),))
+        cat.appended(_app("B"))
+        assert [a.name for a in cat] == ["A"]
+
+
+class TestRemoved:
+    def test_drops_app_at_index(self):
+        cat = AppCatalog((_app("A"), _app("B"), _app("C")))
+        out = cat.removed(1)
+        assert [a.name for a in out] == ["A", "C"]
+
+    def test_leaves_original_untouched(self):
+        cat = AppCatalog((_app("A"), _app("B")))
+        cat.removed(0)
+        assert [a.name for a in cat] == ["A", "B"]
+
+
 class TestSequenceBehaviour:
     def test_is_a_sequence(self):
         assert isinstance(AppCatalog(), Sequence)

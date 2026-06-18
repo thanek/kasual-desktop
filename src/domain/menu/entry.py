@@ -21,3 +21,5 @@ CLOSE   = "close"
 # ── Tile Management Popover actions ──────────────────────────────────────────
 MOVE         = "move"
 CHANGE_COLOR = "change_color"
+PIN          = "pin"      # turn an open-window tile into a persistent app tile
+UNPIN        = "unpin"    # remove a persistent app tile from the menu

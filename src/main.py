@@ -21,9 +21,11 @@ from infrastructure.qt.overlays.home_overlay import HomeOverlayFactory
 from infrastructure.qt.overlays.onboarding_overlay import OnboardingOverlayFactory
 from infrastructure.qt.ui.tray import SystemTray
 from infrastructure.system.app_config import (
-    DesktopAppProvisioning, DesktopTileColorStore, DesktopTileOrderStore, load_apps,
+    DesktopAppProvisioning, DesktopTileColorStore, DesktopTileOrderStore,
+    load_apps,
 )
 from infrastructure.system.app_discovery import WhichAppDiscovery
+from infrastructure.system.app_pinning import DesktopAppPinning
 from domain.provisioning.provisioning import Provisioning, needs_provisioning
 from infrastructure.system.app_manager import AppManager
 from infrastructure.system.log_viewer_launcher import LogViewerLauncher
@@ -118,6 +120,7 @@ def main() -> None:
             network_control=NMNetworkControl(),
             order_store=DesktopTileOrderStore(),
             color_store=DesktopTileColorStore(),
+            app_pinning=DesktopAppPinning(),
         )
         # Keep the top-bar notifications badge in sync with the in-memory count.
         # Subscribed after `record` above, so the count is already updated when

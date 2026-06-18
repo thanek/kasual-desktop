@@ -341,6 +341,21 @@ class TestRestoreApp:
         c.lc.restore_app(AppTarget(index=0, name="Witcher 3"))
         c.wm.activate_windows_for_pids.assert_called_once_with({100})
 
+    def test_pinned_external_app_raised_by_window_identity(self):
+        # A pinned app that is running but was not launched by us has no tracked
+        # pid; it is raised by its window (matched via the carried StartupWMClass)
+        # instead of the no-op activate-by-pid path.
+        c = _make(apps=[App(name="Konsole", command="konsole", wm_class="org.kde.konsole")])
+        c.am.running_pid.return_value = None         # not tracked — started externally
+        c.am.all_running_pids.return_value = []
+        c.wm.cached_windows.return_value = [
+            Window(id="k1", title="Konsole", pid=200, resource_class="org.kde.konsole"),
+        ]
+        c.lc.restore_app(AppTarget(index=0, name="Konsole"))
+        c.wm.activate_window.assert_called_once_with("k1")
+        c.wm.activate_windows_for_pids.assert_not_called()
+        assert c.view.hidden == 1
+
 
 # ── arrange_windows ─────────────────────────────────────────────────────────
 

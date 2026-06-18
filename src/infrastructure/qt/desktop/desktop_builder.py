@@ -22,7 +22,7 @@ from domain.lifecycle.app_lifecycle import AppLifecycle
 from domain.lifecycle.process_manager import ProcessManager
 from domain.lifecycle.prompts import LocalizedPrompts
 from domain.lifecycle.window_manager import WindowManager
-from domain.menu.ports import TileColorStore, TileOrderStore
+from domain.menu.ports import AppPinning, TileColorStore, TileOrderStore
 from domain.navigation.focus_navigator import FocusNavigator
 from domain.navigation.tile_mover import TileMover
 from domain.network.control import NetworkControl
@@ -61,6 +61,7 @@ def build_desktop(
     network_control: NetworkControl,
     order_store: TileOrderStore,
     color_store: TileColorStore,
+    app_pinning: AppPinning,
 ) -> Desktop:
     """Build a fully wired Desktop: the view widget plus its domain coordinators."""
     # The open-overlay group is shared: the widget feeds it (register/forget) and
@@ -85,6 +86,7 @@ def build_desktop(
         network_control=network_control,
         overlays=overlays,
         color_store=color_store,
+        app_pinning=app_pinning,
     )
 
     nav = FocusNavigator(

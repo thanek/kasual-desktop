@@ -208,3 +208,91 @@ class TestSetAppColor:
         before = [a.color for a in bar._apps]
         bar.set_app_color(9, "#ff0000")
         assert [a.color for a in bar._apps] == before
+
+
+class TestPinWindow:
+    def test_appends_static_tile_for_pinned_app(self, bar_with_tiles):
+        bar = bar_with_tiles
+        before = len(bar._tiles)
+        bar.update_windows([_win("100", "Foo")])
+        bar.pin_window(App(name="Foo", command="foo"), window_id="100")
+        assert len(bar._tiles) == before + 1
+        assert bar._apps[-1].name == "Foo"
+        assert bar._tiles[-1]._full_name == "Foo"
+
+    def test_pinned_window_drops_out_of_dynamic_section(self, bar_with_tiles):
+        bar = bar_with_tiles
+        bar.update_windows([_win("100", "Foo")])
+        assert len(bar._dynamic_tiles) == 1
+        bar.pin_window(App(name="Foo", command="foo"), window_id="100")
+        assert bar._dynamic_tiles == []
+
+    def test_pinned_window_stays_suppressed_on_refresh(self, bar_with_tiles):
+        bar = bar_with_tiles
+        bar.update_windows([_win("100", "Foo")])
+        bar.pin_window(App(name="Foo", command="foo"), window_id="100")
+        # A later KWin refresh still reporting the open window must not bring its
+        # dynamic tile back (identity may not match the pinned tile).
+        bar.update_windows([_win("100", "Foo")])
+        assert bar._dynamic_tiles == []
+
+    def test_other_windows_still_get_dynamic_tiles(self, bar_with_tiles):
+        bar = bar_with_tiles
+        bar.update_windows([_win("100", "Foo"), _win("200", "Bar")])
+        bar.pin_window(App(name="Foo", command="foo"), window_id="100")
+        assert [wid for wid, _, _ in bar._dynamic_tiles] == ["200"]
+
+    def test_focus_moves_to_new_tile(self, bar_with_tiles):
+        bar = bar_with_tiles
+        bar.update_windows([_win("100", "Foo")])
+        bar.pin_window(App(name="Foo", command="foo"), window_id="100")
+        assert bar.current_app_index() == len(bar._tiles) - 1
+
+    def test_new_tile_marked_running_immediately(self, bar_with_tiles):
+        bar = bar_with_tiles
+        bar.update_windows([_win("100", "Foo")])
+        bar.pin_window(App(name="Foo", command="foo"), window_id="100")
+        assert not bar._tiles[-1]._status_bar.isHidden()
+
+    def test_window_for_resolves_open_window(self, bar_with_tiles):
+        bar = bar_with_tiles
+        bar.update_windows([_win("100", "Foo")])
+        assert bar.window_for("100").title == "Foo"
+        assert bar.window_for("nope") is None
+
+
+class TestUnpinApp:
+    def test_idle_app_tile_is_removed(self, bar_with_tiles):
+        bar = bar_with_tiles
+        before = len(bar._tiles)
+        bar.unpin_app(1)
+        assert len(bar._tiles) == before - 1
+        assert [a.name for a in bar._apps] == ["App 0", "App 2"]
+
+    def test_app_manager_slots_shift(self, bar_with_tiles, app_manager):
+        bar = bar_with_tiles
+        bar.unpin_app(1)
+        app_manager.remove_index.assert_called_once_with(1)
+
+    def test_out_of_range_is_noop(self, bar_with_tiles):
+        bar = bar_with_tiles
+        before = [a.name for a in bar._apps]
+        bar.unpin_app(9)
+        assert [a.name for a in bar._apps] == before
+
+    def test_running_app_returns_to_dynamic_section(self, bar_with_tiles):
+        bar = bar_with_tiles
+        win = Window(id="100", title="Foo", pid=0, resource_class="foo")
+        bar.update_windows([win])
+        bar.pin_window(App(name="Foo", command="foo"), window_id="100")
+        assert bar._dynamic_tiles == []            # suppressed while pinned
+        bar.unpin_app(len(bar._tiles) - 1)         # unpin the just-added tile
+        assert [wid for wid, _, _ in bar._dynamic_tiles] == ["100"]   # back as dynamic
+
+    def test_unpinned_window_is_no_longer_suppressed(self, bar_with_tiles):
+        bar = bar_with_tiles
+        win = Window(id="100", title="Foo", pid=0, resource_class="foo")
+        bar.update_windows([win])
+        bar.pin_window(App(name="Foo", command="foo"), window_id="100")
+        bar.unpin_app(len(bar._tiles) - 1)
+        assert "100" not in bar._pinned_window_ids

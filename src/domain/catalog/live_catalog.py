@@ -36,6 +36,14 @@ class LiveCatalog(Sequence[App]):
         """Recolour the app at *index*, for every consumer at once."""
         self._catalog = self._catalog.with_color(index, color)
 
+    def append(self, app: App) -> None:
+        """Add *app* as the last tile, for every consumer at once (the pin action)."""
+        self._catalog = self._catalog.appended(app)
+
+    def remove(self, index: int) -> None:
+        """Drop the tile at *index*, for every consumer at once (the unpin action)."""
+        self._catalog = self._catalog.removed(index)
+
     def __getitem__(self, index):
         return self._catalog[index]
 

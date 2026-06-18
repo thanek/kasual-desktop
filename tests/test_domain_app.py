@@ -125,6 +125,14 @@ class TestFromDesktopEntry:
         assert app.icon is None
         assert app.icon_theme == "org.kde.themed"
 
+    def test_reads_startupwmclass(self):
+        _, app = App.from_desktop_entry({
+            "Type": "Application", "Name": "Konsole", "Exec": "konsole",
+            "StartupWMClass": "org.kde.konsole",
+        })
+        assert app.wm_class == "org.kde.konsole"
+        assert "org.kde.konsole" in app.window_match_keys
+
     @pytest.mark.parametrize("entry", [
         {"Type": "Link", "Name": "L", "URL": "http://x"},
         {"Type": "Application", "Name": "N", "Exec": "n", "NoDisplay": "true"},
@@ -176,6 +184,13 @@ class TestToDesktopEntry:
         assert entry["X-Kasual-HideGraceMs"] == "500"
         assert entry["X-Kasual-Env"] == "MANGOHUD=1"
         assert entry["Categories"] == "Game;"
+
+    def test_emits_startupwmclass(self):
+        app = App(name="Konsole", command="konsole", wm_class="org.kde.konsole")
+        assert app.to_desktop_entry(order=1)["StartupWMClass"] == "org.kde.konsole"
+
+    def test_omits_startupwmclass_when_unset(self):
+        assert "StartupWMClass" not in App(name="M", command="m").to_desktop_entry(order=1)
 
     def test_exec_requoting_survives_round_trip(self):
         app = App(name="X", command="/opt/my app/run.sh", args=("--flag", "a b"))

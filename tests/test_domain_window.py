@@ -31,6 +31,21 @@ class TestMatchesApp:
         app = App(name="Steam", command="steam")
         assert _win(resource_class="gedit", desktop_file="org.gnome.gedit").matches_app(app) is False
 
+    def test_wm_class_match_when_command_differs(self):
+        # A pinned tile whose command (konsole) differs from the window class
+        # (org.kde.konsole) matches via its carried StartupWMClass.
+        app = App(name="Konsole", command="konsole", wm_class="org.kde.konsole")
+        assert _win(resource_class="org.kde.konsole").matches_app(app) is True
+        assert _win(desktop_file="org.kde.konsole.desktop").matches_app(app) is True
+
+    def test_wm_class_match_case_insensitive(self):
+        app = App(name="Konsole", command="konsole", wm_class="Org.KDE.Konsole")
+        assert _win(resource_class="org.kde.konsole").matches_app(app) is True
+
+    def test_command_basename_still_matches_without_wm_class(self):
+        app = App(name="Firefox", command="firefox")
+        assert _win(resource_class="firefox").matches_app(app) is True
+
     def test_empty_window_does_not_match(self):
         app = App(name="Steam", command="steam")
         assert _win().matches_app(app) is False

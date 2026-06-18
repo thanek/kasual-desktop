@@ -46,6 +46,7 @@ class App:
     launch_hide_grace_ms: int               = 0
     env:                  Mapping[str, str] = field(default_factory=dict)
     categories:           tuple[str, ...]   = ()      # freedesktop Categories
+    wm_class:             str | None        = None    # freedesktop StartupWMClass
 
     @property
     def command_basename(self) -> str:
@@ -74,15 +75,21 @@ class App:
         """Identity strings a KWin window's resourceClass / desktopFile basename
         is matched against to attribute the window to this app.
 
-        Normally just the command basename. A Steam game tile, however, matches
-        only its own ``steam_app_<id>`` window — never the bare ``steam`` client
-        whose window stays open behind *every* running game. Matching on the
-        shared ``steam`` basename would light up every Steam tile at once.
+        Normally the command basename, plus the ``StartupWMClass`` when set — a
+        window's reported class often differs from the command name (e.g.
+        ``org.kde.konsole`` vs ``konsole``), so a pinned tile carries the window's
+        own class to match it back. A Steam game tile, however, matches only its
+        own ``steam_app_<id>`` window — never the bare ``steam`` client whose
+        window stays open behind *every* running game. Matching on the shared
+        ``steam`` basename would light up every Steam tile at once.
         """
         appid = self.steam_app_id
         if appid is not None:
             return (f"steam_app_{appid}",)
-        return (self.command_basename,)
+        keys = [self.command_basename]
+        if self.wm_class:
+            keys.append(self.wm_class.lower())
+        return tuple(dict.fromkeys(keys))   # de-duplicate, preserve order
 
     @property
     def is_game(self) -> bool:
@@ -133,6 +140,7 @@ class App:
             launch_hide_grace_ms=_parse_int(entry.get("X-Kasual-HideGraceMs"), 0),
             env=_parse_env(entry.get("X-Kasual-Env")),
             categories=_parse_categories(entry.get("Categories")),
+            wm_class=_str_entry(entry, "StartupWMClass"),
         )
         order = _parse_int(entry.get("X-Kasual-Order"), ORDER_DEFAULT)
         return order, app
@@ -156,6 +164,8 @@ class App:
             entry["Icon"] = self.icon_theme
         if self.icon is not None:
             entry["X-Kasual-Icon"] = self.icon
+        if self.wm_class is not None:
+            entry["StartupWMClass"] = self.wm_class
         if self.color != "#2e3440":
             entry["X-Kasual-Color"] = self.color
         if self.recall_menu_trigger != Trigger.CLICK:

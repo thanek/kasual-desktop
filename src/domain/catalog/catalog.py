@@ -76,6 +76,26 @@ class AppCatalog(Sequence[App]):
         apps[i], apps[j] = apps[j], apps[i]
         return AppCatalog(tuple(apps))
 
+    def appended(self, app: App) -> "AppCatalog":
+        """Return a new catalog with *app* added at the end.
+
+        Pure (the catalog is immutable): the *Pin to menu* action uses this to add
+        a newly-pinned open window as the last app tile, with the parallel
+        ``.desktop`` write handled by the persistence adapter.
+        """
+        return AppCatalog((*self.apps, app))
+
+    def removed(self, index: int) -> "AppCatalog":
+        """Return a new catalog without the app at *index*.
+
+        Pure (the catalog is immutable): the *Unpin* action uses this to drop a
+        tile, with the parallel ``.desktop`` deletion handled by the persistence
+        adapter.
+        """
+        apps = list(self.apps)
+        del apps[index]
+        return AppCatalog(tuple(apps))
+
     def with_color(self, index: int, color: str) -> "AppCatalog":
         """Return a new catalog with the app at *index* recoloured to *color*.
 

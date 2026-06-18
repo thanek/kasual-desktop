@@ -144,6 +144,18 @@ class AppManager(QObject, ProcessManager, metaclass=_Meta):
         if pj is not None:
             self._processes[i] = pj
 
+    def remove_index(self, idx: int) -> None:
+        """Drop the slot at *idx* and shift higher slots down by one, after a tile
+        was removed (unpin). The process formerly at *idx* is forgotten — *not*
+        terminated — so an unpinned-but-running app keeps running (it reappears as
+        a dynamic open-window tile). Cleanup is keyed on process identity, so an
+        in-flight monitor or force-kill timer survives the re-keying."""
+        self._processes.pop(idx, None)
+        self._processes = {
+            (k - 1 if k > idx else k): proc
+            for k, proc in self._processes.items()
+        }
+
     def is_running(self, idx: int | None = None) -> bool:
         """True if app *idx* is running, or if any app is running when idx is None."""
         if idx is not None:

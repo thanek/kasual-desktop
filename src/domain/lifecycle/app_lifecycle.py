@@ -221,26 +221,28 @@ class AppLifecycle(AppControl):
     def _raise_app(self, idx: int, app: App) -> None:
         """Bring app *idx* to the front, minimizing the other running apps.
 
-        Ordinary apps are raised by their tracked process pid. A Steam game,
-        though, runs in its own ``steam_app_<id>`` window while the tracked
-        process is the shared Steam client — activating that process surfaces
-        Steam, not the game (and minimizing it by pid-subtree would sweep the
-        game window down with it). So a game is raised by its window identity,
-        and the Steam process tree is left out of the minimize set.
+        Ordinary apps we launched are raised by their tracked process pid. Two
+        cases instead raise by *window identity*: a Steam game (its tracked
+        process is the shared Steam client, so activating it surfaces Steam, not
+        the game) and a pinned, externally-started app (running but never launched
+        by us, so there is no tracked pid). In both the window is found via
+        ``matches_app`` and the activate-by-pid path is left for tracked apps.
         """
-        if app.steam_app_id is None:
-            self.arrange_windows(self._app_manager.running_pid(idx))
+        pid = self._app_manager.running_pid(idx)
+        if app.steam_app_id is None and pid is not None:
+            self.arrange_windows(pid)
             return
         own_windows = [w.id for w in self._wm.cached_windows() if w.matches_app(app)]
         if not own_windows:
-            # Window not mapped yet (game still loading) — fall back to the
-            # process so something sensible (the Steam client) comes forward.
-            self.arrange_windows(self._app_manager.running_pid(idx))
+            # Window not mapped yet (game still loading) or unmatched — fall back
+            # to the process so something sensible comes forward (a no-op when
+            # there is no tracked pid either).
+            self.arrange_windows(pid)
             return
         for win_id in own_windows:
             self._wm.activate_window(win_id)
         others = set(self._app_manager.all_running_pids())
-        others.discard(self._app_manager.running_pid(idx))
+        others.discard(pid)
         if others:
             self._wm.minimize_windows_for_pids(others)
 

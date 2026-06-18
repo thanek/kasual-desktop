@@ -84,6 +84,10 @@ class TileBar(QScrollArea, TileBarView, TileFocusView, TileReorderView, metaclas
 
         # Dynamic tiles: list of (window_id, title, AppTile)
         self._dynamic_tiles: list[tuple[str, str, AppTile]] = []
+        # Windows promoted to a static tile via *Pin to menu*: suppressed from the
+        # dynamic section so a pinned, still-open window is not shown twice (once
+        # as its new static tile, once as a leftover open-window tile).
+        self._pinned_window_ids: set[str]                   = set()
         self._dyn_separator: QWidget | None                 = None
         # window_id → pid for dynamic tiles (used for trigger inheritance)
         self._dynamic_pids:  dict[str, int]                 = {}
@@ -110,33 +114,34 @@ class TileBar(QScrollArea, TileBarView, TileFocusView, TileReorderView, metaclas
         self._tile_layout.setSpacing(24)
 
         self._tiles: list[AppTile] = []
-        for i, app in enumerate(self._apps):
-            # Icon: prefer a qtawesome glyph (X-Kasual-Icon); otherwise fall back
-            # to the themed `Icon` name via QIcon.fromTheme. AppTile uses the
-            # QIcon when given (and non-null), else the qtawesome name.
-            qta_name = app.icon or "fa5s.desktop"
-            qicon = None
-            if not app.icon and app.icon_theme:
-                themed = QIcon.fromTheme(app.icon_theme)
-                if not themed.isNull():
-                    qicon = themed
-            tile = AppTile(
-                name=app.name,
-                icon_name=qta_name,
-                color=app.color,
-                qicon=qicon,
-            )
-            # Bind to the tile, not a fixed index: move mode reorders the static
-            # tiles, so each tile resolves its current position on demand
-            # (_static_index_of) and a swap needs no reconnecting.
-            tile.clicked.connect(lambda t=tile: self._activate_index(self._static_index_of(t)))
-            tile.hovered.connect(lambda t=tile: self._on_tile_hovered(self._static_index_of(t)))
-            tile.right_clicked.connect(lambda t=tile: self._on_tile_right_clicked(self._static_index_of(t)))
+        for app in self._apps:
+            tile = self._make_static_tile(app)
             self._tile_layout.addWidget(tile)
             self._tiles.append(tile)
 
         self.setWidget(container)
         self._render_tiles()
+
+    def _make_static_tile(self, app) -> AppTile:
+        """Build a configured-app tile, wired to resolve its own current position.
+
+        Icon: prefer a qtawesome glyph (X-Kasual-Icon); otherwise fall back to the
+        themed ``Icon`` name via QIcon.fromTheme (AppTile uses the QIcon when given
+        and non-null, else the qtawesome name). Signals bind to the tile, not a
+        fixed index: move mode reorders the static tiles, so each tile resolves its
+        position on demand (``_static_index_of``) and a swap needs no reconnecting.
+        """
+        qta_name = app.icon or "fa5s.desktop"
+        qicon = None
+        if not app.icon and app.icon_theme:
+            themed = QIcon.fromTheme(app.icon_theme)
+            if not themed.isNull():
+                qicon = themed
+        tile = AppTile(name=app.name, icon_name=qta_name, color=app.color, qicon=qicon)
+        tile.clicked.connect(lambda t=tile: self._activate_index(self._static_index_of(t)))
+        tile.hovered.connect(lambda t=tile: self._on_tile_hovered(self._static_index_of(t)))
+        tile.right_clicked.connect(lambda t=tile: self._on_tile_right_clicked(self._static_index_of(t)))
+        return tile
 
     @property
     def last_windows(self) -> list[Window]:
@@ -238,6 +243,61 @@ class TileBar(QScrollArea, TileBarView, TileFocusView, TileReorderView, metaclas
         self._apps.recolour(index, color)
         self._tiles[index].set_color(color)
 
+    # ── Pin to menu (Tile Management Popover) ────────────────────────────────
+
+    def window_for(self, window_id: str) -> Window | None:
+        """The open :class:`Window` behind a dynamic tile, or None if it is gone."""
+        return next((w for w in self._last_windows if w.id == window_id), None)
+
+    def pin_window(self, app, window_id: str) -> None:
+        """Promote the open-window tile *window_id* to a persistent tile for *app*.
+
+        Appends a static tile after the configured ones (the catalog is the shared
+        LiveCatalog, so the lifecycle/deferred-hide see the new app too), suppresses
+        the now-pinned window from the dynamic section, and focuses the new tile.
+        Existing tile indices are unchanged — the app is appended at the end — so
+        the AppManager's index-keyed process tracking stays valid."""
+        self._apps.append(app)
+        tile = self._make_static_tile(app)
+        # The pinned window is open, so the new tile is running from the start —
+        # mark it now rather than waiting for the next periodic status refresh.
+        tile.set_running(True)
+        # Static tiles occupy layout items 0..n-1, ahead of the separator + dynamic.
+        self._tile_layout.insertWidget(len(self._tiles), tile)
+        self._tiles.append(tile)
+        self._pinned_window_ids.add(window_id)
+        # Rebuild the dynamic section so the pinned window drops out of it.
+        self._dyn_signature = None
+        self.update_windows(self._last_windows)
+        self._tile_index = len(self._tiles) - 1
+        self._render_tiles()
+
+    def unpin_app(self, index: int) -> None:
+        """Remove the static app tile at *index* — the reverse of :meth:`pin_window`.
+
+        The app leaves the shared catalog (so the lifecycle/deferred-hide stop
+        seeing it) and the AppManager's slots shift to match. Any open window the
+        app owned is no longer suppressed nor matched, so the dynamic rebuild brings
+        it back as an open-window tile — an *unpinned running app* lands in the
+        dynamic section, an unpinned idle one simply disappears."""
+        if not (0 <= index < len(self._tiles)):
+            return
+        app = self._apps[index]
+        # Stop suppressing this app's open windows so they return as dynamic tiles.
+        self._pinned_window_ids -= {
+            w.id for w in self._last_windows if w.matches_app(app)
+        }
+        tile = self._tiles.pop(index)
+        self._tile_layout.removeWidget(tile)
+        tile.deleteLater()
+        self._apps.remove(index)
+        self._app_manager.remove_index(index)
+        # Rebuild the dynamic section so the freed window reappears there.
+        self._dyn_signature = None
+        self.update_windows(self._last_windows)
+        self._clamp_index()
+        self._render_tiles()
+
     def _static_index_of(self, tile: AppTile) -> int:
         """Current position of a static app *tile* (it shifts during move mode)."""
         return self._tiles.index(tile)
@@ -313,6 +373,11 @@ class TileBar(QScrollArea, TileBarView, TileFocusView, TileReorderView, metaclas
                 return False
 
         extern_windows = external_windows(windows, self._apps, _owned_by_running_group)
+        # A window pinned this session is now a static tile — keep it out of the
+        # dynamic section even while its window is still open (its app identity may
+        # not match the pinned tile, e.g. reverse-DNS app-ids, so filter by id).
+        if self._pinned_window_ids:
+            extern_windows = [w for w in extern_windows if w.id not in self._pinned_window_ids]
 
         # The window list is refreshed periodically (every few seconds). When the
         # visible dynamic tiles are unchanged, skip the teardown/rebuild entirely —
