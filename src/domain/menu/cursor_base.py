@@ -15,13 +15,14 @@ Pure application logic: no Qt, no sound backend. It repaints through an injected
 
 from __future__ import annotations
 
+import abc
 from collections.abc import Callable
 
 from domain.input.vocabulary import Event
 from domain.shared.feedback import Cue, Feedback
 
 
-class Cursor:
+class Cursor(abc.ABC):
     def __init__(
         self,
         count: Callable[[], int],
@@ -62,10 +63,10 @@ class Cursor:
         else:
             self._handle_common(event)
 
+    @abc.abstractmethod
     def _destination(self, event: str) -> int | None:
         """The index a movement *event* leads to, or None when it is not a
         movement (SELECT / CANCEL / CLOSE). Implemented per layout."""
-        raise NotImplementedError
 
     def _handle_common(self, event: str) -> None:
         if event == Event.SELECT:
