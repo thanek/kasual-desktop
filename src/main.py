@@ -18,6 +18,8 @@ from version import get_version
 from infrastructure.audio.feedback import SoundFeedback
 from infrastructure.input.gamepad_watcher import GamepadWatcher
 from infrastructure.qt.desktop import build_desktop
+from infrastructure.qt.icons import install_fontawesome5
+from infrastructure.qt.overlays.about_overlay import AboutOverlay
 from infrastructure.qt.overlays.home_overlay import HomeOverlayFactory
 from infrastructure.qt.overlays.onboarding_overlay import OnboardingOverlayFactory
 from infrastructure.qt.ui.tray import SystemTray
@@ -80,6 +82,10 @@ def main() -> None:
     app.setApplicationName("Kasual Desktop")
     app.setApplicationVersion(version)
     app.setQuitOnLastWindowClosed(False)
+
+    # Use the bundled genuine Font Awesome 5 fonts, not the distro's Fork Awesome
+    # substitute (see icons.install_fontawesome5). Before any icon is built.
+    install_fontawesome5()
 
     install_translations(app, str(Path(__file__).parent.parent / "locale"))
 
@@ -148,6 +154,7 @@ def main() -> None:
         tray = SystemTray(
             on_show=lambda: (feedback.play(Cue.START), desktop.show_desktop()),
             on_logs=log_viewer.open,
+            on_about=lambda: AboutOverlay(version, gamepad, feedback),
             on_quit=app.quit,
         )
 

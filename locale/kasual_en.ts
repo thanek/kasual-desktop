@@ -2,6 +2,28 @@
 <!DOCTYPE TS>
 <TS version="2.1">
 <context>
+    <name>AboutOverlay</name>
+    <message>
+        <location filename="../src/infrastructure/qt/overlays/about_overlay.py" line="53" />
+        <source>Version {0}</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/infrastructure/qt/overlays/about_overlay.py" line="60" />
+        <source>Author</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/infrastructure/qt/overlays/about_overlay.py" line="62" />
+        <source>License</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/infrastructure/qt/overlays/about_overlay.py" line="75" />
+        <source>Close</source>
+        <translation type="unfinished" />
+    </message>
+</context><context>
     <name>ConfirmDialog</name>
     <message>
         <location filename="../src/infrastructure/qt/overlays/confirm_dialog.py" line="61" />
@@ -101,7 +123,7 @@
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/domain/system/action_view.py" line="70" />
+        <location filename="../src/domain/system/actions.py" line="107" />
         <location filename="../src/domain/network/view.py" line="54" />
         <location filename="../src/domain/network/view.py" line="37" />
         <source>Network</source>
@@ -168,52 +190,52 @@
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/domain/system/action_view.py" line="43" />
+        <location filename="../src/domain/system/actions.py" line="77" />
         <source>Volume</source>
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/domain/system/action_view.py" line="47" />
+        <location filename="../src/domain/system/actions.py" line="81" />
         <source>Brightness</source>
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/domain/system/action_view.py" line="51" />
+        <location filename="../src/domain/system/actions.py" line="85" />
         <source>Sleep</source>
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/domain/system/action_view.py" line="53" />
+        <location filename="../src/domain/system/actions.py" line="87" />
         <source>Are you sure you want to sleep?</source>
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/domain/system/action_view.py" line="56" />
+        <location filename="../src/domain/system/actions.py" line="91" />
         <source>Restart</source>
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/domain/system/action_view.py" line="58" />
+        <location filename="../src/domain/system/actions.py" line="93" />
         <source>Are you sure you want to restart?</source>
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/domain/system/action_view.py" line="61" />
+        <location filename="../src/domain/system/actions.py" line="97" />
         <source>Shut Down</source>
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/domain/system/action_view.py" line="63" />
+        <location filename="../src/domain/system/actions.py" line="99" />
         <source>Are you sure you want to shut down?</source>
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/domain/system/action_view.py" line="66" />
+        <location filename="../src/domain/system/actions.py" line="103" />
         <source>Notifications</source>
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/domain/system/action_view.py" line="74" />
+        <location filename="../src/domain/system/actions.py" line="111" />
         <source>Minimize Desktop</source>
         <translation type="unfinished" />
     </message>
@@ -243,17 +265,22 @@
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/infrastructure/qt/ui/tray.py" line="26" />
+        <location filename="../src/infrastructure/qt/ui/tray.py" line="27" />
         <source>Show Desktop</source>
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/infrastructure/qt/ui/tray.py" line="28" />
+        <location filename="../src/infrastructure/qt/ui/tray.py" line="29" />
         <source>Logs</source>
         <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/infrastructure/qt/ui/tray.py" line="31" />
+        <source>About…</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/infrastructure/qt/ui/tray.py" line="34" />
         <source>Quit</source>
         <translation type="unfinished" />
     </message>

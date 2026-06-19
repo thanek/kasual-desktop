@@ -36,7 +36,7 @@ stage:
 	@echo "==> Staging kasual-desktop $(VERSION)"
 	rm -rf $(STAGE)
 	mkdir -p $(APPROOT)
-	rsync -a $(RSYNC_EXCLUDES) src apps sounds locale $(APPROOT)/
+	rsync -a $(RSYNC_EXCLUDES) src apps sounds locale fonts $(APPROOT)/
 	printf '%s' "$(VERSION)" > $(APPROOT)/src/_version.txt
 	find $(APPROOT) -type d -exec chmod 0755 {} +
 	find $(APPROOT) -type f -exec chmod 0644 {} +

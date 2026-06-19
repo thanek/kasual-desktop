@@ -17,6 +17,7 @@ class SystemTray(ConnectionIndicator):
         self,
         on_show:  Callable[[], None],
         on_logs:  Callable[[], None],
+        on_about: Callable[[], None],
         on_quit:  Callable[[], None],
     ) -> None:
         self._tray = QSystemTrayIcon(self._make_icon(connected=False))
@@ -27,6 +28,8 @@ class SystemTray(ConnectionIndicator):
         show_action.triggered.connect(on_show)
         logs_action = menu.addAction(translate("Kasual Desktop", "Logs"))
         logs_action.triggered.connect(on_logs)
+        about_action = menu.addAction(translate("Kasual Desktop", "About…"))
+        about_action.triggered.connect(on_about)
         menu.addSeparator()
         quit_action = menu.addAction(translate("Kasual Desktop", "Quit"))
         quit_action.triggered.connect(on_quit)

@@ -26,6 +26,7 @@ from PyQt6.QtWidgets import (
 import qtawesome as qta
 
 import dlna as dlna_mod
+import fa_icons
 import sound_player
 import ssdp
 from breadcrumb import BreadcrumbBar
@@ -1373,6 +1374,7 @@ class FileBrowserWindow(QMainWindow):
 
 def main() -> None:
     app = QApplication(sys.argv)
+    fa_icons.install_fontawesome5()
     sound_player.init()
 
     locale_dir = str(Path(__file__).parent.parent / "locale")
