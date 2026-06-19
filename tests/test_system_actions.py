@@ -74,15 +74,13 @@ class TestActionDeps:
         assert deps.desktop is desktop and deps.power is power
 
 
-class TestCatalogPresentationConsistency:
-    """The confirmation *policy* (application catalog) and the confirmation
-    *question text* (view presentation) are two facets of the same fact — keep
-    them in lock-step: confirmable ⟺ has a question."""
+class TestCatalogConsistency:
+    """The confirmation *policy* and the confirmation *question text* are two
+    facets of the same fact on each action — keep them in lock-step:
+    confirmable ⟺ has a question."""
 
-    def test_confirmation_policy_matches_presentation(self):
+    def test_confirmation_policy_matches_question(self):
         from domain.system.actions import ACTIONS
-        from domain.system.action_view import PRESENTATION
-        assert PRESENTATION.keys() == ACTIONS.keys()
         for key, action in ACTIONS.items():
-            has_question = PRESENTATION[key].confirm_question is not None
+            has_question = action.confirm_question is not None
             assert action.needs_confirmation == has_question, key

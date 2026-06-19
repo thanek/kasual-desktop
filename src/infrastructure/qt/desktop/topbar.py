@@ -8,7 +8,6 @@ from PyQt6.QtCore import Qt, QLocale, QTimer, QSize, pyqtSignal
 from PyQt6.QtWidgets import QWidget, QPushButton, QHBoxLayout, QVBoxLayout, QLabel
 
 from domain.system.actions import ACTIONS
-from domain.system.action_view import PRESENTATION
 from infrastructure.qt.ui import styles
 from domain.navigation.bar_views import TopBarView
 
@@ -68,7 +67,7 @@ class TopBar(QWidget, TopBarView, metaclass=_Meta):
         self._build_clock(layout)
         layout.addStretch(1)
 
-        self._colors = [PRESENTATION[k].color for k in ACTIONS]
+        self._colors = [action.color for action in ACTIONS.values()]
         self._action_keys = list(ACTIONS)
         self._buttons: list[QPushButton] = []
         self._badges: dict[str, QLabel] = {}   # per-action count badge (lazy)
@@ -86,7 +85,7 @@ class TopBar(QWidget, TopBarView, metaclass=_Meta):
             btn.enterEvent = _enter
 
         for i, action_type in enumerate(ACTIONS):
-            view = PRESENTATION[action_type]
+            view = ACTIONS[action_type]
             btn = QPushButton()
             btn.setFixedSize(BTN_SIZE, BTN_SIZE)
             # Navigation is gamepad/highlight-driven, so the buttons must not take
