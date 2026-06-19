@@ -18,7 +18,6 @@ from __future__ import annotations
 import logging
 from collections.abc import Callable
 
-from domain.catalog.app import App
 from domain.catalog.live_catalog import LiveCatalog
 from domain.catalog.window_rules import is_app_running
 from domain.input.vocabulary import Trigger
@@ -33,6 +32,7 @@ from domain.menu.item import MenuItem
 from domain.lifecycle.process_manager import ProcessManager
 from domain.lifecycle.prompts import Prompts
 from domain.lifecycle.tile_bar_view import TileBarView
+from domain.lifecycle.window_arranger import WindowArranger
 from domain.lifecycle.window_manager import WindowManager
 from domain.shared.feedback import Cue, Feedback
 from domain.shared.scheduler import Scheduler
@@ -69,6 +69,7 @@ class AppLifecycle(AppControl):
         self._gamepad       = gamepad
         self._wm            = window_manager
         self._app_manager   = app_manager
+        self._arranger      = WindowArranger(window_manager, app_manager)
         self._apps          = apps
         self._foreground    = foreground
         self._deferred_hide = deferred_hide
@@ -157,51 +158,16 @@ class AppLifecycle(AppControl):
             idx = target.index
             app = self._apps[idx]
             self._gamepad.set_app_btn_mode_trigger(app.recall_menu_trigger)
-            self._raise_app(idx, app)
+            self._arranger.raise_app(idx, app)
         else:
             self._gamepad.set_app_btn_mode_trigger(target.trigger)
             self._wm.activate_window(target.window_id)
         self._gamepad.pop_handler(self._pad_handler)
         self._view.hide_view()
 
-    def _raise_app(self, idx: int, app: App) -> None:
-        """Bring app *idx* to the front, minimizing the other running apps.
-
-        Ordinary apps we launched are raised by their tracked process pid. Two
-        cases instead raise by *window identity*: a Steam game (its tracked
-        process is the shared Steam client, so activating it surfaces Steam, not
-        the game) and a pinned, externally-started app (running but never launched
-        by us, so there is no tracked pid). In both the window is found via
-        ``matches_app`` and the activate-by-pid path is left for tracked apps.
-        """
-        pid = self._app_manager.running_pid(idx)
-        if app.steam_app_id is None and pid is not None:
-            self.arrange_windows(pid)
-            return
-        own_windows = [w.id for w in self._wm.cached_windows() if w.matches_app(app)]
-        if not own_windows:
-            # Window not mapped yet (game still loading) or unmatched — fall back
-            # to the process so something sensible comes forward (a no-op when
-            # there is no tracked pid either).
-            self.arrange_windows(pid)
-            return
-        for win_id in own_windows:
-            self._wm.activate_window(win_id)
-        others = set(self._app_manager.all_running_pids())
-        others.discard(pid)
-        if others:
-            self._wm.minimize_windows_for_pids(others)
-
     def arrange_windows(self, activate_pid: int | None = None) -> None:
         """Activate windows for activate_pid and minimize all other running apps."""
-        all_pids = set(self._app_manager.all_running_pids())
-        exclude: set[int] = set()
-        if activate_pid is not None:
-            self._wm.activate_windows_for_pids({activate_pid})
-            exclude = {activate_pid}
-        other_pids = all_pids - exclude
-        if other_pids:
-            self._wm.minimize_windows_for_pids(other_pids)
+        self._arranger.arrange(activate_pid)
 
     # ── Closing an application ──────────────────────────────────────────────
 
@@ -210,43 +176,42 @@ class AppLifecycle(AppControl):
         # the Desktop (tile menu, KD visible) or the running app (overlay opened
         # over it, KD hidden). Captured now, before the dialog changes anything.
         from_desktop = self._view.is_visible()
-
-        def _confirmed() -> None:
-            self.restore_desktop_view()
-            if isinstance(target, AppTarget):
-                idx = target.index
-                app = self._apps[idx]
-                self._tilebar.set_static_closing(idx)
-                if app.steam_app_id is not None:
-                    # The tracked process is the shared Steam client, not the
-                    # game — terminating it would quit all of Steam. Close the
-                    # game's own steam_app_<id> window instead.
-                    self._close_app_windows(idx)
-                elif self._app_manager.is_running(idx):
-                    self._app_manager.terminate(idx)
-                else:
-                    # App was launched via a forwarder (e.g. `steam steam://...`)
-                    # whose launcher process has already exited — AppManager has
-                    # no live process to kill. Close matching KWin windows instead.
-                    self._close_app_windows(idx)
-            else:
-                self._foreground.clear()
-                self._wm.close_window(target.window_id)
-                self._scheduler.call_later(1000, self._wm.refresh_now)
-
-        def _cancelled() -> None:
-            # Cancelling closes the dialog without consequences: return to the
-            # context the user came from rather than yanking up the Desktop.
-            if from_desktop:
-                self.restore_desktop_view()
-            else:
-                self.restore_app(target)
-
         self._view.show_confirm(
             question=self._prompts.close_confirm(target.name),
-            on_confirmed=_confirmed,
-            on_cancelled=_cancelled,
+            on_confirmed=lambda: self._close_confirmed(target),
+            on_cancelled=lambda: self._close_cancelled(target, from_desktop),
         )
+
+    def _close_confirmed(self, target: Target) -> None:
+        self.restore_desktop_view()
+        if isinstance(target, AppTarget):
+            idx = target.index
+            app = self._apps[idx]
+            self._tilebar.set_static_closing(idx)
+            if app.steam_app_id is not None:
+                # The tracked process is the shared Steam client, not the
+                # game — terminating it would quit all of Steam. Close the
+                # game's own steam_app_<id> window instead.
+                self._close_app_windows(idx)
+            elif self._app_manager.is_running(idx):
+                self._app_manager.terminate(idx)
+            else:
+                # App was launched via a forwarder (e.g. `steam steam://...`)
+                # whose launcher process has already exited — AppManager has
+                # no live process to kill. Close matching KWin windows instead.
+                self._close_app_windows(idx)
+        else:
+            self._foreground.clear()
+            self._wm.close_window(target.window_id)
+            self._scheduler.call_later(1000, self._wm.refresh_now)
+
+    def _close_cancelled(self, target: Target, from_desktop: bool) -> None:
+        # Cancelling closes the dialog without consequences: return to the
+        # context the user came from rather than yanking up the Desktop.
+        if from_desktop:
+            self.restore_desktop_view()
+        else:
+            self.restore_app(target)
 
     def _close_app_windows(self, idx: int) -> None:
         """Close all windows belonging to a static app, matched by app identity.

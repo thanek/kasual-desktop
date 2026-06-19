@@ -1,0 +1,15 @@
+# Project metadata — primarily to document the supported Python range.
+#
+# Kasual Desktop is NOT installed as a pip package: it runs against the system
+# Qt/PyQt6 (see requirements.txt and the README), so there is deliberately no
+# [build-system] and no dependency list here — runtime deps live in
+# requirements.txt and the distro's python3-pyqt6. This file exists so the
+# minimum Python version is declared in one conventional, tool-readable place.
+#
+# Floor is 3.11: the domain layer uses enum.StrEnum (added in 3.11) and
+# typing.Self.
+[project]
+name = "kasual-desktop"
+version = "0.1.0"
+description = "Gamepad-first launcher/desktop for KDE Plasma 6 on Wayland."
+requires-python = ">=3.11"

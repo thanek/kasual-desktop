@@ -26,7 +26,7 @@ Kasual Desktop is an interactive, graphical "launcher/desktop" interface, design
   surfaces (overlays that sit above applications, including fullscreen games).
   This requires a compositor that supports the protocol — **KWin (KDE) or another
   wlroots-based compositor**. GNOME/Mutter does **not** support `wlr-layer-shell`.
-- **Python 3.10+** with `venv`.
+- **Python 3.11+** with `venv` (the codebase uses `enum.StrEnum`).
 - **System Qt + PyQt6 (not pip's bundled PyQt6).** The layer-shell integration
   plugin is version-locked to the system Qt build, so Kasual Desktop must run against the
   distribution's PyQt6 — pip's self-contained Qt cannot load it.
