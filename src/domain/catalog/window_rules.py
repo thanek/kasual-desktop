@@ -7,7 +7,7 @@ another compositor, so they live here rather than in the tile bar widget; the
 /proc and os.getpgid reads they need are injected from infrastructure.
 """
 
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Iterator, Mapping, Sequence
 
 from domain.catalog.app import App
 from domain.catalog.window import Window
@@ -120,6 +120,27 @@ GAME_LAUNCHERS = frozenset({
 })
 
 
+def walk_parent_chain(
+    pid:       int,
+    parent_of: Callable[[int], int | None],
+) -> Iterator[int]:
+    """Yield *pid* and each ancestor up the process tree.
+
+    Stops at pid 1 (init), at an unknown parent (``parent_of`` returns None), or
+    on a cycle — each pid is visited at most once. The ``parent_of`` /proc read
+    is injected from infrastructure. Yields nothing for a pid of 0/1.
+    """
+    visited: set[int] = set()
+    current = pid
+    while current > 1 and current not in visited:
+        visited.add(current)
+        yield current
+        parent = parent_of(current)
+        if parent is None:
+            break
+        current = parent
+
+
 def descends_from_launcher(
     pid:       int,
     name_of:   Callable[[int], str | None],
@@ -133,17 +154,10 @@ def descends_from_launcher(
     *launchers* (plus any ``wine``-prefixed name). This is how the Home Overlay
     recognises a Steam/Heroic/Lutris-launched game without a per-title list, so
     the HUD toggle appears for games but not for ordinary apps."""
-    visited: set[int] = set()
-    current = pid
-    while current > 1 and current not in visited:
-        visited.add(current)
+    for current in walk_parent_chain(pid, parent_of):
         name = (name_of(current) or "").lower()
         if name in launchers or name.startswith("wine"):
             return True
-        parent = parent_of(current)
-        if parent is None:
-            break
-        current = parent
     return False
 
 
@@ -159,17 +173,8 @@ def resolve_recall_trigger(
     that app's ``recall_menu_trigger`` — so e.g. a game launched by Steam
     inherits Steam's hold-to-recall. Falls back to CLICK when nothing owns it.
     """
-    if pid == 0:
-        return Trigger.CLICK
-    visited: set[int] = set()
-    current = pid
-    while current > 1 and current not in visited:
-        visited.add(current)
+    for current in walk_parent_chain(pid, parent_of):
         app = pid_to_app.get(current)
         if app is not None:
             return app.recall_menu_trigger
-        parent = parent_of(current)
-        if parent is None:
-            break
-        current = parent
     return Trigger.CLICK
