@@ -5,21 +5,18 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import ClassVar, Protocol
 
+from domain.system.bounded_value import BoundedValue
+
 
 @dataclass(frozen=True)
-class Volume:
-    STEP: ClassVar[int] = 5
+class Volume(BoundedValue):
+    STEP:    ClassVar[int] = 5
     DEFAULT: ClassVar[int] = 50
+    # MIN inherited (0): muting to silence is fine, unlike screen brightness.
 
-    value: int
 
-    def __post_init__(self) -> None:
-        object.__setattr__(self, 'value', max(0, min(100, self.value)))
-
-    def adjusted(self, delta: int) -> Volume:
-        return Volume(self.value + delta)
-
-"""The audio-sink volume port."""
 class VolumeControl(Protocol):
+    """The audio-sink volume port."""
+
     def get(self) -> Volume: ...
     def set(self, volume: Volume) -> None: ...

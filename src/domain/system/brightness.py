@@ -10,29 +10,24 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import ClassVar, Protocol
 
+from domain.system.bounded_value import BoundedValue
+
 
 @dataclass(frozen=True)
-class Brightness:
-    STEP: ClassVar[int] = 10
+class Brightness(BoundedValue):
+    MIN:     ClassVar[int] = 5
+    STEP:    ClassVar[int] = 10
     DEFAULT: ClassVar[int] = 70
-    MIN: ClassVar[int] = 5
-
-    value: int
-
-    def __post_init__(self) -> None:
-        object.__setattr__(self, 'value', max(self.MIN, min(100, self.value)))
-
-    def adjusted(self, delta: int) -> Brightness:
-        return Brightness(self.value + delta)
 
 
-"""The display-backlight brightness port.
-
-Deliberately minimal so it can be backed by whatever the host desktop exposes —
-a generic CLI (brightnessctl), sysfs, or a DE-specific D-Bus service (KDE
-PowerManagement, GNOME settings daemon). The concrete adapter is chosen at the
-composition root; see
-:func:`infrastructure.system.brightness.select_brightness_control`."""
 class BrightnessControl(Protocol):
+    """The display-backlight brightness port.
+
+    Deliberately minimal so it can be backed by whatever the host desktop exposes —
+    a generic CLI (brightnessctl), sysfs, or a DE-specific D-Bus service (KDE
+    PowerManagement, GNOME settings daemon). The concrete adapter is chosen at the
+    composition root; see
+    :func:`infrastructure.system.brightness.select_brightness_control`."""
+
     def get(self) -> Brightness: ...
     def set(self, brightness: Brightness) -> None: ...
