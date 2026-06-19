@@ -224,8 +224,8 @@ def _rewrite_key(path: Path, key: str, value: str) -> None:
 def _write_desktop(path: Path, entry: dict[str, str]) -> None:
     """Write one ``[Desktop Entry]`` mapping to *path* (mirror of _parse_desktop).
 
-    Same ``configparser`` mechanics, case-sensitive keys, and the leading
-    Kasual-Desktop comment as the bundled examples carry."""
+    Same ``configparser`` mechanics, case-sensitive keys, and a leading
+    Kasual-Desktop comment header."""
     parser = configparser.ConfigParser(interpolation=None, strict=False)
     parser.optionxform = str  # .desktop keys are case-sensitive
     parser["Desktop Entry"] = entry

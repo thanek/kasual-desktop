@@ -99,21 +99,41 @@ sudo udevadm control --reload-rules && sudo udevadm trigger
 
 ## ⚙️ Configuration
 
+### First run (provisioning)
+
+On its **first launch**, Kasual Desktop shows a provisioning dialog that lets you
+pick from a curated starter set — File Browser and YouTube, plus Steam and Heroic
+when they are installed — to seed your app catalog.
+
+Completing it writes a marker at `~/.config/kasual-desktop/.provisioned`, so the
+dialog does not reappear on later launches (even if you pick nothing, or later
+remove every tile). To run provisioning again:
+
+```sh
+./kasual.sh --provisioning          # remove the marker, then relaunch
+# — or remove it manually and start normally:
+rm ~/.config/kasual-desktop/.provisioned
+```
+
+To add or customize tiles yourself, edit the `.desktop` files directly.
+
+### App tiles
+
 Launcher tiles are defined by freedesktop **`.desktop`** files placed in:
 
 ```
 ~/.config/kasual-desktop/apps/        # or $XDG_CONFIG_HOME/kasual-desktop/apps/
 ```
 
-One file per app. To get started, copy the bundled examples and edit them:
+One file per app. Create the apps directory and add a `.desktop` file using the
+standard `[Desktop Entry]` section plus a few `X-Kasual-*` extensions:
 
 ```sh
 mkdir -p ~/.config/kasual-desktop/apps
-cp examples/apps/*.desktop ~/.config/kasual-desktop/apps/
+$EDITOR ~/.config/kasual-desktop/apps/steam.desktop
 ```
 
-Each file uses the standard `[Desktop Entry]` section plus a few `X-Kasual-*`
-extensions:
+For example:
 
 ```ini
 [Desktop Entry]
@@ -145,8 +165,8 @@ X-Kasual-Env=MANGOHUD=1;FOO=bar     # extra environment variables (optional)
 
 > **Bundled apps (`yt`, `file_browser`):** their launcher scripts live in the
 > cloned repo, so `Exec` must be an **absolute** path (e.g.
-> `/home/you/kasual/apps/yt/yt.sh`) — relative paths do not resolve from
-> `~/.config`. See `examples/apps/youtube.desktop` and `files.desktop`.
+> `Exec=/home/you/kasual-desktop/apps/yt/yt.sh`) — relative paths do not resolve
+> from `~/.config`.
 
 ## 🎚️ In-Game HUD (MangoHud)
 

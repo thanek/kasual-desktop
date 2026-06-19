@@ -1,11 +1,11 @@
 """The single source of truth for the starter apps offered on first run.
 
 Pure domain rule: *what* Kasual Desktop offers a fresh install, the default
-selections, and the availability filtering for system apps. This supersedes the
-loose ``examples/apps/*.desktop`` as the runtime seed (those stay as reference
-docs). Names here are the canonical English strings — the view translates them
-(i18n lives in the Qt layer). Bundled launchers are always offered; system apps
-appear only when the injected :class:`AppDiscovery` finds their command.
+selections, and the availability filtering for system apps. This is the runtime
+seed for first-run provisioning. Names here are the canonical English strings —
+the view translates them (i18n lives in the Qt layer). Bundled launchers are
+always offered; system apps appear only when the injected :class:`AppDiscovery`
+finds their command.
 """
 
 from dataclasses import replace
