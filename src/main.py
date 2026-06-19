@@ -14,6 +14,7 @@ from PyQt6.QtCore import QTimer
 from PyQt6.QtWidgets import QApplication
 
 from application import Application
+from version import get_version
 from infrastructure.audio.feedback import SoundFeedback
 from infrastructure.input.gamepad_watcher import GamepadWatcher
 from infrastructure.qt.desktop import build_desktop
@@ -72,10 +73,12 @@ def main() -> None:
     signal.signal(signal.SIGINT, signal.SIG_DFL)
 
     log_file = _setup_logging()
-    logger.info("Running Kasual Desktop")
+    version = get_version()
+    logger.info("Running Kasual Desktop %s", version)
 
     app = QApplication(sys.argv)
     app.setApplicationName("Kasual Desktop")
+    app.setApplicationVersion(version)
     app.setQuitOnLastWindowClosed(False)
 
     install_translations(app, str(Path(__file__).parent.parent / "locale"))

@@ -1,5 +1,0 @@
-pyqt6
-pyqt6-webengine
-evdev
-
-pytest

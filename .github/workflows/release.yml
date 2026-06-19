@@ -1,0 +1,49 @@
+name: Release packages
+
+# Builds the .deb and .rpm and attaches them to the GitHub Release.
+on:
+  release:
+    types: [published]
+  workflow_dispatch:   # allow manual rebuilds; uploads only when a release exists
+
+permissions:
+  contents: write      # needed to upload assets to the release
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install nfpm
+        run: |
+          echo 'deb [trusted=yes] https://repo.goreleaser.com/apt/ /' \
+            | sudo tee /etc/apt/sources.list.d/goreleaser.list
+          sudo apt-get update -q
+          sudo apt-get install -y nfpm
+
+      - name: Build packages
+        # On a release, the tag is the source of truth for the version; strip the
+        # leading "v". On manual runs, let the Makefile fall back to pyproject.
+        run: |
+          if [ "${{ github.event_name }}" = "release" ]; then
+            v="${{ github.event.release.tag_name }}"
+            make all VERSION="${v#v}"
+          else
+            make all
+          fi
+
+      - name: List artifacts
+        run: ls -l dist/
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: packages
+          path: dist/*
+
+      - name: Attach to release
+        if: github.event_name == 'release'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release upload "${{ github.event.release.tag_name }}" dist/* --clobber

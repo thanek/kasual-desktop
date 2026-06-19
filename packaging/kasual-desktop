@@ -1,0 +1,20 @@
+#!/bin/bash
+# Installed launcher (/usr/bin/kasual-desktop). Mirrors the dev kasual.sh but
+# points at the packaged tree under /usr/share/kasual-desktop. Runs against the
+# system PyQt6 + KDE layer-shell plugin.
+INSTALL_ROOT=/usr/share/kasual-desktop
+
+# --provisioning: re-trigger first-run onboarding by removing the marker.
+if [ "$1" = "--provisioning" ]; then
+    rm -f "${XDG_CONFIG_HOME:-$HOME/.config}/kasual-desktop/.provisioned"
+    echo "Removed provisioning marker — onboarding will run on next launch."
+fi
+
+# Force the SYSTEM PyQt6 (locked to the layer-shell plugin) by hiding ~/.local —
+# a pip-installed PyQt6 there ships no layer-shell integration and breaks the
+# wayland platform plugin. All of Kasual's deps are system packages, so dropping
+# the user site is safe.
+export PYTHONNOUSERSITE=1
+export QT_QPA_PLATFORM=wayland
+export QT_WAYLAND_SHELL_INTEGRATION=layer-shell
+exec python3 "$INSTALL_ROOT/src/main.py"

@@ -1,0 +1,73 @@
+# nfpm descriptor — single source for both .deb and .rpm.
+#   nfpm pkg -p deb -t dist/
+#   nfpm pkg -p rpm -t dist/
+# Version is injected from pyproject.toml by the Makefile (KASUAL_VERSION).
+# The whole runnable tree is staged under build/stage/usr by `make stage`, so
+# this file just packs that staging dir — keeping __file__-relative resource
+# paths (src/apps/sounds/locale all under /usr/share/kasual-desktop) intact.
+name: kasual-desktop
+arch: all
+platform: linux
+version: ${KASUAL_VERSION}
+section: games
+priority: optional
+maintainer: xis <xis@schowek.net>
+description: |
+  Gamepad-first launcher/desktop for KDE Plasma 6 on Wayland.
+  Bundles the File Browser and YouTube couch apps.
+vendor: Kasual Desktop
+homepage: https://github.com/thanek/kasual-desktop
+license: GPL-3.0-or-later
+
+contents:
+  - src: ./build/stage/usr
+    dst: /usr
+    type: tree
+
+overrides:
+  deb:
+    depends:
+      - python3 (>= 3.11)
+      - python3-pyqt6
+      - python3-pyqt6.sip
+      - python3-pyqt6.qtmultimedia
+      - python3-pyqt6.qtwebengine
+      - python3-qtawesome
+      - python3-evdev
+      - python3-xlib
+      - layer-shell-qt
+      - qt6-wayland
+    recommends:
+      # Runtime helpers Kasual shells out to (KDE Plasma 6 is assumed present).
+      - pipewire-pulse | pulseaudio-utils
+      - network-manager
+    suggests:
+      - mangohud
+  rpm:
+    # NOTE: Fedora/openSUSE package names — verify on a real target before a
+    # public rpm release (qtwebengine/layer-shell naming differs across distros).
+    depends:
+      - python3 >= 3.11
+      - python3-pyqt6
+      - python3-pyqt6-webengine
+      - python3-qtawesome
+      - python3-evdev
+      - python3-xlib
+      - layer-shell-qt
+      - qt6-qtwayland
+    recommends:
+      - pipewire-pulseaudio
+      - NetworkManager
+    suggests:
+      - mangohud
+  archlinux:
+    # Arch's python-pyqt6 bundles QtMultimedia; QtWebEngine is a separate pkg.
+    depends:
+      - python
+      - python-pyqt6
+      - python-pyqt6-webengine
+      - python-qtawesome
+      - python-evdev
+      - python-xlib
+      - layer-shell-qt
+      - qt6-wayland

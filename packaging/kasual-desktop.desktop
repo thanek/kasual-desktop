@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Kasual Desktop
+GenericName=Gamepad Launcher
+Comment=Gamepad-first launcher/desktop for KDE Plasma 6 on Wayland
+Exec=kasual-desktop
+Icon=kasual-desktop
+Terminal=false
+Categories=Game;
+Keywords=gamepad;launcher;couch;controller;

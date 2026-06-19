@@ -2,7 +2,9 @@ __pycache__
 *.user
 others
 venv
+build
+dist
+src/_version.txt
 btn_mode_daemon
 .idea
-deploy.sh
 apps/*/tools

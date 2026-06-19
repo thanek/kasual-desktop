@@ -26,26 +26,28 @@ Kasual Desktop is an interactive, graphical "launcher/desktop" interface, design
   surfaces (overlays that sit above applications, including fullscreen games).
   This requires a compositor that supports the protocol — **KWin (KDE) or another
   wlroots-based compositor**. GNOME/Mutter does **not** support `wlr-layer-shell`.
-- **Python 3.11+** with `venv` (the codebase uses `enum.StrEnum`).
+- **Python 3.11+** (the codebase uses `enum.StrEnum`).
 - **System Qt + PyQt6 (not pip's bundled PyQt6).** The layer-shell integration
   plugin is version-locked to the system Qt build, so Kasual Desktop must run against the
-  distribution's PyQt6 — pip's self-contained Qt cannot load it.
+  distribution's PyQt6 — pip's self-contained Qt cannot load it. 
 
   On **Debian/Ubuntu**:
   ```bash
-  sudo apt install python3-venv python3-dev \
-      python3-pyqt6 python3-pyqt6.sip python3-pyqt6.qtmultimedia \
-      python3-pyqt6.qtwebengine layer-shell-qt qt6-wayland
+  sudo apt install python3-pyqt6 python3-pyqt6.sip python3-pyqt6.qtmultimedia \
+      python3-pyqt6.qtwebengine python3-qtawesome python3-evdev python3-xlib \
+      layer-shell-qt qt6-wayland
   ```
 
   On **Arch Linux**:
   ```bash
-  sudo pacman -S python python-pyqt6 python-pyqt6-webengine layer-shell-qt qt6-wayland
+  sudo pacman -S python python-pyqt6 python-pyqt6-webengine python-qtawesome \
+      python-evdev python-xlib layer-shell-qt qt6-wayland
   ```
 
   Other distros: install the equivalent of `python3-pyqt6` (incl. its
-  `QtMultimedia` and `QtWebEngine` modules), `layer-shell-qt` (LayerShellQt)
-  and `qt6-wayland`. `QtWebEngine` is required by the bundled YouTube app.
+  `QtMultimedia` and `QtWebEngine` modules), `python3-qtawesome`, `python3-evdev`,
+  `python3-xlib`, `layer-shell-qt` (LayerShellQt) and `qt6-wayland`. `QtWebEngine`
+  is required by the bundled YouTube app.
 
 ### Gamepad permissions
 
@@ -72,30 +74,76 @@ sudo udevadm control --reload-rules && sudo udevadm trigger
 
 ### Installation
 
+**From a package (recommended).** Grab the `.deb` or `.rpm` from the
+[GitHub Releases](https://github.com/thanek/kasual-desktop/releases) page and
+install it — the dependencies above are pulled in automatically:
+
+```bash
+sudo apt install ./kasual-desktop_*_all.deb          # Debian/Ubuntu
+sudo dnf install ./kasual-desktop-*.noarch.rpm        # Fedora/openSUSE
+sudo pacman -U ./kasual-desktop-*-any.pkg.tar.zst     # Arch Linux
+```
+
+This installs the launcher as `kasual-desktop` (also in the application menu);
+the bundled File Browser and YouTube apps ship inside the same package.
+
+**From source (development).**
+
 1. Clone the repository:
    ```bash
    git clone https://github.com/thanek/kasual-desktop.git
    cd kasual-desktop
    ```
 
-2. Create a virtual environment **with access to the system PyQt6**:
+2. Install the system dependencies (and the dev/test stack):
    ```bash
-   python3 -m venv --system-site-packages venv
-   source venv/bin/activate
+   ./install.sh          # apt/dnf/pacman, auto-detected
    ```
 
-3. Install the remaining (pure-Python) dependencies:
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-4. Run the application:
+3. Run the application:
    ```bash
    ./kasual.sh
    ```
-   `kasual.sh` selects the Wayland platform and the layer-shell integration and
-   forces the system PyQt6 (`QT_QPA_PLATFORM=wayland`,
-   `QT_WAYLAND_SHELL_INTEGRATION=layer-shell`, `PYTHONNOUSERSITE=1`).
+   `kasual.sh` selects the Wayland platform and the layer-shell integration
+   (`QT_QPA_PLATFORM=wayland`, `QT_WAYLAND_SHELL_INTEGRATION=layer-shell`) and
+   forces the system PyQt6 via `PYTHONNOUSERSITE=1` — a pip-installed PyQt6 in
+   `~/.local` ships a newer Qt without the layer-shell plugin, which otherwise
+   fails with *"No shell integration named layer-shell found"*.
+
+### Building packages
+
+All three formats are produced from a single descriptor (`nfpm.yaml`) by
+[`nfpm`](https://nfpm.goreleaser.com/). The package version comes from the git
+tag (e.g. `v0.2.0` → `0.2.0`), falling back to `pyproject.toml` when there is no
+tag; the same value is baked into the app so it reports its own version at
+runtime. The only build-time tools needed are `make`, `rsync` and `nfpm` (PyQt6
+etc. are *runtime* deps, not required to build).
+
+1. Install `nfpm`. On **Debian/Ubuntu** use the goreleaser apt repo:
+   ```bash
+   echo 'deb [trusted=yes] https://repo.goreleaser.com/apt/ /' \
+     | sudo tee /etc/apt/sources.list.d/goreleaser.list
+   sudo apt update && sudo apt install nfpm
+   ```
+   On **Arch**: `nfpm` is in the AUR (`yay -S nfpm-bin`). Any platform with Go:
+   `go install github.com/goreleaser/nfpm/v2/cmd/nfpm@latest`. See the
+   [nfpm install docs](https://nfpm.goreleaser.com/docs/install/) for other options.
+
+2. Build:
+   ```bash
+   make deb      # -> dist/kasual-desktop_<version>_all.deb
+   make rpm      # -> dist/kasual-desktop-<version>.noarch.rpm
+   make arch     # -> dist/kasual-desktop-<version>-1-any.pkg.tar.zst
+   make all      # all three
+   make clean    # remove build/ and dist/
+   ```
+
+   `make` first stages the runnable tree under `build/stage/` (what actually
+   gets packaged — see `make stage`), then runs `nfpm` for each format. Output
+   lands in `dist/`.
+
+Publishing a GitHub Release triggers `.github/workflows/release.yml`, which runs
+`make all` on a clean runner and attaches the resulting packages to the release.
 
 ## ⚙️ Configuration
 
