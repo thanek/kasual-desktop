@@ -1,228 +1,259 @@
-"""
-Minimal HomeOverlay skeleton for the Windows PoC.
-
-A simple PyQt window that demonstrates the overlay concept.
-"""
+"""Home Overlay for Windows - full menu with MenuItems mirroring Linux."""
 
 import logging
 from typing import Callable
 
-from PyQt6.QtCore import Qt, QTimer
+import qtawesome as qta
+from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QKeyEvent
-from PyQt6.QtWidgets import (
-    QApplication,
-    QHBoxLayout,
-    QLabel,
-    QPushButton,
-    QVBoxLayout,
-    QWidget,
-)
+from PyQt6.QtWidgets import QWidget, QPushButton, QVBoxLayout, QLabel
+
+from domain.input.pad_control import PadControl
+from domain.input.vocabulary import Event
+from domain.menu.cursor import MenuCursor
+from domain.menu.home import HomeMenu, compose_home_menu
+from domain.menu.item import MenuItem
+from domain.shared.feedback import Cue, Feedback
+from domain.shared.i18n import translate
 
 logger = logging.getLogger(__name__)
 
+COLOR_ACCENT = "#88c0d0"
 
-class HomeOverlay(QWidget):
+
+def _home_menu_item_normal() -> str:
+    return """
+        QPushButton {
+            font-size: 24px;
+            padding: 18px 32px;
+            background-color: #2e3440;
+            color: white;
+            border: 2px solid transparent;
+            text-align: left;
+        }
     """
-    Minimal Home Overlay that displays on top of the shell.
 
-    On Linux this would be a layer-shell surface.
-    On Windows it's just a topmost widget within our shell.
+
+def _home_menu_item_selected() -> str:
+    return f"""
+        QPushButton {{
+            font-size: 24px;
+            padding: 18px 32px;
+            background-color: {COLOR_ACCENT};
+            color: black;
+            border: 2px solid white;
+            text-align: left;
+        }}
     """
 
-    def __init__(
-        self,
-        on_select: Callable[[str], None] | None = None,
-        on_cancel: Callable[[], None] | None = None,
-    ):
-        super().__init__()
-        self._on_select = on_select
-        self._on_cancel = on_cancel
+
+class WindowsHomeOverlay(QWidget):
+    """Home Overlay for Windows - mirrors Linux HomeOverlay."""
+
+    closed = pyqtSignal()
+
+    def __init__(self, gamepad: PadControl, feedback: Feedback, parent=None):
+        super().__init__(parent)
+        self._gamepad = gamepad
+        self._feedback = feedback
+        self._on_select: Callable[[MenuItem], None] | None = None
+        self._on_cancel: Callable[[], None] | None = None
         self._buttons: list[QPushButton] = []
-        self._selected_index = 0
-        self._setup_ui()
-        self._highlight_selection()
+        self._items: list[MenuItem] = []
+        self._cursor: MenuCursor | None = None
+        self._hud = _StubHudControl()
 
-    def _setup_ui(self):
-        self.setWindowTitle("Home Overlay")
-        self.resize(800, 600)
-
-        flags = (
+        self.setWindowFlags(
             Qt.WindowType.FramelessWindowHint
             | Qt.WindowType.WindowStaysOnTopHint
-            | Qt.WindowType.NoDropShadowWindowHint
         )
-        self.setWindowFlags(flags)
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, False)
 
-        desktop = QApplication.primaryScreen().geometry()
-        self.move(
-            (desktop.width() - self.width()) // 2,
-            (desktop.height() - self.height()) // 2,
-        )
+        outer = QVBoxLayout(self)
+        outer.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
-        self.setStyleSheet("""
-            QWidget {
-                background-color: #1a1a2a;
-                color: white;
-            }
-            QPushButton {
-                padding: 12px 24px;
-                font-size: 16px;
-                background-color: #3a3a4a;
-                color: white;
-                border: 2px solid #5a5a6a;
-                border-radius: 8px;
-                min-width: 200px;
-            }
-            QPushButton:pressed {
-                background-color: #2a2a3a;
-            }
+        self._card = QWidget()
+        self._card.setFixedWidth(500)
+        self._card.setStyleSheet("""
+            background-color: #2e3440;
+            border-radius: 12px;
         """)
+        self._apply_shadow()
 
-        layout = QVBoxLayout()
-        layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.setSpacing(20)
+        self._card_layout = QVBoxLayout(self._card)
+        self._card_layout.setContentsMargins(32, 32, 32, 32)
+        self._card_layout.setSpacing(8)
+        self._card_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
 
-        title = QLabel("Kasual Desktop")
-        title.setStyleSheet("font-size: 32px; font-weight: bold; padding: 20px;")
-        title.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(title)
+        self._title = QLabel("Kasual Desktop")
+        self._title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._title.setStyleSheet(
+            "font-size: 28px; color: #88c0d0; font-weight: bold;"
+            " background: transparent; padding-bottom: 8px;"
+        )
+        self._card_layout.addWidget(self._title)
 
-        subtitle = QLabel("Press BTN_MODE (Xbox button) or ESC to close")
-        subtitle.setStyleSheet("font-size: 14px; color: #888;")
-        subtitle.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(subtitle)
+        self._buttons_container = QWidget()
+        self._buttons_container.setStyleSheet("background: transparent;")
+        self._buttons_layout = QVBoxLayout(self._buttons_container)
+        self._buttons_layout.setContentsMargins(0, 0, 0, 0)
+        self._buttons_layout.setSpacing(8)
+        self._card_layout.addWidget(self._buttons_container)
 
-        layout.addSpacing(40)
+        outer.addWidget(self._card)
 
-        btn_container = QWidget()
-        btn_layout = QVBoxLayout()
-        btn_container.setLayout(btn_layout)
+    def _apply_shadow(self) -> None:
+        from PyQt6.QtGui import QColor
+        from PyQt6.QtWidgets import QGraphicsDropShadowEffect
+        effect = QGraphicsDropShadowEffect(self._card)
+        effect.setOffset(0, 0)
+        effect.setBlurRadius(90)
+        effect.setColor(QColor(0, 0, 0, 180))
+        self._card.setGraphicsEffect(effect)
 
-        actions = [
-            ("Przywróć Kasual", "restore"),
-            ("Minimalizuj Kasual", "minimize"),
-            ("Zamknij aplikację", "exit"),
-        ]
-        self._actions = actions
+    def show_overlay(
+        self,
+        items: list[MenuItem] | None = None,
+        on_select: Callable[[MenuItem], None] | None = None,
+        on_cancel: Callable[[], None] | None = None,
+        foreground_is_game: bool = False,
+    ) -> None:
+        if self.isVisible():
+            return
+        self._on_select = on_select
+        self._on_cancel = on_cancel
 
-        for label, action in actions:
-            btn = QPushButton(label)
-            btn.clicked.connect(lambda checked, a=action: self._handle_action(a))
-            btn_layout.addWidget(btn)
+        if items is None:
+            menu = compose_home_menu(foreground=None, hud=self._hud, foreground_is_game=foreground_is_game)
+            items = menu.items
+
+        self._rebuild_buttons(items)
+        self._gamepad.push_handler(self._handle_pad)
+        self._show()
+        logger.debug("HomeOverlay shown")
+
+    def _show(self) -> None:
+        self.showFullScreen()
+        self.raise_()
+
+    def hide_overlay(self) -> None:
+        if not self.isVisible():
+            return
+        self._gamepad.pop_handler(self._handle_pad)
+        self.hide()
+        self.closed.emit()
+
+    def _handle_pad(self, event: str) -> None:
+        if self._cursor:
+            self._cursor.handle_pad(event)
+
+    def _rebuild_buttons(self, items: list[MenuItem]) -> None:
+        while self._buttons_layout.count():
+            item = self._buttons_layout.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+        self._buttons.clear()
+        self._items = list(items)
+
+        self._cursor = MenuCursor(
+            count=lambda: len(self._items),
+            render=self._render_selection,
+            on_activate=self._activate,
+            on_dismiss=self._dismiss,
+            feedback=self._feedback,
+            wrap=True,
+        )
+
+        for i, item in enumerate(self._items):
+            btn = QPushButton("  " + item.label)
+            btn.setMinimumHeight(62)
+            if item.icon:
+                try:
+                    btn.setIcon(qta.icon(item.icon, color="white"))
+                except Exception:
+                    pass
+            btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+            btn.clicked.connect(lambda checked=False, idx=i: self._activate(idx))
+            self._bind_hover(btn, i)
+            self._buttons_layout.addWidget(btn)
             self._buttons.append(btn)
 
-        layout.addWidget(btn_container)
+        self._cursor.reset(0)
 
-        self.setLayout(layout)
+    def _bind_hover(self, btn: QPushButton, idx: int) -> None:
+        def _enter(event) -> None:
+            QPushButton.enterEvent(btn, event)
+            if self._cursor:
+                self._cursor.hover(idx)
+        btn.enterEvent = _enter
 
-    def _highlight_selection(self):
+    def _render_selection(self, index: int) -> None:
         for i, btn in enumerate(self._buttons):
-            if i == self._selected_index:
-                btn.setStyleSheet("""
-                    QPushButton {
-                        padding: 12px 24px;
-                        font-size: 16px;
-                        background-color: #6ab04c;
-                        color: white;
-                        border: 2px solid #8ae86c;
-                        border-radius: 8px;
-                        min-width: 200px;
-                    }
-                """)
-            else:
-                btn.setStyleSheet("""
-                    QPushButton {
-                        padding: 12px 24px;
-                        font-size: 16px;
-                        background-color: #3a3a4a;
-                        color: white;
-                        border: 1px solid #5a5a6a;
-                        border-radius: 8px;
-                        min-width: 200px;
-                    }
-                """)
+            btn.setStyleSheet(
+                _home_menu_item_selected() if i == index
+                else _home_menu_item_normal()
+            )
 
-    def handle_navigation(self, event: str):
-        logger.debug("handle_navigation called with: %s", event)
-        from domain.input.vocabulary import Event
-        if event in (Event.UP, Event.LEFT):
-            self._selected_index = (self._selected_index - 1) % len(self._buttons)
-            self._highlight_selection()
-        elif event in (Event.DOWN, Event.RIGHT):
-            self._selected_index = (self._selected_index + 1) % len(self._buttons)
-            self._highlight_selection()
-        elif event == Event.SELECT:
-            action = self._actions[self._selected_index][1]
-            self._handle_action(action)
-        elif event == Event.CANCEL:
-            if self._on_cancel:
-                self._on_cancel()
-            self.hide()
+    def _activate(self, idx: int) -> None:
+        item = self._items[idx]
+        self._feedback.play(Cue.SELECT)
+        self.hide_overlay()
+        if self._on_select is not None:
+            self._on_select(item)
 
-    def _handle_action(self, action: str):
-        logger.info("Action selected: %s", action)
-        if action == "restore":
-            from infrastructure.windows.desktop_shell import get_desktop_shell
-            get_desktop_shell().restore()
-        elif action == "minimize":
-            from infrastructure.windows.desktop_shell import get_desktop_shell
-            get_desktop_shell().pause()
-        elif action == "exit":
-            if self._on_cancel:
-                self._on_cancel()
+    def _dismiss(self) -> None:
+        self._feedback.play(Cue.POPUP_CLOSE)
+        self.hide_overlay()
+        if self._on_cancel:
+            self._on_cancel()
+
+    def keyPressEvent(self, event: QKeyEvent) -> None:
+        mapped = None
+        if event.key() == Qt.Key.Key_Up:
+            mapped = Event.UP
+        elif event.key() == Qt.Key.Key_Down:
+            mapped = Event.DOWN
+        elif event.key() == Qt.Key.Key_Return:
+            mapped = Event.SELECT
+        elif event.key() == Qt.Key.Key_Enter:
+            mapped = Event.SELECT
+        elif event.key() == Qt.Key.Key_Escape:
+            self._dismiss()
+            return
+        elif event.key() == Qt.Key.Key_F1:
+            self._dismiss()
+            return
+
+        if mapped and self._cursor:
+            self._cursor.handle_pad(mapped)
+
+    def mousePressEvent(self, event) -> None:
+        if not self._card.geometry().contains(event.pos()):
+            self._dismiss()
         else:
-            if self._on_select:
-                self._on_select(action)
-        self.hide()
-
-    def keyPressEvent(self, event: QKeyEvent):
-        if event.key() == Qt.Key.Key_Escape:
-            if self._on_cancel:
-                self._on_cancel()
-            self.hide()
-        super().keyPressEvent(event)
-
-    def show_overlay(self):
-        logger.debug("show_overlay called")
-        self._selected_index = 0
-        self._highlight_selection()
-        self.show()
-        self.activateWindow()
-        self.raise_()
-        logger.debug("Overlay shown, isVisible=%s", self.isVisible())
-
-    def hide_overlay(self):
-        self.hide()
+            super().mousePressEvent(event)
 
 
-class HomeOverlayFactory:
-    """Factory for creating HomeOverlay instances."""
+class _StubHudControl:
+    """Stub HudControl - HUD is not implemented in Windows Iteracja 1."""
 
-    def __init__(self, gamepad, feedback=None):
+    def is_configured(self) -> bool:
+        return False
+
+    def is_visible(self) -> bool:
+        return False
+
+    def toggle(self) -> None:
+        pass
+
+
+class WindowsHomeOverlayFactory:
+    """Factory for creating Windows HomeOverlay instances."""
+
+    def __init__(self, gamepad: PadControl, feedback: Feedback) -> None:
         self._gamepad = gamepad
         self._feedback = feedback
 
-    def create(self) -> QWidget:
-        return HomeOverlay()
-
-
-def compose_home_menu(apps=None, hud_control=None, foreground_is_game=False):
-    """
-    Compose the home menu items.
-
-    Simplified version for PoC.
-    """
-    return HomeMenuItems(
-        items=[
-            ("resume", "Resume Game", "back"),
-            ("settings", "Settings", "gear"),
-            ("exit", "Exit to Windows", "power"),
-        ],
-        cancel_restores=None,
-    )
-
-
-class HomeMenuItems:
-    def __init__(self, items, cancel_restores):
-        self.items = items  # list of (action_id, label, icon)
-        self.cancel_restores = cancel_restores
+    def create_home_overlay(self) -> WindowsHomeOverlay:
+        return WindowsHomeOverlay(self._gamepad, self._feedback)

@@ -1,4 +1,4 @@
-# Kasual Desktop PoC Launcher for Windows (PowerShell)
+# Kasual Desktop Launcher for Windows (PowerShell)
 # Clears Python cache before running - useful for development
 
 $ErrorActionPreference = "SilentlyContinue"
@@ -12,7 +12,7 @@ Get-ChildItem -Path "$ProjectRoot\src" -Recurse -Filter "*.pyc" | Remove-Item -F
 # Also clear venv cache
 Get-ChildItem -Path "$ProjectRoot\venv" -Recurse -Directory -Filter "__pycache__" | Remove-Item -Recurse -Force
 
-Write-Host "Cache cleared. Starting Kasual Desktop PoC..." -ForegroundColor Cyan
+Write-Host "Cache cleared. Starting Kasual Desktop..." -ForegroundColor Cyan
 
-# Run Kasual Desktop PoC
-& "$ProjectRoot\venv\Scripts\python.exe" "$ProjectRoot\src\infrastructure\windows\poc_main.py"
+# Run Kasual Desktop
+& "$ProjectRoot\venv\Scripts\python.exe" "$ProjectRoot\src\infrastructure\windows\windows_main.py"
