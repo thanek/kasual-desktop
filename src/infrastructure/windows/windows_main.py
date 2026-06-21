@@ -24,13 +24,6 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-class _StubFeedback:
-    """Stub feedback - no audio on Windows in Iteracja 1."""
-
-    def play(self, cue) -> None:
-        pass
-
-
 class _StubHud:
     def is_available(self) -> bool: return False
     def is_enabled(self) -> bool: return False
@@ -59,6 +52,12 @@ def main():
     wm = WindowsWindowManager()
     wallpaper = WindowsSystemWallpaper()
     process_manager = WindowsAppManager()
+
+    # Sound cues: the shared QtMultimedia backend works as-is on Windows. One
+    # shared instance, injected everywhere; init() (WAV decode) is deferred until
+    # the event loop is running, mirroring the Linux composition root.
+    from infrastructure.audio.feedback import SoundFeedback
+    feedback = SoundFeedback()
 
     # ── Stub adapters (Iteracja 2) ──────────────────────────────────────────
     from infrastructure.windows.stubs import (
@@ -115,7 +114,7 @@ def main():
         gamepad=gamepad,
         window_manager=wm,
         wallpaper=wallpaper,
-        feedback=_StubFeedback(),
+        feedback=feedback,
         volume=StubVolumeControl(),
         brightness=StubBrightnessControl(),
         power=StubPowerControl(),
@@ -160,7 +159,7 @@ def main():
         if overlay is not None and overlay.isVisible():
             overlay.hide_overlay()
             return
-        factory = HomeOverlayFactory(gamepad, _StubFeedback())
+        factory = HomeOverlayFactory(gamepad, feedback)
         overlay = factory.create_home_overlay()
         _home_overlay_ref[0] = overlay
 
@@ -181,6 +180,10 @@ def main():
     wm.start_periodic_refresh(3000)
     desktop.show()
     desktop.activate()
+
+    # Decode the WAV cues once the event loop is up (mirrors Linux main.py).
+    from PyQt6.QtCore import QTimer
+    QTimer.singleShot(0, feedback.init)
 
     logger.info("Kasual Desktop Windows running (shared widget via surface seam)")
 
