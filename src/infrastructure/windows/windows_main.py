@@ -4,11 +4,13 @@ Windows entry point for Kasual Desktop.
 
 Run with: python src/infrastructure/windows/windows_main.py
 
-PoC of the de-fork: this wires the *shared* Desktop widget (the same
-`infrastructure.qt.desktop` UI used on Linux) onto Windows, via the
-`DesktopSurface` seam. Only genuinely OS-specific adapters live under
-`infrastructure.windows`: the topmost host window (surface), window/app/gamepad
-managers, wallpaper, and not-yet-implemented stubs.
+Wires the *shared* Desktop widget, overlays, and `Application` controller (the
+same code used on Linux) onto Windows via the `DesktopSurface` seam. Only
+genuinely OS-specific adapters live under `infrastructure.windows`: the topmost
+surface, window/app/gamepad managers, wallpaper, and not-yet-implemented stubs.
+
+Default behaviour mirrors Linux: starts in the background (only the tray icon),
+surfaces the Desktop when a gamepad connects, hides again when it disconnects.
 """
 
 import logging
@@ -25,6 +27,7 @@ logger = logging.getLogger(__name__)
 
 
 class _StubHud:
+    """No in-game HUD on Windows — gates the HUD toggle out of the Home Overlay."""
     def is_available(self) -> bool: return False
     def is_enabled(self) -> bool: return False
     def enable(self) -> None: pass
@@ -32,30 +35,30 @@ class _StubHud:
 
 
 def main():
+    from PyQt6.QtCore import QTimer
     from PyQt6.QtWidgets import QApplication
 
     app = QApplication(sys.argv)
     app.setApplicationName("Kasual Desktop")
     app.setQuitOnLastWindowClosed(False)
 
+    from version import get_version
+    version = get_version()
+
     # ── OS-specific adapters ────────────────────────────────────────────────
-    from infrastructure.windows.shell import WindowsShellManager
     from infrastructure.windows.gamepad_watcher import WindowsGamepadWatcher
     from infrastructure.windows.window_manager import WindowsWindowManager
     from infrastructure.windows.wallpaper import WindowsSystemWallpaper
     from infrastructure.windows.app_manager import WindowsAppManager
-    from infrastructure.windows.qt.host_surface import WindowsHostSurface, TimedLaunchHide
+    from infrastructure.windows.qt.desktop_surface import WindowsDesktopSurface, TimedLaunchHide
 
-    shell_manager = WindowsShellManager(on_exit_requested=app.quit)
-    surface = WindowsHostSurface(shell_manager)            # installs the host on build
+    surface = WindowsDesktopSurface()
     gamepad = WindowsGamepadWatcher()
     wm = WindowsWindowManager()
     wallpaper = WindowsSystemWallpaper()
     process_manager = WindowsAppManager()
 
-    # Sound cues: the shared QtMultimedia backend works as-is on Windows. One
-    # shared instance, injected everywhere; init() (WAV decode) is deferred until
-    # the event loop is running, mirroring the Linux composition root.
+    # Sound cues: the shared QtMultimedia backend works as-is on Windows.
     from infrastructure.audio.feedback import SoundFeedback
     feedback = SoundFeedback()
 
@@ -66,6 +69,8 @@ def main():
     )
     from infrastructure.qt.scheduler import QtScheduler
     from domain.notifications.center import NotificationCenter
+
+    power = StubPowerControl()
 
     # ── Catalog ─────────────────────────────────────────────────────────────
     from domain.catalog.app import App
@@ -117,7 +122,7 @@ def main():
         feedback=feedback,
         volume=StubVolumeControl(),
         brightness=StubBrightnessControl(),
-        power=StubPowerControl(),
+        power=power,
         scheduler=QtScheduler(),
         process_manager=process_manager,
         notifications=NotificationCenter(),
@@ -126,67 +131,45 @@ def main():
         color_store=StubTileColorStore(),
         app_pinning=StubAppPinning(),
         surface=surface,
-        deferred_hide=TimedLaunchHide(on_hide=surface.hide),
+        deferred_hide=TimedLaunchHide(on_hide=surface.hide_for_launch),
     )
 
-    host = surface.host
+    # ── Tray + Application controller (shared) ───────────────────────────────
+    from domain.shared.feedback import Cue
+    from domain.system.actions import ActionDeps
+    from infrastructure.qt.ui.tray import SystemTray
+    from infrastructure.qt.overlays.about_overlay import AboutOverlay
+    from infrastructure.qt.overlays.home_overlay import HomeOverlayFactory
+    from application import Application
 
-    from infrastructure.windows.desktop_shell import get_desktop_shell
-    get_desktop_shell().set_shell_window(host)
+    tray = SystemTray(
+        on_show=lambda: (feedback.play(Cue.START), desktop.show_desktop()),
+        on_logs=lambda: logger.info("Log viewer not implemented on Windows yet"),
+        on_about=lambda: AboutOverlay(version, gamepad, feedback),
+        on_quit=app.quit,
+    )
 
-    # ── Home Overlay (BTN_MODE / ESC) ───────────────────────────────────────
-    from domain.menu.entry import RETURN_TO_DESKTOP, RETURN_TO_APP, CLOSE_APP
-    from domain.menu.home import compose_home_menu
-
-    _home_overlay_ref: list = [None]
-
-    def _dispatch_home(item):
-        action = getattr(item, 'action', None)
-        if action == RETURN_TO_DESKTOP:
-            desktop.show_desktop()
-        elif action == RETURN_TO_APP:
-            desktop.app_control.restore_app(item.target)
-        elif action == CLOSE_APP:
-            desktop.app_control.request_close_app(item.target)
-        elif action:
-            desktop._action_runner.run(action)
-        else:
-            logger.info("No action for: %s", item.label)
-
-    def show_home_overlay():
-        from infrastructure.qt.overlays.home_overlay import HomeOverlayFactory
-        overlay = _home_overlay_ref[0]
-        if overlay is not None and overlay.isVisible():
-            overlay.hide_overlay()
-            return
-        factory = HomeOverlayFactory(gamepad, feedback)
-        overlay = factory.create_home_overlay()
-        _home_overlay_ref[0] = overlay
-
-        current_app = desktop.app_control.current_app() if desktop.app_control else None
-        menu = compose_home_menu(foreground=current_app, hud=_StubHud(), foreground_is_game=False)
-        on_cancel = (
-            (lambda t=menu.cancel_restores: desktop.app_control.restore_app(t))
-            if menu.cancel_restores is not None else None
-        )
-        overlay.show_overlay(items=menu.items, on_select=_dispatch_home, on_cancel=on_cancel)
-
-    gamepad.on_btn_mode(show_home_overlay)
-    if host is not None:
-        host._on_key_escape = show_home_overlay
-
-    desktop.take_input()
+    controller = Application(
+        gamepad=gamepad,
+        desktop=desktop,
+        app_control=desktop.app_control,
+        action_deps=ActionDeps(desktop=desktop, power=power),
+        tray=tray,
+        wm=wm,
+        overlay_factory=HomeOverlayFactory(gamepad, feedback),
+        hud=_StubHud(),
+    )
 
     wm.start_periodic_refresh(3000)
-    desktop.show()
-    desktop.activate()
-
     # Decode the WAV cues once the event loop is up (mirrors Linux main.py).
-    from PyQt6.QtCore import QTimer
     QTimer.singleShot(0, feedback.init)
 
-    logger.info("Kasual Desktop Windows running (shared widget via surface seam)")
+    # The Desktop is NOT shown here: it starts hidden and is surfaced by the
+    # Application/SessionPolicy when a gamepad connects (and re-hidden on
+    # disconnect). The tray keeps the process alive meanwhile.
+    logger.info("Kasual Desktop Windows running (background; waiting for gamepad)")
 
+    app.aboutToQuit.connect(controller.shutdown)
     app.aboutToQuit.connect(lambda: (wm.close(), gamepad.shutdown()))
 
     sys.exit(app.exec())

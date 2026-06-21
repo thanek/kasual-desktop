@@ -6,9 +6,9 @@ OS is how it becomes (and is driven as) a fullscreen, stay-on-top surface:
 
   - Wayland/KWin → the widget is its own frameless top-level window, promoted to
     a wlr-layer-shell TOP-layer surface (:class:`LayerShellSurface`, the default);
-  - Windows → there is no layer-shell, so the widget is hosted inside a separate
-    WS_EX_TOPMOST window and shown/hidden through it (see the Windows infra's
-    ``WindowsHostSurface``).
+  - Windows → there is no layer-shell, so the widget is made its own frameless
+    WS_EX_TOPMOST top-level window (see the Windows infra's
+    ``WindowsDesktopSurface``).
 
 Capturing that one difference behind a small port lets the rest of the UI
 (TopBar, TileBar, overlays, the whole Desktop widget) stay shared across both
