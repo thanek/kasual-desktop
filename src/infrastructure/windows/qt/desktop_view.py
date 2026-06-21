@@ -461,10 +461,21 @@ class _TilePopoverMenu(QWidget):
 
     def _build_ui(self) -> None:
         from .home_overlay import _home_menu_item_normal, _home_menu_item_selected
-        from PyQt6.QtWidgets import QVBoxLayout
+        from PyQt6.QtWidgets import QVBoxLayout, QWidget
+
+        self._card = QWidget()
+        self._card.setStyleSheet("""
+            background-color: #2e3440;
+            border-radius: 8px;
+        """)
 
         layout = QVBoxLayout(self)
-        layout.setSpacing(4)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.addWidget(self._card)
+
+        card_layout = QVBoxLayout(self._card)
+        card_layout.setSpacing(4)
+        card_layout.setContentsMargins(8, 8, 8, 8)
         self._btns = []
         for i, item in enumerate(self._items):
             from PyQt6.QtWidgets import QPushButton
@@ -472,7 +483,7 @@ class _TilePopoverMenu(QWidget):
             btn.setMinimumHeight(50)
             btn.clicked.connect(lambda _, idx=i: self._activate(idx))
             btn.setStyleSheet(_home_menu_item_normal())
-            layout.addWidget(btn)
+            card_layout.addWidget(btn)
             self._btns.append(btn)
         self._render_selection()
 
@@ -493,9 +504,11 @@ class _TilePopoverMenu(QWidget):
             return
         from PyQt6.QtCore import QTimer
         from PyQt6.QtGui import QKeyEvent
+        self.adjustSize()
         pos = tile.mapToGlobal(tile.rect().topLeft())
         self.move(pos.x() - 50, pos.y() - self.height() - 10)
         self.show()
+        self.raise_()
         QTimer.singleShot(0, lambda: self._gamepad.push_handler(self._handle_pad))
 
     def _handle_pad(self, event: str) -> None:
@@ -515,6 +528,15 @@ class _TilePopoverMenu(QWidget):
         self._gamepad.pop_handler(self._handle_pad)
         self.hide()
         self.closed.emit()
+
+    def pause(self) -> None:
+        pass
+
+    def resume(self) -> None:
+        pass
+
+    def cancel(self) -> None:
+        self._close()
 
     def keyPressEvent(self, event) -> None:
         from PyQt6.QtCore import Qt
