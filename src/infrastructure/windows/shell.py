@@ -27,8 +27,6 @@ WS_EX_TOPMOST = 0x00000008
 WS_EX_NOACTIVATE = 0x08000000
 SWP_NOMOVE = 0x0002
 SWP_NOSIZE = 0x0001
-SWP_NOZORDER = 0x0004
-SWP_SHOWWINDOW = 0x0040
 GWL_EXSTYLE = -20
 HWND_TOPMOST = -1
 VK_ESCAPE = 0x1B
@@ -103,7 +101,7 @@ class WindowsShellManager:
             hwnd = int(self._window.winId())
             user32 = ctypes.windll.user32
             user32.SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, 0, 0,
-                                SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_SHOWWINDOW)
+                                SWP_NOMOVE | SWP_NOSIZE)
 
     def _on_close(self, event):
         if self._on_exit_requested:

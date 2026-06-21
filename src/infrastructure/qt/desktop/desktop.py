@@ -30,7 +30,7 @@ from domain.shared.scheduler import Scheduler
 from domain.lifecycle.app_control import AppControl
 from domain.lifecycle.process_manager import ProcessManager
 from domain.lifecycle.window_manager import WindowManager
-from infrastructure.qt.ui.layer_shell import make_layer_surface, Layer, Anchor, Keyboard
+from .surface import DesktopSurface, LayerShellSurface
 from domain.shell.desktop import Desktop as DesktopCoordinator
 from domain.lifecycle.app_lifecycle import AppLifecycle
 from domain.navigation.focus_navigator import FocusNavigator
@@ -94,6 +94,7 @@ class Desktop(QWidget, DesktopView, DesktopShell, DesktopControl, metaclass=_Met
         overlays: OpenOverlays,
         color_store: TileColorStore,
         app_pinning: AppPinning,
+        surface: DesktopSurface | None = None,
     ):
         super().__init__()
         self._apps        = apps
@@ -115,6 +116,10 @@ class Desktop(QWidget, DesktopView, DesktopShell, DesktopControl, metaclass=_Met
         self._overlays       = overlays
         self._color_store    = color_store
         self._app_pinning    = app_pinning
+        # How this widget becomes a fullscreen, stay-on-top surface — the one
+        # OS-specific seam. Defaults to layer-shell (Linux); Windows injects a
+        # host-window strategy. See infrastructure/qt/desktop/surface.py.
+        self._surface        = surface or LayerShellSurface()
         self._confirm_dialog = None
         self._tile_popover   = None
         self._color_picker   = None
@@ -125,19 +130,12 @@ class Desktop(QWidget, DesktopView, DesktopShell, DesktopControl, metaclass=_Met
         self._foreground = self._state.foreground
 
         self.setWindowTitle("Kasual Desktop")
-        self.setWindowFlags(Qt.WindowType.FramelessWindowHint)
         self.setAttribute(Qt.WidgetAttribute.WA_OpaquePaintEvent)
-        # Layer-shell surface (Phase 1): keep the Desktop full-screen and above
-        # the DE panels under the global layer-shell integration. The Home
-        # Overlay (overlay layer) still renders above this. The show/hide state
+        # Establish the fullscreen, stay-on-top surface via the injected strategy.
+        # On Wayland this promotes the widget to a layer-shell TOP surface (above
+        # DE panels; the Home Overlay still renders above it). The show/hide state
         # machine rework lands in Phase 2.
-        make_layer_surface(
-            self,
-            layer=Layer.TOP,
-            anchors=Anchor.ALL,
-            exclusive_zone=-1,
-            keyboard=Keyboard.ON_DEMAND,
-        )
+        self._surface.install(self)
 
         main = QVBoxLayout(self)
         main.setContentsMargins(0, 0, 0, 0)
@@ -192,6 +190,11 @@ class Desktop(QWidget, DesktopView, DesktopShell, DesktopControl, metaclass=_Met
         self._action_runner = action_runner
         self._tile_mover    = tile_mover
 
+        # Platform reactivation seam: where the surface itself detects the Desktop
+        # should return (Windows polls the foreground window), route it through the
+        # same idempotent domain entry point used by changeEvent on Linux.
+        self._surface.on_reactivate(self._lifecycle.reactivate_desktop)
+
         self._tilebar.activated.connect(self._lifecycle.on_tile_activated)
         self._tilebar.windows_changed.connect(self._lifecycle.check_active_dyn_gone)
         self._app_manager.on_finished(
@@ -241,16 +244,16 @@ class Desktop(QWidget, DesktopView, DesktopShell, DesktopControl, metaclass=_Met
     # ── DesktopView port (driven by AppLifecycle) ───────────────────────────
 
     def is_visible(self) -> bool:
-        return self.isVisible()
+        return self._surface.is_visible()
 
     def show_fullscreen(self) -> None:
-        self.showFullScreen()
+        self._surface.show_fullscreen()
 
     def activate(self) -> None:
-        self.activateWindow()
+        self._surface.activate()
 
     def hide_view(self) -> None:
-        self.hide()
+        self._surface.hide()
 
     def take_input(self) -> None:
         self._gamepad.push_handler(self._handle_pad)

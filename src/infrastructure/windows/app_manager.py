@@ -1,10 +1,12 @@
 """Windows app manager - launches apps via .lnk or .exe."""
 
+import ctypes
 import logging
 import os
 import subprocess
 import threading
 from collections.abc import Callable, Mapping, Sequence
+from ctypes import wintypes
 from typing import _ProtocolMeta
 
 from PyQt6.QtCore import QObject, QTimer, pyqtSignal
@@ -20,6 +22,65 @@ class _Meta(type(QObject), _ProtocolMeta):
     """Combined metaclass so a QObject can declare it implements a Protocol port."""
 
 CREATE_NO_WINDOW = 0x08000000
+SEE_MASK_NOCLOSEPROCESS = 0x00000040
+WAIT_TIMEOUT = 0x00000102
+
+
+class _SHELLEXECUTEINFO(ctypes.Structure):
+    _fields_ = [
+        ("cbSize",        wintypes.DWORD),
+        ("fMask",         wintypes.ULONG),
+        ("hwnd",          wintypes.HWND),
+        ("lpVerb",        wintypes.LPCWSTR),
+        ("lpFile",        wintypes.LPCWSTR),
+        ("lpParameters",  wintypes.LPCWSTR),
+        ("lpDirectory",   wintypes.LPCWSTR),
+        ("nShow",         wintypes.INT),
+        ("hInstApp",      wintypes.HINSTANCE),
+        ("lpIDList",      ctypes.c_void_p),
+        ("lpClass",       wintypes.LPCWSTR),
+        ("hkeyClass",     wintypes.HKEY),
+        ("dwHotKey",      wintypes.DWORD),
+        ("hIconOrMonitor", wintypes.HANDLE),
+        ("hProcess",      wintypes.HANDLE),
+    ]
+
+
+class _WinHandle:
+    """Thin subprocess.Popen-compatible wrapper around a Win32 process HANDLE."""
+
+    def __init__(self, hProcess: int, pid: int) -> None:
+        self._h = hProcess
+        self.pid = pid
+        self.returncode: int | None = None
+
+    def poll(self) -> int | None:
+        if self.returncode is not None or not self._h:
+            return self.returncode
+        rc = ctypes.windll.kernel32.WaitForSingleObject(self._h, 0)
+        if rc != WAIT_TIMEOUT:
+            self._read_exit_code()
+        return self.returncode
+
+    def wait(self) -> int:
+        if self.returncode is None and self._h:
+            ctypes.windll.kernel32.WaitForSingleObject(self._h, 0xFFFFFFFF)
+            self._read_exit_code()
+        return self.returncode or 0
+
+    def terminate(self) -> None:
+        if self._h:
+            ctypes.windll.kernel32.TerminateProcess(self._h, 1)
+
+    def kill(self) -> None:
+        self.terminate()
+
+    def _read_exit_code(self) -> None:
+        ec = wintypes.DWORD()
+        ctypes.windll.kernel32.GetExitCodeProcess(self._h, ctypes.byref(ec))
+        self.returncode = ec.value
+        ctypes.windll.kernel32.CloseHandle(self._h)
+        self._h = None
 
 
 class WindowsAppManager(QObject, ProcessManager, metaclass=_Meta):
@@ -78,12 +139,26 @@ class WindowsAppManager(QObject, ProcessManager, metaclass=_Meta):
                     return False
 
             if command.startswith("ms-"):
-                proc = subprocess.Popen(
-                    ['cmd', '/c', 'start', '', command] + arg_list,
-                    env=proc_env,
-                    startupinfo=startupinfo,
-                    shell=False,
-                )
+                # Protocol handlers (ms-settings: etc.) can't be tracked via
+                # subprocess. Use ShellExecuteEx with SEE_MASK_NOCLOSEPROCESS
+                # to obtain the process handle so we can monitor it normally.
+                sei = _SHELLEXECUTEINFO()
+                sei.cbSize = ctypes.sizeof(_SHELLEXECUTEINFO)
+                sei.fMask = SEE_MASK_NOCLOSEPROCESS
+                sei.lpFile = command
+                sei.nShow = 1  # SW_SHOW
+                ok = ctypes.windll.shell32.ShellExecuteExW(ctypes.byref(sei))
+                if ok and sei.hProcess:
+                    pid = ctypes.windll.kernel32.GetProcessId(sei.hProcess)
+                    proc = _WinHandle(int(sei.hProcess), pid)
+                    self._processes[idx] = proc
+                    threading.Thread(
+                        target=self._monitor, args=(proc,), daemon=True,
+                    ).start()
+                else:
+                    logger.warning("ShellExecuteEx returned no process handle for %s", command)
+                self._started_emitter.emit(AppStarted(idx))
+                return True
             elif os.path.exists(target):
                 proc = subprocess.Popen(
                     [target] + arg_list,

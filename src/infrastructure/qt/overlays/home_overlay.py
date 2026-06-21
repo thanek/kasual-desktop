@@ -16,7 +16,8 @@ from domain.menu.item import MenuItem
 from domain.shared.feedback import Cue, Feedback
 from domain.shell.overlay import HomeMenuOverlay
 from infrastructure.qt.ui import styles
-from infrastructure.qt.ui.layer_shell import make_layer_surface, Layer, Anchor, Keyboard
+from infrastructure.qt.ui.layer_shell import Layer, Anchor, Keyboard
+from infrastructure.qt.ui.top_surface import promote_overlay_surface
 
 logger = logging.getLogger(__name__)
 
@@ -74,7 +75,7 @@ class HomeOverlay(QWidget, HomeMenuOverlay, metaclass=_Meta):
         # deactivate the fullscreen app underneath, which prompts KWin to reveal
         # the panels it hides under fullscreen windows. Navigation is gamepad-
         # driven (evdev) and independent of Wayland focus, so we don't need it.
-        make_layer_surface(
+        promote_overlay_surface(
             self,
             layer=Layer.OVERLAY,
             anchors=Anchor.ALL,

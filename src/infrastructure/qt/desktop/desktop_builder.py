@@ -20,6 +20,7 @@ from domain.catalog.live_catalog import LiveCatalog
 from domain.input.pad_control import PadControl
 from domain.lifecycle.app_lifecycle import AppLifecycle
 from domain.lifecycle.foreground_inspector import ForegroundInspector
+from domain.lifecycle.launch_hide import LaunchHide
 from domain.lifecycle.process_manager import ProcessManager
 from domain.lifecycle.prompts import LocalizedPrompts
 from domain.lifecycle.window_manager import WindowManager
@@ -42,8 +43,8 @@ from domain.system.brightness import BrightnessControl
 
 from infrastructure.system.proc import parent_pid, process_name
 
-from .deferred_hide import DeferredHide
 from .desktop import Desktop
+from .surface import DesktopSurface
 
 
 def build_desktop(
@@ -63,6 +64,8 @@ def build_desktop(
     order_store: TileOrderStore,
     color_store: TileColorStore,
     app_pinning: AppPinning,
+    surface: DesktopSurface | None = None,
+    deferred_hide: 'LaunchHide | None' = None,
 ) -> Desktop:
     """Build a fully wired Desktop: the view widget plus its domain coordinators."""
     # The open-overlay group is shared: the widget feeds it (register/forget) and
@@ -88,6 +91,7 @@ def build_desktop(
         overlays=overlays,
         color_store=color_store,
         app_pinning=app_pinning,
+        surface=surface,
     )
 
     nav = FocusNavigator(
@@ -103,10 +107,20 @@ def build_desktop(
     )
 
     # The Desktop stays on screen after launching an app until that app's window
-    # is actually mapped, then hides to reveal it.
-    deferred_hide = DeferredHide(
-        window_manager, process_manager, live_apps, on_hide=widget.hide,
-    )
+    # is actually mapped, then hides to reveal it. Hiding goes through hide_view so
+    # it routes through the surface (on Windows that hides the host window and arms
+    # the reactivation monitor; on Linux it is the same as widget.hide()). The
+    # strategy is injectable: Windows supplies a time-based one because protocol
+    # apps (e.g. ms-settings, hosted by ApplicationFrameHost) have no detectable
+    # window to wait on.
+    if deferred_hide is None:
+        # Imported lazily: DeferredHide pulls in the DBus/KWin window manager,
+        # which isn't importable on platforms without PyQt6.QtDBus (e.g. Windows,
+        # which injects its own time-based deferred_hide instead).
+        from .deferred_hide import DeferredHide
+        deferred_hide = DeferredHide(
+            window_manager, process_manager, live_apps, on_hide=widget.hide_view,
+        )
     # App launch/restore/close/exit orchestration lives off the widget in a
     # testable coordinator; the Desktop is just its DesktopView.
     # Read-only foreground/game introspection, split off the coordinator.

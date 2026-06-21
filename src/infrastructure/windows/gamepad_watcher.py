@@ -18,6 +18,7 @@ import threading
 from typing import Callable
 
 import pygame
+from PyQt6.QtCore import QObject, pyqtSignal
 
 from domain.input.gamepad_events import (
     BtnModePressed,
@@ -49,6 +50,14 @@ HAT_DOWN = 3
 HAT_LEFT = 4
 
 
+class _Bridge(QObject):
+    """Qt-signal bridge: emitted from the pygame thread, delivered on the main thread."""
+    nav    = pyqtSignal(str)
+    btn    = pyqtSignal()          # BTN_MODE
+    conn   = pyqtSignal()
+    disc   = pyqtSignal()
+
+
 class WindowsGamepadWatcher(PadControl, GamepadSignals):
     """
     Reads events from a gamepad using pygame in a background thread.
@@ -77,6 +86,14 @@ class WindowsGamepadWatcher(PadControl, GamepadSignals):
         self._btn_mode_emitter = EventEmitter[BtnModePressed]()
         self._connected_emitter = EventEmitter[GamepadConnected]()
         self._disconnected_emitter = EventEmitter[GamepadDisconnected]()
+
+        # Bridge: pygame events arrive on background thread; signals are
+        # delivered to the main thread via Qt's queued-connection mechanism.
+        self._bridge = _Bridge()
+        self._bridge.nav.connect(self._on_nav_main)
+        self._bridge.btn.connect(self._on_btn_mode_main)
+        self._bridge.conn.connect(self._on_connected_main)
+        self._bridge.disc.connect(self._on_disconnected_main)
 
         pygame.init()
         pygame.joystick.init()
@@ -141,7 +158,7 @@ class WindowsGamepadWatcher(PadControl, GamepadSignals):
 
         if button == BTN_MODE:
             logger.debug("BTN_MODE pressed - triggering HomeOverlay")
-            self._btn_mode_emitter.emit(BtnModePressed())
+            self._bridge.btn.emit()
         elif button == BTN_SOUTH:
             self._dispatch(Event.SELECT)
         elif button == BTN_EAST:
@@ -150,7 +167,7 @@ class WindowsGamepadWatcher(PadControl, GamepadSignals):
             self._dispatch(Event.CLOSE)
         elif button == BTN_START:
             if BTN_SELECT in self._held:
-                self._btn_mode_emitter.emit(BtnModePressed())
+                self._bridge.btn.emit()
             else:
                 self._dispatch(Event.MANAGE)
 
@@ -213,16 +230,29 @@ class WindowsGamepadWatcher(PadControl, GamepadSignals):
             self._hat_state["y"] = None
 
     def _dispatch(self, event: str):
-        """Dispatch event to top handler on stack."""
-        logger.debug("Dispatching event: %s", event)
-        if self._stack:
-            handler = self._stack[-1]
-            handler(event)
+        """Queue event for delivery on the Qt main thread."""
+        self._bridge.nav.emit(event)
 
     def _emit_connected(self):
-        self._connected_emitter.emit(GamepadConnected())
+        self._bridge.conn.emit()
 
     def _emit_disconnected(self):
+        self._bridge.disc.emit()
+
+    # ── Main-thread slots (called via Qt queued connection) ──────────────────
+
+    def _on_nav_main(self, event: str) -> None:
+        logger.debug("Dispatching event: %s", event)
+        if self._stack:
+            self._stack[-1](event)
+
+    def _on_btn_mode_main(self) -> None:
+        self._btn_mode_emitter.emit(BtnModePressed())
+
+    def _on_connected_main(self) -> None:
+        self._connected_emitter.emit(GamepadConnected())
+
+    def _on_disconnected_main(self) -> None:
         self._disconnected_emitter.emit(GamepadDisconnected())
 
     def on_btn_mode(self, handler: Callable[[], None]) -> Unsubscribe:

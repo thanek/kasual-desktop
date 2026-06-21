@@ -9,7 +9,8 @@ from PyQt6.QtWidgets import QWidget
 from domain.input.pad_control import PadControl
 from domain.shared.feedback import Cue, Feedback
 from infrastructure.qt.ui import styles
-from infrastructure.qt.ui.layer_shell import make_layer_surface, Layer, Anchor, Keyboard
+from infrastructure.qt.ui.layer_shell import Layer, Anchor, Keyboard
+from infrastructure.qt.ui.top_surface import promote_overlay_surface
 
 logger = logging.getLogger(__name__)
 
@@ -55,14 +56,15 @@ class BaseOverlay(QWidget):
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.setWindowTitle("Kasual Overlay")
         self.setStyleSheet("background-color: rgba(0, 0, 0, 150);")
-        # Standalone layer-shell surface above everything (incl. fullscreen games).
-        # keyboard defaults to NONE — taking keyboard interactivity deactivates a
-        # fullscreen app underneath, which makes KWin reveal the panels it hides
-        # under fullscreen windows. Most overlays are gamepad-driven (evdev) and
-        # don't need Wayland focus. An overlay shown when nothing is fullscreen
-        # (e.g. first-run onboarding) can opt into keyboard input to be navigable
-        # by keyboard as well.
-        make_layer_surface(
+        # Standalone surface above everything (incl. fullscreen games): layer-shell
+        # on Wayland, WS_EX_TOPMOST on Windows, ordinary window elsewhere — see
+        # promote_overlay_surface. keyboard defaults to NONE — taking keyboard
+        # interactivity deactivates a fullscreen app underneath, which makes KWin
+        # reveal the panels it hides under fullscreen windows. Most overlays are
+        # gamepad-driven and don't need Wayland focus. An overlay shown when
+        # nothing is fullscreen (e.g. first-run onboarding) can opt into keyboard
+        # input to be navigable by keyboard as well.
+        promote_overlay_surface(
             self,
             layer=Layer.OVERLAY,
             anchors=Anchor.ALL,

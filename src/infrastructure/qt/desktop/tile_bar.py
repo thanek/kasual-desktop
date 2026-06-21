@@ -367,9 +367,12 @@ class TileBar(QScrollArea, TileBarView, TileFocusView, TileReorderView, metaclas
         running_pids = set(self._app_manager.all_running_pids())
 
         def _owned_by_running_group(window: Window) -> bool:
+            # os.getpgid is Unix-only (absent on Windows → AttributeError); the
+            # process-group rule simply doesn't apply there, so fall through to
+            # False and let matches_app / pinned-id filtering stand on its own.
             try:
                 return bool(running_pids) and os.getpgid(window.pid) in running_pids
-            except OSError:
+            except (OSError, AttributeError):
                 return False
 
         extern_windows = external_windows(windows, self._apps, _owned_by_running_group)

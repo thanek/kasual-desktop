@@ -5,6 +5,26 @@ Port pełnego pulpitu Kasual Desktop (Steam Big Picture style) na Windows.
 Iteracja 1 = działający pulpit z pełnym layoutem (TopBar, TileBar, HomeOverlay)
 identycznym jak wersja Linuksowa, z niezaimplementowanymi funkcjami jako stuby.
 
+> **AKTUALIZACJA ARCHITEKTURY (2026-06-21): de-fork.**
+> Pierwotna iteracja sforkowała całą warstwę Qt UI do `infrastructure/windows/qt/`
+> (desktop_view, tile_bar, topbar, app_tile, overlaye). To był błąd — te widżety są
+> platform-neutralne. Zostały **usunięte**; Windows reużywa teraz **współdzielone**
+> `infrastructure/qt/desktop/*` i `infrastructure/qt/overlays/*`, identycznie jak Linux.
+>
+> Różnice OS są ujęte w dwóch wąskich szwach:
+> - **`DesktopSurface`** (`infrastructure/qt/desktop/surface.py`) — jak pulpit staje się
+>   fullscreen/topmost. Linux: `LayerShellSurface` (wlr-layer-shell). Windows:
+>   `WindowsHostSurface` (`infrastructure/windows/qt/host_surface.py`) — host WS_EX_TOPMOST
+>   + monitor przywracania foreground + `TimedLaunchHide`.
+> - **`promote_overlay_surface`** (`infrastructure/qt/ui/top_surface.py`) — jak overlay
+>   wychodzi na wierzch. Linux: layer-shell OVERLAY. Windows: `Qt.WindowStaysOnTopHint`.
+>
+> Pozostałe pliki OS-specyficzne pod `infrastructure/windows/`: `shell.py`,
+> `window_manager.py`, `app_manager.py`, `gamepad_watcher.py`, `wallpaper.py`,
+> `desktop_shell.py`, `stubs.py`, `qt/host_surface.py`, `windows_main.py`.
+> Sekcje "Struktura plików docelowych" i tabele statusu poniżej opisują stan
+> *sprzed* de-forku — zachowane jako kontekst historyczny.
+
 ---
 
 ## Menu HomeOverlay (identyczne jak Linux)
@@ -140,6 +160,11 @@ src/infrastructure/windows/windows_main.py   # Entry point
 
 - 2026-06-20: Utworzono plan
 - 2026-06-20: Zaimplementowano Iterację 1 - pełny MVP Desktop dla Windows
+- 2026-06-21: De-fork — usunięto sforkowaną warstwę `windows/qt/*`; Windows reużywa
+  współdzielone widżety Qt przez szwy `DesktopSurface` + `promote_overlay_surface`.
+  Naprawiono po drodze: stan "running" kafli (ShellExecuteEx + handle tracking dla
+  protokołów ms-), confirm overlay nie na wierzchu (WS_EX_TOPMOST), home overlay
+  na współdzielonym `HomeOverlay`.
 
 ---
 
