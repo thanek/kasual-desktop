@@ -44,19 +44,3 @@ class StubNetworkControl:
 
     def disconnect(self) -> None:
         pass
-
-
-class StubTileColorStore:
-    def get_color(self, idx: int) -> str | None:
-        return None
-
-    def set_color(self, idx: int, color: str) -> None:
-        pass
-
-
-class StubAppPinning:
-    def pin(self, window) -> None:
-        pass
-
-    def unpin(self, idx: int) -> None:
-        pass

@@ -171,6 +171,14 @@ src/infrastructure/windows/windows_main.py   # Entry point
   pusta), (2) populacji `resource_class` basename'em exe, (3) rozwiązania realnego
   procesu UWP dla okien ApplicationFrameHost (np. SystemSettings.exe), (4) kafel
   ms-settings ma `wm_class="SystemSettings"`.
+- 2026-06-21: Sound feedback — wpięto współdzielony `SoundFeedback` (QtMultimedia,
+  cross-platform) zamiast stuba; `feedback.init()` odroczone QTimerem.
+- 2026-06-21: Tray + sesja. windows_main przeszedł na współdzielony kontroler
+  `Application` + `SystemTray` (QSystemTrayIcon). KD startuje w tle (tylko tray),
+  `SessionPolicy` pokazuje pulpit przy podłączeniu pada i chowa przy odłączeniu.
+  Powierzchnia Windows zmieniona z modelu hosta na "Desktop sam jako okno topmost"
+  (`WindowsDesktopSurface`) — dzięki temu `hide()`/`resume()` działają jednolicie jak
+  na Linuksie; usunięto `host_surface.py`, `WindowsShellManager` nieużywany.
 
 ---
 

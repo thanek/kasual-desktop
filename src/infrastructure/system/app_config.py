@@ -24,8 +24,15 @@ logger = logging.getLogger(__name__)
 
 
 def config_root() -> Path:
-    """Kasual Desktop's config directory (``$XDG_CONFIG_HOME/kasual-desktop``)."""
-    base = os.environ.get("XDG_CONFIG_HOME") or (Path.home() / ".config")
+    """Kasual Desktop's config directory, per OS.
+
+    Windows → ``%APPDATA%\\kasual-desktop``; elsewhere →
+    ``$XDG_CONFIG_HOME/kasual-desktop`` (defaulting to ``~/.config``). The
+    ``.desktop`` catalog format itself is plain INI and identical on both."""
+    if os.name == "nt":
+        base = os.environ.get("APPDATA") or (Path.home() / "AppData" / "Roaming")
+    else:
+        base = os.environ.get("XDG_CONFIG_HOME") or (Path.home() / ".config")
     return Path(base) / "kasual-desktop"
 
 

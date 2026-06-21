@@ -26,6 +26,7 @@ from PyQt6.QtCore import Qt, QSize
 from PyQt6.QtGui import QIcon, QKeyEvent
 from PyQt6.QtWidgets import (
     QWidget, QPushButton, QVBoxLayout, QLabel, QSizePolicy,
+    QScrollArea, QFrame, QApplication,
 )
 
 from domain.input.pad_control import PadControl
@@ -44,8 +45,9 @@ logger = logging.getLogger(__name__)
 
 # Row icon size — sits comfortably within the 62px-tall toggle rows.
 _ROW_ICON_PX     = 36
-# Gap from the toggle to the row's right edge.
-_TOGGLE_MARGIN_R = 24
+# Gap from the toggle to the row's right edge. Wide enough to clear the 10px
+# scrollbar (shown when the list is long) and still leave comfortable spacing.
+_TOGGLE_MARGIN_R = 36
 
 
 class _ToggleRow(QPushButton):
@@ -81,6 +83,7 @@ class OnboardingOverlay(BaseOverlay, ProvisioningView, metaclass=_Meta):
         self._on_confirm: Callable[[list[CandidateApp]], None] | None = None
         self._rows:    list[_ToggleRow] = []
         self._confirm: QPushButton | None = None
+        self._return_row: int = 0   # row to return to when Left leaves Confirm
 
         # Navigation spans the toggle rows plus the trailing Confirm action;
         # clamped (wrap=False) like the tile popover — a fixed-length form.
@@ -117,7 +120,28 @@ class OnboardingOverlay(BaseOverlay, ProvisioningView, metaclass=_Meta):
         self._rows_layout = QVBoxLayout(self._rows_container)
         self._rows_layout.setContentsMargins(0, 0, 0, 0)
         self._rows_layout.setSpacing(8)
-        layout.addWidget(self._rows_container)
+
+        # Scrollable so a long candidate list (e.g. a full Start Menu scan) stays
+        # within the screen; for a short list the area shrinks to fit (see present()).
+        self._scroll = QScrollArea()
+        self._scroll.setWidget(self._rows_container)
+        self._scroll.setWidgetResizable(True)
+        self._scroll.setFrameShape(QFrame.Shape.NoFrame)
+        self._scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self._scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        self._scroll.viewport().setStyleSheet("background: transparent;")
+        self._scroll.setStyleSheet(styles.flat_scrollbar())
+        layout.addWidget(self._scroll)
+
+        # Confirm lives OUTSIDE the scroll area, so it is always visible at the
+        # bottom no matter how far the list is scrolled. Navigation-wise it is the
+        # cursor's last index (reached by Down from the last row, or Right from any
+        # row); see _handle_pad.
+        self._confirm = QPushButton(self.tr("Confirm"))
+        self._confirm.setMinimumHeight(62)
+        self._confirm.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self._confirm.clicked.connect(self._confirm_clicked)
+        layout.addWidget(self._confirm)
 
         outer.addWidget(card)
 
@@ -135,9 +159,20 @@ class OnboardingOverlay(BaseOverlay, ProvisioningView, metaclass=_Meta):
         self._selection = AppSelection(self._candidates)
         self._on_confirm = on_confirm
         self._build_rows()
+        self._fit_scroll_height()
         self._cursor.reset(0)
         self._feedback.play(Cue.POPUP_OPEN)
         self._show()
+
+    def _fit_scroll_height(self) -> None:
+        """Size the scroll area to its rows, capped to ~55% of screen height so a
+        long list scrolls while a short one shrinks to fit (no empty space).
+        Confirm sits below the scroll, so it is not counted here."""
+        n = max(1, len(self._rows))
+        content = n * 62 + (n - 1) * 8
+        screen = QApplication.primaryScreen()
+        cap = int(screen.availableGeometry().height() * 0.55) if screen else 560
+        self._scroll.setFixedHeight(min(content, cap))
 
     # ── Building ─────────────────────────────────────────────────────────────
 
@@ -147,6 +182,9 @@ class OnboardingOverlay(BaseOverlay, ProvisioningView, metaclass=_Meta):
         for i, candidate in enumerate(self._candidates):
             btn = _ToggleRow()
             btn.setMinimumHeight(62)
+            # Ignore the text's natural width so a long name never widens the row
+            # past the card (it clips inside instead of overflowing the dialog).
+            btn.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Fixed)
             icon = self._candidate_icon(candidate)
             if icon is not None:
                 btn.setIcon(icon)
@@ -158,19 +196,15 @@ class OnboardingOverlay(BaseOverlay, ProvisioningView, metaclass=_Meta):
             self._rows_layout.addWidget(btn)
             self._rows.append(btn)
 
-        self._confirm = QPushButton(self.tr("Confirm"))
-        self._confirm.setMinimumHeight(62)
-        self._confirm.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-        self._confirm.clicked.connect(self._confirm_clicked)
-        self._bind_hover(self._confirm, len(self._candidates))   # Confirm is last
-        self._rows_layout.addWidget(self._confirm)
+        # Confirm is created once (outside the scroll, in __init__); re-bind its
+        # hover index now that the row count — its cursor index — is known.
+        self._bind_hover(self._confirm, len(self._candidates))
 
     @staticmethod
     def _candidate_icon(candidate: CandidateApp) -> QIcon | None:
         """The row icon for a candidate, mirroring the tile bar's resolution: the
-        real themed ``Icon`` when present and resolvable, else the Font Awesome
-        glyph. Provisioning seeds only one of the two per app (see the catalog),
-        so this just renders whichever it set."""
+        Font Awesome glyph or themed ``Icon`` when set, else — for apps whose
+        command is a real file (e.g. a Windows ``.lnk``/exe) — the OS shell icon."""
         app = candidate.app
         if app.icon:
             return qta.icon(app.icon, color="white")
@@ -178,7 +212,7 @@ class OnboardingOverlay(BaseOverlay, ProvisioningView, metaclass=_Meta):
             themed = QIcon.fromTheme(app.icon_theme)
             if not themed.isNull():
                 return themed
-        return None
+        return _shell_icon(app.command)
 
     def _bind_hover(self, btn: QPushButton, index: int) -> None:
         """Move the cursor onto *index* when the pointer enters *btn* (with the
@@ -191,14 +225,27 @@ class OnboardingOverlay(BaseOverlay, ProvisioningView, metaclass=_Meta):
     # ── Navigation (delegated to the domain cursor) ──────────────────────────
 
     def _handle_pad(self, event: str) -> None:
+        # Left/Right jump between the list and the always-visible Confirm button:
+        # Right from any row → Confirm; Left from Confirm → the row last left.
+        if event == Event.RIGHT and self._rows and self._cursor.index < len(self._rows):
+            self._return_row = self._cursor.index
+            self._cursor.hover(len(self._rows))
+            return
+        if event == Event.LEFT and self._cursor.index == len(self._rows) and self._rows:
+            self._cursor.hover(min(self._return_row, len(self._rows) - 1))
+            return
         self._cursor.handle_pad(event)
 
     def keyPressEvent(self, event: QKeyEvent) -> None:
         key = event.key()
-        if key in (Qt.Key.Key_Up,):
-            self._cursor.handle_pad(Event.UP)
-        elif key in (Qt.Key.Key_Down,):
-            self._cursor.handle_pad(Event.DOWN)
+        if key == Qt.Key.Key_Up:
+            self._handle_pad(Event.UP)
+        elif key == Qt.Key.Key_Down:
+            self._handle_pad(Event.DOWN)
+        elif key == Qt.Key.Key_Left:
+            self._handle_pad(Event.LEFT)
+        elif key == Qt.Key.Key_Right:
+            self._handle_pad(Event.RIGHT)
         elif key in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
             self._cursor.handle_pad(Event.SELECT)
         elif key == Qt.Key.Key_Space:
@@ -250,6 +297,10 @@ class OnboardingOverlay(BaseOverlay, ProvisioningView, metaclass=_Meta):
             self._confirm.setStyleSheet(
                 styles.dialog_focused() if on_confirm_row else styles.dialog_idle()
             )
+        # Keep the focused row visible as the cursor moves. Confirm sits outside
+        # the scroll area (always visible), so it needs no scrolling.
+        if index < len(self._rows):
+            self._scroll.ensureWidgetVisible(self._rows[index])
 
 
 class OnboardingOverlayFactory:
@@ -262,3 +313,24 @@ class OnboardingOverlayFactory:
 
     def create(self) -> OnboardingOverlay:
         return OnboardingOverlay(self._gamepad, self._feedback)
+
+
+_icon_provider: 'QFileIconProvider | None' = None
+
+
+def _shell_icon(path: str) -> QIcon | None:
+    """The operating system's icon for *path* (a .lnk resolves to its target's
+    icon), or None when *path* is not an existing file. Cross-platform via Qt;
+    on Linux a shell-command 'path' simply isn't a file, so this is a no-op there."""
+    if not path:
+        return None
+    from PyQt6.QtCore import QFileInfo
+    from PyQt6.QtWidgets import QFileIconProvider
+    info = QFileInfo(path)
+    if not info.exists():
+        return None
+    global _icon_provider
+    if _icon_provider is None:
+        _icon_provider = QFileIconProvider()
+    icon = _icon_provider.icon(info)
+    return icon if not icon.isNull() else None

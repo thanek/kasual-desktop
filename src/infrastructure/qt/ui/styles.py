@@ -166,3 +166,31 @@ def home_menu_item_selected() -> str:
             text-align: left;
         }}
     """
+
+
+def flat_scrollbar() -> str:
+    """A flat scrollbar: solid rounded track and handle, no native pseudo-3D
+    frame, no arrow buttons. Apply to a QScrollArea (the rule also clears the
+    area's own border/background)."""
+    return """
+        QScrollArea { background: transparent; border: none; }
+        QScrollBar:vertical {
+            background: #2e3440;
+            width: 10px;
+            margin: 0;
+            border: none;
+            border-radius: 5px;
+        }
+        QScrollBar::handle:vertical {
+            background: #4c566a;
+            min-height: 30px;
+            border: none;
+            border-radius: 5px;
+        }
+        QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+            height: 0; border: none; background: none;
+        }
+        QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {
+            background: none;
+        }
+    """

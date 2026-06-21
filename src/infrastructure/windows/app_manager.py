@@ -129,37 +129,15 @@ class WindowsAppManager(QObject, ProcessManager, metaclass=_Meta):
         startupinfo.wShowWindow = 1
 
         try:
-            target = command
-            if command.lower().endswith('.lnk'):
-                target = self._resolve_lnk(command)
-                if target is None:
-                    msg = f"Failed to resolve .lnk: {command}"
-                    logger.error(msg)
-                    self._launch_failed_emitter.emit(AppLaunchFailed(idx, msg))
-                    return False
+            # Protocol handlers (ms-settings: …) and shortcuts (.lnk) go through the
+            # shell: ShellExecuteEx resolves them — no pywin32/.lnk parsing — and for
+            # a normal target hands back a trackable process handle. UWP/protocol
+            # activations may return no handle; those rely on window-matching.
+            if command.startswith("ms-") or command.lower().endswith(".lnk"):
+                return self._shell_execute(idx, command)
 
-            if command.startswith("ms-"):
-                # Protocol handlers (ms-settings: etc.) can't be tracked via
-                # subprocess. Use ShellExecuteEx with SEE_MASK_NOCLOSEPROCESS
-                # to obtain the process handle so we can monitor it normally.
-                sei = _SHELLEXECUTEINFO()
-                sei.cbSize = ctypes.sizeof(_SHELLEXECUTEINFO)
-                sei.fMask = SEE_MASK_NOCLOSEPROCESS
-                sei.lpFile = command
-                sei.nShow = 1  # SW_SHOW
-                ok = ctypes.windll.shell32.ShellExecuteExW(ctypes.byref(sei))
-                if ok and sei.hProcess:
-                    pid = ctypes.windll.kernel32.GetProcessId(sei.hProcess)
-                    proc = _WinHandle(int(sei.hProcess), pid)
-                    self._processes[idx] = proc
-                    threading.Thread(
-                        target=self._monitor, args=(proc,), daemon=True,
-                    ).start()
-                else:
-                    logger.warning("ShellExecuteEx returned no process handle for %s", command)
-                self._started_emitter.emit(AppStarted(idx))
-                return True
-            elif os.path.exists(target):
+            target = command
+            if os.path.exists(target):
                 proc = subprocess.Popen(
                     [target] + arg_list,
                     env=proc_env,
@@ -209,26 +187,32 @@ class WindowsAppManager(QObject, ProcessManager, metaclass=_Meta):
         self._started_emitter.emit(AppStarted(idx))
         return True
 
-    def _resolve_lnk(self, lnk_path: str) -> str | None:
-        """Resolve a .lnk shortcut to its target path."""
-        try:
-            import pythoncom
-            from win32com.client import Dispatch
-            pythoncom.CoInitialize()
-            try:
-                shell = Dispatch('WScript.Shell')
-                shortcut = shell.CreateShortCut(lnk_path)
-                target = shortcut.Targetpath
-                if target:
-                    logger.debug("Resolved .lnk %s -> %s", lnk_path, target)
-                    return target
-            finally:
-                pythoncom.CoUninitialize()
-        except ImportError:
-            logger.warning("pythoncom not available, .lnk resolution skipped")
-        except Exception as e:
-            logger.warning("Failed to resolve .lnk %s: %s", lnk_path, e)
-        return None
+    def _shell_execute(self, idx: int, command: str) -> bool:
+        """Launch a protocol or shortcut via ShellExecuteEx.
+
+        Tracks the spawned process when the shell returns a handle (normal exe
+        targets do, thanks to SEE_MASK_NOCLOSEPROCESS); some protocol/UWP
+        activations return none and rely on window-matching for running state."""
+        sei = _SHELLEXECUTEINFO()
+        sei.cbSize = ctypes.sizeof(_SHELLEXECUTEINFO)
+        sei.fMask = SEE_MASK_NOCLOSEPROCESS
+        sei.lpFile = command
+        sei.nShow = 1  # SW_SHOW
+        ok = ctypes.windll.shell32.ShellExecuteExW(ctypes.byref(sei))
+        if not ok:
+            msg = f"ShellExecuteEx failed for {command}"
+            logger.error(msg)
+            self._launch_failed_emitter.emit(AppLaunchFailed(idx, msg))
+            return False
+        if sei.hProcess:
+            pid = ctypes.windll.kernel32.GetProcessId(sei.hProcess)
+            proc = _WinHandle(int(sei.hProcess), pid)
+            self._processes[idx] = proc
+            threading.Thread(target=self._monitor, args=(proc,), daemon=True).start()
+        else:
+            logger.info("No process handle for %s — running tracked via window match", command)
+        self._started_emitter.emit(AppStarted(idx))
+        return True
 
     def _find_in_path(self, cmd: str) -> str | None:
         """Find command in PATH."""

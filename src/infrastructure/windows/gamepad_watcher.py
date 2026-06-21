@@ -25,6 +25,7 @@ from domain.input.gamepad_events import (
     GamepadConnected,
     GamepadDisconnected,
 )
+from domain.input.direction_repeat import DirectionRepeat
 from domain.input.gamepad_signals import GamepadSignals
 from domain.input.pad_control import PadControl
 from domain.input.vocabulary import Event
@@ -102,6 +103,10 @@ class WindowsGamepadWatcher(PadControl, GamepadSignals):
         self._held = set()
         self._stick = {"x": None, "y": None}
         self._hat_state = {"x": None, "y": None}
+        # Auto-fire: a held direction re-emits like a keyboard key-repeat. Pure
+        # timing policy lives in the domain; the loop polls due() each tick (the
+        # 60 fps tick is well under the repeat interval, so none are missed).
+        self._repeat = DirectionRepeat()
 
         self._thread = threading.Thread(target=self._loop, daemon=True, name="windows-gamepad-watcher")
         self._thread.start()
@@ -137,6 +142,9 @@ class WindowsGamepadWatcher(PadControl, GamepadSignals):
                     if self._connected:
                         self._connected = False
                         self._joystick = None
+                        self._repeat.clear()
+                        self._stick = {"x": None, "y": None}
+                        self._hat_state = {"x": None, "y": None}
                         self._emit_disconnected()
 
                 elif event.type == pygame.JOYBUTTONDOWN:
@@ -150,6 +158,11 @@ class WindowsGamepadWatcher(PadControl, GamepadSignals):
 
                 elif event.type == pygame.JOYHATMOTION:
                     self._handle_hat(event.hat, event.value)
+
+            # Re-emit the held direction when its next auto-repeat is due.
+            repeated = self._repeat.due()
+            if repeated is not None:
+                self._dispatch(repeated)
 
     def _handle_button_down(self, button: int):
         """Handle button press."""
@@ -191,10 +204,14 @@ class WindowsGamepadWatcher(PadControl, GamepadSignals):
         if value < -STICK_THRESHOLD and self._stick[axis] != neg_event:
             self._stick[axis] = neg_event
             self._dispatch(neg_event)
+            self._repeat.press(neg_event)
         elif value > STICK_THRESHOLD and self._stick[axis] != pos_event:
             self._stick[axis] = pos_event
             self._dispatch(pos_event)
+            self._repeat.press(pos_event)
         elif abs(value) < STICK_RESET:
+            if self._stick[axis] is not None:
+                self._repeat.release(self._stick[axis])
             self._stick[axis] = None
 
     def _handle_hat(self, hat: int, value: tuple[int, int]):
@@ -220,13 +237,17 @@ class WindowsGamepadWatcher(PadControl, GamepadSignals):
         if new_x and self._hat_state["x"] != new_x:
             self._hat_state["x"] = new_x
             self._dispatch(new_x)
-        elif x == 0:
+            self._repeat.press(new_x)
+        elif x == 0 and self._hat_state["x"] is not None:
+            self._repeat.release(self._hat_state["x"])
             self._hat_state["x"] = None
 
         if new_y and self._hat_state["y"] != new_y:
             self._hat_state["y"] = new_y
             self._dispatch(new_y)
-        elif y == 0:
+            self._repeat.press(new_y)
+        elif y == 0 and self._hat_state["y"] is not None:
+            self._repeat.release(self._hat_state["y"])
             self._hat_state["y"] = None
 
     def _dispatch(self, event: str):
@@ -293,6 +314,7 @@ class WindowsGamepadWatcher(PadControl, GamepadSignals):
 
     def refresh(self) -> None:
         """Reinitialize joystick subsystem."""
+        self._repeat.clear()
         pygame.joystick.quit()
         pygame.joystick.init()
 

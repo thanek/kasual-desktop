@@ -65,111 +65,115 @@ def main():
     # ── Stub adapters (Iteracja 2) ──────────────────────────────────────────
     from infrastructure.windows.stubs import (
         StubPowerControl, StubVolumeControl, StubBrightnessControl,
-        StubNetworkControl, StubTileColorStore, StubAppPinning,
+        StubNetworkControl,
     )
+    from infrastructure.windows.app_pinning import WindowsAppPinning
     from infrastructure.qt.scheduler import QtScheduler
     from domain.notifications.center import NotificationCenter
 
     power = StubPowerControl()
 
     # ── Catalog ─────────────────────────────────────────────────────────────
+    # The same freedesktop .desktop store as Linux (app_config is pure Python;
+    # only config_root() differs — %APPDATA% on Windows). The catalog, tile order
+    # and colours persist across restarts.
     from domain.catalog.app import App
-    from domain.catalog.catalog import AppCatalog
-
-    apps = [
-        # wm_class matches the real hosted UWP process (SystemSettings.exe) so the
-        # tile lights up as running — ms-settings: is a protocol with no launch
-        # process handle, so window-matching is the only running signal.
-        App(name="Settings", command="ms-settings:", color="#2e3440", wm_class="SystemSettings"),
-        App(name="Browser", command="msedge", color="#5e81ac"),
-    ]
-
-    class SimpleCatalog(AppCatalog):
-        def __init__(self, apps):
-            self._apps = list(apps)
-
-        def __iter__(self):
-            return iter(self._apps)
-
-        def __len__(self):
-            return len(self._apps)
-
-        def __getitem__(self, idx):
-            return self._apps[idx]
-
-        def swap(self, i, j):
-            self._apps[i], self._apps[j] = self._apps[j], self._apps[i]
-
-        def append(self, app):
-            self._apps.append(app)
-
-        def remove(self, idx):
-            self._apps.pop(idx)
-
-        def recolour(self, idx, color):
-            pass
-
-    catalog = SimpleCatalog(apps)
-
-    # ── Build the shared Desktop with the Windows surface ────────────────────
-    from infrastructure.qt.desktop.desktop_builder import build_desktop
-
-    desktop = build_desktop(
-        apps=catalog,
-        gamepad=gamepad,
-        window_manager=wm,
-        wallpaper=wallpaper,
-        feedback=feedback,
-        volume=StubVolumeControl(),
-        brightness=StubBrightnessControl(),
-        power=power,
-        scheduler=QtScheduler(),
-        process_manager=process_manager,
-        notifications=NotificationCenter(),
-        network_control=StubNetworkControl(),
-        order_store=None,
-        color_store=StubTileColorStore(),
-        app_pinning=StubAppPinning(),
-        surface=surface,
-        deferred_hide=TimedLaunchHide(on_hide=surface.hide_for_launch),
+    from domain.provisioning.candidate import CandidateApp
+    from infrastructure.system.app_config import (
+        load_apps, DesktopAppProvisioning,
+        DesktopTileOrderStore, DesktopTileColorStore,
     )
+    from infrastructure.windows.app_discovery import discover_candidates
 
-    # ── Tray + Application controller (shared) ───────────────────────────────
-    from domain.shared.feedback import Cue
-    from domain.system.actions import ActionDeps
-    from infrastructure.qt.ui.tray import SystemTray
-    from infrastructure.qt.overlays.about_overlay import AboutOverlay
-    from infrastructure.qt.overlays.home_overlay import HomeOverlayFactory
-    from application import Application
+    provisioning = DesktopAppProvisioning()
 
-    tray = SystemTray(
-        on_show=lambda: (feedback.play(Cue.START), desktop.show_desktop()),
-        on_logs=lambda: logger.info("Log viewer not implemented on Windows yet"),
-        on_about=lambda: AboutOverlay(version, gamepad, feedback),
-        on_quit=app.quit,
-    )
+    def _default_candidates() -> list:
+        """Fallback seed when the Start Menu scan yields nothing."""
+        return [
+            CandidateApp(
+                key="settings", order=0, default_selected=True,
+                app=App(name="Settings", command="ms-settings:", color="#2e3440",
+                        wm_class="SystemSettings"),
+            ),
+            CandidateApp(
+                key="browser", order=1, default_selected=True,
+                app=App(name="Browser", command="msedge", color="#5e81ac"),
+            ),
+        ]
 
-    controller = Application(
-        gamepad=gamepad,
-        desktop=desktop,
-        app_control=desktop.app_control,
-        action_deps=ActionDeps(desktop=desktop, power=power),
-        tray=tray,
-        wm=wm,
-        overlay_factory=HomeOverlayFactory(gamepad, feedback),
-        hud=_StubHud(),
-    )
+    # ── Session (deferred behind onboarding on first run) ────────────────────
+    _refs: dict = {}  # keep tray/controller/overlay alive past their scope
 
-    wm.start_periodic_refresh(3000)
+    def start_session() -> None:
+        from infrastructure.qt.desktop.desktop_builder import build_desktop
+        from domain.shared.feedback import Cue
+        from domain.system.actions import ActionDeps
+        from infrastructure.qt.ui.tray import SystemTray
+        from infrastructure.qt.overlays.about_overlay import AboutOverlay
+        from infrastructure.qt.overlays.home_overlay import HomeOverlayFactory
+        from application import Application
+
+        desktop = build_desktop(
+            apps=load_apps(),
+            gamepad=gamepad,
+            window_manager=wm,
+            wallpaper=wallpaper,
+            feedback=feedback,
+            volume=StubVolumeControl(),
+            brightness=StubBrightnessControl(),
+            power=power,
+            scheduler=QtScheduler(),
+            process_manager=process_manager,
+            notifications=NotificationCenter(),
+            network_control=StubNetworkControl(),
+            order_store=DesktopTileOrderStore(),
+            color_store=DesktopTileColorStore(),
+            app_pinning=WindowsAppPinning(),
+            surface=surface,
+            deferred_hide=TimedLaunchHide(on_hide=surface.hide_for_launch),
+        )
+
+        tray = SystemTray(
+            on_show=lambda: (feedback.play(Cue.START), desktop.show_desktop()),
+            on_logs=lambda: logger.info("Log viewer not implemented on Windows yet"),
+            on_about=lambda: _refs.__setitem__("about", AboutOverlay(version, gamepad, feedback)),
+            on_quit=app.quit,
+        )
+        controller = Application(
+            gamepad=gamepad,
+            desktop=desktop,
+            app_control=desktop.app_control,
+            action_deps=ActionDeps(desktop=desktop, power=power),
+            tray=tray,
+            wm=wm,
+            overlay_factory=HomeOverlayFactory(gamepad, feedback),
+            hud=_StubHud(),
+        )
+        _refs.update(desktop=desktop, tray=tray, controller=controller)
+
+        wm.start_periodic_refresh(3000)
+        app.aboutToQuit.connect(controller.shutdown)
+        # The Desktop is NOT shown here: it starts hidden and is surfaced by the
+        # Application/SessionPolicy when a gamepad connects (and re-hidden on
+        # disconnect). The tray keeps the process alive meanwhile.
+        logger.info("Kasual Desktop running (background; waiting for gamepad)")
+
+    # First run: onboarding picker built from a Start Menu scan; otherwise straight
+    # to the session. Mirrors the Linux composition root.
+    if not provisioning.is_provisioned():
+        from infrastructure.qt.overlays.onboarding_overlay import OnboardingOverlayFactory
+        candidates = discover_candidates() or _default_candidates()
+        onboarding = OnboardingOverlayFactory(gamepad, feedback).create()
+        _refs["onboarding"] = onboarding
+        onboarding.present(
+            candidates,
+            on_confirm=lambda chosen: (provisioning.provision(chosen), start_session()),
+        )
+    else:
+        start_session()
+
     # Decode the WAV cues once the event loop is up (mirrors Linux main.py).
     QTimer.singleShot(0, feedback.init)
-
-    # The Desktop is NOT shown here: it starts hidden and is surfaced by the
-    # Application/SessionPolicy when a gamepad connects (and re-hidden on
-    # disconnect). The tray keeps the process alive meanwhile.
-    logger.info("Kasual Desktop Windows running (background; waiting for gamepad)")
-
-    app.aboutToQuit.connect(controller.shutdown)
     app.aboutToQuit.connect(lambda: (wm.close(), gamepad.shutdown()))
 
     sys.exit(app.exec())

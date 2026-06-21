@@ -25,6 +25,7 @@ from domain.notifications.view import relative_age
 from domain.shared.feedback import Cue, Feedback
 from domain.shared.text import truncate
 from domain.shared.i18n import translate
+from infrastructure.qt.ui import styles
 from .base_overlay import BaseOverlay
 
 _MAX_ROWS        = 12     # how many recent notifications to show
@@ -96,31 +97,6 @@ _ROW_SELECTED = (
 )
 
 _ACCENT = "#88c0d0"   # unread accent (border + dot)
-
-# Flat scrollbar: drop the native pseudo-3D frame, use a solid rounded track and
-# handle, and hide the arrow buttons.
-_SCROLL_STYLE = """
-    QScrollArea { background: transparent; border: none; }
-    QScrollBar:vertical {
-        background: #2e3440;
-        width: 10px;
-        margin: 0;
-        border: none;
-        border-radius: 5px;
-    }
-    QScrollBar::handle:vertical {
-        background: #4c566a;
-        min-height: 30px;
-        border: none;
-        border-radius: 5px;
-    }
-    QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
-        height: 0; border: none; background: none;
-    }
-    QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {
-        background: none;
-    }
-"""
 
 
 class NotificationsOverlay(BaseOverlay):
@@ -218,7 +194,7 @@ class NotificationsOverlay(BaseOverlay):
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QScrollArea.Shape.NoFrame)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        scroll.setStyleSheet(_SCROLL_STYLE)
+        scroll.setStyleSheet(styles.flat_scrollbar())
         # Size the viewport to the rows, capped: a few notifications give a short
         # card; a long list stops growing at _LIST_MAX_HEIGHT and scrolls.
         container.ensurePolished()
