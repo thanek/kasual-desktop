@@ -53,23 +53,69 @@ def _is_visible(hwnd: int) -> bool:
         return False
 
 
+_PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+
+
 def _get_exe_path(pid: int) -> str | None:
-    """Get executable path for a process ID."""
+    """Full executable path for a process ID, or None.
+
+    Uses QueryFullProcessImageNameW (kernel32) — the modern, reliable call.
+    The older GetModuleFileNameExW lives in psapi, not kernel32, so the previous
+    kernel32.GetModuleFileNameExW raised AttributeError and silently returned None
+    for *every* window, leaving the whole window list empty.
+    """
     try:
-        PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
         kernel32 = ctypes.windll.kernel32
-        handle = kernel32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, False, pid)
+        handle = kernel32.OpenProcess(_PROCESS_QUERY_LIMITED_INFORMATION, False, pid)
         if handle:
             try:
-                buffer = ctypes.create_unicode_buffer(260)
-                size = ctypes.windll.kernel32.GetModuleFileNameExW(handle, 0, buffer, 260)
-                if size > 0:
+                size = ctypes.c_ulong(260)
+                buffer = ctypes.create_unicode_buffer(size.value)
+                if kernel32.QueryFullProcessImageNameW(handle, 0, buffer, ctypes.byref(size)):
                     return buffer.value
             finally:
                 kernel32.CloseHandle(handle)
     except Exception:
         pass
     return None
+
+
+def _exe_basename(pid: int) -> str:
+    """Lowercased executable basename (no extension) for *pid*, e.g. 'systemsettings'."""
+    exe = _get_exe_path(pid) or ""
+    return os.path.splitext(os.path.basename(exe))[0].lower() if exe else ""
+
+
+def _resolve_uwp_pid(hwnd: int, host_pid: int) -> int | None:
+    """For a UWP frame-host window, find the PID of the real hosted app.
+
+    A UWP app's top-level ``ApplicationFrameWindow`` belongs to
+    ApplicationFrameHost.exe; the actual app (e.g. SystemSettings.exe) owns a
+    child ``Windows.UI.Core.CoreWindow``. Return the first child PID that differs
+    from the host, or None."""
+    found = [None]
+
+    EnumChildProc = ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_void_p, ctypes.c_void_p)
+
+    def _cb(child, _lparam):
+        cpid = _get_pid(int(child))
+        if cpid and cpid != host_pid:
+            found[0] = cpid
+            return False
+        return True
+
+    try:
+        ctypes.windll.user32.EnumChildWindows(int(hwnd), EnumChildProc(_cb), 0)
+    except Exception:
+        pass
+    return found[0]
+
+
+# Shell/system processes whose windows are never app tiles.
+_SKIP_EXES = frozenset({
+    "explorer", "searchui", "searchhost", "searchapp", "shellexperiencehost",
+    "startmenuexperiencehost", "textinputhost", "steam", "steamwebhelper",
+})
 
 
 class WindowsWindowManager(QObject, WindowManager, metaclass=_Meta):
@@ -134,22 +180,31 @@ class WindowsWindowManager(QObject, WindowManager, metaclass=_Meta):
                     if not title or len(title.strip()) == 0:
                         return True
 
-                    exe = _get_exe_path(pid) or ""
-                    desktop_file = ""
-                    resource_class = ""
+                    basename = _exe_basename(pid)
+                    win_pid = pid
+                    if basename == "applicationframehost":
+                        # UWP window: the frame host isn't the app. Resolve the
+                        # real hosted process (e.g. SystemSettings) so the tile
+                        # can be matched by its StartupWMClass / resourceClass.
+                        real_pid = _resolve_uwp_pid(int(hwnd), pid)
+                        if real_pid is None:
+                            return True
+                        win_pid = real_pid
+                        basename = _exe_basename(real_pid)
 
-                    if exe:
-                        basename = os.path.splitext(os.path.basename(exe))[0].lower()
-                        if basename not in ("explorer", "steam", "steamwebhelper",
-                                           "applicationframehost", "searchui", "searchhost"):
-                            windows.append(Window(
-                                id=str(int(hwnd)),
-                                title=title,
-                                pid=pid,
-                                active=False,
-                                desktop_file=desktop_file,
-                                resource_class=resource_class,
-                            ))
+                    if basename and basename not in _SKIP_EXES:
+                        # resource_class carries the exe basename — the Windows
+                        # analogue of an X11/Wayland app id — so Window.matches_app
+                        # can attribute the window to a tile (command basename or
+                        # StartupWMClass).
+                        windows.append(Window(
+                            id=str(int(hwnd)),
+                            title=title,
+                            pid=win_pid,
+                            active=False,
+                            desktop_file="",
+                            resource_class=basename,
+                        ))
                 except Exception as e:
                     logger.debug("Error enumerating window 0x%x: %s", hwnd, e)
                 return True

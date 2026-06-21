@@ -162,9 +162,15 @@ src/infrastructure/windows/windows_main.py   # Entry point
 - 2026-06-20: Zaimplementowano Iterację 1 - pełny MVP Desktop dla Windows
 - 2026-06-21: De-fork — usunięto sforkowaną warstwę `windows/qt/*`; Windows reużywa
   współdzielone widżety Qt przez szwy `DesktopSurface` + `promote_overlay_surface`.
-  Naprawiono po drodze: stan "running" kafli (ShellExecuteEx + handle tracking dla
-  protokołów ms-), confirm overlay nie na wierzchu (WS_EX_TOPMOST), home overlay
-  na współdzielonym `HomeOverlay`.
+  Naprawiono po drodze: confirm overlay nie na wierzchu (WS_EX_TOPMOST przez
+  `promote_overlay_surface`), home overlay na współdzielonym `HomeOverlay`.
+- 2026-06-21: Stan "running" kafli. Protokoły ms- NIE zwracają uchwytu procesu z
+  ShellExecuteEx, więc śledzenie procesowe jest niemożliwe — running wykrywamy przez
+  dopasowanie okna. Wymagało: (1) naprawy `_get_exe_path` (QueryFullProcessImageNameW
+  zamiast nieistniejącego kernel32.GetModuleFileNameExW — wcześniej lista okien była
+  pusta), (2) populacji `resource_class` basename'em exe, (3) rozwiązania realnego
+  procesu UWP dla okien ApplicationFrameHost (np. SystemSettings.exe), (4) kafel
+  ms-settings ma `wm_class="SystemSettings"`.
 
 ---
 

@@ -73,7 +73,10 @@ def main():
     from domain.catalog.catalog import AppCatalog
 
     apps = [
-        App(name="Settings", command="ms-settings:", color="#2e3440"),
+        # wm_class matches the real hosted UWP process (SystemSettings.exe) so the
+        # tile lights up as running — ms-settings: is a protocol with no launch
+        # process handle, so window-matching is the only running signal.
+        App(name="Settings", command="ms-settings:", color="#2e3440", wm_class="SystemSettings"),
         App(name="Browser", command="msedge", color="#5e81ac"),
     ]
 
