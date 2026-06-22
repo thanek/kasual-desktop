@@ -160,3 +160,13 @@ Tier 2 (dopieszczanie), Tier 3 (dystrybucja), HUD na końcu.
   linear (driver Della odrzuca linear <50%, power-curve schodzi do ~25%).
   Partial failure (driver anti-blackout floor) logowany info, nie warning.
   Reset LUT do identity przy 100%.
+- 2026-06-22: Network disconnect/reconnect na Windows — `WindowsNetworkControl`
+  w `network.py` implementuje `disconnect()`/`reconnect()`/`can_reconnect()`
+  przez `netsh interface set interface name=... admin=disable|enable`. Wymaga
+  elevacji (netsh verb jest admin-only), więc call idzie przez `ShellExecuteEx`
+  z verbem `runas` — Windows pokazuje UAC prompt per action, główny proces
+  Kasual zostaje unelevated. Synchroniczny wait na exit code (10s timeout).
+  Bez elevacji (user kliknie No na UAC) call fails gracefully (info w logu,
+  `can_reconnect` zostaje False, overlay odzwierciedla rzeczywistość).
+  Zapamiętuje nazwę interfejsu do `reconnect()` (mirror Linux `NMNetworkControl`).
+  `_primary_interface()` reuseuje logikę probe (Ethernet > Wi-Fi > unknown).
