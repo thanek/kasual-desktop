@@ -1,75 +1,44 @@
 import sys
+import threading
 import time
 from PyQt6.QtWidgets import QApplication, QMainWindow
 from PyQt6.QtWebEngineWidgets import QWebEngineView
 from PyQt6.QtCore import QUrl
 from PyQt6.QtWebEngineCore import QWebEngineProfile, QWebEnginePage, QWebEngineScript
-from evdev import InputDevice, ecodes, list_devices
-import threading
-from evdev import UInput, ecodes as e
 
+from keyinput import Key, press
+from padbackend import (
+    ABS_HAT0X, ABS_HAT0Y, BTN_EAST, BTN_SOUTH, PadListener as _PadListener,
+    find_pad,
+)
 from adblocker import AdBlocker, JS_PATCH
 
-# Nazwa wirtualnego pada tworzonego przez kasual/gamepad_manager.py.
-# Czytamy z niego zamiast z fizycznego urządzenia, bo:
-#   1. Fizyczny pad jest grabowany przez desktop (ekskluzywny dostęp).
-#   2. BTN_MODE jest filtrowany przez desktop – YT go nie widzi.
+# On Linux, Kasual grabs the physical gamepad and exposes a virtual
+# "kasual-vpad" device; the app reads from it because the physical pad is
+# exclusive-grabbed and BTN_MODE is filtered. On Windows the controller is
+# cooperative, so padbackend reads it directly via pygame.
 VIRTUAL_DEVICE_NAME = "kasual-vpad"
 PHYSICAL_DEVICE_NAME = '8BitDo Ultimate Wireless / Pro 2 Wired Controller'
 
 
-def find_pad(names: list[str], timeout: float = 10.0) -> InputDevice:
-    """Waits for gamepad with given name appearance, max timeout seconds."""
-    deadline = time.monotonic() + timeout
-    while time.monotonic() < deadline:
-        for path in list_devices():
-            try:
-                d = InputDevice(path)
-                if d.name in names:
-                    return d
-                d.close()
-            except Exception:
-                pass
-        time.sleep(0.2)
-    raise RuntimeError(f"Pad not found among: {names}")
+class PadListener(_PadListener):
+    """YouTube gamepad translator: A → Enter, B → Esc, D-pad → arrows."""
 
-ui = UInput()
+    def on_key(self, code: str) -> None:
+        if   code == BTN_SOUTH: press(Key.KEY_ENTER)
+        elif code == BTN_EAST:  press(Key.KEY_ESC)
 
-
-def press(key):
-    ui.write(e.EV_KEY, key, 1)
-    ui.write(e.EV_KEY, key, 0)
-    ui.syn()
-
-
-class PadListener(threading.Thread):
-    def __init__(self, gamepad: InputDevice, window=None):
-        super().__init__(daemon=True)
-        self._gamepad = gamepad
-        self._window = window
-
-    def run(self):
-        for ev in self._gamepad.read_loop():
-            if self._window is not None and not self._window.isActiveWindow():
-                continue
-            if ev.type == ecodes.EV_KEY:
-                if ev.value == 1:   # wciśnięcie
-                    if ecodes.BTN_SOUTH == ev.code:
-                        press(e.KEY_ENTER)
-                    elif ecodes.BTN_EAST == ev.code:
-                        press(e.KEY_ESC)
-
-            elif ev.type == ecodes.EV_ABS:
-                if ev.code == ecodes.ABS_HAT0X:
-                    if ev.value == -1:
-                        press(e.KEY_LEFT)
-                    elif ev.value == 1:
-                        press(e.KEY_RIGHT)
-                elif ev.code == ecodes.ABS_HAT0Y:
-                    if ev.value == -1:
-                        press(e.KEY_UP)
-                    elif ev.value == 1:
-                        press(e.KEY_DOWN)
+    def on_axis(self, code: str, value, prev) -> None:
+        if   code == ABS_HAT0X:
+            if value < 0:
+                press(Key.KEY_LEFT)
+            elif value > 0:
+                press(Key.KEY_RIGHT)
+        elif code == ABS_HAT0Y:
+            if value < 0:
+                press(Key.KEY_UP)
+            elif value > 0:
+                press(Key.KEY_DOWN)
 
 
 # ── Entrypoint ─────────────────────────────────────────────────────────────
