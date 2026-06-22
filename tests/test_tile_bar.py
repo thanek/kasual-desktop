@@ -114,6 +114,52 @@ class TestWindowsChangedSignal:
         assert bar._dynamic_tiles == []
 
 
+# ── Stable dynamic-tile order (first-seen order) ───────────────────────────────
+
+class TestDynamicTileOrder:
+    """Dynamic-tile order must stay stable across Z-order changes
+    (Windows EnumWindows returns windows in Z-order, KWin in creation order).
+    A new window appends to the end; a disappearing window doesn't shift the rest."""
+
+    def _ids(self, bar) -> list[str]:
+        return [wid for wid, _, _ in bar._dynamic_tiles]
+
+    def test_order_kept_when_z_order_reversed(self, bar):
+        # First refresh establishes the order [1, 2, 3]
+        bar.update_windows([_win("1"), _win("2"), _win("3")])
+        assert self._ids(bar) == ["1", "2", "3"]
+
+        # Next refresh with reversed Z-order (window 3 activated) must not
+        # reshuffle the tiles — first-seen order wins.
+        bar.update_windows([_win("3"), _win("2"), _win("1")])
+        assert self._ids(bar) == ["1", "2", "3"]
+
+    def test_new_window_appends_at_end(self, bar):
+        bar.update_windows([_win("1"), _win("2")])
+        # New window "3" appears at the end, regardless of Z-order
+        bar.update_windows([_win("3"), _win("1"), _win("2")])
+        assert self._ids(bar) == ["1", "2", "3"]
+
+    def test_disappeared_window_keeps_rest_in_place(self, bar):
+        bar.update_windows([_win("1"), _win("2"), _win("3")])
+        # Window "2" disappeared — "1" and "3" keep their order
+        bar.update_windows([_win("3"), _win("1")])
+        assert self._ids(bar) == ["1", "3"]
+
+    def test_returning_window_with_new_id_appends_at_end(self, bar):
+        bar.update_windows([_win("1"), _win("2")])
+        # Window "1" disappeared and returned with new id "4" — goes to the end
+        bar.update_windows([_win("2"), _win("4")])
+        assert self._ids(bar) == ["2", "4"]
+
+    def test_empty_list_clears_order_memory(self, bar):
+        bar.update_windows([_win("1"), _win("2")])
+        bar.update_windows([])
+        # After clearing, new windows start fresh (don't inherit old positions)
+        bar.update_windows([_win("5"), _win("6")])
+        assert self._ids(bar) == ["5", "6"]
+
+
 # ── Hover suppression on Desktop reappearance ───────────────────────────────────
 
 @pytest.fixture

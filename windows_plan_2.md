@@ -144,3 +144,10 @@ Tier 2 (dopieszczanie), Tier 3 (dystrybucja), HUD na końcu.
   heurystyka ex_style go nie łapała; Settings to built-in tile, nie potrzebuje
   dynamicznego kafelka) + guard w UWP branch odrzuca resolve, które zwraca
   `applicationframehost` (edge case pustego frame'a).
+- 2026-06-22: Stabilna kolejność dynamicznych kafli — `TileBar._dyn_order`
+  (first-seen order window id) w `tile_bar.py`. Na Windows `EnumWindows` zwraca
+  okna w Z-orderze (aktywacja okna → przesunięcie na początek), więc bez tego
+  dynamiczne kafle zmieniały kolejność przy aktywacji. KWin's `windowList()`
+  jest już stabilny (creation order), więc fix jest no-op na Linuxie. Nowe okna
+  lądują na końcu, zniknięcie okna nie rusza pozostałych, pusta lista czyści
+  pamięć kolejności. Testy: `TestDynamicTileOrder` w `test_tile_bar.py`.

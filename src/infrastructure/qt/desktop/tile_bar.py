@@ -98,6 +98,14 @@ class TileBar(QScrollArea, TileBarView, TileFocusView, TileReorderView, metaclas
         # KWin refresh skip the teardown/rebuild when nothing visible changed,
         # so an in-progress tile marquee animation is not restarted.
         self._dyn_signature: tuple | None                   = None
+        # First-seen order of dynamic window ids — stabilises the tile order
+        # across refreshes. On Windows ``EnumWindows`` returns windows in Z-order
+        # (top-most first), so activating a window would reshuffle the dynamic
+        # tiles without this. KWin's ``windowList()`` is already stable
+        # (creation order), so this is a no-op there. New windows append to the
+        # end; disappeared windows drop out (their id won't recur — ids are
+        # unique per window instance).
+        self._dyn_order: list[str]                          = []
 
         self.setFixedHeight(TILE_SEL_H + 100)
         self.setWidgetResizable(True)
@@ -387,6 +395,16 @@ class TileBar(QScrollArea, TileBarView, TileFocusView, TileReorderView, metaclas
         # not match the pinned tile, e.g. reverse-DNS app-ids, so filter by id).
         if self._pinned_window_ids:
             extern_windows = [w for w in extern_windows if w.id not in self._pinned_window_ids]
+
+        # Stabilise the dynamic-tile order across refreshes (see _dyn_order).
+        # Rebuild the first-seen order: keep known ids in their existing order,
+        # then append newly-seen ids in the order they arrived in this refresh.
+        seen = {w.id: w for w in extern_windows}
+        ordered: list[Window] = [seen[wid] for wid in self._dyn_order if wid in seen]
+        known = set(self._dyn_order)
+        new_windows: list[Window] = [w for w in extern_windows if w.id not in known]
+        self._dyn_order = [wid for wid in self._dyn_order if wid in seen] + [w.id for w in new_windows]
+        extern_windows = ordered + new_windows
 
         # The window list is refreshed periodically (every few seconds). When the
         # visible dynamic tiles are unchanged, skip the teardown/rebuild entirely —
