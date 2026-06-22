@@ -15,6 +15,7 @@ import logging
 import os
 import re
 import subprocess
+import sys
 from pathlib import Path
 
 from domain.catalog.app import App
@@ -120,6 +121,38 @@ def discover_candidates(limit: int | None = None) -> list[CandidateApp]:
     logger.info("Discovered %d candidate app(s) from Start Menu (%d pre-selected as games)",
                 len(candidates), n_games)
     return candidates
+
+
+# Bundled Kasual apps shipped in the repo's apps/ dir (the Windows analogue of the
+# Linux .sh launchers): name, script path under <root>/apps/, glyph, colour.
+_BUILTINS = [
+    ("files",   "File Browser", "file_browser/src/file_browser.py", "fa5s.folder-open", "#5e81ac"),
+    ("youtube", "YouTube",      "yt/src/yt.py",                     "fa5b.youtube",     "#c0392b"),
+]
+
+
+def builtin_candidates() -> list[CandidateApp]:
+    """The bundled apps (File Browser, YouTube), always offered at onboarding
+    (mirrors Linux 'bundled launchers are always offered').
+
+    Launched via the running interpreter's ``pythonw`` (the venv, so PyQt6/WebEngine
+    resolve) on their ``.py`` — no console window, no launcher file. The repo path
+    is used for now; a future installer can re-provision from its install location."""
+    root = Path(__file__).resolve().parents[3]
+    pyw = Path(sys.executable).with_name("pythonw.exe")
+    python = str(pyw if pyw.exists() else sys.executable)
+
+    out: list[CandidateApp] = []
+    for order, (key, name, rel, icon, color) in enumerate(_BUILTINS):
+        script = root / "apps" / rel
+        if not script.exists():
+            logger.warning("Bundled app script missing: %s", script)
+            continue
+        out.append(CandidateApp(
+            key=key, order=order, default_selected=True,
+            app=App(name=name, command=python, args=(str(script),), icon=icon, color=color),
+        ))
+    return out
 
 
 def _scan_start_menu() -> list[tuple[str, str, str]]:

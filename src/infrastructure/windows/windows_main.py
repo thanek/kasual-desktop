@@ -62,16 +62,16 @@ def main():
     from infrastructure.audio.feedback import SoundFeedback
     feedback = SoundFeedback()
 
-    # ── Stub adapters (Iteracja 2) ──────────────────────────────────────────
-    from infrastructure.windows.stubs import (
-        StubPowerControl, StubVolumeControl, StubBrightnessControl,
-        StubNetworkControl,
-    )
+    # ── System adapters ─────────────────────────────────────────────────────
+    from infrastructure.windows.power import WindowsPowerControl
+    from infrastructure.windows.volume import WindowsVolumeControl
+    from infrastructure.windows.brightness import WindowsBrightnessControl
+    from infrastructure.windows.network import WindowsNetworkProbe, WindowsNetworkControl
     from infrastructure.windows.app_pinning import WindowsAppPinning
     from infrastructure.qt.scheduler import QtScheduler
     from domain.notifications.center import NotificationCenter
 
-    power = StubPowerControl()
+    power = WindowsPowerControl()
 
     # ── Catalog ─────────────────────────────────────────────────────────────
     # The same freedesktop .desktop store as Linux (app_config is pure Python;
@@ -83,7 +83,7 @@ def main():
         load_apps, DesktopAppProvisioning,
         DesktopTileOrderStore, DesktopTileColorStore,
     )
-    from infrastructure.windows.app_discovery import discover_candidates
+    from infrastructure.windows.app_discovery import discover_candidates, builtin_candidates
 
     provisioning = DesktopAppProvisioning()
 
@@ -119,13 +119,13 @@ def main():
             window_manager=wm,
             wallpaper=wallpaper,
             feedback=feedback,
-            volume=StubVolumeControl(),
-            brightness=StubBrightnessControl(),
+            volume=WindowsVolumeControl(),
+            brightness=WindowsBrightnessControl(),
             power=power,
             scheduler=QtScheduler(),
             process_manager=process_manager,
             notifications=NotificationCenter(),
-            network_control=StubNetworkControl(),
+            network_control=WindowsNetworkControl(),
             order_store=DesktopTileOrderStore(),
             color_store=DesktopTileColorStore(),
             app_pinning=WindowsAppPinning(),
@@ -151,8 +151,18 @@ def main():
         )
         _refs.update(desktop=desktop, tray=tray, controller=controller)
 
+        # Top-bar network indicator: a polling monitor over the Windows probe
+        # (reuses the domain PollingNetworkMonitor), feeding the Desktop.
+        from domain.network.polling import PollingNetworkMonitor
+        network_monitor = PollingNetworkMonitor(WindowsNetworkProbe(), QtScheduler())
+        network_monitor.on_changed(desktop.update_network_status)
+        desktop.update_network_status(network_monitor.current())
+        _refs["network_monitor"] = network_monitor
+        QTimer.singleShot(0, network_monitor.start)
+
         wm.start_periodic_refresh(3000)
         app.aboutToQuit.connect(controller.shutdown)
+        app.aboutToQuit.connect(network_monitor.stop)
         # The Desktop is NOT shown here: it starts hidden and is surfaced by the
         # Application/SessionPolicy when a gamepad connects (and re-hidden on
         # disconnect). The tray keeps the process alive meanwhile.
@@ -161,8 +171,15 @@ def main():
     # First run: onboarding picker built from a Start Menu scan; otherwise straight
     # to the session. Mirrors the Linux composition root.
     if not provisioning.is_provisioned():
+        from dataclasses import replace
         from infrastructure.qt.overlays.onboarding_overlay import OnboardingOverlayFactory
-        candidates = discover_candidates() or _default_candidates()
+        # Bundled apps first (always offered, pre-selected), then Start Menu apps
+        # (games pre-selected and sorted first). Renumber so X-Kasual-Order is unique
+        # and matches the list order.
+        combined = builtin_candidates() + discover_candidates()
+        if not combined:
+            combined = _default_candidates()
+        candidates = [replace(c, order=i) for i, c in enumerate(combined)]
         onboarding = OnboardingOverlayFactory(gamepad, feedback).create()
         _refs["onboarding"] = onboarding
         onboarding.present(

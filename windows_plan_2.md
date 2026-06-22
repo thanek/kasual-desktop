@@ -126,4 +126,10 @@ Tier 2 (dopieszczanie), Tier 3 (dystrybucja), HUD na końcu.
   Dziedziczenie przez dzieci: na Windows trigger jest sticky od launchu do powrotu na
   pulpit, więc gry odpalone ze Steama dziedziczą HOLD_1S bez chodzenia po drzewie
   procesów (per-okno rozwiązywanie triggera dla dynamicznych kafli = NTH, fragile przez forking).
-  Następne: item 2 (kontrole: power/volume/brightness).
+- 2026-06-22: Mitygant dual-nav (przejmowanie fokusu) NIE zadziałał (Steam czyta XInput
+  niezależnie od fokusu) — usunięty. Bleed do Steama odłożony (czeka na decyzję: HidHide/ViGEm,
+  zawieszanie procesu, lub akceptacja).
+- 2026-06-22: Ikony dynamicznych kafli — `WindowIconResolver` rozwiązuje ikonę z exe procesu
+  okna (jumbo, krok 4) na Windows. Builtin apps (File Browser, YouTube) provisionowane na
+  Windows: `builtin_candidates()` (venv pythonw + `.py` z `apps/`), zawsze oferowane; round-trip
+  przez `.desktop` zachowuje ścieżki Windows. Następne: item 2 (kontrole: power/volume/brightness).
