@@ -151,3 +151,12 @@ Tier 2 (dopieszczanie), Tier 3 (dystrybucja), HUD na końcu.
   jest już stabilny (creation order), więc fix jest no-op na Linuxie. Nowe okna
   lądują na końcu, zniknięcie okna nie rusza pozostałych, pusta lista czyści
   pamięć kolejności. Testy: `TestDynamicTileOrder` w `test_tile_bar.py`.
+- 2026-06-22: Brightness na Windows — `WindowsBrightnessControl` w
+  `brightness.py` z dwoma backendami: (1) `screen_brightness_control` (real
+  backlight via WMI/DDC-CI) gdy sbc działa, (2) gamma-ramp fallback via Win32
+  `SetDeviceGammaRamp` gdy sbc zawodzi (zepsute DDC/CI, np. HDMI TV bez CEC).
+  Gamma ramp: per-monitor dimming przez `EnumDisplayMonitors`+`CreateDCW`
+  (sięga wszystkich GPU, nie tylko primary), power-curve `(i/255)^gamma` zamiast
+  linear (driver Della odrzuca linear <50%, power-curve schodzi do ~25%).
+  Partial failure (driver anti-blackout floor) logowany info, nie warning.
+  Reset LUT do identity przy 100%.
