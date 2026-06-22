@@ -133,3 +133,14 @@ Tier 2 (dopieszczanie), Tier 3 (dystrybucja), HUD na końcu.
   okna (jumbo, krok 4) na Windows. Builtin apps (File Browser, YouTube) provisionowane na
   Windows: `builtin_candidates()` (venv pythonw + `.py` z `apps/`), zawsze oferowane; round-trip
   przez `.desktop` zachowuje ścieżki Windows. Następne: item 2 (kontrole: power/volume/brightness).
+- 2026-06-22: Filtrowanie okien po taskbar-eligibility — `_is_taskbar_eligible` w
+  `window_manager.py` (odpowiednik KWin `!skipTaskbar && normalWindow`): pomija
+  zawieszone UWP frames (`ApplicationFrameWindow` z `WS_EX_NOACTIVATE`/`TOOLWINDOW`
+  lub z ownerem), tool windows i owned transients. Naprawia p. 2 z `todo.md`:
+  zawieszony `SystemSettings.exe` nie jest już enumerowany, więc tile Settings
+  nie świeci się jako "running" i close-path nie próbuje zamykać zawieszonej UWP.
+  Dodatkowo: `systemsettings` dodany do `_SKIP_EXES` (Windows utrzymuje
+  zawieszony SystemSettings jako widoczne okno bez wpisu na taskbarze —
+  heurystyka ex_style go nie łapała; Settings to built-in tile, nie potrzebuje
+  dynamicznego kafelka) + guard w UWP branch odrzuca resolve, które zwraca
+  `applicationframehost` (edge case pustego frame'a).

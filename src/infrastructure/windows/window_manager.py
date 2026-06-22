@@ -53,6 +53,44 @@ def _is_visible(hwnd: int) -> bool:
         return False
 
 
+# Win32 extended-window-style flags and GetWindow relation constants used by
+# _is_taskbar_eligible — the analogue of KWin's `!skipTaskbar && normalWindow`
+# filter (see infrastructure/system/window_manager.py::_LIST_SCRIPT).
+WS_EX_TOOLWINDOW = 0x00000080
+WS_EX_APPWINDOW  = 0x00040000
+WS_EX_NOACTIVATE = 0x08000000
+GWL_EXSTYLE      = -20
+GW_OWNER         = 4
+
+
+def _is_taskbar_eligible(hwnd: int) -> bool:
+    """Whether *hwnd* would appear on the Windows taskbar.
+
+    Suspended UWP frames (e.g. a background ``SystemSettings``
+    ``ApplicationFrameWindow``), tool windows, and owned transients (dialogs)
+    are not taskbar-eligible and must not be treated as live app tiles —
+    otherwise a built-in tile whose ``wm_class`` matches a background UWP
+    lights up as "running" and can't be closed (the UWP is suspended, so
+    ``WM_CLOSE`` is never pumped).
+    """
+    try:
+        user32 = ctypes.windll.user32
+        ex_style = user32.GetWindowLongW(hwnd, GWL_EXSTYLE)
+        # WS_EX_APPWINDOW forces taskbar eligibility (overrides owner/tool flags).
+        if ex_style & WS_EX_APPWINDOW:
+            return True
+        if ex_style & (WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE):
+            return False
+        # An owned top-level window (transient/dialog) is not on the taskbar
+        # unless WS_EX_APPWINDOW is set (handled above).
+        if user32.GetWindow(hwnd, GW_OWNER):
+            return False
+        return True
+    except Exception:
+        # Be permissive on error — don't drop genuine app windows.
+        return True
+
+
 _PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
 
 
@@ -112,9 +150,16 @@ def _resolve_uwp_pid(hwnd: int, host_pid: int) -> int | None:
 
 
 # Shell/system processes whose windows are never app tiles.
+# ``systemsettings`` is included because Windows keeps a suspended
+# ``SystemSettings.exe`` UWP alive in the background — visible to
+# ``EnumWindows`` but not on the taskbar—so without this exclude it would
+# surface as a spurious dynamic tile (and light up the built-in Settings
+# tile as "running"). The built-in Settings tile launches Settings via
+# ``ms-settings:`` directly; it doesn't need the window enumerator.
 _SKIP_EXES = frozenset({
     "explorer", "searchui", "searchhost", "searchapp", "shellexperiencehost",
     "startmenuexperiencehost", "textinputhost", "steam", "steamwebhelper",
+    "systemsettings",
 })
 
 
@@ -172,6 +217,12 @@ class WindowsWindowManager(QObject, WindowManager, metaclass=_Meta):
                     if not _is_visible(int(hwnd)):
                         return True
 
+                    # Win32 analogue of KWin's `!skipTaskbar && normalWindow`:
+                    # drop suspended UWP frames, tool windows and owned
+                    # transients so they don't surface as running tiles.
+                    if not _is_taskbar_eligible(int(hwnd)):
+                        return True
+
                     pid = _get_pid(int(hwnd))
                     if pid == 0 or pid == our_pid:
                         return True
@@ -191,6 +242,11 @@ class WindowsWindowManager(QObject, WindowManager, metaclass=_Meta):
                             return True
                         win_pid = real_pid
                         basename = _exe_basename(real_pid)
+                        # If resolve returned another ApplicationFrameHost
+                        # (an edge case for suspended/empty UWP frames), there
+                        # is no real hosted app to tile — skip.
+                        if basename == "applicationframehost":
+                            return True
 
                     if basename and basename not in _SKIP_EXES:
                         # resource_class carries the exe basename — the Windows

@@ -191,7 +191,7 @@ class WindowsGamepadWatcher(PadControl, GamepadSignals):
             self._dispatch(Event.SELECT)
         elif button == BTN_EAST:
             self._dispatch(Event.CANCEL)
-        elif button == BTN_WEST:
+        elif button == BTN_NORTH:
             self._dispatch(Event.CLOSE)
         elif button == BTN_START:
             if BTN_SELECT in self._held:
