@@ -325,13 +325,19 @@ class Desktop(QWidget, DesktopView, DesktopShell, DesktopControl, metaclass=_Met
 
     def changeEvent(self, event) -> None:
         super().changeEvent(event)
-        if event.type() == QEvent.Type.ActivationChange and self.isActiveWindow():
+        if (event.type() == QEvent.Type.ActivationChange and self.isActiveWindow()
+                and not self._state.paused):
             # When KWin gives us focus back (e.g. the app we ceded the pad to
             # has closed) delegate the reactivate decision to the domain layer.
             # Edge-triggered on focus gain, so it never fires while an app is
             # foreground (we are not active then). This covers apps launched via
             # a forwarder — e.g. `steam steam://...`, whose launcher process
             # exits immediately, so the normal app_finished path runs too early.
+            #
+            # Skipped while paused (minimized to tray): a stray focus event — e.g.
+            # on Windows when the Home Overlay above us closes as we minimize —
+            # must not bounce the Desktop back; it stays down until explicitly
+            # resumed (tray / gamepad reconnect).
             self._lifecycle.on_focus_gained()
 
     # ── Gamepad handler ────────────────────────────────────────────────────

@@ -137,6 +137,12 @@ class TileBar(QScrollArea, TileBarView, TileFocusView, TileReorderView, metaclas
             themed = QIcon.fromTheme(app.icon_theme)
             if not themed.isNull():
                 qicon = themed
+        if qicon is None and not app.icon:
+            # No glyph/theme icon (e.g. a Windows .desktop whose command is a
+            # .lnk/exe): fall back to the OS shell icon. No-op on Linux, where the
+            # command is a shell name rather than a file path.
+            from infrastructure.qt.icons import shell_icon
+            qicon = shell_icon(app.command)
         tile = AppTile(name=app.name, icon_name=qta_name, color=app.color, qicon=qicon)
         tile.clicked.connect(lambda t=tile: self._activate_index(self._static_index_of(t)))
         tile.hovered.connect(lambda t=tile: self._on_tile_hovered(self._static_index_of(t)))

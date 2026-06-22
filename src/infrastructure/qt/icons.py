@@ -15,8 +15,38 @@ import logging
 from pathlib import Path
 
 import qtawesome
+from PyQt6.QtGui import QIcon
 
 logger = logging.getLogger(__name__)
+
+_icon_provider = None
+
+
+def shell_icon(path: str) -> QIcon | None:
+    """The operating system's icon for *path* (a Windows ``.lnk`` resolves to its
+    target's icon; an exe gives its own), or None when *path* is not an existing
+    file. On Linux a shell-command 'path' (e.g. ``steam``) is not a file, so this
+    is a no-op there."""
+    if not path:
+        return None
+    import os
+    from PyQt6.QtCore import QFileInfo
+    info = QFileInfo(path)
+    if not info.exists():
+        return None
+    # On Windows pull the real 256px "jumbo" icon — QFileIconProvider only ever
+    # delivers the 32px shell icon (it won't upscale), so tiles looked tiny.
+    if os.name == "nt":
+        from infrastructure.windows.win_icons import jumbo_icon
+        jumbo = jumbo_icon(path)
+        if jumbo is not None and not jumbo.isNull():
+            return jumbo
+    from PyQt6.QtWidgets import QFileIconProvider
+    global _icon_provider
+    if _icon_provider is None:
+        _icon_provider = QFileIconProvider()
+    icon = _icon_provider.icon(info)
+    return icon if not icon.isNull() else None
 
 _FONTS_DIR = Path(__file__).resolve().parents[3] / "fonts"
 

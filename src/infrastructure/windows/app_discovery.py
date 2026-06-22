@@ -19,9 +19,15 @@ from pathlib import Path
 
 from domain.catalog.app import App
 from domain.catalog.game_heuristic import looks_like_game
+from domain.input.vocabulary import Trigger
 from domain.provisioning.candidate import CandidateApp
 
 logger = logging.getLogger(__name__)
+
+# Apps (by exe basename) that run their own controller UI in front of Kasual —
+# their tile gets BTN_MODE_HOLD_1S so a quick guide press reaches the app (e.g.
+# Steam Big Picture) and only a hold recalls the Kasual menu.
+_HOLD_1S_TARGETS = frozenset({"steam"})
 
 # Shortcut display-names that are not apps.
 _SKIP_NAME = re.compile(
@@ -92,7 +98,9 @@ def discover_candidates(limit: int | None = None) -> list[CandidateApp]:
 
     # Build apps, flag games, and order: games first, then prominence, then name.
     entries = [
-        (App(name=name, command=lnk, wm_class=base), depth, base)
+        (App(name=name, command=lnk, wm_class=base,
+             recall_menu_trigger=(Trigger.HOLD_1S if base in _HOLD_1S_TARGETS else Trigger.CLICK)),
+         depth, base)
         for base, (depth, name, lnk) in by_target.items()
     ]
     entries.sort(key=lambda e: (not looks_like_game(e[0]), e[1], e[0].name.lower()))

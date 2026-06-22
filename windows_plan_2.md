@@ -110,4 +110,20 @@ Tier 2 (dopieszczanie), Tier 3 (dystrybucja), HUD na końcu.
   margines toggli pod scrollbar.
 - 2026-06-21: Autofire D-pada/gałki — reuse domenowego `DirectionRepeat` w
   `gamepad_watcher` (pętla pygame 60fps odpytuje `due()` co tick; press/release na
-  przejściach kierunku). Zweryfikowane deterministycznie. Następne: item 2 (kontrole).
+  przejściach kierunku). Zweryfikowane deterministycznie.
+- 2026-06-22: Ikony kafli — `shell_icon` (QFileIconProvider) w `icons.py`, fallback
+  w `_make_static_tile` + reuse w onboardingu. Poprawione mapowanie przycisków pada
+  (8BitDo/XInput): START 4→7, SELECT 5→6, WEST/NORTH odwrócone (X=2/Y=3) — MANAGE na
+  Start, CLOSE na X.
+- 2026-06-22: Ikony zbyt małe — `QFileIconProvider` dostarcza tylko 32px (mimo
+  raportowania 256). Dodano ekstrakcję jumbo 256px przez Win32 (`win_icons.py`:
+  image list + ImageList_GetIcon → HICON → QImage); `shell_icon` używa jej na Windows.
+  Naprawiono Minimize z Home Overlay: strażnik `not _state.paused` w `Desktop.changeEvent`
+  (focus-gain przy zamykaniu overlayu nie reaktywuje świadomie zminimalizowanego pulpitu).
+- 2026-06-22: BTN_MODE recall (jak Linux) — `RecallTrigger` w `gamepad_watcher`
+  (`set_app_btn_mode_trigger`, kasual_active=bool(stack), HOLD_1S=1s). Provisioning
+  nadaje Steamowi `recall_menu_trigger=HOLD_1S` (`_HOLD_1S_TARGETS` w discovery).
+  Dziedziczenie przez dzieci: na Windows trigger jest sticky od launchu do powrotu na
+  pulpit, więc gry odpalone ze Steama dziedziczą HOLD_1S bez chodzenia po drzewie
+  procesów (per-okno rozwiązywanie triggera dla dynamicznych kafli = NTH, fragile przez forking).
+  Następne: item 2 (kontrole: power/volume/brightness).

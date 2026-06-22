@@ -212,7 +212,8 @@ class OnboardingOverlay(BaseOverlay, ProvisioningView, metaclass=_Meta):
             themed = QIcon.fromTheme(app.icon_theme)
             if not themed.isNull():
                 return themed
-        return _shell_icon(app.command)
+        from infrastructure.qt.icons import shell_icon
+        return shell_icon(app.command)
 
     def _bind_hover(self, btn: QPushButton, index: int) -> None:
         """Move the cursor onto *index* when the pointer enters *btn* (with the
@@ -313,24 +314,3 @@ class OnboardingOverlayFactory:
 
     def create(self) -> OnboardingOverlay:
         return OnboardingOverlay(self._gamepad, self._feedback)
-
-
-_icon_provider: 'QFileIconProvider | None' = None
-
-
-def _shell_icon(path: str) -> QIcon | None:
-    """The operating system's icon for *path* (a .lnk resolves to its target's
-    icon), or None when *path* is not an existing file. Cross-platform via Qt;
-    on Linux a shell-command 'path' simply isn't a file, so this is a no-op there."""
-    if not path:
-        return None
-    from PyQt6.QtCore import QFileInfo
-    from PyQt6.QtWidgets import QFileIconProvider
-    info = QFileInfo(path)
-    if not info.exists():
-        return None
-    global _icon_provider
-    if _icon_provider is None:
-        _icon_provider = QFileIconProvider()
-    icon = _icon_provider.icon(info)
-    return icon if not icon.isNull() else None

@@ -28,7 +28,8 @@ from domain.input.gamepad_events import (
 from domain.input.direction_repeat import DirectionRepeat
 from domain.input.gamepad_signals import GamepadSignals
 from domain.input.pad_control import PadControl
-from domain.input.vocabulary import Event
+from domain.input.recall import RecallTrigger
+from domain.input.vocabulary import Event, Trigger
 from domain.shared.event_emitter import EventEmitter, Unsubscribe
 
 logger = logging.getLogger(__name__)
@@ -36,13 +37,17 @@ logger = logging.getLogger(__name__)
 STICK_THRESHOLD = 0.5
 STICK_RESET = 0.1
 
-BTN_SOUTH = 0
-BTN_EAST = 1
-BTN_NORTH = 2
-BTN_WEST = 3
-BTN_START = 4
-BTN_SELECT = 5
-BTN_MODE = 10
+# Standard XInput/SDL button indices (verified on an 8BitDo Ultimate in X-input
+# mode). The previous values had Start/Select on the bumpers and X/Y swapped.
+BTN_SOUTH = 0    # A
+BTN_EAST = 1     # B
+BTN_WEST = 2     # X
+BTN_NORTH = 3    # Y
+BTN_TL = 4       # LB
+BTN_TR = 5       # RB
+BTN_SELECT = 6   # Back / View
+BTN_START = 7    # Start / Menu
+BTN_MODE = 10    # Guide / Home
 
 HAT_CENTER = 0
 HAT_UP = 1
@@ -96,6 +101,15 @@ class WindowsGamepadWatcher(PadControl, GamepadSignals):
         self._bridge.conn.connect(self._on_connected_main)
         self._bridge.disc.connect(self._on_disconnected_main)
 
+        # BTN_MODE recall policy: per the foreground app's trigger, a quick guide
+        # press is left to the app (e.g. Steam's own menu — the controller is
+        # cooperative on Windows, so Steam sees it natively) and only a ~1 s HOLD
+        # opens the Kasual menu. When Kasual itself is in control (a handler on the
+        # stack) recall is always immediate. The hold timer fires on_recall on a
+        # background thread; bridge.btn marshals it to the GUI thread.
+        self._app_trigger = Trigger.CLICK
+        self._recall = RecallTrigger(on_recall=self._bridge.btn.emit)
+
         pygame.init()
         pygame.joystick.init()
         pygame.display.init()
@@ -143,6 +157,7 @@ class WindowsGamepadWatcher(PadControl, GamepadSignals):
                         self._connected = False
                         self._joystick = None
                         self._repeat.clear()
+                        self._recall.cancel()
                         self._stick = {"x": None, "y": None}
                         self._hat_state = {"x": None, "y": None}
                         self._emit_disconnected()
@@ -170,8 +185,8 @@ class WindowsGamepadWatcher(PadControl, GamepadSignals):
         logger.debug("Button down: %d", button)
 
         if button == BTN_MODE:
-            logger.debug("BTN_MODE pressed - triggering HomeOverlay")
-            self._bridge.btn.emit()
+            # CLICK / Kasual active → recall now; HOLD_1S app → arm the hold.
+            self._recall.press(kasual_active=bool(self._stack), trigger=self._app_trigger)
         elif button == BTN_SOUTH:
             self._dispatch(Event.SELECT)
         elif button == BTN_EAST:
@@ -187,6 +202,11 @@ class WindowsGamepadWatcher(PadControl, GamepadSignals):
     def _handle_button_up(self, button: int):
         """Handle button release."""
         self._held.discard(button)
+        if button == BTN_MODE:
+            # Cancels a pending hold. The short-press "forward to the app" the
+            # return value reports is moot on Windows — the controller is
+            # cooperative, so the app already saw the guide press itself.
+            self._recall.release(suppressed=bool(self._stack))
 
     def _handle_axis(self, axis: int, value: float):
         """Handle analog stick movement."""
@@ -309,12 +329,17 @@ class WindowsGamepadWatcher(PadControl, GamepadSignals):
         self.trigger_btn_mode()
 
     def set_app_btn_mode_trigger(self, trigger: str) -> None:
-        """On Windows, this is ignored - BTN_MODE always fires immediately."""
-        pass
+        """Set how BTN_MODE recalls the Kasual menu for the current foreground:
+        ``Trigger.CLICK`` (immediate) or ``Trigger.HOLD_1S`` (require a ~1 s hold,
+        leaving a quick press to the app). Driven by AppLifecycle as apps come and
+        go; the trigger stays put for a whole app session (so a launcher's child
+        games inherit it) until the Desktop is reactivated (reset to CLICK)."""
+        self._app_trigger = trigger
 
     def refresh(self) -> None:
         """Reinitialize joystick subsystem."""
         self._repeat.clear()
+        self._recall.cancel()
         pygame.joystick.quit()
         pygame.joystick.init()
 
