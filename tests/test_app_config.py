@@ -5,7 +5,14 @@ in test_domain_app.py (TestFromDesktopEntry / Exec / Env). Here we cover the
 loader: directory handling, file parsing, ordering and resilience to bad files.
 """
 
+import sys
+
 import pytest
+
+pytestmark = pytest.mark.skipif(
+    sys.platform == "win32",
+    reason="Tests Linux XDG_CONFIG_HOME path handling; Windows uses %APPDATA%",
+)
 
 from domain.catalog.app import App
 from domain.provisioning.candidate import CandidateApp

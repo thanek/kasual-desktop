@@ -1,19 +1,29 @@
 """
-Testy jednostkowe dla GamepadWatcher.
+Unit tests for GamepadWatcher (Linux evdev implementation).
 
-Testujemy:
-  - stos handlerów (push/pop, LIFO, deduplikacja)
-  - flagę _suppress_uinput
-  - _dispatch i inject
-  - _translate (eventy EV_KEY i EV_ABS)
-  - _handle_stick_axis (próg, histereza, brak powtórzeń)
-  - _is_gamepad (filtrowanie urządzeń)
+Tests:
+  - handler stack (push/pop, LIFO, dedup)
+  - _suppress_uinput flag
+  - _dispatch and inject
+  - _translate (EV_KEY and EV_ABS events)
+  - _handle_stick_axis (threshold, hysteresis, no repeats)
+  - _is_gamepad (device filtering)
 
-Wątek _loop jest zawsze zablokowany przez fixture mock_gamepad,
-więc żadne evdev ani UInput nie są potrzebne.
+The _loop thread is always blocked by the mock_gamepad fixture,
+so no evdev or UInput hardware is needed. Skipped on Windows —
+Windows uses WindowsGamepadWatcher (pygame) with its own tests.
 """
 
+import sys
 import types
+
+import pytest
+
+pytestmark = pytest.mark.skipif(
+    sys.platform == "win32",
+    reason="Tests the Linux evdev GamepadWatcher; Windows uses WindowsGamepadWatcher (pygame)",
+)
+
 from evdev import ecodes
 
 

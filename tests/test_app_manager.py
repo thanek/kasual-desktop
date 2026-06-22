@@ -1,23 +1,32 @@
 """
-Testy jednostkowe dla AppManager (wersja multi-process).
+Unit tests for AppManager (Linux multi-process version).
 
-Testujemy:
-  - stan początkowy (is_running, running_idxs, all_running_pids)
-  - launch (tworzy proces, emituje app_started)
-  - launch idempotentny — ponowne uruchomienie działającego idx jest ignorowane
-  - launch wielu różnych aplikacji jednocześnie
-  - _on_finished (usuwa z _processes, emituje app_finished, inne procesy nienaruszone)
-  - terminate(idx) — SIGTERM + harmonogram SIGKILL
-  - _force_kill(proc) — SIGKILL tylko gdy TEN proces jest wciąż śledzony
-  - swap_indices — przenosi śledzony proces po zmianie kolejności kafli
+Tests:
+  - initial state (is_running, running_idxs, all_running_pids)
+  - launch (creates process, emits app_started)
+  - idempotent launch — re-launching a running idx is ignored
+  - launching multiple different apps simultaneously
+  - _on_finished (removes from _processes, emits app_finished, other processes intact)
+  - terminate(idx) — SIGTERM + scheduled SIGKILL
+  - _force_kill(proc) — SIGKILL only when THIS process is still tracked
+  - swap_indices — moves tracked process after tile order change
   - running_pid / all_running_pids / is_running
 
-Subprocess.Popen i threading.Thread są zawsze mockowane — testy nie
-uruchamiają żadnych prawdziwych procesów ani wątków.
+Subprocess.Popen and threading.Thread are always mocked — tests don't
+start any real processes or threads. Skipped on Windows — Windows uses
+WindowsAppManager (ShellExecuteEx/subprocess) with its own behaviour.
 """
 
 import signal
+import sys
 from unittest.mock import MagicMock, patch
+
+import pytest
+
+pytestmark = pytest.mark.skipif(
+    sys.platform == "win32",
+    reason="Tests the Linux POSIX AppManager; Windows uses WindowsAppManager",
+)
 
 
 def _make_manager():
