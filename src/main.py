@@ -18,6 +18,7 @@ from version import get_version
 from infrastructure.audio.feedback import SoundFeedback
 from infrastructure.input.gamepad_watcher import GamepadWatcher
 from infrastructure.qt.desktop import build_desktop
+from infrastructure.qt.desktop.deferred_hide import DeferredHide
 from infrastructure.qt.icons import install_fontawesome5
 from infrastructure.qt.overlays.about_overlay import AboutOverlay
 from infrastructure.qt.overlays.home_overlay import HomeOverlayFactory
@@ -31,6 +32,7 @@ from infrastructure.system.app_discovery import WhichAppDiscovery
 from infrastructure.system.app_pinning import DesktopAppPinning
 from domain.provisioning.provisioning import Provisioning, needs_provisioning
 from infrastructure.system.app_manager import AppManager
+from infrastructure.system.proc import parent_pid, process_name
 from infrastructure.system.log_viewer_launcher import LogViewerLauncher
 from infrastructure.system.power import SystemdPowerControl
 from infrastructure.system.volume import PactlVolumeControl
@@ -130,6 +132,10 @@ def main() -> None:
             order_store=DesktopTileOrderStore(),
             color_store=DesktopTileColorStore(),
             app_pinning=DesktopAppPinning(),
+            parent_of=parent_pid,
+            process_name_of=process_name,
+            deferred_hide_factory=lambda wm_, pm_, apps_, on_hide:
+                DeferredHide(wm_, pm_, apps_, on_hide=on_hide),
         )
         # Keep the top-bar notifications badge in sync with the in-memory count.
         # Subscribed after `record` above, so the count is already updated when

@@ -41,10 +41,30 @@ from domain.system.runner import ActionRunner
 from domain.system.volume import VolumeControl
 from domain.system.brightness import BrightnessControl
 
-from infrastructure.system.proc import parent_pid, process_name
+from collections.abc import Callable
 
 from .desktop import Desktop
 from .surface import DesktopSurface
+
+
+class _ImmediateHide:
+    """Fallback ``LaunchHide``: hide the Desktop the moment an app launches, with
+    no window-map wait. Used when the composition root injects no
+    ``deferred_hide_factory`` — keeps the shared builder usable (e.g. in tests)
+    without importing any platform's real deferred-hide."""
+
+    def __init__(self, on_hide: Callable[[], None]) -> None:
+        self._on_hide = on_hide
+
+    @property
+    def is_armed(self) -> bool:
+        return False
+
+    def arm(self, idx: int) -> None:
+        self._on_hide()
+
+    def cancel(self) -> None:
+        pass
 
 
 def build_desktop(
@@ -65,9 +85,20 @@ def build_desktop(
     color_store: TileColorStore,
     app_pinning: AppPinning,
     surface: DesktopSurface | None = None,
-    deferred_hide: 'LaunchHide | None' = None,
+    deferred_hide_factory: 'Callable[[WindowManager, ProcessManager, LiveCatalog, Callable[[], None]], LaunchHide] | None' = None,
+    parent_of: Callable[[int], int | None] | None = None,
+    process_name_of: Callable[[int], str | None] | None = None,
 ) -> Desktop:
-    """Build a fully wired Desktop: the view widget plus its domain coordinators."""
+    """Build a fully wired Desktop: the view widget plus its domain coordinators.
+
+    ``parent_of`` / ``process_name_of`` are the process-tree readers the
+    foreground inspector and recall-trigger resolution need. The composition root
+    injects them (Linux: ``/proc`` readers; Windows: no-ops, since its launch
+    model doesn't expose a parent chain) — keeping this shared builder free of any
+    platform-specific process introspection.
+    """
+    parent_of = parent_of or (lambda _pid: None)
+    process_name_of = process_name_of or (lambda _pid: None)
     # The open-overlay group is shared: the widget feeds it (register/forget) and
     # the coordinator pauses/resumes it as the surface hides and returns.
     overlays = OpenOverlays()
@@ -92,6 +123,7 @@ def build_desktop(
         color_store=color_store,
         app_pinning=app_pinning,
         surface=surface,
+        parent_of=parent_of,
     )
 
     nav = FocusNavigator(
@@ -108,19 +140,19 @@ def build_desktop(
 
     # The Desktop stays on screen after launching an app until that app's window
     # is actually mapped, then hides to reveal it. Hiding goes through hide_view so
-    # it routes through the surface (on Windows that hides the host window and arms
-    # the reactivation monitor; on Linux it is the same as widget.hide()). The
-    # strategy is injectable: Windows supplies a time-based one because protocol
-    # apps (e.g. ms-settings, hosted by ApplicationFrameHost) have no detectable
-    # window to wait on.
-    if deferred_hide is None:
-        # Imported lazily: DeferredHide pulls in the DBus/KWin window manager,
-        # which isn't importable on platforms without PyQt6.QtDBus (e.g. Windows,
-        # which injects its own time-based deferred_hide instead).
-        from .deferred_hide import DeferredHide
-        deferred_hide = DeferredHide(
-            window_manager, process_manager, live_apps, on_hide=widget.hide_view,
+    # it routes through the surface. The strategy is built by an injected factory
+    # — it needs build-internal collaborators (the live catalog, the widget's
+    # hide_view) the composition root can't supply directly, so the root passes a
+    # factory rather than an instance. Linux builds the KWin/DBus DeferredHide;
+    # Windows builds a time-based one (protocol apps like ms-settings have no
+    # detectable window to wait on). With no factory we fall back to an immediate
+    # hide — keeping this shared builder free of any platform import.
+    if deferred_hide_factory is not None:
+        deferred_hide = deferred_hide_factory(
+            window_manager, process_manager, live_apps, widget.hide_view,
         )
+    else:
+        deferred_hide = _ImmediateHide(widget.hide_view)
     # App launch/restore/close/exit orchestration lives off the widget in a
     # testable coordinator; the Desktop is just its DesktopView.
     # Read-only foreground/game introspection, split off the coordinator.
@@ -129,8 +161,8 @@ def build_desktop(
         window_manager=window_manager,
         apps=live_apps,
         app_manager=process_manager,
-        parent_of=parent_pid,
-        process_name_of=process_name,
+        parent_of=parent_of,
+        process_name_of=process_name_of,
     )
     lifecycle = AppLifecycle(
         view=widget,

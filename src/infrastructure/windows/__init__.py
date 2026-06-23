@@ -1,16 +1,6 @@
-"""Windows-specific infrastructure implementations for Kasual Desktop."""
+"""Windows-specific infrastructure implementations for Kasual Desktop.
 
-from infrastructure.windows.gamepad_watcher import WindowsGamepadWatcher
-from infrastructure.windows.shell import WindowsShellManager, get_windows_wallpaper
-from infrastructure.windows.wallpaper import WindowsSystemWallpaper
-from infrastructure.windows.window_manager import WindowsWindowManager
-from infrastructure.windows.app_manager import WindowsAppManager
-
-__all__ = [
-    "WindowsGamepadWatcher",
-    "WindowsShellManager",
-    "get_windows_wallpaper",
-    "WindowsSystemWallpaper",
-    "WindowsWindowManager",
-    "WindowsAppManager",
-]
+Imports are kept lazy (per submodule) so this package has no import-time side
+effects — the composition root (``windows_main``) imports the concrete adapters
+it needs directly.
+"""

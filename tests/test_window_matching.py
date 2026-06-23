@@ -118,11 +118,11 @@ class TestFindTriggerForPid:
     def test_inherits_through_parent_chain(self, bar, app_manager):
         app_manager.running_idxs.return_value = [0]
         app_manager.running_pid.side_effect = lambda i: 1000 if i == 0 else None
-        # child 2000 → parent 1000 (owned by Steam)
-        with patch("infrastructure.qt.desktop.tile_bar._get_ppid", return_value=1000):
-            assert bar._find_trigger_for_pid(2000) == Trigger.HOLD_1S
+        # child 2000 → parent 1000 (owned by Steam) — parent_of is injected now.
+        bar._parent_of = lambda pid: 1000
+        assert bar._find_trigger_for_pid(2000) == Trigger.HOLD_1S
 
     def test_unowned_pid_defaults_to_click(self, bar, app_manager):
         app_manager.running_idxs.return_value = []
-        with patch("infrastructure.qt.desktop.tile_bar._get_ppid", return_value=None):
-            assert bar._find_trigger_for_pid(7777) == Trigger.CLICK
+        bar._parent_of = lambda pid: None
+        assert bar._find_trigger_for_pid(7777) == Trigger.CLICK

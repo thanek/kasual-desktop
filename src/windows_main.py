@@ -2,7 +2,7 @@
 """
 Windows entry point for Kasual Desktop.
 
-Run with: python src/infrastructure/windows/windows_main.py
+Run with: python src/windows_main.py (the sibling of the Linux src/main.py).
 
 Wires the *shared* Desktop widget, overlays, and `Application` controller (the
 same code used on Linux) onto Windows via the `DesktopSurface` seam. Only
@@ -14,10 +14,11 @@ surfaces the Desktop when a gamepad connects, hides again when it disconnects.
 """
 
 import logging
-import os
 import sys
 
-sys.path.insert(0, os.path.normpath(os.path.join(os.path.dirname(__file__), "../..")))
+# No sys.path hack: like src/main.py, running ``python src/windows_main.py`` puts
+# src/ on sys.path[0], so the top-level ``infrastructure``/``domain``/``application``
+# imports resolve.
 
 logging.basicConfig(
     level=logging.DEBUG,
@@ -137,7 +138,11 @@ def main():
             color_store=DesktopTileColorStore(),
             app_pinning=WindowsAppPinning(),
             surface=surface,
-            deferred_hide=TimedLaunchHide(on_hide=surface.hide_for_launch),
+            # Protocol apps (ms-settings) have no detectable window to wait on, so
+            # hide on a short timer and let the surface's foreground monitor bring
+            # the Desktop back; the builder's wm/pm/apps/on_hide args don't apply.
+            deferred_hide_factory=lambda _wm, _pm, _apps, _on_hide:
+                TimedLaunchHide(on_hide=surface.hide_for_launch),
         )
 
         tray = SystemTray(

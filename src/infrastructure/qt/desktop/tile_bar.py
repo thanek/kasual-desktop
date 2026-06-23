@@ -2,7 +2,7 @@
 
 import logging
 import os
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from typing import _ProtocolMeta  # type: ignore[attr-defined]
 
 from PyQt6.QtCore import Qt, QPoint, QTimer, QEasingCurve, QPropertyAnimation, pyqtSignal
@@ -30,18 +30,6 @@ _DYN_TILE_MAX_TITLE = 22   # Maximum length of a dynamic tile title
 _SCROLL_ANIM_MS     = 220  # glide duration when centering the focused tile
 
 
-def _get_ppid(pid: int) -> int | None:
-    """Return the parent PID of *pid* by reading /proc, or None on failure."""
-    try:
-        with open(f'/proc/{pid}/status') as f:
-            for line in f:
-                if line.startswith('PPid:'):
-                    return int(line.split()[1])
-    except (OSError, ValueError):
-        pass
-    return None
-
-
 class TileBar(QScrollArea, TileBarView, TileFocusView, TileReorderView, metaclass=_Meta):
     """Scrollable row of tiles: configured apps first, then open-window tiles.
 
@@ -61,11 +49,17 @@ class TileBar(QScrollArea, TileBarView, TileFocusView, TileReorderView, metaclas
     tile_hovered     = pyqtSignal(int)
     tile_context_menu = pyqtSignal()
 
-    def __init__(self, apps: LiveCatalog, app_manager: ProcessManager, parent: QWidget | None = None) -> None:
+    def __init__(self, apps: LiveCatalog, app_manager: ProcessManager,
+                 parent_of: Callable[[int], int | None] | None = None,
+                 parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._apps          = apps
         self._app_manager   = app_manager
         self._icon_resolver = WindowIconResolver()
+        # Parent-PID lookup for recall-trigger inheritance (a dynamic window
+        # owned by a launcher inherits its trigger). Linux injects the /proc
+        # reader; platforms without a process tree (Windows) pass a no-op.
+        self._parent_of     = parent_of or (lambda _pid: None)
 
         self._tile_index = 0
         self._focused    = True   # tiles own focus at startup
@@ -561,11 +555,11 @@ class TileBar(QScrollArea, TileBarView, TileFocusView, TileReorderView, metaclas
 
         The ownership rule (walk the parent chain to the owning app, default
         CLICK) lives in the domain; this only supplies the pid→app map from the
-        AppManager and the /proc parent lookup.
+        AppManager and the injected parent-PID lookup.
         """
         pid_to_app = {
             self._app_manager.running_pid(i): self._apps[i]
             for i in self._app_manager.running_idxs()
             if self._app_manager.running_pid(i) is not None
         }
-        return resolve_recall_trigger(pid, pid_to_app, _get_ppid)
+        return resolve_recall_trigger(pid, pid_to_app, self._parent_of)

@@ -95,6 +95,7 @@ class Desktop(QWidget, DesktopView, DesktopShell, DesktopControl, metaclass=_Met
         color_store: TileColorStore,
         app_pinning: AppPinning,
         surface: DesktopSurface | None = None,
+        parent_of: 'Callable[[int], int | None] | None' = None,
     ):
         super().__init__()
         self._apps        = apps
@@ -145,7 +146,7 @@ class Desktop(QWidget, DesktopView, DesktopShell, DesktopControl, metaclass=_Met
         self._topbar.button_hovered.connect(self._on_topbar_hovered)
         main.addWidget(self._topbar)
         main.addStretch(1)
-        self._tilebar = TileBar(self._apps, self._app_manager)
+        self._tilebar = TileBar(self._apps, self._app_manager, parent_of=parent_of)
         self._tilebar.tile_hovered.connect(self._on_tile_hovered)
         self._tilebar.tile_context_menu.connect(self._on_tile_context_menu)
         main.addWidget(self._tilebar)

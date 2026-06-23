@@ -23,4 +23,4 @@ Get-ChildItem -Path "$ProjectRoot\venv" -Recurse -Directory -Filter "__pycache__
 Write-Host "Cache cleared. Starting Kasual Desktop..." -ForegroundColor Cyan
 
 # Run Kasual Desktop
-& "$ProjectRoot\venv\Scripts\python.exe" "$ProjectRoot\src\infrastructure\windows\windows_main.py"
+& "$ProjectRoot\venv\Scripts\python.exe" "$ProjectRoot\src\windows_main.py"
