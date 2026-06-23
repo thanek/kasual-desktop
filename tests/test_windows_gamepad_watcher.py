@@ -28,10 +28,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-pytestmark = pytest.mark.skipif(
-    sys.platform != "win32",
-    reason="Tests Windows pygame GamepadWatcher; Windows uses its own port",
-)
+if sys.platform != "win32":
+    pytest.skip("Windows-only test; needs pygame/ctypes.windll", allow_module_level=True)
 
 from infrastructure.windows.gamepad_watcher import (
     BTN_EAST, BTN_MODE, BTN_NORTH, BTN_SELECT, BTN_SOUTH, BTN_START, BTN_WEST,

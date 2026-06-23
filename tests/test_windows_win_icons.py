@@ -15,10 +15,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-pytestmark = pytest.mark.skipif(
-    sys.platform != "win32",
-    reason="Tests Windows Win32/ctypes adapters; needs ctypes.windll",
-)
+if sys.platform != "win32":
+    pytest.skip("Windows-only test; needs ctypes.windll", allow_module_level=True)
 
 from infrastructure.windows.win_icons import (
     SHIL_EXTRALARGE, SHIL_JUMBO, jumbo_icon,
