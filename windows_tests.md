@@ -2,16 +2,15 @@
 
 ## Stan obecny
 
-- **914 testów** w `tests/` (was 873), **162 nowe testy Windows** w 4 plikach
-- Pełna suita: `914 passed, 121 skipped, 0 failed` na Windows; testy Windows
-  są `skipif(sys.platform != "win32")` więc leżą cicho na Linux CI
+- **1159 testów** w `tests/` (was 873), **238 nowe testy Windows** w 14 plikach
+- Pełna suita: **1155 test items** (`879 passed, 280 skipped, 0 failed` na Linux);
+  na Windows po dodaniu 122 testów z 4 plików skipniętych modułowo → **1277 testów**
+- Testy Windows używają `skipif(sys.platform != "win32")` więc leżą cicho na
+  Linux CI (4 pliki z `pytest.skip(allow_module_level=True)`)
 - Oryginalne 4 pliki skipowane na Windows (`test_app_manager.py`,
   `test_app_pinning.py`, `test_app_config.py`, `test_gamepad_watcher.py`) mają
-  teraz swoje lustrzane odpowiedniki w `test_windows_*.py`
-- Cała logika w `src/infrastructure/windows/` Poziomu 1 (app manager, pinning,
-  config, gamepad) jest pokryta; Poziom 2 (window manager, discovery,
-  brightness, network, power, volume, wallpaper, icons, surface, log window)
-  nadal niepokryta
+  swoje lustrzane odpowiedniki w `test_windows_*.py`
+- **14 plików** `test_windows_*.py` pokrywa całe `src/infrastructure/windows/`
 
 ### Konwencja skipów
 
@@ -65,7 +64,7 @@ Odpowiedniki 4 plików skipowanych na Windows, z tą samą charakterystyką.
   - stack handlerów, `inject`, `on_btn_mode`/`on_connected`/`on_disconnected`
   - `refresh()`, `shutdown()` (mock `threading.Thread`)
 
-## Poziom 2 — czysta logika adapterów Windows [in_progress]
+## Poziom 2 — czysta logika adapterów Windows [ukończone]
 
 - [x] **`tests/test_windows_window_manager.py`** — największa niepokryta powierzchnia (56 testów, pass)
   - `_is_taskbar_eligible`: APPWINDOW→True; TOOLWINDOW/NOACTIVATE→False; owner→False; exc→True
@@ -101,18 +100,18 @@ Odpowiedniki 4 plików skipowanych na Windows, z tą samą charakterystyką.
 - [x] **`tests/test_windows_volume.py`** (8 testów, pass)
 - [x] **`tests/test_windows_wallpaper.py`** (5 testów, pass)
 
-- [ ] **`tests/test_windows_win_icons.py`**
+- [x] **`tests/test_windows_win_icons.py`** (16 testów, pass)
   - `jumbo_icon`: sukces z `QImage` (mock SHGetFileInfoW/SHGetImageList/ImageList_GetIcon/GetIconInfo/GetDIBits)
   - każde pole failure → None; `DestroyIcon`/`DeleteObject` w finally; `shil=SHIL_EXTRALARGE` też działa
 
-- [ ] **`tests/test_windows_desktop_surface.py`**
+- [x] **`tests/test_windows_desktop_surface.py`** (34 testy, pass)
   - `install`: `FramelessWindowHint` + `WindowStaysOnTopHint`
   - `show_fullscreen`/`hide`/`activate`/`is_visible`/`on_reactivate`
   - `hide_for_launch`: ukrywa + singleShot(1500) startuje monitor
   - `_check_foreground`: klasa w `_DESKTOP_WIN_CLASSES` (Progman/WorkerW/Shell_TrayWnd/"") → stop + callback; inna → noop; widoczny → stop bez callback
   - `TimedLaunchHide`: arm/cancel/is_armed/_fire; arm po arm resetuje timer
 
-- [ ] **`tests/test_windows_log_window.py`**
+- [x] **`tests/test_windows_log_window.py`** (6 testów, pass)
   - `open()` leniwie buduje `LogViewer`; drugie `open()` re-show bez duplikatu
   - `close()` woła `close` + `deleteLater`; po zamkniętym → noop
 
