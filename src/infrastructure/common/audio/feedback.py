@@ -23,9 +23,9 @@ from domain.shared.feedback import Cue, Feedback
 
 logger = logging.getLogger(__name__)
 
-# sounds/ lives at the repo root; this file sits at src/infrastructure/audio/,
-# so the root is four levels up (parents[3]).
-_SOUNDS_DIR = Path(__file__).resolve().parents[3] / "sounds"
+# sounds/ lives at the repo root; this file sits at src/infrastructure/common/audio/,
+# so the root is four levels up (parents[4]).
+_SOUNDS_DIR = Path(__file__).resolve().parents[4] / "sounds"
 _SOUND_NAMES = tuple(c.value for c in Cue)
 
 

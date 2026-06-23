@@ -19,8 +19,8 @@ duplicates), and ``close`` runs at quit so we don't leak on shutdown.
 import logging
 
 from domain.shared.log_provider import LogProvider
-from infrastructure.qt.ui.log_viewer import LogViewer
-from infrastructure.system.file_log_source import FileLogSource
+from infrastructure.common.qt.ui.log_viewer import LogViewer
+from infrastructure.common.log.file_log_source import FileLogSource
 
 logger = logging.getLogger(__name__)
 
