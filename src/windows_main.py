@@ -75,11 +75,6 @@ def main():
     from version import get_version
     version = get_version()
 
-    # Translations: same setup as Linux's main.py — load the system-locale
-    # .qm from the repo-root locale/ dir and route domain.shared.i18n through Qt.
-    from infrastructure.qt.i18n import install_translations
-    install_translations(app, str(Path(__file__).parents[3] / "locale"))
-
     # ── OS-specific adapters ────────────────────────────────────────────────
     from infrastructure.windows.gamepad_watcher import WindowsGamepadWatcher
     from infrastructure.windows.window_manager import WindowsWindowManager
