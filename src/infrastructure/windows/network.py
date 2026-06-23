@@ -99,6 +99,21 @@ class _SHELLEXECUTEINFO(ctypes.Structure):
     ]
 
 
+# Explicit signatures so the unsigned DWORD return of WaitForSingleObject isn't
+# truncated to a signed int — otherwise WAIT_FAILED (0xFFFFFFFF) would read as -1
+# and never match the constant below.
+_shell32 = ctypes.windll.shell32
+_kernel32 = ctypes.windll.kernel32
+_shell32.ShellExecuteExW.argtypes = [ctypes.POINTER(_SHELLEXECUTEINFO)]
+_shell32.ShellExecuteExW.restype = wintypes.BOOL
+_kernel32.WaitForSingleObject.argtypes = [wintypes.HANDLE, wintypes.DWORD]
+_kernel32.WaitForSingleObject.restype = wintypes.DWORD
+_kernel32.GetExitCodeProcess.argtypes = [wintypes.HANDLE, ctypes.POINTER(wintypes.DWORD)]
+_kernel32.GetExitCodeProcess.restype = wintypes.BOOL
+_kernel32.CloseHandle.argtypes = [wintypes.HANDLE]
+_kernel32.CloseHandle.restype = wintypes.BOOL
+
+
 def _runas_netsh(interface: str, admin: str) -> bool:
     """Run ``netsh interface set interface name=... admin=<admin>`` elevated.
 
@@ -116,7 +131,7 @@ def _runas_netsh(interface: str, admin: str) -> bool:
     sei.lpParameters = f"interface set interface name={interface} admin={admin}"
     sei.nShow = SW_HIDE
 
-    ok = ctypes.windll.shell32.ShellExecuteExW(ctypes.byref(sei))
+    ok = _shell32.ShellExecuteExW(ctypes.byref(sei))
     if not ok:
         # Most common failure: the user clicked "No" on the UAC prompt
         # (ERROR_CANCELLED). There's no process to wait on.
@@ -131,12 +146,12 @@ def _runas_netsh(interface: str, admin: str) -> bool:
             return True
         # Block until the elevated netsh exits. 10 s is generous for a local
         # interface toggle; if it somehow hangs we give up and report False.
-        rc = ctypes.windll.kernel32.WaitForSingleObject(hProcess, 10_000)
+        rc = _kernel32.WaitForSingleObject(hProcess, 10_000)
         if rc == WAIT_FAILED or rc == WAIT_TIMEOUT:
             logger.warning("netsh elevated process wait failed/timeout (rc=%s)", rc)
             return False
         exit_code = wintypes.DWORD()
-        if ctypes.windll.kernel32.GetExitCodeProcess(hProcess, ctypes.byref(exit_code)):
+        if _kernel32.GetExitCodeProcess(hProcess, ctypes.byref(exit_code)):
             if exit_code.value != 0:
                 logger.warning("netsh elevated exit code %d for admin=%s on %r",
                                exit_code.value, admin, interface)
@@ -144,7 +159,7 @@ def _runas_netsh(interface: str, admin: str) -> bool:
         return True
     finally:
         if hProcess:
-            ctypes.windll.kernel32.CloseHandle(hProcess)
+            _kernel32.CloseHandle(hProcess)
 
 
 class WindowsNetworkProbe:

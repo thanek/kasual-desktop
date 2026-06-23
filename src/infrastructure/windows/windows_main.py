@@ -58,9 +58,14 @@ def main():
     wallpaper = WindowsSystemWallpaper()
     process_manager = WindowsAppManager()
 
-    # Sound cues: the shared QtMultimedia backend works as-is on Windows.
+    # Sound cues: the shared QtMultimedia backend works as-is on Windows. Decode
+    # the WAVs now (synchronously) rather than deferring via a timer — a gamepad
+    # connected at launch surfaces the Desktop and plays the START cue from the
+    # queued connect handler, which would otherwise beat a deferred init and drop
+    # the sound ("Unknown sound or no init()"). Decoding 6 short clips is cheap.
     from infrastructure.audio.feedback import SoundFeedback
     feedback = SoundFeedback()
+    feedback.init()
 
     # ── System adapters ─────────────────────────────────────────────────────
     from infrastructure.windows.power import WindowsPowerControl
@@ -92,8 +97,10 @@ def main():
         return [
             CandidateApp(
                 key="settings", order=0, default_selected=True,
-                app=App(name="Settings", command="ms-settings:", color="#2e3440",
-                        wm_class="SystemSettings"),
+                # No wm_class: SystemSettings windows are filtered from enumeration
+                # (a suspended UWP lingers in the background), so the tile never
+                # reads as running — launching always re-opens via ms-settings:.
+                app=App(name="Settings", command="ms-settings:", color="#2e3440"),
             ),
             CandidateApp(
                 key="browser", order=1, default_selected=True,
@@ -189,8 +196,6 @@ def main():
     else:
         start_session()
 
-    # Decode the WAV cues once the event loop is up (mirrors Linux main.py).
-    QTimer.singleShot(0, feedback.init)
     app.aboutToQuit.connect(lambda: (wm.close(), gamepad.shutdown()))
 
     sys.exit(app.exec())

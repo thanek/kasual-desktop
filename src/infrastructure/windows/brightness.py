@@ -15,11 +15,22 @@ Two backends, probed once at construction:
 
 import ctypes
 import logging
+import warnings
 from ctypes import wintypes
 
 from domain.system.brightness import Brightness, BrightnessControl
 
 logger = logging.getLogger(__name__)
+
+# screen_brightness_control logs DDC/CI probe failures at WARNING on every call —
+# redundant with our own "falling back to gamma ramp" message — so quiet it to
+# errors only. And the `wmi` package it pulls in has invalid `\_` escapes in its
+# docstrings that raise SyntaxWarning on Python 3.12+; silence that library noise.
+logging.getLogger("screen_brightness_control").setLevel(logging.ERROR)
+# Match by message, not module: this fires at compile time when `wmi` is (re)imported
+# (kasual.ps1 clears the venv __pycache__ each launch, so it recompiles every run),
+# and a module= filter doesn't catch compile-time SyntaxWarnings reliably.
+warnings.filterwarnings("ignore", category=SyntaxWarning, message=r"invalid escape sequence")
 
 
 class _SbcBrightnessControl(BrightnessControl):
@@ -144,6 +155,13 @@ class _GammaRampBrightnessControl(BrightnessControl):
     applies the ramp to each monitor's own DC (``CreateDCW`` on the device
     name), so dimming reaches all displays even when they sit on different
     graphics adapters (``GetDC(0)`` only reaches the primary adapter's LUT).
+
+    Caveat: Windows clamps how far a gamma ramp may deviate from identity unless
+    ``HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\ICM\\GdiICMGammaRange``
+    is set (a system-wide, reboot-required tweak we deliberately don't write). On
+    a clamped system the achievable dimming range is narrower than the slider
+    implies — the power curve below still helps, but very low levels may be
+    capped by the OS before the driver's own anti-blackout floor even applies.
     """
 
     def __init__(self) -> None:
