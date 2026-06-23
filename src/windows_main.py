@@ -14,16 +14,43 @@ surfaces the Desktop when a gamepad connects, hides again when it disconnects.
 """
 
 import logging
+import os
 import sys
+from pathlib import Path
 
 # No sys.path hack: like src/main.py, running ``python src/windows_main.py`` puts
 # src/ on sys.path[0], so the top-level ``infrastructure``/``domain``/``application``
 # imports resolve.
 
-logging.basicConfig(
-    level=logging.DEBUG,
-    format="%(asctime)s  [%(name)-22s]  %(levelname)-8s  %(message)s",
-)
+_LOG_FMT      = "%(asctime)s  [%(name)-22s]  %(levelname)-8s  %(message)s"
+_LOG_DATE_FMT = "%Y-%m-%d %H:%M:%S"
+
+
+def _setup_logging() -> Path:
+    """Mirror Linux's main.py: file + stderr handlers, under the user cache dir.
+
+    On Windows the conventional per-user cache is ``%LOCALAPPDATA%`` (the
+    counterpart of ``~/.local/cache`` on Linux), so logs land in
+    ``%LOCALAPPDATA%/kasual/kasual.log``. A real file handler is needed because
+    the tray "Logs" viewer reads that file — without it the viewer would only
+    show an empty / missing file. ``KASUAL_DEBUG`` lowers the level to DEBUG;
+    the default is INFO (matches Linux).
+    """
+    log_dir = Path(os.environ.get("LOCALAPPDATA", str(Path.home()))) / "kasual"
+    log_dir.mkdir(parents=True, exist_ok=True)
+    log_file = log_dir / "kasual.log"
+
+    fmt = logging.Formatter(_LOG_FMT, datefmt=_LOG_DATE_FMT)
+    stream_handler = logging.StreamHandler()
+    stream_handler.setFormatter(fmt)
+    file_handler = logging.FileHandler(log_file, encoding="utf-8")
+    file_handler.setFormatter(fmt)
+
+    level = logging.DEBUG if os.environ.get("KASUAL_DEBUG") else logging.INFO
+    logging.basicConfig(level=level, handlers=[stream_handler, file_handler])
+    return log_file
+
+
 logger = logging.getLogger(__name__)
 
 
@@ -39,12 +66,19 @@ def main():
     from PyQt6.QtCore import QTimer
     from PyQt6.QtWidgets import QApplication
 
+    log_file = _setup_logging()
+
     app = QApplication(sys.argv)
     app.setApplicationName("Kasual Desktop")
     app.setQuitOnLastWindowClosed(False)
 
     from version import get_version
     version = get_version()
+
+    # Translations: same setup as Linux's main.py — load the system-locale
+    # .qm from the repo-root locale/ dir and route domain.shared.i18n through Qt.
+    from infrastructure.qt.i18n import install_translations
+    install_translations(app, str(Path(__file__).parents[3] / "locale"))
 
     # ── OS-specific adapters ────────────────────────────────────────────────
     from infrastructure.windows.gamepad_watcher import WindowsGamepadWatcher
@@ -119,6 +153,7 @@ def main():
         from infrastructure.common.qt.ui.tray import SystemTray
         from infrastructure.common.qt.overlays.about_overlay import AboutOverlay
         from infrastructure.common.qt.overlays.home_overlay import HomeOverlayFactory
+        from infrastructure.windows.qt.log_window import LogWindow
         from application import Application
 
         desktop = build_desktop(
@@ -145,9 +180,13 @@ def main():
                 TimedLaunchHide(on_hide=surface.hide_for_launch),
         )
 
+        # In-process log viewer (Windows has no layer-shell, so unlike Linux we
+        # don't need a separate process — see LogWindow). Owned by start_session
+        # like every other collaborator; released on quit via aboutToQuit below.
+        log_window = LogWindow(log_file=str(log_file))
         tray = SystemTray(
             on_show=lambda: (feedback.play(Cue.START), desktop.show_desktop()),
-            on_logs=lambda: logger.info("Log viewer not implemented on Windows yet"),
+            on_logs=log_window.open,
             on_about=lambda: _refs.__setitem__("about", AboutOverlay(version, gamepad, feedback)),
             on_quit=app.quit,
         )
@@ -175,6 +214,7 @@ def main():
         wm.start_periodic_refresh(3000)
         app.aboutToQuit.connect(controller.shutdown)
         app.aboutToQuit.connect(network_monitor.stop)
+        app.aboutToQuit.connect(log_window.close)
         # The Desktop is NOT shown here: it starts hidden and is surfaced by the
         # Application/SessionPolicy when a gamepad connects (and re-hidden on
         # disconnect). The tray keeps the process alive meanwhile.
