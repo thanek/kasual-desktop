@@ -2,7 +2,7 @@ import logging
 import select
 import threading
 import time
-from typing import Callable, _ProtocolMeta  # type: ignore[attr-defined]
+from typing import Callable
 
 from PyQt6.QtCore import pyqtSignal, QObject, QTimer
 from evdev import InputDevice, InputEvent, UInput, ecodes, list_devices
@@ -17,19 +17,16 @@ from domain.input.gamepad_signals import GamepadSignals
 from domain.input.recall import RecallTrigger
 from domain.input.vocabulary import Event, Trigger
 from domain.input.pad_control import PadControl
+from infrastructure.common.qt._meta import ProtocolQtMeta
 
 logger = logging.getLogger(__name__)
-
-
-class _Meta(type(QObject), _ProtocolMeta):
-    """Combined metaclass so a QObject can declare it implements Protocol ports."""
 
 STICK_THRESHOLD = 10000   # analog axis range: -32768..32767
 STICK_RESET     = 6000    # hysteresis — below this value the axis is "centered"
 
 VIRTUAL_DEVICE_NAME   = "kasual-vpad"
 
-class GamepadWatcher(QObject, PadControl, GamepadSignals, metaclass=_Meta):
+class GamepadWatcher(QObject, PadControl, GamepadSignals, metaclass=ProtocolQtMeta):
     """
     Reads events from a physical gamepad in a background thread.
 

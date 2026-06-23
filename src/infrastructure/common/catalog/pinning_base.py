@@ -18,7 +18,7 @@ from domain.catalog.app import App
 from domain.catalog.window import Window
 from domain.menu.ports import AppPinning
 
-from .app_config import _ordered_desktop_paths, _write_desktop  # noqa: F401 (re-exported)
+from .app_config import _ordered_desktop_paths, _write_desktop, apps_dir  # noqa: F401 (re-exported)
 
 logger = logging.getLogger(__name__)
 
@@ -40,6 +40,34 @@ class AppPinningBase(AppPinning):
             logger.info("Unpinned %s", path.name)
         except OSError as exc:
             logger.error("Unpin: cannot delete %s: %s", path, exc)
+
+    def _persist(self, window: Window, app: App) -> App | None:
+        """Write *app* as a pinned tile in the catalog directory; return *app*
+        on success, None on I/O failure.
+
+        The shared tail of a platform pin: ensure the catalog dir, allocate the
+        next sort order and a unique filename, write the ``.desktop`` entry and
+        log. Subclasses build the resolved :class:`App` from the window and call
+        this to do the on-disk work, so the placement mechanics stay in one
+        place (mirroring :meth:`App.to_desktop_entry`'s shape).
+        """
+        directory = apps_dir()
+        try:
+            directory.mkdir(parents=True, exist_ok=True)
+        except OSError as exc:
+            logger.error("Pin: cannot create apps dir %s: %s", directory, exc)
+            return None
+
+        order = self._next_order(directory)
+        path = self._unique_path(directory, window, app)
+        try:
+            _write_desktop(path, app.to_desktop_entry(order))
+        except OSError as exc:
+            logger.error("Pin: cannot write %s: %s", path, exc)
+            return None
+
+        logger.info("Pinned %r to %s", app.name, path.name)
+        return app
 
     # ── Placement / filename ─────────────────────────────────────────────────
 

@@ -19,7 +19,6 @@ import logging
 import socket
 import struct
 from collections.abc import Callable
-from typing import _ProtocolMeta  # type: ignore[attr-defined]
 
 from PyQt6.QtCore import QObject, pyqtSlot
 from PyQt6.QtDBus import QDBusConnection, QDBusInterface, QDBusMessage, QDBusObjectPath
@@ -28,12 +27,9 @@ from domain.network.control import NetworkControl
 from domain.network.monitor import NetworkMonitor
 from domain.network.status import NetworkKind, NetworkStatus
 from domain.shared.event_emitter import EventEmitter, Unsubscribe
+from infrastructure.common.qt._meta import ProtocolQtMeta
 
 logger = logging.getLogger(__name__)
-
-
-class _Meta(type(QObject), _ProtocolMeta):
-    """Combined metaclass so a QObject can declare it implements a Protocol port."""
 
 
 _NM_SVC   = "org.freedesktop.NetworkManager"
@@ -54,7 +50,39 @@ _TYPE_KIND = {
 _SIOCGIFADDR = 0x8915   # ioctl: get interface IPv4 address
 
 
-class NMNetworkMonitor(QObject, NetworkMonitor, metaclass=_Meta):
+class _NmDbusMixin:
+    """Shared NetworkManager D-Bus property reads for classes holding ``self._bus``.
+
+    Both the monitor and the control talk to NM on the system bus through the
+    same ``org.freedesktop.DBus.Properties.Get`` helper and the same
+    object-path coercion. Keeping the trio here removes the byte-w-byte
+    duplication between the two adapters in this module; the class itself has
+    no `__init__` — subclasses wire ``self._bus`` themselves.
+    """
+
+    def _get(self, path: str, iface: str, prop: str):
+        reply = QDBusInterface(_NM_SVC, path, _PROPS_IFACE, self._bus).call(
+            "Get", iface, prop
+        )
+        if reply.type() != QDBusMessage.MessageType.ReplyMessage:
+            return None
+        args = reply.arguments()
+        return args[0] if args else None
+
+    def _path(self, path: str, iface: str, prop: str) -> str:
+        value = self._get(path, iface, prop)
+        if isinstance(value, QDBusObjectPath):
+            return value.path()
+        return str(value) if value else ""
+
+    def _paths(self, path: str, iface: str, prop: str) -> list[str]:
+        value = self._get(path, iface, prop)
+        if not value:
+            return []
+        return [p.path() if isinstance(p, QDBusObjectPath) else str(p) for p in value]
+
+
+class NMNetworkMonitor(_NmDbusMixin, QObject, NetworkMonitor, metaclass=ProtocolQtMeta):
     """`NetworkMonitor` over NetworkManager's system-bus D-Bus API."""
 
     def __init__(self, parent: QObject | None = None) -> None:
@@ -134,30 +162,9 @@ class NMNetworkMonitor(QObject, NetworkMonitor, metaclass=_Meta):
 
     # ── D-Bus property helpers ───────────────────────────────────────────────
 
-    def _get(self, path: str, iface: str, prop: str):
-        reply = QDBusInterface(_NM_SVC, path, _PROPS_IFACE, self._bus).call(
-            "Get", iface, prop
-        )
-        if reply.type() != QDBusMessage.MessageType.ReplyMessage:
-            return None
-        args = reply.arguments()
-        return args[0] if args else None
-
     def _str(self, path: str, iface: str, prop: str) -> str:
         value = self._get(path, iface, prop)
         return str(value) if value is not None else ""
-
-    def _path(self, path: str, iface: str, prop: str) -> str:
-        value = self._get(path, iface, prop)
-        if isinstance(value, QDBusObjectPath):
-            return value.path()
-        return str(value) if value else ""
-
-    def _paths(self, path: str, iface: str, prop: str) -> list[str]:
-        value = self._get(path, iface, prop)
-        if not value:
-            return []
-        return [p.path() if isinstance(p, QDBusObjectPath) else str(p) for p in value]
 
     @staticmethod
     def _ssid(raw) -> str:
@@ -182,7 +189,7 @@ class NMNetworkMonitor(QObject, NetworkMonitor, metaclass=_Meta):
             return None
 
 
-class NMNetworkControl(NetworkControl):
+class NMNetworkControl(_NmDbusMixin, NetworkControl):
     """`NetworkControl` over NetworkManager's system-bus D-Bus API.
 
     `disconnect()` brings the primary connection down with `Device.Disconnect`,
@@ -223,26 +230,3 @@ class NMNetworkControl(NetworkControl):
 
     def can_reconnect(self) -> bool:
         return self._last is not None
-
-    # ── D-Bus property reads (object-path valued) ────────────────────────────
-
-    def _path(self, path: str, iface: str, prop: str) -> str:
-        value = self._get(path, iface, prop)
-        if isinstance(value, QDBusObjectPath):
-            return value.path()
-        return str(value) if value else ""
-
-    def _paths(self, path: str, iface: str, prop: str) -> list[str]:
-        value = self._get(path, iface, prop)
-        if not value:
-            return []
-        return [p.path() if isinstance(p, QDBusObjectPath) else str(p) for p in value]
-
-    def _get(self, path: str, iface: str, prop: str):
-        reply = QDBusInterface(_NM_SVC, path, _PROPS_IFACE, self._bus).call(
-            "Get", iface, prop
-        )
-        if reply.type() != QDBusMessage.MessageType.ReplyMessage:
-            return None
-        args = reply.arguments()
-        return args[0] if args else None

@@ -19,7 +19,6 @@ The view takes a candidate list + callbacks, so it is reusable beyond first-run
 
 import logging
 from collections.abc import Callable
-from typing import _ProtocolMeta  # type: ignore[attr-defined]
 
 import qtawesome as qta
 from PyQt6.QtCore import Qt, QSize
@@ -36,6 +35,7 @@ from domain.provisioning.candidate import CandidateApp
 from domain.provisioning.ports import ProvisioningView
 from domain.provisioning.selection import AppSelection
 from domain.shared.feedback import Cue, Feedback
+from infrastructure.common.qt._meta import ProtocolQtMeta
 from infrastructure.common.qt.ui import styles
 from infrastructure.common.qt.ui.layer_shell import Keyboard
 from infrastructure.common.qt.ui.toggle_switch import ToggleSwitch
@@ -66,10 +66,7 @@ class _ToggleRow(QPushButton):
         self.toggle.move(x, y)
 
 
-class _Meta(type(BaseOverlay), _ProtocolMeta): pass
-
-
-class OnboardingOverlay(BaseOverlay, ProvisioningView, metaclass=_Meta):
+class OnboardingOverlay(BaseOverlay, ProvisioningView, metaclass=ProtocolQtMeta):
     """The first-run app picker. Created once via its factory, shown by
     :meth:`present`, which feeds it the candidates and result callback."""
 

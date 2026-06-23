@@ -14,6 +14,7 @@ import base64
 import logging
 import os
 import re
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -22,6 +23,7 @@ from domain.catalog.app import App
 from domain.catalog.game_heuristic import looks_like_game
 from domain.input.vocabulary import Trigger
 from domain.provisioning.candidate import CandidateApp
+from domain.provisioning.ports import AppDiscovery
 
 logger = logging.getLogger(__name__)
 
@@ -138,7 +140,8 @@ def builtin_candidates() -> list[CandidateApp]:
     Launched via the running interpreter's ``pythonw`` (the venv, so PyQt6/WebEngine
     resolve) on their ``.py`` — no console window, no launcher file. The repo path
     is used for now; a future installer can re-provision from its install location."""
-    root = Path(__file__).resolve().parents[3]
+    from infrastructure.common.bundled import project_root
+    root = project_root()
     pyw = Path(sys.executable).with_name("pythonw.exe")
     python = str(pyw if pyw.exists() else sys.executable)
 
@@ -153,6 +156,24 @@ def builtin_candidates() -> list[CandidateApp]:
             app=App(name=name, command=python, args=(str(script),), icon=icon, color=color),
         ))
     return out
+
+
+def _default_candidates() -> list[CandidateApp]:
+    """Minimal seeds used when both the bundled apps and the Start Menu scan
+    turn up nothing (e.g. a fresh Windows image with no shortcuts)."""
+    return [
+        CandidateApp(
+            key="settings", order=0, default_selected=True,
+            # No wm_class: SystemSettings windows are filtered from enumeration
+            # (a suspended UWP lingers in the background), so the tile never
+            # reads as running — launching always re-opens via ms-settings:.
+            app=App(name="Settings", command="ms-settings:", color="#2e3440"),
+        ),
+        CandidateApp(
+            key="browser", order=1, default_selected=True,
+            app=App(name="Browser", command="msedge", color="#5e81ac"),
+        ),
+    ]
 
 
 def _scan_start_menu() -> list[tuple[str, str, str]]:
@@ -191,3 +212,47 @@ _SLUG_STRIP = re.compile(r"[^a-z0-9._-]+")
 
 def _slug(text: str) -> str:
     return _SLUG_STRIP.sub("-", text.strip().lower()).strip("-")
+
+
+class WindowsAppDiscovery(AppDiscovery):
+    """The Windows port of `AppDiscovery` — Start Menu + PATH detection.
+
+    Backs the catalog's availability filtering (PATH-resolvable system apps +
+    absolute paths to existing files / ``.lnk`` shortcuts) and the Windows-specific
+    "extras": the bundled Python apps (launched via the running interpreter's
+    ``pythonw``) followed by the curated Start Menu scan. The default fallback
+    (Settings + Edge) covers a fresh Windows image whose Start Menu scans empty.
+    No icon theme is consulted — Windows doesn't ship the freedesktop icon-theme
+    conventions the bundled glyphs already encode. The use-case prefers this full
+    extras list over the cross-platform `starter_candidates` baseline because the
+    baseline's bundled entries use ``.sh`` scripts that don't resolve on Windows.
+    """
+
+    def is_available(self, command: str) -> bool:
+        # PATH-resolvable binaries (msedge via App Paths registry key resolves
+        # through `shutil.which` on Windows since 3.11). Protocol schemes are
+        # always "available" — we can't reliably check them without launching.
+        if not command:
+            return False
+        if shutil.which(command):
+            return True
+        if command.startswith("ms-") and command.endswith(":"):
+            return True
+        p = Path(command)
+        if command.lower().endswith(".lnk") and p.exists():
+            return True
+        return p.is_file() and p.exists()
+
+    def system_icon(self, names: tuple[str, ...]) -> str | None:
+        # Windows has no system-wide icon theme. Tile icons fall back to the
+        # bundled Font Awesome glyph.
+        return None
+
+    def extra_candidates(self) -> list[CandidateApp]:
+        from dataclasses import replace
+        combined = builtin_candidates() + discover_candidates()
+        if not combined:
+            combined = _default_candidates()
+        # Renumber by list position so order is unique and matches onboarding's
+        # display order (the Start Menu scan already sorts games first).
+        return [replace(c, order=i) for i, c in enumerate(combined)]

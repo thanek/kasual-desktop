@@ -20,12 +20,13 @@ from PyQt6.QtCore import QByteArray, QBuffer, QIODevice
 from PyQt6.QtMultimedia import QAudio, QAudioFormat, QAudioSink
 
 from domain.shared.feedback import Cue, Feedback
+from infrastructure.common.bundled import bundled_dir
 
 logger = logging.getLogger(__name__)
 
-# sounds/ lives at the repo root; this file sits at src/infrastructure/common/audio/,
-# so the root is four levels up (parents[4]).
-_SOUNDS_DIR = Path(__file__).resolve().parents[4] / "sounds"
+# sounds/ lives at the repo root, anchored via the pyproject.toml marker (see
+# infrastructure.common.bundled) so a package reorg doesn't break the resolve.
+_SOUNDS_DIR = bundled_dir("sounds")
 _SOUND_NAMES = tuple(c.value for c in Cue)
 
 

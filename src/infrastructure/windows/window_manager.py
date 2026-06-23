@@ -4,19 +4,15 @@ import ctypes
 import logging
 import os
 from collections.abc import Callable
-from typing import _ProtocolMeta
 
 from PyQt6.QtCore import QObject, QTimer
 
 from domain.catalog.window import Window
 from domain.lifecycle.window_manager import WindowManager
 from domain.shared.event_emitter import EventEmitter, Unsubscribe
+from infrastructure.common.qt._meta import ProtocolQtMeta
 
 logger = logging.getLogger(__name__)
-
-
-class _Meta(type(QObject), _ProtocolMeta):
-    """Combined metaclass so a QObject can declare it implements a Protocol port."""
 
 
 def _get_pid(hwnd: int) -> int:
@@ -163,7 +159,7 @@ _SKIP_EXES = frozenset({
 })
 
 
-class WindowsWindowManager(QObject, WindowManager, metaclass=_Meta):
+class WindowsWindowManager(QObject, WindowManager, metaclass=ProtocolQtMeta):
     """Manages windows using Win32 EnumWindows API."""
 
     def __init__(self, parent=None):

@@ -44,12 +44,12 @@ from domain.menu.tile import tile_management_menu, tile_menu_for
 from domain.shared.feedback import Cue, Feedback
 from domain.shared.i18n import translate
 from domain.shared.text import truncate
-from typing import _ProtocolMeta  # type: ignore[attr-defined]
 from domain.shell.desktop_view import DesktopView
 from domain.shell.desktop_control import DesktopControl
 from domain.shell.open_overlays import OpenOverlays
 from domain.system.desktop_shell import DesktopShell
 from domain.shell.wallpaper import SystemWallpaper
+from infrastructure.common.qt._meta import ProtocolQtMeta
 from .tile_bar import TileBar
 from .topbar import TopBar
 
@@ -71,10 +71,7 @@ _KEY_MAP = {
 }
 
 
-class _Meta(type(QWidget), _ProtocolMeta): pass
-
-
-class Desktop(QWidget, DesktopView, DesktopShell, DesktopControl, metaclass=_Meta):
+class Desktop(QWidget, DesktopView, DesktopShell, DesktopControl, metaclass=ProtocolQtMeta):
     """Main environment window — always fullscreen."""
 
     def __init__(

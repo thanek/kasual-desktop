@@ -12,10 +12,11 @@ Must be called after a ``QApplication`` exists and before any icon is created.
 """
 
 import logging
-from pathlib import Path
 
 import qtawesome
 from PyQt6.QtGui import QIcon
+
+from infrastructure.common.bundled import bundled_dir
 
 logger = logging.getLogger(__name__)
 
@@ -48,7 +49,7 @@ def shell_icon(path: str) -> QIcon | None:
     icon = _icon_provider.icon(info)
     return icon if not icon.isNull() else None
 
-_FONTS_DIR = Path(__file__).resolve().parents[3] / "fonts"
+_FONTS_DIR = bundled_dir("fonts")
 
 # prefix -> (ttf filename, charmap filename) for the genuine FA5 webfonts.
 _FA5_FONTS = {

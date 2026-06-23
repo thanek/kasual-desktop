@@ -27,19 +27,15 @@ import threading
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
-from typing import _ProtocolMeta  # type: ignore[attr-defined]
 
 from PyQt6.QtCore import QObject, pyqtSignal
 
 from domain.notifications.notification import Notification
 from domain.notifications.source import NotificationSource
 from domain.shared.event_emitter import EventEmitter, Unsubscribe
+from infrastructure.common.qt._meta import ProtocolQtMeta
 
 logger = logging.getLogger(__name__)
-
-
-class _Meta(type(QObject), _ProtocolMeta):
-    """Combined metaclass so a QObject can declare it implements a Protocol port."""
 
 
 # Watch only the notification deliveries on the session bus.
@@ -137,7 +133,7 @@ def parse_notify_blocks(text: str) -> tuple[list[_NotifyArgs], str]:
     return results, leftover
 
 
-class KdeNotificationMonitor(QObject, NotificationSource, metaclass=_Meta):
+class KdeNotificationMonitor(QObject, NotificationSource, metaclass=ProtocolQtMeta):
     """Observes freedesktop notifications via ``dbus-monitor`` and republishes
     them as domain :class:`Notification`s through the `NotificationSource` port.
 

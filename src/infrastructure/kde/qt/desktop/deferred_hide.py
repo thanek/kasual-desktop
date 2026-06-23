@@ -1,7 +1,6 @@
 """Deferred hide of the Desktop until a freshly launched app's window is mapped."""
 
 from collections.abc import Callable
-from typing import _ProtocolMeta  # type: ignore[attr-defined]
 
 from PyQt6.QtCore import QObject, QTimer
 
@@ -11,6 +10,7 @@ from domain.catalog.window_rules import app_window_present
 from domain.lifecycle.process_manager import ProcessManager
 from domain.lifecycle.window_manager import WindowManager
 from domain.shared.event_emitter import Unsubscribe
+from infrastructure.common.qt._meta import ProtocolQtMeta
 from infrastructure.kde.window_manager import expand_pid_tree
 from domain.lifecycle.launch_hide import LaunchHide
 
@@ -18,11 +18,7 @@ _POLL_INTERVAL_MS = 150
 _GUARD_TIMEOUT_MS = 5000
 
 
-class _Meta(type(QObject), _ProtocolMeta):
-    """Combined metaclass so a QObject can declare it implements a Protocol port."""
-
-
-class DeferredHide(QObject, LaunchHide, metaclass=_Meta):
+class DeferredHide(QObject, LaunchHide, metaclass=ProtocolQtMeta):
     """Hide the Desktop only once a launched app actually has a mapped window.
 
     The Desktop is a top-layer surface sitting above windowed apps, so it must

@@ -3,7 +3,6 @@
 import logging
 import os
 from collections.abc import Callable, Sequence
-from typing import _ProtocolMeta  # type: ignore[attr-defined]
 
 from PyQt6.QtCore import Qt, QPoint, QTimer, QEasingCurve, QPropertyAnimation, pyqtSignal
 from PyQt6.QtGui import QCursor, QIcon
@@ -14,6 +13,7 @@ from domain.catalog.target import AppTarget, Target, target_at_index
 from domain.catalog.window import Window
 from domain.catalog.window_rules import external_windows, is_app_running, resolve_recall_trigger
 from domain.lifecycle.process_manager import ProcessManager
+from infrastructure.common.qt._meta import ProtocolQtMeta
 from infrastructure.common.qt.ui import styles
 from domain.lifecycle.tile_bar_view import TileBarView
 from domain.navigation.bar_views import TileFocusView, TileReorderView
@@ -22,15 +22,11 @@ from .window_icons import WindowIconResolver
 
 logger = logging.getLogger(__name__)
 
-
-class _Meta(type(QScrollArea), _ProtocolMeta):
-    """Combined metaclass so a QWidget can declare it implements a Protocol port."""
-
 _DYN_TILE_MAX_TITLE = 22   # Maximum length of a dynamic tile title
 _SCROLL_ANIM_MS     = 220  # glide duration when centering the focused tile
 
 
-class TileBar(QScrollArea, TileBarView, TileFocusView, TileReorderView, metaclass=_Meta):
+class TileBar(QScrollArea, TileBarView, TileFocusView, TileReorderView, metaclass=ProtocolQtMeta):
     """Scrollable row of tiles: configured apps first, then open-window tiles.
 
     Implements `TileBarView` (app-lifecycle), `TileFocusView` (focus navigation) and

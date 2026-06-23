@@ -127,7 +127,7 @@ class TestLaunch:
     def _launch(self, am, idx=0, command="echo", args=None, pid=1234):
         proc = _running_proc(pid=pid)
         with patch("infrastructure.kde.app_manager.subprocess.Popen", return_value=proc) as popen, \
-             patch("infrastructure.kde.app_manager.threading.Thread"):
+             patch("infrastructure.common.lifecycle.base_app_manager.threading.Thread"):
             am.launch(idx, command, args or [])
         return popen, proc
 
@@ -144,7 +144,7 @@ class TestLaunch:
         am = _make_manager()
         proc = _running_proc(pid=1234)
         with patch("infrastructure.kde.app_manager.subprocess.Popen", return_value=proc) as popen, \
-             patch("infrastructure.kde.app_manager.threading.Thread"):
+             patch("infrastructure.common.lifecycle.base_app_manager.threading.Thread"):
             am.launch(0, "echo", [], {"FOO": "bar"})
         env = popen.call_args.kwargs["env"]
         assert env["FOO"] == "bar"
@@ -159,7 +159,7 @@ class TestLaunch:
         am = _make_manager()
         proc = _running_proc()
         with patch("infrastructure.kde.app_manager.subprocess.Popen", return_value=proc) as popen, \
-             patch("infrastructure.kde.app_manager.threading.Thread"):
+             patch("infrastructure.common.lifecycle.base_app_manager.threading.Thread"):
             am.launch(0, "cmd")
         assert popen.call_args[0][0] == ["cmd"]
 
@@ -187,7 +187,7 @@ class TestLaunch:
         am = _make_manager()
         proc = _running_proc()
         with patch("infrastructure.kde.app_manager.subprocess.Popen", return_value=proc), \
-             patch("infrastructure.kde.app_manager.threading.Thread") as mock_thread:
+             patch("infrastructure.common.lifecycle.base_app_manager.threading.Thread") as mock_thread:
             am.launch(0, "echo")
         mock_thread.assert_called_once()
         mock_thread.return_value.start.assert_called_once()
@@ -196,7 +196,7 @@ class TestLaunch:
         am = _make_manager()
         proc = _running_proc()
         with patch("infrastructure.kde.app_manager.subprocess.Popen", return_value=proc), \
-             patch("infrastructure.kde.app_manager.threading.Thread"):
+             patch("infrastructure.common.lifecycle.base_app_manager.threading.Thread"):
             assert am.launch(0, "echo") is True
 
     def test_returns_false_when_already_running(self, qapp):
@@ -268,7 +268,7 @@ class TestTerminate:
         am._processes[0] = _running_proc(pid=1234)
         with patch("infrastructure.kde.app_manager.os.getpgid", return_value=1234), \
              patch("infrastructure.kde.app_manager.os.killpg") as mock_killpg, \
-             patch("infrastructure.kde.app_manager.QTimer.singleShot"):
+             patch("infrastructure.common.lifecycle.base_app_manager.QTimer.singleShot"):
             am.terminate(0)
         mock_killpg.assert_called_once_with(1234, signal.SIGTERM)
 
@@ -277,7 +277,7 @@ class TestTerminate:
         am._processes[0] = _running_proc()
         with patch("infrastructure.kde.app_manager.os.getpgid", return_value=999), \
              patch("infrastructure.kde.app_manager.os.killpg"), \
-             patch("infrastructure.kde.app_manager.QTimer.singleShot") as mock_timer:
+             patch("infrastructure.common.lifecycle.base_app_manager.QTimer.singleShot") as mock_timer:
             am.terminate(0)
         assert mock_timer.call_args[0][0] == 3000
 
@@ -294,7 +294,7 @@ class TestTerminate:
         am._processes[1] = _running_proc(pid=200)
         with patch("infrastructure.kde.app_manager.os.getpgid", return_value=100), \
              patch("infrastructure.kde.app_manager.os.killpg") as mock_killpg, \
-             patch("infrastructure.kde.app_manager.QTimer.singleShot"):
+             patch("infrastructure.common.lifecycle.base_app_manager.QTimer.singleShot"):
             am.terminate(0)
         mock_killpg.assert_called_once_with(100, signal.SIGTERM)
 

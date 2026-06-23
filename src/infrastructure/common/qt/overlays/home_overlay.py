@@ -1,5 +1,5 @@
 import logging
-from typing import Callable, _ProtocolMeta  # type: ignore[attr-defined]
+from typing import Callable
 
 import qtawesome as qta
 from PyQt6.QtCore import Qt, pyqtSignal
@@ -15,6 +15,7 @@ from domain.menu.cursor import MenuCursor
 from domain.menu.item import MenuItem
 from domain.shared.feedback import Cue, Feedback
 from domain.shell.overlay import HomeMenuOverlay
+from infrastructure.common.qt._meta import ProtocolQtMeta
 from infrastructure.common.qt.ui import styles
 from infrastructure.common.qt.ui.layer_shell import Layer, Anchor, Keyboard
 from infrastructure.common.qt.ui.top_surface import promote_overlay_surface
@@ -22,10 +23,7 @@ from infrastructure.common.qt.ui.top_surface import promote_overlay_surface
 logger = logging.getLogger(__name__)
 
 
-class _Meta(type(QWidget), _ProtocolMeta): pass
-
-
-class HomeOverlay(QWidget, HomeMenuOverlay, metaclass=_Meta):
+class HomeOverlay(QWidget, HomeMenuOverlay, metaclass=ProtocolQtMeta):
     """
     Full-screen menu overlay shown when BTN_MODE is pressed.
 

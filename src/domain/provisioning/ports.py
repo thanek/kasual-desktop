@@ -28,7 +28,18 @@ class AppProvisioning(Protocol):
 
 
 class AppDiscovery(Protocol):
-    """Detects whether a system command/app is available to launch."""
+    """Detects whether a system command/app is available to launch.
+
+    Two shapes of discovery live behind this port: binary availability on
+    ``PATH`` (``is_available`` / ``system_icon`` — what the bundled
+    :func:`starter_candidates` catalogue filters on) and a platform-specific
+    **extras** layer (``extra_candidates`` — e.g. a Start Menu scan on Windows,
+    empty by default). The use-case prefers a non-empty ``extra_candidates``
+    list over the cross-platform baseline so a platform can ship its own
+    complete bundled+scanned candidate set when the baseline's paths do not
+    apply (e.g. Windows bundled apps launch via ``pythonw.exe`` rather than a
+    ``.sh`` script).
+    """
 
     def is_available(self, command: str) -> bool: ...
 
@@ -38,6 +49,16 @@ class AppDiscovery(Protocol):
         Lets provisioning prefer a real installed app icon (e.g. the genuine
         ``steam`` logo) over the bundled Font Awesome glyph when the system has
         one — the glyph stays as the fallback for a system that does not."""
+        ...
+
+    def extra_candidates(self) -> list[CandidateApp]:
+        """Platform-specific extra starter candidates beyond the baseline.
+
+        Empty by default (Linux relies on the cross-platform
+        :func:`starter_candidates`). A platform that bundles its own app launch
+        mechanism and/or scans the system menu (Start Menu on Windows) returns
+        the full appended list here; the use-case prefers this over the
+        baseline when non-empty."""
         ...
 
 

@@ -23,7 +23,6 @@ import struct
 from domain.catalog.app import App
 from domain.catalog.window import Window
 
-from infrastructure.common.catalog.app_config import apps_dir, _write_desktop
 from infrastructure.common.catalog.pinning_base import AppPinningBase
 from infrastructure.windows.window_manager import _get_exe_path
 
@@ -54,23 +53,7 @@ class WindowsAppPinning(AppPinningBase):
         )
         app = App(name=name, command=exe, wm_class=window.resource_class or None)
 
-        directory = apps_dir()
-        try:
-            directory.mkdir(parents=True, exist_ok=True)
-        except OSError as exc:
-            logger.error("Pin: cannot create apps dir %s: %s", directory, exc)
-            return None
-
-        order = self._next_order(directory)
-        path = self._unique_path(directory, window, app)
-        try:
-            _write_desktop(path, app.to_desktop_entry(order))
-        except OSError as exc:
-            logger.error("Pin: cannot write %s: %s", path, exc)
-            return None
-
-        logger.info("Pinned %r to %s", app.name, path.name)
-        return app
+        return self._persist(window, app)
 
 
 def _file_description(exe_path: str) -> str | None:

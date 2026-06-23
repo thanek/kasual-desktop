@@ -17,8 +17,6 @@ import logging
 import os
 import tempfile
 
-from typing import _ProtocolMeta  # type: ignore[attr-defined]
-
 from collections.abc import Callable
 
 from PyQt6.QtCore import QObject, QTimer, pyqtSlot
@@ -29,12 +27,9 @@ from PyQt6.QtDBus import (
 from domain.catalog.window import Window
 from domain.lifecycle.window_manager import WindowManager
 from domain.shared.event_emitter import EventEmitter, Unsubscribe
+from infrastructure.common.qt._meta import ProtocolQtMeta
 
 logger = logging.getLogger(__name__)
-
-
-class _Meta(type(QObject), _ProtocolMeta):
-    """Combined metaclass so a QObject can declare it implements a Protocol port."""
 
 
 def to_window(d: dict) -> Window:
@@ -234,7 +229,7 @@ class _WindowListHost(QObject):
         bus.unregisterObject(_WL_PATH)
 
 
-class KWinWindowManager(QObject, WindowManager, metaclass=_Meta):
+class KWinWindowManager(QObject, WindowManager, metaclass=ProtocolQtMeta):
     """
     Manages windows via KWin D-Bus + one-shot KWin scripts.
     Wayland-native, no xdotool. Compatible with KDE Plasma 6.

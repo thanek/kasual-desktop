@@ -112,31 +112,20 @@ def main():
     # The same freedesktop .desktop store as Linux (app_config is pure Python;
     # only config_root() differs — %APPDATA% on Windows). The catalog, tile order
     # and colours persist across restarts.
-    from domain.catalog.app import App
-    from domain.provisioning.candidate import CandidateApp
+    from pathlib import Path
+    from domain.provisioning.provisioning import Provisioning as ProvisioningUseCase
     from infrastructure.common.catalog.app_config import (
         load_apps, DesktopAppProvisioning,
         DesktopTileOrderStore, DesktopTileColorStore,
     )
-    from infrastructure.windows.app_discovery import discover_candidates, builtin_candidates
+    from infrastructure.windows.app_discovery import WindowsAppDiscovery
 
     provisioning = DesktopAppProvisioning()
-
-    def _default_candidates() -> list:
-        """Fallback seed when the Start Menu scan yields nothing."""
-        return [
-            CandidateApp(
-                key="settings", order=0, default_selected=True,
-                # No wm_class: SystemSettings windows are filtered from enumeration
-                # (a suspended UWP lingers in the background), so the tile never
-                # reads as running — launching always re-opens via ms-settings:.
-                app=App(name="Settings", command="ms-settings:", color="#2e3440"),
-            ),
-            CandidateApp(
-                key="browser", order=1, default_selected=True,
-                app=App(name="Browser", command="msedge", color="#5e81ac"),
-            ),
-        ]
+    provisioning_uc = ProvisioningUseCase(
+        provisioning,
+        WindowsAppDiscovery(),
+        bundled_base=str(Path(__file__).parent.parent),
+    )
 
     # ── Session (deferred behind onboarding on first run) ────────────────────
     _refs: dict = {}  # keep tray/controller/overlay alive past their scope
@@ -216,22 +205,16 @@ def main():
         logger.info("Kasual Desktop running (background; waiting for gamepad)")
 
     # First run: onboarding picker built from a Start Menu scan; otherwise straight
-    # to the session. Mirrors the Linux composition root.
+    # to the session. Mirrors the Linux composition root — uses the domain
+    # Provisioning use-case (`candidates()` / `complete()`) rather than bypassing
+    # it. The Windows-specific Start Menu scan lives in `WindowsAppDiscovery`.
     if not provisioning.is_provisioned():
-        from dataclasses import replace
         from infrastructure.common.qt.overlays.onboarding_overlay import OnboardingOverlayFactory
-        # Bundled apps first (always offered, pre-selected), then Start Menu apps
-        # (games pre-selected and sorted first). Renumber so X-Kasual-Order is unique
-        # and matches the list order.
-        combined = builtin_candidates() + discover_candidates()
-        if not combined:
-            combined = _default_candidates()
-        candidates = [replace(c, order=i) for i, c in enumerate(combined)]
         onboarding = OnboardingOverlayFactory(gamepad, feedback).create()
         _refs["onboarding"] = onboarding
         onboarding.present(
-            candidates,
-            on_confirm=lambda chosen: (provisioning.provision(chosen), start_session()),
+            provisioning_uc.candidates(),
+            on_confirm=lambda chosen: (provisioning_uc.complete(chosen), start_session()),
         )
     else:
         start_session()

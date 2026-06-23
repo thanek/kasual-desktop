@@ -33,6 +33,13 @@ class Provisioning:
         self._bundled_base = bundled_base
 
     def candidates(self) -> list[CandidateApp]:
+        extras = self._discovery.extra_candidates()
+        if extras:
+            # Platform ships a complete bundled+scanned starter list (Start
+            # Menu scan on Windows); prefer it over the cross-platform baseline,
+            # whose bundled entries use ``.sh`` scripts that don't resolve on
+            # the platform providing its own extras.
+            return list(extras)
         return starter_candidates(self._discovery, self._bundled_base)
 
     def complete(self, chosen: list[CandidateApp]) -> None:
