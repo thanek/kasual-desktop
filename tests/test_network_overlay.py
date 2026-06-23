@@ -8,7 +8,7 @@ from domain.network.status import NetworkKind, NetworkStatus
 
 
 def _overlay(mock_gamepad, status, *, can_reconnect=False, control=None):
-    from infrastructure.qt.overlays.network_overlay import NetworkOverlay
+    from infrastructure.common.qt.overlays.network_overlay import NetworkOverlay
     if control is None:
         control = MagicMock()
         control.can_reconnect.return_value = can_reconnect

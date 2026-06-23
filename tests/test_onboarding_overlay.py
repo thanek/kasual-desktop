@@ -13,7 +13,7 @@ from PyQt6.QtGui import QEnterEvent, QKeyEvent
 
 from domain.catalog.app import App
 from domain.provisioning.candidate import CandidateApp
-from infrastructure.qt.overlays.onboarding_overlay import OnboardingOverlay
+from infrastructure.common.qt.overlays.onboarding_overlay import OnboardingOverlay
 
 
 def _candidates():

@@ -25,7 +25,7 @@ import pytest
 @pytest.fixture(autouse=True)
 def silence_sounds():
     """Mutes sound playback (SoundFeedback) in all tests."""
-    with patch("infrastructure.audio.feedback.SoundFeedback.play"):
+    with patch("infrastructure.common.audio.feedback.SoundFeedback.play"):
         yield
 
 
@@ -38,7 +38,7 @@ def mock_gamepad(qapp):
     so the evdev loop never starts — tests are fully isolated
     from hardware and UInput permissions.
     """
-    with patch("infrastructure.input.gamepad_watcher.threading.Thread"):
-        from infrastructure.input.gamepad_watcher import GamepadWatcher
+    with patch("infrastructure.kde.gamepad_watcher.threading.Thread"):
+        from infrastructure.kde.gamepad_watcher import GamepadWatcher
         gw = GamepadWatcher()
     return gw

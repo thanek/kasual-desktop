@@ -13,7 +13,7 @@ prawdziwego wyświetlacza.
 
 from unittest.mock import MagicMock
 
-from infrastructure.qt.overlays.confirm_dialog import ConfirmDialog
+from infrastructure.common.qt.overlays.confirm_dialog import ConfirmDialog
 
 
 def _make_dialog(mock_gamepad, on_confirmed=None, on_cancelled=None):

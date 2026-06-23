@@ -30,7 +30,7 @@ pytestmark = pytest.mark.skipif(
 
 
 def _make_manager():
-    from infrastructure.system.app_manager import AppManager
+    from infrastructure.kde.app_manager import AppManager
     return AppManager()
 
 
@@ -126,8 +126,8 @@ class TestIsRunning:
 class TestLaunch:
     def _launch(self, am, idx=0, command="echo", args=None, pid=1234):
         proc = _running_proc(pid=pid)
-        with patch("infrastructure.system.app_manager.subprocess.Popen", return_value=proc) as popen, \
-             patch("infrastructure.system.app_manager.threading.Thread"):
+        with patch("infrastructure.kde.app_manager.subprocess.Popen", return_value=proc) as popen, \
+             patch("infrastructure.kde.app_manager.threading.Thread"):
             am.launch(idx, command, args or [])
         return popen, proc
 
@@ -143,8 +143,8 @@ class TestLaunch:
     def test_env_merges_app_env(self, qapp):
         am = _make_manager()
         proc = _running_proc(pid=1234)
-        with patch("infrastructure.system.app_manager.subprocess.Popen", return_value=proc) as popen, \
-             patch("infrastructure.system.app_manager.threading.Thread"):
+        with patch("infrastructure.kde.app_manager.subprocess.Popen", return_value=proc) as popen, \
+             patch("infrastructure.kde.app_manager.threading.Thread"):
             am.launch(0, "echo", [], {"FOO": "bar"})
         env = popen.call_args.kwargs["env"]
         assert env["FOO"] == "bar"
@@ -158,8 +158,8 @@ class TestLaunch:
     def test_missing_args_key_defaults_to_empty(self, qapp):
         am = _make_manager()
         proc = _running_proc()
-        with patch("infrastructure.system.app_manager.subprocess.Popen", return_value=proc) as popen, \
-             patch("infrastructure.system.app_manager.threading.Thread"):
+        with patch("infrastructure.kde.app_manager.subprocess.Popen", return_value=proc) as popen, \
+             patch("infrastructure.kde.app_manager.threading.Thread"):
             am.launch(0, "cmd")
         assert popen.call_args[0][0] == ["cmd"]
 
@@ -173,7 +173,7 @@ class TestLaunch:
     def test_ignored_when_same_idx_already_running(self, qapp):
         am = _make_manager()
         am._processes[0] = _running_proc()
-        with patch("infrastructure.system.app_manager.subprocess.Popen") as popen:
+        with patch("infrastructure.kde.app_manager.subprocess.Popen") as popen:
             am.launch(0, "echo")
         popen.assert_not_called()
 
@@ -186,8 +186,8 @@ class TestLaunch:
     def test_starts_monitor_thread(self, qapp):
         am = _make_manager()
         proc = _running_proc()
-        with patch("infrastructure.system.app_manager.subprocess.Popen", return_value=proc), \
-             patch("infrastructure.system.app_manager.threading.Thread") as mock_thread:
+        with patch("infrastructure.kde.app_manager.subprocess.Popen", return_value=proc), \
+             patch("infrastructure.kde.app_manager.threading.Thread") as mock_thread:
             am.launch(0, "echo")
         mock_thread.assert_called_once()
         mock_thread.return_value.start.assert_called_once()
@@ -195,21 +195,21 @@ class TestLaunch:
     def test_returns_true_on_successful_launch(self, qapp):
         am = _make_manager()
         proc = _running_proc()
-        with patch("infrastructure.system.app_manager.subprocess.Popen", return_value=proc), \
-             patch("infrastructure.system.app_manager.threading.Thread"):
+        with patch("infrastructure.kde.app_manager.subprocess.Popen", return_value=proc), \
+             patch("infrastructure.kde.app_manager.threading.Thread"):
             assert am.launch(0, "echo") is True
 
     def test_returns_false_when_already_running(self, qapp):
         am = _make_manager()
         am._processes[0] = _running_proc()
-        with patch("infrastructure.system.app_manager.subprocess.Popen"):
+        with patch("infrastructure.kde.app_manager.subprocess.Popen"):
             assert am.launch(0, "echo") is False
 
     def test_returns_false_and_emits_failed_on_missing_command(self, qapp):
         am = _make_manager()
         failed = []
         am.on_launch_failed(lambda e: failed.append((e.idx, e.error)))
-        with patch("infrastructure.system.app_manager.subprocess.Popen", side_effect=FileNotFoundError):
+        with patch("infrastructure.kde.app_manager.subprocess.Popen", side_effect=FileNotFoundError):
             assert am.launch(2, "/no/such/app") is False
         assert failed and failed[0][0] == 2
         # A failed launch must leave no process registered for that idx.
@@ -217,7 +217,7 @@ class TestLaunch:
 
     def test_returns_false_on_permission_error(self, qapp):
         am = _make_manager()
-        with patch("infrastructure.system.app_manager.subprocess.Popen", side_effect=PermissionError):
+        with patch("infrastructure.kde.app_manager.subprocess.Popen", side_effect=PermissionError):
             assert am.launch(0, "/root/secret") is False
 
 
@@ -266,25 +266,25 @@ class TestTerminate:
     def test_sends_sigterm(self, qapp):
         am = _make_manager()
         am._processes[0] = _running_proc(pid=1234)
-        with patch("infrastructure.system.app_manager.os.getpgid", return_value=1234), \
-             patch("infrastructure.system.app_manager.os.killpg") as mock_killpg, \
-             patch("infrastructure.system.app_manager.QTimer.singleShot"):
+        with patch("infrastructure.kde.app_manager.os.getpgid", return_value=1234), \
+             patch("infrastructure.kde.app_manager.os.killpg") as mock_killpg, \
+             patch("infrastructure.kde.app_manager.QTimer.singleShot"):
             am.terminate(0)
         mock_killpg.assert_called_once_with(1234, signal.SIGTERM)
 
     def test_schedules_force_kill_after_3s(self, qapp):
         am = _make_manager()
         am._processes[0] = _running_proc()
-        with patch("infrastructure.system.app_manager.os.getpgid", return_value=999), \
-             patch("infrastructure.system.app_manager.os.killpg"), \
-             patch("infrastructure.system.app_manager.QTimer.singleShot") as mock_timer:
+        with patch("infrastructure.kde.app_manager.os.getpgid", return_value=999), \
+             patch("infrastructure.kde.app_manager.os.killpg"), \
+             patch("infrastructure.kde.app_manager.QTimer.singleShot") as mock_timer:
             am.terminate(0)
         assert mock_timer.call_args[0][0] == 3000
 
     def test_noop_when_process_already_exited(self, qapp):
         am = _make_manager()
         am._processes[0] = _exited_proc()
-        with patch("infrastructure.system.app_manager.os.killpg") as mock_killpg:
+        with patch("infrastructure.kde.app_manager.os.killpg") as mock_killpg:
             am.terminate(0)
         mock_killpg.assert_not_called()
 
@@ -292,9 +292,9 @@ class TestTerminate:
         am = _make_manager()
         am._processes[0] = _running_proc(pid=100)
         am._processes[1] = _running_proc(pid=200)
-        with patch("infrastructure.system.app_manager.os.getpgid", return_value=100), \
-             patch("infrastructure.system.app_manager.os.killpg") as mock_killpg, \
-             patch("infrastructure.system.app_manager.QTimer.singleShot"):
+        with patch("infrastructure.kde.app_manager.os.getpgid", return_value=100), \
+             patch("infrastructure.kde.app_manager.os.killpg") as mock_killpg, \
+             patch("infrastructure.kde.app_manager.QTimer.singleShot"):
             am.terminate(0)
         mock_killpg.assert_called_once_with(100, signal.SIGTERM)
 
@@ -304,8 +304,8 @@ class TestForceKill:
         am = _make_manager()
         proc = _running_proc(pid=5678)
         am._processes[0] = proc
-        with patch("infrastructure.system.app_manager.os.getpgid", return_value=5678), \
-             patch("infrastructure.system.app_manager.os.killpg") as mock_killpg:
+        with patch("infrastructure.kde.app_manager.os.getpgid", return_value=5678), \
+             patch("infrastructure.kde.app_manager.os.killpg") as mock_killpg:
             am._force_kill(proc)
         mock_killpg.assert_called_once_with(5678, signal.SIGKILL)
 
@@ -315,8 +315,8 @@ class TestForceKill:
         am = _make_manager()
         proc = _running_proc(pid=5678)
         am._processes[3] = proc          # moved here by swap_indices after launch
-        with patch("infrastructure.system.app_manager.os.getpgid", return_value=5678), \
-             patch("infrastructure.system.app_manager.os.killpg") as mock_killpg:
+        with patch("infrastructure.kde.app_manager.os.getpgid", return_value=5678), \
+             patch("infrastructure.kde.app_manager.os.killpg") as mock_killpg:
             am._force_kill(proc)
         mock_killpg.assert_called_once_with(5678, signal.SIGKILL)
 
@@ -324,14 +324,14 @@ class TestForceKill:
         am = _make_manager()
         proc = _exited_proc()
         am._processes[0] = proc
-        with patch("infrastructure.system.app_manager.os.killpg") as mock_killpg:
+        with patch("infrastructure.kde.app_manager.os.killpg") as mock_killpg:
             am._force_kill(proc)
         mock_killpg.assert_not_called()
 
     def test_noop_when_no_process(self, qapp):
         am = _make_manager()
         proc = _running_proc()   # never registered under any idx
-        with patch("infrastructure.system.app_manager.os.killpg") as mock_killpg:
+        with patch("infrastructure.kde.app_manager.os.killpg") as mock_killpg:
             am._force_kill(proc)
         mock_killpg.assert_not_called()
 
@@ -343,8 +343,8 @@ class TestForceKill:
         old = _running_proc(pid=1111)    # what terminate() targeted, now gone
         new = _running_proc(pid=4242)    # relaunched under the same idx
         am._processes[0] = new
-        with patch("infrastructure.system.app_manager.os.getpgid", return_value=1111), \
-             patch("infrastructure.system.app_manager.os.killpg") as mock_killpg:
+        with patch("infrastructure.kde.app_manager.os.getpgid", return_value=1111), \
+             patch("infrastructure.kde.app_manager.os.killpg") as mock_killpg:
             am._force_kill(old)          # stale timer fires
         mock_killpg.assert_not_called()
 
@@ -392,7 +392,7 @@ class TestRemoveIndex:
         am = _make_manager()
         proc = _running_proc(pid=100)
         am._processes[0] = proc
-        with patch("infrastructure.system.app_manager.os.killpg") as mock_killpg:
+        with patch("infrastructure.kde.app_manager.os.killpg") as mock_killpg:
             am.remove_index(0)
         assert am._processes == {}
         mock_killpg.assert_not_called()     # unpinned-but-running app keeps running

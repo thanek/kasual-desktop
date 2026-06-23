@@ -11,7 +11,7 @@ import pytest
 from unittest.mock import MagicMock, patch
 
 from domain.input.vocabulary import Trigger
-from infrastructure.qt.desktop.tile_bar import TileBar
+from infrastructure.common.qt.desktop.tile_bar import TileBar
 from domain.catalog.app import App
 from domain.catalog.window import Window
 
@@ -99,7 +99,7 @@ class TestManagedWindowFiltering:
         if not hasattr(os, "getpgid"):
             pytest.skip("os.getpgid is POSIX-only")
         app_manager.all_running_pids.return_value = [4321]
-        with patch("infrastructure.qt.desktop.tile_bar.os.getpgid", return_value=4321):
+        with patch("infrastructure.common.qt.desktop.tile_bar.os.getpgid", return_value=4321):
             bar.update_windows([_win(id_="w1", pid=9999, resource_class="mystery")])
         assert bar._dynamic_tiles == []
 

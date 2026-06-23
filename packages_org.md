@@ -3,10 +3,38 @@
 Point 6 of `todo.md`: *"po odseparowaniu domeny od implementacji, trzeba pomyśleć
 o podobnym podziale wewnątrz infrastruktury (kde, windows, common)".*
 
-Status: **Phase A done & verified on Windows (752 tests pass); Phase B (physical
-move) pending a Linux-capable checkout.**
+Status: **Phase A + Phase B done. Verified on Windows (752 tests pass, all smoke
+imports OK). Linux runtime + the evdev/QtDBus-only kde modules still need a
+verification run on a Linux checkout (see "Linux verification TODO" below).**
 
 ### Realisation log (2026-06-23)
+
+**Done (Phase B — physical move to `infrastructure/{kde,common,windows}`):**
+- 52 files `git mv`'d; imports rewritten across 57 files (one-shot script).
+  `system/`, `input/`, `mangohud/`, `qt/`, `audio/` packages removed.
+- `qt/` → `common/qt/` except `layer_shell` impl + `deferred_hide` → `kde/qt/`.
+- `surface.py` split: `DesktopSurface` Protocol + new `PlainSurface` default in
+  `common/qt/desktop/surface.py`; `LayerShellSurface` → `kde/qt/desktop/surface.py`.
+  `Desktop` now defaults to `PlainSurface`; Linux root injects `LayerShellSurface`.
+- `layer_shell` split: the `Layer/Anchor/Keyboard` enums (pure vocabulary) →
+  `common/qt/ui/layer_shell.py`; the LayerShellQt ctypes binding stays in
+  `kde/qt/ui/layer_shell.py` (imports the enums from common). `top_surface`
+  lazy-imports `make_layer_surface` only in the wayland branch.
+- Coupling #4: extracted `common/catalog/pinning_base.AppPinningBase` (unpin +
+  placement mechanics + slug helpers). Both `DesktopAppPinning` (kde) and
+  `WindowsAppPinning` (windows) subclass it — **windows no longer imports kde**.
+- `x11_icon` kept in `common/qt/desktop/` (guarded/lazy, X11-not-KDE) so
+  `window_icons` needs no cross-package import for it.
+
+**Boundary audit (grep):** `windows → kde` = 0. `common → kde` = lazy only
+(`top_surface` wayland branch) + docstrings. `common → windows` = lazy/guarded
+only (`icons.jumbo_icon`, `window_icons` exe path) — the established pattern.
+
+**Linux verification TODO (cannot run on Windows — evdev/QtDBus/fcntl):** import
++ runtime-check `kde/{window_manager,notifications,gamepad_watcher,network_manager}`
+and `kde/qt/desktop/deferred_hide`, plus a full `kasual.sh` smoke. These
+syntax-compile clean and their `infrastructure.*` imports were verified to resolve
+to existing modules, but only a Linux run exercises their actual import + behaviour.
 
 **Done (Phase A — sever couplings + cleanup, all verified on Windows):**
 - Legacy Windows cleanup: deleted `windows/shell.py`, `windows/desktop_shell.py`;

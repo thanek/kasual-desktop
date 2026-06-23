@@ -16,7 +16,7 @@ pytestmark = pytest.mark.skipif(
 
 from domain.catalog.app import App
 from domain.provisioning.candidate import CandidateApp
-from infrastructure.system.app_config import (
+from infrastructure.common.catalog.app_config import (
     DesktopAppProvisioning, DesktopTileOrderStore, load_apps, provisioned_marker,
 )
 
@@ -262,7 +262,7 @@ class TestTileColorStore:
         self._write_app(apps_root, "a.desktop", "A", 0, color="#111111")
         self._write_app(apps_root, "b.desktop", "B", 1, color="#222222")
 
-        from infrastructure.system.app_config import DesktopTileColorStore
+        from infrastructure.common.catalog.app_config import DesktopTileColorStore
         DesktopTileColorStore().set_color(1, "#ff0000")
 
         apps = {a.name: a for a in load_apps()}
@@ -272,13 +272,13 @@ class TestTileColorStore:
     def test_adds_color_key_when_absent(self, apps_root):
         self._write_app(apps_root, "a.desktop", "A", 0)   # no X-Kasual-Color
 
-        from infrastructure.system.app_config import DesktopTileColorStore
+        from infrastructure.common.catalog.app_config import DesktopTileColorStore
         DesktopTileColorStore().set_color(0, "#abcdef")
 
         assert load_apps()[0].color == "#abcdef"
 
     def test_out_of_range_is_a_noop(self, apps_root):
         self._write_app(apps_root, "a.desktop", "A", 0, color="#111111")
-        from infrastructure.system.app_config import DesktopTileColorStore
+        from infrastructure.common.catalog.app_config import DesktopTileColorStore
         DesktopTileColorStore().set_color(5, "#ff0000")
         assert load_apps()[0].color == "#111111"

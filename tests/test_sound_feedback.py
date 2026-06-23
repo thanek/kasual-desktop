@@ -2,7 +2,7 @@
 
 import struct
 
-from infrastructure.audio.feedback import _convert_24_to_16
+from infrastructure.common.audio.feedback import _convert_24_to_16
 
 
 def _encode_24(val: int) -> bytes:

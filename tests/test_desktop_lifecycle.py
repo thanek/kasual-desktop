@@ -53,8 +53,8 @@ def _make_desktop(mock_gamepad):
     wm.on_windows_updated = MagicMock()
     wm.refresh_now = MagicMock()
 
-    from infrastructure.qt.desktop import build_desktop
-    from infrastructure.system.app_manager import AppManager
+    from infrastructure.common.qt.desktop import build_desktop
+    from infrastructure.kde.app_manager import AppManager
     from domain.notifications.center import NotificationCenter
     return build_desktop(
         apps=[], gamepad=mock_gamepad, window_manager=wm,

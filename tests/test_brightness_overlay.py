@@ -14,7 +14,7 @@ from domain.system.brightness import Brightness
 
 
 def _make_overlay(mock_gamepad, brightness=70):
-    from infrastructure.qt.overlays.brightness_overlay import BrightnessOverlay
+    from infrastructure.common.qt.overlays.brightness_overlay import BrightnessOverlay
     control = MagicMock()
     control.get.return_value = Brightness(brightness)
     return BrightnessOverlay(gamepad=mock_gamepad, brightness=control, feedback=MagicMock())

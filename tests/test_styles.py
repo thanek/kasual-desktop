@@ -1,7 +1,7 @@
 """Tests for ui.styles utility functions."""
 
 import pytest
-from infrastructure.qt.ui.styles import truncate
+from infrastructure.common.qt.ui.styles import truncate
 
 
 class TestTruncate:

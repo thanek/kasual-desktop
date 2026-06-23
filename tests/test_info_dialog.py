@@ -12,7 +12,7 @@ poza kartą z BaseOverlay — te testy domykają ten współdzielony kontrakt:
 
 from unittest.mock import MagicMock
 
-from infrastructure.qt.overlays.info_dialog import InfoDialog
+from infrastructure.common.qt.overlays.info_dialog import InfoDialog
 
 
 def _make_dialog(mock_gamepad, on_confirmed=None):

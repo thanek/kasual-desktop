@@ -18,7 +18,7 @@ from unittest.mock import MagicMock
 
 from PyQt6.QtCore import Qt, QEvent
 
-from infrastructure.qt.desktop.desktop import Desktop
+from infrastructure.common.qt.desktop.desktop import Desktop
 from domain.input.vocabulary import Event
 
 

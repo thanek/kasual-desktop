@@ -64,7 +64,7 @@ def main():
     # connected at launch surfaces the Desktop and plays the START cue from the
     # queued connect handler, which would otherwise beat a deferred init and drop
     # the sound ("Unknown sound or no init()"). Decoding 6 short clips is cheap.
-    from infrastructure.audio.feedback import SoundFeedback
+    from infrastructure.common.audio.feedback import SoundFeedback
     feedback = SoundFeedback()
     feedback.init()
 
@@ -74,7 +74,7 @@ def main():
     from infrastructure.windows.brightness import WindowsBrightnessControl
     from infrastructure.windows.network import WindowsNetworkProbe, WindowsNetworkControl
     from infrastructure.windows.app_pinning import WindowsAppPinning
-    from infrastructure.qt.scheduler import QtScheduler
+    from infrastructure.common.qt.scheduler import QtScheduler
     from domain.notifications.center import NotificationCenter
 
     power = WindowsPowerControl()
@@ -85,7 +85,7 @@ def main():
     # and colours persist across restarts.
     from domain.catalog.app import App
     from domain.provisioning.candidate import CandidateApp
-    from infrastructure.system.app_config import (
+    from infrastructure.common.catalog.app_config import (
         load_apps, DesktopAppProvisioning,
         DesktopTileOrderStore, DesktopTileColorStore,
     )
@@ -113,12 +113,12 @@ def main():
     _refs: dict = {}  # keep tray/controller/overlay alive past their scope
 
     def start_session() -> None:
-        from infrastructure.qt.desktop.desktop_builder import build_desktop
+        from infrastructure.common.qt.desktop.desktop_builder import build_desktop
         from domain.shared.feedback import Cue
         from domain.system.actions import ActionDeps
-        from infrastructure.qt.ui.tray import SystemTray
-        from infrastructure.qt.overlays.about_overlay import AboutOverlay
-        from infrastructure.qt.overlays.home_overlay import HomeOverlayFactory
+        from infrastructure.common.qt.ui.tray import SystemTray
+        from infrastructure.common.qt.overlays.about_overlay import AboutOverlay
+        from infrastructure.common.qt.overlays.home_overlay import HomeOverlayFactory
         from application import Application
 
         desktop = build_desktop(
@@ -184,7 +184,7 @@ def main():
     # to the session. Mirrors the Linux composition root.
     if not provisioning.is_provisioned():
         from dataclasses import replace
-        from infrastructure.qt.overlays.onboarding_overlay import OnboardingOverlayFactory
+        from infrastructure.common.qt.overlays.onboarding_overlay import OnboardingOverlayFactory
         # Bundled apps first (always offered, pre-selected), then Start Menu apps
         # (games pre-selected and sorted first). Renumber so X-Kasual-Order is unique
         # and matches the list order.

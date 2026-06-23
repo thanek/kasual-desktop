@@ -21,7 +21,7 @@ def _center(*names: str) -> NotificationCenter:
 
 
 def _make_overlay(mock_gamepad, center):
-    from infrastructure.qt.overlays.notifications_overlay import NotificationsOverlay
+    from infrastructure.common.qt.overlays.notifications_overlay import NotificationsOverlay
     return NotificationsOverlay(gamepad=mock_gamepad, center=center, feedback=MagicMock())
 
 
@@ -53,19 +53,19 @@ class TestInit:
 
 class TestIconCandidates:
     def test_hint_then_app_name_then_lowercased(self):
-        from infrastructure.qt.overlays.notifications_overlay import _icon_name_candidates
+        from infrastructure.common.qt.overlays.notifications_overlay import _icon_name_candidates
         assert _icon_name_candidates("spotify", "Spotify") == ["spotify", "Spotify"]
         assert _icon_name_candidates(None, "Firefox") == ["Firefox", "firefox"]
 
     def test_drops_empties_and_dupes(self):
-        from infrastructure.qt.overlays.notifications_overlay import _icon_name_candidates
+        from infrastructure.common.qt.overlays.notifications_overlay import _icon_name_candidates
         assert _icon_name_candidates("", "") == []
         assert _icon_name_candidates("kmail", "kmail") == ["kmail"]
 
 
 class TestIconResolution:
     def test_falls_back_to_bell_when_unresolvable(self, qapp):
-        from infrastructure.qt.overlays.notifications_overlay import _resolve_icon_pixmap
+        from infrastructure.common.qt.overlays.notifications_overlay import _resolve_icon_pixmap
         # A nonsense hint/app resolves to nothing themed; we still get a pixmap.
         pm = _resolve_icon_pixmap("no-such-icon-xyz", "no-such-app-xyz", 40)
         assert not pm.isNull()

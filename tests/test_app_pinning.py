@@ -17,7 +17,7 @@ pytestmark = pytest.mark.skipif(
 )
 
 from domain.catalog.window import Window
-from infrastructure.system.app_pinning import DesktopAppPinning
+from infrastructure.kde.app_pinning import DesktopAppPinning
 
 
 @pytest.fixture

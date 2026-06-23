@@ -15,38 +15,39 @@ from PyQt6.QtWidgets import QApplication
 
 from application import Application
 from version import get_version
-from infrastructure.audio.feedback import SoundFeedback
-from infrastructure.input.gamepad_watcher import GamepadWatcher
-from infrastructure.qt.desktop import build_desktop
-from infrastructure.qt.desktop.deferred_hide import DeferredHide
-from infrastructure.qt.icons import install_fontawesome5
-from infrastructure.qt.overlays.about_overlay import AboutOverlay
-from infrastructure.qt.overlays.home_overlay import HomeOverlayFactory
-from infrastructure.qt.overlays.onboarding_overlay import OnboardingOverlayFactory
-from infrastructure.qt.ui.tray import SystemTray
-from infrastructure.system.app_config import (
+from infrastructure.common.audio.feedback import SoundFeedback
+from infrastructure.kde.gamepad_watcher import GamepadWatcher
+from infrastructure.common.qt.desktop import build_desktop
+from infrastructure.kde.qt.desktop.deferred_hide import DeferredHide
+from infrastructure.kde.qt.desktop.surface import LayerShellSurface
+from infrastructure.common.qt.icons import install_fontawesome5
+from infrastructure.common.qt.overlays.about_overlay import AboutOverlay
+from infrastructure.common.qt.overlays.home_overlay import HomeOverlayFactory
+from infrastructure.common.qt.overlays.onboarding_overlay import OnboardingOverlayFactory
+from infrastructure.common.qt.ui.tray import SystemTray
+from infrastructure.common.catalog.app_config import (
     DesktopAppProvisioning, DesktopTileColorStore, DesktopTileOrderStore,
     load_apps,
 )
-from infrastructure.system.app_discovery import WhichAppDiscovery
-from infrastructure.system.app_pinning import DesktopAppPinning
+from infrastructure.kde.app_discovery import WhichAppDiscovery
+from infrastructure.kde.app_pinning import DesktopAppPinning
 from domain.provisioning.provisioning import Provisioning, needs_provisioning
-from infrastructure.system.app_manager import AppManager
-from infrastructure.system.proc import parent_pid, process_name
-from infrastructure.system.log_viewer_launcher import LogViewerLauncher
-from infrastructure.system.power import SystemdPowerControl
-from infrastructure.system.volume import PactlVolumeControl
-from infrastructure.system.brightness import select_brightness_control
-from infrastructure.qt.scheduler import QtScheduler
-from infrastructure.mangohud import MangoHudControl
+from infrastructure.kde.app_manager import AppManager
+from infrastructure.kde.proc import parent_pid, process_name
+from infrastructure.kde.log_viewer_launcher import LogViewerLauncher
+from infrastructure.kde.power import SystemdPowerControl
+from infrastructure.kde.volume import PactlVolumeControl
+from infrastructure.kde.brightness import select_brightness_control
+from infrastructure.common.qt.scheduler import QtScheduler
+from infrastructure.kde.mangohud import MangoHudControl
 from domain.shared.feedback import Cue
-from infrastructure.system.kde_wallpaper import KdeSystemWallpaper
-from infrastructure.system.kde_notifications import KdeNotificationMonitor
-from infrastructure.system.network_manager import NMNetworkControl, NMNetworkMonitor
+from infrastructure.kde.wallpaper import KdeSystemWallpaper
+from infrastructure.kde.notifications import KdeNotificationMonitor
+from infrastructure.kde.network_manager import NMNetworkControl, NMNetworkMonitor
 from domain.notifications.center import NotificationCenter
 from domain.system.actions import ActionDeps
-from infrastructure.system.window_manager import KWinWindowManager
-from infrastructure.qt.i18n import install_translations
+from infrastructure.kde.window_manager import KWinWindowManager
+from infrastructure.common.qt.i18n import install_translations
 
 logger = logging.getLogger(__name__)
 
@@ -132,6 +133,7 @@ def main() -> None:
             order_store=DesktopTileOrderStore(),
             color_store=DesktopTileColorStore(),
             app_pinning=DesktopAppPinning(),
+            surface=LayerShellSurface(),
             parent_of=parent_pid,
             process_name_of=process_name,
             deferred_hide_factory=lambda wm_, pm_, apps_, on_hide:

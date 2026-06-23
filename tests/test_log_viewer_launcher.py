@@ -10,7 +10,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 from pathlib import Path
 
-from infrastructure.system.log_viewer_launcher import LogViewerLauncher
+from infrastructure.kde.log_viewer_launcher import LogViewerLauncher
 
 
 class _FakeProc:

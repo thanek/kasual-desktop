@@ -4,7 +4,7 @@ The brittle text parsing is isolated from the QProcess plumbing precisely so it
 can be exercised without a live bus.
 """
 
-from infrastructure.system.kde_notifications import (
+from infrastructure.kde.notifications import (
     parse_notify_blocks, _parse_notify_args,
 )
 

@@ -9,7 +9,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from infrastructure.qt.desktop.deferred_hide import DeferredHide
+from infrastructure.kde.qt.desktop.deferred_hide import DeferredHide
 from domain.catalog.app import App
 from domain.catalog.window import Window
 
@@ -31,7 +31,7 @@ def _win(pid=0, rc="", df=""):
 class TestAppWindowPresent:
     def test_matches_by_pid_subtree(self, qapp):
         dh, _, _, _ = _make(running_pid=1000)
-        with patch("infrastructure.qt.desktop.deferred_hide.expand_pid_tree", return_value={1000, 1001}):
+        with patch("infrastructure.kde.qt.desktop.deferred_hide.expand_pid_tree", return_value={1000, 1001}):
             assert dh._app_window_present(0, [_win(pid=1001)]) is True
 
     def test_matches_by_resource_class(self, qapp):

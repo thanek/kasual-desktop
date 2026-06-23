@@ -13,7 +13,7 @@ straight from the window's process:
                   instead of launching a duplicate).
 
 Everything else — writing/numbering/deleting the catalog ``.desktop`` files —
-is reused from the Linux adapter and ``app_config``.
+is reused from the shared ``AppPinningBase`` and ``app_config``.
 """
 
 import ctypes
@@ -23,17 +23,17 @@ import struct
 from domain.catalog.app import App
 from domain.catalog.window import Window
 
-from infrastructure.system.app_config import apps_dir, _write_desktop
-from infrastructure.system.app_pinning import DesktopAppPinning
+from infrastructure.common.catalog.app_config import apps_dir, _write_desktop
+from infrastructure.common.catalog.pinning_base import AppPinningBase
 from infrastructure.windows.window_manager import _get_exe_path
 
 logger = logging.getLogger(__name__)
 
 
-class WindowsAppPinning(DesktopAppPinning):
+class WindowsAppPinning(AppPinningBase):
     """Resolve a window to an :class:`App` via its process, then persist it.
 
-    Reuses the base class for ``unpin`` and the file placement helpers
+    Reuses the shared base for ``unpin`` and the file placement helpers
     (``_next_order``/``_unique_path``); only ``pin``'s source resolution differs.
     """
 

@@ -7,7 +7,7 @@ and the group cancel().
 
 from unittest.mock import MagicMock
 
-from infrastructure.qt.overlays.tile_color_picker import TileColorPicker
+from infrastructure.common.qt.overlays.tile_color_picker import TileColorPicker
 
 COLORS = ["#aaaaaa", "#bbbbbb", "#cccccc", "#dddddd"]
 
@@ -84,7 +84,7 @@ class TestGridNavigation:
         )
 
     def test_wraps_into_rows_of_ten(self, mock_gamepad):
-        from infrastructure.qt.overlays.tile_color_picker import _MAX_PER_ROW
+        from infrastructure.common.qt.overlays.tile_color_picker import _MAX_PER_ROW
         picker = self._make_wide(mock_gamepad)
         # The 11th swatch (index 10) starts the second grid row.
         assert len(picker._swatches) == 12

@@ -4,7 +4,7 @@ from domain.system.actions import NOTIFICATIONS, VOLUME
 
 
 def _topbar(qapp):
-    from infrastructure.qt.desktop.topbar import TopBar
+    from infrastructure.common.qt.desktop.topbar import TopBar
     return TopBar()
 
 

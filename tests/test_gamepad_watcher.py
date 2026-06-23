@@ -202,7 +202,7 @@ class TestTranslateDpad:
 # ── _handle_stick_axis ────────────────────────────────────────────────────────
 
 class TestHandleStickAxis:
-    from infrastructure.input.gamepad_watcher import STICK_THRESHOLD, STICK_RESET
+    from infrastructure.kde.gamepad_watcher import STICK_THRESHOLD, STICK_RESET
 
     OVER  = 11000   # > STICK_THRESHOLD (10000)
     UNDER = 5000    # < STICK_RESET (6000)
@@ -245,7 +245,7 @@ class TestHandleStickAxis:
 class TestIsGamepad:
     """Statyczna metoda filtrująca urządzenia."""
 
-    from infrastructure.input.gamepad_watcher import GamepadWatcher
+    from infrastructure.kde.gamepad_watcher import GamepadWatcher
 
     def _make_device(self, keys=None, abs_axes=None, has_key_a=False):
         """Zbuduj mock urządzenia z podanymi capabilities."""
@@ -262,28 +262,28 @@ class TestIsGamepad:
         return d
 
     def test_recognizes_gamepad_with_buttons(self):
-        from infrastructure.input.gamepad_watcher import GamepadWatcher
+        from infrastructure.kde.gamepad_watcher import GamepadWatcher
         d = self._make_device(keys=[ecodes.BTN_SOUTH, ecodes.BTN_EAST, ecodes.BTN_NORTH,
                                      ecodes.BTN_WEST, ecodes.BTN_START, ecodes.BTN_SELECT])
         assert GamepadWatcher._is_gamepad(d) is True
 
     def test_recognizes_gamepad_with_hat(self):
-        from infrastructure.input.gamepad_watcher import GamepadWatcher
+        from infrastructure.kde.gamepad_watcher import GamepadWatcher
         d = self._make_device(keys=[ecodes.BTN_SOUTH], abs_axes=[ecodes.ABS_HAT0X, ecodes.ABS_HAT0Y])
         assert GamepadWatcher._is_gamepad(d) is True
 
     def test_rejects_keyboard(self):
-        from infrastructure.input.gamepad_watcher import GamepadWatcher
+        from infrastructure.kde.gamepad_watcher import GamepadWatcher
         d = self._make_device(keys=[ecodes.BTN_SOUTH, ecodes.BTN_EAST], has_key_a=True)
         assert GamepadWatcher._is_gamepad(d) is False
 
     def test_rejects_device_without_ev_key(self):
-        from infrastructure.input.gamepad_watcher import GamepadWatcher
+        from infrastructure.kde.gamepad_watcher import GamepadWatcher
         d = self._make_device()   # brak EV_KEY
         assert GamepadWatcher._is_gamepad(d) is False
 
     def test_rejects_on_exception(self):
-        from infrastructure.input.gamepad_watcher import GamepadWatcher
+        from infrastructure.kde.gamepad_watcher import GamepadWatcher
         from unittest.mock import MagicMock
         d = MagicMock()
         d.capabilities.side_effect = OSError("brak uprawnień")

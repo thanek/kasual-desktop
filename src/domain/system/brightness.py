@@ -27,7 +27,7 @@ class BrightnessControl(Protocol):
     a generic CLI (brightnessctl), sysfs, or a DE-specific D-Bus service (KDE
     PowerManagement, GNOME settings daemon). The concrete adapter is chosen at the
     composition root; see
-    :func:`infrastructure.system.brightness.select_brightness_control`."""
+    :func:`infrastructure.kde.brightness.select_brightness_control`."""
 
     def get(self) -> Brightness: ...
     def set(self, brightness: Brightness) -> None: ...

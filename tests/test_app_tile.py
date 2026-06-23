@@ -10,7 +10,7 @@ import pytest
 from PyQt6.QtCore import QEvent, QPoint, QPointF
 from PyQt6.QtGui import QEnterEvent
 
-from infrastructure.qt.desktop.app_tile import AppTile
+from infrastructure.common.qt.desktop.app_tile import AppTile
 
 
 @pytest.fixture
