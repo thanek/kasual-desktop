@@ -24,7 +24,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 pytestmark = pytest.mark.skipif(
-    sys.platform == "win32",
+    sys.platform != "linux",
     reason="Tests the Linux POSIX AppManager; Windows uses WindowsAppManager",
 )
 

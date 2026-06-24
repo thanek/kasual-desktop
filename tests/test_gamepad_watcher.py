@@ -20,7 +20,7 @@ import types
 import pytest
 
 pytestmark = pytest.mark.skipif(
-    sys.platform == "win32",
+    sys.platform != "linux",
     reason="Tests the Linux evdev GamepadWatcher; Windows uses WindowsGamepadWatcher (pygame)",
 )
 

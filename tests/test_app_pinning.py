@@ -12,7 +12,7 @@ import sys
 import pytest
 
 pytestmark = pytest.mark.skipif(
-    sys.platform == "win32",
+    sys.platform != "linux",
     reason="Tests the Linux XDG DesktopAppPinning; Windows uses WindowsAppPinning",
 )
 

@@ -10,7 +10,7 @@ import sys
 import pytest
 
 pytestmark = pytest.mark.skipif(
-    sys.platform == "win32",
+    sys.platform != "linux",
     reason="Tests Linux XDG_CONFIG_HOME path handling; Windows uses %APPDATA%",
 )
 
