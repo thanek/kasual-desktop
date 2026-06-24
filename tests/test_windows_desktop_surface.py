@@ -20,6 +20,7 @@ import sys
 from unittest.mock import MagicMock, patch
 
 import pytest
+from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QWidget
 
 pytestmark = pytest.mark.skipif(
@@ -36,12 +37,13 @@ from infrastructure.windows.qt.desktop_surface import (
 
 def _make_surface(widget=None, visible=False):
     surface = WindowsDesktopSurface()
-    if widget is not None:
-        surface.install(widget)
-    else:
-        w = MagicMock()
-        w.isVisible.return_value = visible
-        surface.install(w)
+    if widget is None:
+        widget = MagicMock()
+    # MagicMock.isVisible() returns a truthy Mock by default, which breaks
+    # guards like ``if self.is_visible()``. Set an explicit bool return.
+    if isinstance(widget, MagicMock):
+        widget.isVisible.return_value = visible
+    surface.install(widget)
     return surface
 
 
@@ -77,9 +79,10 @@ class TestShowFullscreen:
     def test_stops_restore_monitor(self, qapp):
         widget = MagicMock()
         surface = _make_surface(widget)
-        surface._restore_timer = MagicMock()
+        timer = MagicMock()
+        surface._restore_timer = timer
         surface.show_fullscreen()
-        surface._restore_timer.stop.assert_called_once()
+        timer.stop.assert_called_once()
 
 
 # ── hide / activate / is_visible / on_reactivate ──────────────────────────────
@@ -142,19 +145,26 @@ class TestHideForLaunch:
 # ── _start_restore_monitor / _stop_restore_monitor ────────────────────────────
 
 class TestStartRestoreMonitor:
+    @pytest.fixture(autouse=True)
+    def _mock_qtimer(self, monkeypatch):
+        """QTimer(MagicMock) raises TypeError; replace QTimer with a MagicMock
+        factory so _start_restore_monitor can create a timer with a mock parent."""
+        from infrastructure.windows.qt import desktop_surface as mod
+        monkeypatch.setattr(mod, "QTimer", lambda parent: MagicMock())
+
     def test_creates_qtimer_with_600ms(self, qapp):
         widget = MagicMock()
         surface = _make_surface(widget)
         surface._start_restore_monitor()
         assert surface._restore_timer is not None
-        assert surface._restore_timer.interval() == 600
+        surface._restore_timer.start.assert_called_once_with(600)
 
     def test_connects_timeout_to_check_foreground(self, qapp):
         widget = MagicMock()
         surface = _make_surface(widget)
         surface._start_restore_monitor()
-        assert surface._restore_timer.receivers(
-            surface._restore_timer.timeout) == 1
+        surface._restore_timer.timeout.connect.assert_called_once_with(
+            surface._check_foreground)
 
     def test_noop_when_already_visible(self, qapp):
         widget = QWidget()
@@ -174,6 +184,11 @@ class TestStartRestoreMonitor:
 
 
 class TestStopRestoreMonitor:
+    @pytest.fixture(autouse=True)
+    def _mock_qtimer(self, monkeypatch):
+        from infrastructure.windows.qt import desktop_surface as mod
+        monkeypatch.setattr(mod, "QTimer", lambda parent: MagicMock())
+
     def test_stops_and_deletes_timer(self, qapp):
         widget = MagicMock()
         surface = _make_surface(widget)
@@ -254,21 +269,23 @@ class TestCheckForeground:
     def test_stops_monitor_on_desktop_class(self, qapp):
         surface = _make_surface(visible=False)
         surface._on_reactivate = MagicMock()
-        surface._restore_timer = MagicMock()
+        timer = MagicMock()
+        surface._restore_timer = timer
         buf = MagicMock(value="Progman")
         with patch("infrastructure.windows.qt.desktop_surface.ctypes.windll") as windll, \
              patch("infrastructure.windows.qt.desktop_surface.ctypes.create_unicode_buffer",
                    return_value=buf):
             windll.user32.GetForegroundWindow.return_value = 0x100
             surface._check_foreground()
-        surface._restore_timer.stop.assert_called_once()
+        timer.stop.assert_called_once()
 
     def test_stops_monitor_when_already_visible(self, qapp):
         surface = _make_surface(visible=True)
         surface._on_reactivate = MagicMock()
-        surface._restore_timer = MagicMock()
+        timer = MagicMock()
+        surface._restore_timer = timer
         surface._check_foreground()
-        surface._restore_timer.stop.assert_called_once()
+        timer.stop.assert_called_once()
         surface._on_reactivate.assert_not_called()
 
     def test_noop_when_no_callback(self, qapp):
