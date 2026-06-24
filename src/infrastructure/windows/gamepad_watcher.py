@@ -26,6 +26,7 @@ from domain.input.gamepad_events import (
     GamepadDisconnected,
 )
 from domain.input.direction_repeat import DirectionRepeat
+from domain.input.focus_stack import InputFocusStack
 from domain.input.gamepad_signals import GamepadSignals
 from domain.input.pad_control import PadControl
 from domain.input.recall import RecallTrigger
@@ -84,7 +85,7 @@ class WindowsGamepadWatcher(PadControl, GamepadSignals):
 
     def __init__(self, parent=None):
         self._parent = parent
-        self._stack = []
+        self._stack = InputFocusStack()
         self._connected = False
         self._running = True
         self._joystick = None
@@ -186,7 +187,7 @@ class WindowsGamepadWatcher(PadControl, GamepadSignals):
 
         if button == BTN_MODE:
             # CLICK / Kasual active → recall now; HOLD_1S app → arm the hold.
-            self._recall.press(kasual_active=bool(self._stack), trigger=self._app_trigger)
+            self._recall.press(kasual_active=self._stack.suppressed, trigger=self._app_trigger)
         elif button == BTN_SOUTH:
             self._dispatch(Event.SELECT)
         elif button == BTN_EAST:
@@ -206,7 +207,7 @@ class WindowsGamepadWatcher(PadControl, GamepadSignals):
             # Cancels a pending hold. The short-press "forward to the app" the
             # return value reports is moot on Windows — the controller is
             # cooperative, so the app already saw the guide press itself.
-            self._recall.release(suppressed=bool(self._stack))
+            self._recall.release(suppressed=self._stack.suppressed)
 
     def _handle_axis(self, axis: int, value: float):
         """Handle analog stick movement."""
@@ -284,8 +285,7 @@ class WindowsGamepadWatcher(PadControl, GamepadSignals):
 
     def _on_nav_main(self, event: str) -> None:
         logger.debug("Dispatching event: %s", event)
-        if self._stack:
-            self._stack[-1](event)
+        self._stack.dispatch(event)
 
     def _on_btn_mode_main(self) -> None:
         self._btn_mode_emitter.emit(BtnModePressed())
@@ -306,20 +306,17 @@ class WindowsGamepadWatcher(PadControl, GamepadSignals):
         return self._disconnected_emitter.subscribe(handler)
 
     def push_handler(self, handler: Callable[[str], None]) -> None:
-        if handler in self._stack:
-            self._stack.remove(handler)
-        self._stack.append(handler)
+        self._stack.push(handler)
 
     def pop_handler(self, handler: Callable[[str], None]) -> None:
-        if handler in self._stack:
-            self._stack.remove(handler)
+        self._stack.pop(handler)
 
     def inject(self, event: str) -> None:
         """Inject a navigation event (e.g. from keyboard)."""
         self._dispatch(event)
 
     def top_handler(self) -> Callable[[str], None] | None:
-        return self._stack[-1] if self._stack else None
+        return self._stack.top()
 
     def trigger_btn_mode(self) -> None:
         """Request BTN_MODE from outside (e.g. keyboard shortcut)."""
