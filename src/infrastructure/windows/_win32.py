@@ -40,6 +40,14 @@ class _SHELLEXECUTEINFO(ctypes.Structure):
     ]
 
 
-_shell32 = ctypes.windll.shell32
-_shell32.ShellExecuteExW.argtypes = [ctypes.POINTER(_SHELLEXECUTEINFO)]
-_shell32.ShellExecuteExW.restype = wintypes.BOOL
+# ``ctypes.windll`` exists only on Windows. Importing this module on Linux (which
+# happens during pytest collection of Windows-only test modules that use the
+# ``pytestmark`` skipif marker — that marker skips *execution*, not import) must
+# not crash, so the shell32 binding and argtypes/restype registration are guarded
+# and run only when the attribute is present.
+if hasattr(ctypes, "windll"):
+    _shell32 = ctypes.windll.shell32
+    _shell32.ShellExecuteExW.argtypes = [ctypes.POINTER(_SHELLEXECUTEINFO)]
+    _shell32.ShellExecuteExW.restype = wintypes.BOOL
+else:
+    _shell32 = None
