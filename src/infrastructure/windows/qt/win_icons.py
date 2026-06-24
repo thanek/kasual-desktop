@@ -13,6 +13,7 @@ import ctypes
 import logging
 from ctypes import wintypes
 
+from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QIcon, QImage, QPixmap
 
 logger = logging.getLogger(__name__)
@@ -21,6 +22,15 @@ SHGFI_SYSICONINDEX = 0x000004000
 SHIL_JUMBO = 0x4
 SHIL_EXTRALARGE = 0x2
 ILD_TRANSPARENT = 0x1
+
+# Apps that ship only a low-res icon (e.g. old games like "Fable - The Lost
+# Chapters") land in the 256px jumbo slot as a small bitmap pinned to the
+# top-left with the rest transparent. Qt then scales the whole 256px canvas down
+# to the tile's icon size, so the real icon renders tiny and corner-aligned. We
+# crop to the icon's real bounds and smoothly scale anything smaller up to this
+# size, so it fills the tile like the others (a soft but correctly-sized icon
+# beats a sharp tiny one — the same trade-off KWin's task manager makes).
+_ICON_TARGET = 256
 
 
 class _GUID(ctypes.Structure):
@@ -93,7 +103,59 @@ def jumbo_icon(path: str, shil: int = SHIL_JUMBO) -> QIcon | None:
         return None
     if image is None or image.isNull():
         return None
-    return QIcon(QPixmap.fromImage(image))
+    return QIcon(QPixmap.fromImage(_fit_to_content(image)))
+
+
+def _fit_to_content(image: QImage) -> QImage:
+    """Crop transparent padding and upscale a small icon so it fills the tile.
+
+    Returns *image* unchanged when it already fills the canvas (a normal app
+    icon); a low-res icon padded into the jumbo slot is cropped to its real
+    bounds and smoothly scaled up to ``_ICON_TARGET``."""
+    if image.format() != QImage.Format.Format_ARGB32:
+        image = image.convertToFormat(QImage.Format.Format_ARGB32)
+    bounds = _alpha_bounds(image)
+    if bounds is None:
+        return image                       # fully transparent — nothing to fit
+    left, top, right, bottom = bounds
+    w = right - left + 1
+    h = bottom - top + 1
+    if (left, top, w, h) != (0, 0, image.width(), image.height()):
+        image = image.copy(left, top, w, h)
+    if max(w, h) < _ICON_TARGET:
+        image = image.scaled(
+            _ICON_TARGET, _ICON_TARGET,
+            Qt.AspectRatioMode.KeepAspectRatio,
+            Qt.TransformationMode.SmoothTransformation,
+        )
+    return image
+
+
+def _alpha_bounds(image: QImage) -> tuple[int, int, int, int] | None:
+    """Bounding box (left, top, right, bottom) of the non-transparent pixels, or
+    None if the whole image is transparent. Scans the raw ARGB32 buffer one row
+    at a time so the per-pixel work stays in C (``lstrip``/``rstrip``)."""
+    w, h, bpl = image.width(), image.height(), image.bytesPerLine()
+    bits = image.constBits()
+    bits.setsize(h * bpl)
+    data = bytes(bits)
+    min_x, min_y, max_x, max_y = w, h, -1, -1
+    for y in range(h):
+        # ARGB32 is BGRA in memory on little-endian, so alpha is every 4th byte.
+        alpha = data[y * bpl: y * bpl + w * 4][3::4]
+        stripped = alpha.lstrip(b"\x00")
+        if not stripped:
+            continue                       # fully transparent row
+        first = len(alpha) - len(stripped)
+        last = len(alpha.rstrip(b"\x00")) - 1
+        min_x = min(min_x, first)
+        max_x = max(max_x, last)
+        if min_y == h:
+            min_y = y
+        max_y = y
+    if max_x < 0:
+        return None
+    return min_x, min_y, max_x, max_y
 
 
 def _jumbo_image(path: str, shil: int) -> QImage | None:

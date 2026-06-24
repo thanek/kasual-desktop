@@ -18,9 +18,23 @@ import pytest
 if sys.platform != "win32":
     pytest.skip("Windows-only test; needs ctypes.windll", allow_module_level=True)
 
+from PyQt6.QtGui import QImage
+
 from infrastructure.windows.qt.win_icons import (
-    SHIL_EXTRALARGE, SHIL_JUMBO, jumbo_icon,
+    SHIL_EXTRALARGE, SHIL_JUMBO, _ICON_TARGET, _alpha_bounds, _fit_to_content,
+    jumbo_icon,
 )
+
+
+def _image_with_block(canvas: int, block: int, *, color: int = 0xFF3366CC) -> QImage:
+    """A transparent *canvas*×*canvas* ARGB32 image with an opaque *block*×*block*
+    square pinned to the top-left — how a low-res icon lands in the jumbo slot."""
+    img = QImage(canvas, canvas, QImage.Format.Format_ARGB32)
+    img.fill(0)
+    for y in range(block):
+        for x in range(block):
+            img.setPixel(x, y, color)
+    return img
 
 
 @pytest.fixture
@@ -149,6 +163,44 @@ class TestJumboIcon:
         # Any unexpected exception is caught and returns None (best-effort).
         mocks["shell32"].SHGetFileInfoW.side_effect = OSError("access denied")
         assert jumbo_icon("C:\\app.exe") is None
+
+
+class TestAlphaBounds:
+    def test_finds_top_left_block(self):
+        img = _image_with_block(256, 32)
+        assert _alpha_bounds(img) == (0, 0, 31, 31)
+
+    def test_full_canvas(self):
+        img = QImage(64, 64, QImage.Format.Format_ARGB32)
+        img.fill(0xFF00FF00)
+        assert _alpha_bounds(img) == (0, 0, 63, 63)
+
+    def test_fully_transparent_returns_none(self):
+        img = QImage(64, 64, QImage.Format.Format_ARGB32)
+        img.fill(0)
+        assert _alpha_bounds(img) is None
+
+
+class TestFitToContent:
+    def test_crops_and_upscales_corner_icon(self):
+        # The bug: a 32px icon in the 256px jumbo slot. After fitting it should
+        # be cropped to its bounds and scaled up to fill, no longer corner-tiny.
+        out = _fit_to_content(_image_with_block(256, 32))
+        assert max(out.width(), out.height()) == _ICON_TARGET
+        # The whole result is now opaque content (the transparent padding is gone).
+        assert out.pixelColor(out.width() // 2, out.height() // 2).alpha() == 255
+
+    def test_full_size_icon_unchanged(self):
+        img = QImage(_ICON_TARGET, _ICON_TARGET, QImage.Format.Format_ARGB32)
+        img.fill(0xFF00FF00)
+        out = _fit_to_content(img)
+        assert (out.width(), out.height()) == (_ICON_TARGET, _ICON_TARGET)
+
+    def test_transparent_image_unchanged(self):
+        img = QImage(64, 64, QImage.Format.Format_ARGB32)
+        img.fill(0)
+        out = _fit_to_content(img)
+        assert (out.width(), out.height()) == (64, 64)
 
 
 class TestShilConstants:
