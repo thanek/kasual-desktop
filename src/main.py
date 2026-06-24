@@ -16,6 +16,7 @@ from PyQt6.QtWidgets import QApplication
 from application import Application
 from version import get_version
 from infrastructure.common.audio.feedback import SoundFeedback
+from infrastructure.common.single_instance import SingleInstanceGuard
 from infrastructure.kde.gamepad_watcher import GamepadWatcher
 from infrastructure.common.qt.desktop import build_desktop
 from infrastructure.kde.qt.desktop.deferred_hide import DeferredHide
@@ -85,6 +86,11 @@ def main() -> None:
     app.setApplicationName("Kasual Desktop")
     app.setApplicationVersion(version)
     app.setQuitOnLastWindowClosed(False)
+
+    guard = SingleInstanceGuard(log_file.parent)
+    if not guard.try_lock():
+        sys.exit(0)
+    app.aboutToQuit.connect(guard.release)
 
     # Use the bundled genuine Font Awesome 5 fonts, not the distro's Fork Awesome
     # substitute (see icons.install_fontawesome5). Before any icon is built.

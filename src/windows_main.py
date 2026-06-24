@@ -72,6 +72,12 @@ def main():
     app.setApplicationName("Kasual Desktop")
     app.setQuitOnLastWindowClosed(False)
 
+    from infrastructure.common.single_instance import SingleInstanceGuard
+    guard = SingleInstanceGuard(log_file.parent)
+    if not guard.try_lock():
+        sys.exit(0)
+    app.aboutToQuit.connect(guard.release)
+
     from version import get_version
     version = get_version()
 
