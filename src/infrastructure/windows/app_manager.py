@@ -9,32 +9,12 @@ from ctypes import wintypes
 
 from domain.lifecycle.app_events import AppStarted
 from infrastructure.common.lifecycle.base_app_manager import BaseAppManager, Proc
+from infrastructure.windows._win32 import SEE_MASK_NOCLOSEPROCESS, _SHELLEXECUTEINFO
 
 logger = logging.getLogger(__name__)
 
 CREATE_NO_WINDOW = 0x08000000
-SEE_MASK_NOCLOSEPROCESS = 0x00000040
 WAIT_TIMEOUT = 0x00000102
-
-
-class _SHELLEXECUTEINFO(ctypes.Structure):
-    _fields_ = [
-        ("cbSize",        wintypes.DWORD),
-        ("fMask",         wintypes.ULONG),
-        ("hwnd",          wintypes.HWND),
-        ("lpVerb",        wintypes.LPCWSTR),
-        ("lpFile",        wintypes.LPCWSTR),
-        ("lpParameters",  wintypes.LPCWSTR),
-        ("lpDirectory",   wintypes.LPCWSTR),
-        ("nShow",         wintypes.INT),
-        ("hInstApp",      wintypes.HINSTANCE),
-        ("lpIDList",      ctypes.c_void_p),
-        ("lpClass",       wintypes.LPCWSTR),
-        ("hkeyClass",     wintypes.HKEY),
-        ("dwHotKey",      wintypes.DWORD),
-        ("hIconOrMonitor", wintypes.HANDLE),
-        ("hProcess",      wintypes.HANDLE),
-    ]
 
 
 class _WinHandle:
