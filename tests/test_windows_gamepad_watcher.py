@@ -31,12 +31,19 @@ import pytest
 if sys.platform != "win32":
     pytest.skip("Windows-only test; needs pygame/ctypes.windll", allow_module_level=True)
 
-from infrastructure.windows.gamepad_watcher import (
+from infrastructure.windows.input.gamepad_watcher import (
     BTN_EAST, BTN_MODE, BTN_NORTH, BTN_SELECT, BTN_SOUTH, BTN_START, BTN_WEST,
     STICK_RESET, STICK_THRESHOLD,
     WindowsGamepadWatcher,
 )
+from infrastructure.windows.input.driver_probe import DriverCapabilities
+from domain.input.recall import RecallTrigger
 from domain.input.vocabulary import Event, Trigger
+
+
+def _cooperative_caps(*a, **kw):
+    """probe_drivers() that reports no drivers → cooperative mode."""
+    return DriverCapabilities(vigembus=False, hidhide=False)
 
 
 @pytest.fixture
@@ -45,6 +52,7 @@ def mock_watcher(qapp):
 
     Patches threading.Thread before __init__ calls it, and pygame.init /
     joystick.init / display.init so no real joystick subsystem is touched.
+    probe_drivers is patched to return cooperative (no DLLs loaded in tests).
     Mirrors the Linux ``mock_gamepad`` fixture in conftest.py.
 
     Yields the watcher and cleans up on teardown: cancels any armed
@@ -53,10 +61,11 @@ def mock_watcher(qapp):
     fixture's Qt objects are gone (a late fire would raise
     ``AttributeError: '_Bridge' does not have a signal with the signature btn()``
     from a garbage-collected C++ QObject)."""
-    with patch("infrastructure.windows.gamepad_watcher.threading.Thread"), \
-         patch("infrastructure.windows.gamepad_watcher.pygame.init"), \
-         patch("infrastructure.windows.gamepad_watcher.pygame.joystick.init"), \
-         patch("infrastructure.windows.gamepad_watcher.pygame.display.init"):
+    with patch("infrastructure.windows.input.gamepad_watcher.threading.Thread"), \
+         patch("infrastructure.windows.input.gamepad_watcher.pygame.init"), \
+         patch("infrastructure.windows.input.gamepad_watcher.pygame.joystick.init"), \
+         patch("infrastructure.windows.input.gamepad_watcher.pygame.display.init"), \
+         patch("infrastructure.windows.input.gamepad_watcher.probe_drivers", _cooperative_caps):
         gw = WindowsGamepadWatcher()
     yield gw
     gw._recall.cancel()
@@ -406,7 +415,7 @@ class TestConnectionState:
 
 class TestLifecycle:
     def test_refresh_reinits_joystick_subsystem(self, mock_watcher):
-        with patch("infrastructure.windows.gamepad_watcher.pygame.joystick") as js:
+        with patch("infrastructure.windows.input.gamepad_watcher.pygame.joystick") as js:
             mock_watcher.refresh()
             js.quit.assert_called_once()
             js.init.assert_called_once()
@@ -420,7 +429,7 @@ class TestLifecycle:
     def test_shutdown_stops_thread_and_quits_pygame(self, mock_watcher):
         mock_watcher._thread = MagicMock()
         mock_watcher._thread.is_alive.return_value = True
-        with patch("infrastructure.windows.gamepad_watcher.pygame.quit") as pg_quit:
+        with patch("infrastructure.windows.input.gamepad_watcher.pygame.quit") as pg_quit:
             mock_watcher.shutdown()
         mock_watcher._thread.join.assert_called_once_with(timeout=1.0)
         pg_quit.assert_called_once()
@@ -429,6 +438,156 @@ class TestLifecycle:
     def test_shutdown_skips_join_when_thread_not_alive(self, mock_watcher):
         mock_watcher._thread = MagicMock()
         mock_watcher._thread.is_alive.return_value = False
-        with patch("infrastructure.windows.gamepad_watcher.pygame.quit"):
+        with patch("infrastructure.windows.input.gamepad_watcher.pygame.quit"):
             mock_watcher.shutdown()
         mock_watcher._thread.join.assert_not_called()
+
+
+# ── Exclusive-mode forwarding (ViGEm) ─────────────────────────────────────────
+
+class TestExclusiveForwarding:
+    """Verify that in exclusive mode, gamepad events are forwarded to the
+    virtual ViGEm pad — gated by ``not stack.suppressed``.
+
+    The fixture creates a cooperative watcher (no DLLs), then injects a mock
+    writer and flips ``_exclusive`` to True, simulating exclusive mode without
+    needing real drivers.
+    """
+
+    def _exclusive_watcher(self, mock_watcher):
+        """Turn a cooperative mock_watcher into an exclusive one with a mock writer."""
+        mock_watcher._exclusive = True
+        mock_watcher._writer = MagicMock()
+        return mock_watcher
+
+    def test_button_press_when_not_suppressed_writes_to_vigem(self, mock_watcher, qapp):
+        gw = self._exclusive_watcher(mock_watcher)
+        # Empty stack → not suppressed → forward.
+        assert not gw._stack.suppressed
+        gw._handle_button_down(BTN_SOUTH)
+        gw._writer.write_button.assert_called_once_with(BTN_SOUTH, 1)
+
+    def test_button_release_when_not_suppressed_writes_to_vigem(self, mock_watcher, qapp):
+        gw = self._exclusive_watcher(mock_watcher)
+        gw._handle_button_up(BTN_SOUTH)
+        gw._writer.write_button.assert_called_once_with(BTN_SOUTH, 0)
+
+    def test_button_press_when_suppressed_does_not_write_to_vigem(self, mock_watcher, qapp):
+        gw = self._exclusive_watcher(mock_watcher)
+        gw.push_handler(lambda e: None)  # Kasual active → suppressed
+        assert gw._stack.suppressed
+        gw._handle_button_down(BTN_SOUTH)
+        gw._writer.write_button.assert_not_called()
+
+    def test_button_release_when_suppressed_does_not_write_to_vigem(self, mock_watcher, qapp):
+        gw = self._exclusive_watcher(mock_watcher)
+        gw.push_handler(lambda e: None)
+        gw._handle_button_up(BTN_SOUTH)
+        gw._writer.write_button.assert_not_called()
+
+    def test_btn_mode_short_press_forwards_synthetic_to_vigem(self, mock_watcher, qapp):
+        """HOLD_1S trigger, empty stack, press+release BTN_MODE (< 1s) →
+        synthetic guide pulse (set_guide True then False)."""
+        gw = self._exclusive_watcher(mock_watcher)
+        gw.set_app_btn_mode_trigger(Trigger.HOLD_1S)
+        # Stack is empty → not suppressed.
+        gw._handle_button_down(BTN_MODE)
+        qapp.processEvents()
+        # Hold timer NOT fired yet (press was instant).
+        gw._handle_button_up(BTN_MODE)
+        # RecallTrigger.release returns True (short press, not suppressed) → forward.
+        assert gw._writer.set_guide.call_count == 2
+        gw._writer.set_guide.assert_any_call(True)
+        gw._writer.set_guide.assert_any_call(False)
+
+    def test_btn_mode_hold_recall_does_not_forward(self, mock_watcher, qapp):
+        """HOLD_1S trigger, empty stack, press, hold > 1s (timer fires), release
+        → no synthetic forward (the press recalled the menu)."""
+        gw = self._exclusive_watcher(mock_watcher)
+        gw.set_app_btn_mode_trigger(Trigger.HOLD_1S)
+        # Use a fake timer that fires immediately to simulate the hold elapsing.
+        gw._recall = RecallTrigger(
+            on_recall=gw._bridge.btn.emit,
+            timer_factory=lambda secs, cb: _ImmediateTimer(cb),
+        )
+        gw._handle_button_down(BTN_MODE)
+        qapp.processEvents()
+        # Timer fired → recall happened → release should NOT forward.
+        gw._handle_button_up(BTN_MODE)
+        gw._writer.set_guide.assert_not_called()
+
+    def test_btn_mode_press_when_suppressed_does_not_forward(self, mock_watcher, qapp):
+        """Handler on stack, press+release BTN_MODE → no synthetic forward
+        (suppressed)."""
+        gw = self._exclusive_watcher(mock_watcher)
+        gw.push_handler(lambda e: None)  # Kasual active → suppressed
+        gw._handle_button_down(BTN_MODE)
+        qapp.processEvents()
+        gw._handle_button_up(BTN_MODE)
+        gw._writer.set_guide.assert_not_called()
+
+    def test_axis_forwarded_when_not_suppressed(self, mock_watcher, qapp):
+        gw = self._exclusive_watcher(mock_watcher)
+        gw._handle_axis(0, 0.9)
+        gw._writer.write_axis.assert_called_once_with(0, 0.9)
+
+    def test_axis_not_forwarded_when_suppressed(self, mock_watcher, qapp):
+        gw = self._exclusive_watcher(mock_watcher)
+        gw.push_handler(lambda e: None)
+        gw._handle_axis(0, 0.9)
+        gw._writer.write_axis.assert_not_called()
+
+    def test_hat_forwarded_when_not_suppressed(self, mock_watcher, qapp):
+        gw = self._exclusive_watcher(mock_watcher)
+        gw._handle_hat(0, (-1, 0))
+        gw._writer.write_hat.assert_called_once_with(-1, 0)
+
+    def test_hat_not_forwarded_when_suppressed(self, mock_watcher, qapp):
+        gw = self._exclusive_watcher(mock_watcher)
+        gw.push_handler(lambda e: None)
+        gw._handle_hat(0, (-1, 0))
+        gw._writer.write_hat.assert_not_called()
+
+
+class _ImmediateTimer:
+    """A timer substitute that fires its callback immediately on start()."""
+
+    def __init__(self, callback):
+        self._callback = callback
+        self._cancelled = False
+
+    def start(self):
+        if not self._cancelled:
+            self._callback()
+
+    def cancel(self):
+        self._cancelled = True
+
+
+# ── Cooperative fallback ──────────────────────────────────────────────────────
+
+class TestCooperativeFallback:
+    """Verify that in cooperative mode (drivers absent), no ViGEm writes happen."""
+
+    def test_no_vigem_writes_when_drivers_absent(self, mock_watcher, qapp):
+        """Default mock_watcher fixture is cooperative (probe_drivers → False/False).
+        No writer should exist, and pressing buttons should not raise."""
+        assert mock_watcher._writer is None
+        assert mock_watcher._exclusive is False
+        mock_watcher.push_handler(lambda e: None)
+        mock_watcher._handle_button_down(BTN_SOUTH)
+        qapp.processEvents()
+        # No writer → no writes, no exception.
+
+    def test_hidhide_absent_disables_exclusive_even_if_vigem_present(self, qapp):
+        """D4 all-or-nothing: ViGEm present but HidHide absent → cooperative."""
+        caps = DriverCapabilities(vigembus=True, hidhide=False)
+        assert caps.exclusive is False
+
+    def test_vigem_absent_disables_exclusive_even_if_hidhide_present(self, qapp):
+        caps = DriverCapabilities(vigembus=False, hidhide=True)
+        assert caps.exclusive is False
+
+    def test_both_present_enables_exclusive(self, qapp):
+        caps = DriverCapabilities(vigembus=True, hidhide=True)
+        assert caps.exclusive is True

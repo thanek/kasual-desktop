@@ -1,13 +1,25 @@
 """
 Windows gamepad implementation using pygame.
 
-Cooperative model: ALL apps see gamepad events simultaneously.
-There is no exclusive grab on Windows without a kernel driver.
+Two modes, decided at startup by driver_probe:
 
-BTN_MODE handling: On Windows, BTN_MODE always triggers HomeOverlay
-(because we can't intercept it without grab). This is a design
-decision - the Windows shell takeover model means we're the only
-active shell anyway.
+  * **Exclusive** (ViGEmBus + HidHide both installed): the physical gamepad is
+    hidden from other processes by HidHide; Kasual reads it via pygame (its
+    image path is whitelisted) and forwards events to a virtual Xbox360 pad
+    (``kasual-vpad``) through ViGEmBus. Steam/games/bundled-apps see only the
+    virtual pad. When Kasual's own UI is active (``stack.suppressed``),
+    forwarding is gated off — the virtual pad goes quiet, eliminating the
+    "cooperative bleed" where two apps navigate the same pad at once.
+
+  * **Cooperative** (either driver missing): the legacy behaviour — ALL apps
+    see gamepad events simultaneously, no virtual pad, no gating. This is the
+    fallback per D4 (all-or-nothing): ViGEm without HidHide would make Steam
+    see *both* pads, which is worse than cooperative.
+
+BTN_MODE handling mirrors the Linux (KDE) model in exclusive mode: a short
+press that didn't recall the Kasual menu is forwarded to the virtual pad as a
+synthetic guide press+release (so Steam still sees its guide button). In
+cooperative mode the synthetic forward is moot (the app already saw the press).
 
 Uses JOY* events (joystick API) which work with most controllers
 including 8BitDo, Xbox, PlayStation (via XInput).
@@ -32,6 +44,7 @@ from domain.input.pad_control import PadControl
 from domain.input.recall import RecallTrigger
 from domain.input.vocabulary import Event, Trigger
 from domain.shared.event_emitter import EventEmitter, Unsubscribe
+from infrastructure.windows.input.driver_probe import DriverCapabilities, probe_drivers
 
 logger = logging.getLogger(__name__)
 
@@ -89,6 +102,25 @@ class WindowsGamepadWatcher(PadControl, GamepadSignals):
         self._connected = False
         self._running = True
         self._joystick = None
+
+        # Driver probe: exclusive mode requires BOTH ViGEmBus and HidHide.
+        # If either is missing, fall back to cooperative (D4 all-or-nothing).
+        self._caps = probe_drivers()
+        self._exclusive = self._caps.exclusive
+        if self._exclusive:
+            logger.info("Gamepad mode: exclusive (ViGEmBus + HidHide)")
+        else:
+            logger.warning(
+                "Gamepad mode: cooperative (ViGEmBus=%s, HidHide=%s) — "
+                "pad bleed to foreground apps will occur. "
+                "Install both drivers for exclusive control.",
+                self._caps.vigembus, self._caps.hidhide,
+            )
+
+        # Exclusive-mode state (None in cooperative mode).
+        self._writer = None        # VigemWriter, set on gamepad connect
+        self._hidhide = None       # HidHideClient, set on gamepad connect
+        self._pad_instance_ids: list[str] = []  # for unhide on disconnect/shutdown
 
         self._btn_mode_emitter = EventEmitter[BtnModePressed]()
         self._connected_emitter = EventEmitter[GamepadConnected]()
@@ -150,6 +182,7 @@ class WindowsGamepadWatcher(PadControl, GamepadSignals):
                         self._joystick = pygame.joystick.Joystick(joy_id)
                         self._joystick.init()
                         logger.info("Joystick initialized: %s", self._joystick.get_name())
+                        self._setup_exclusive()
                         self._emit_connected()
 
                 elif event.type == pygame.JOYDEVICEREMOVED:
@@ -157,6 +190,7 @@ class WindowsGamepadWatcher(PadControl, GamepadSignals):
                     if self._connected:
                         self._connected = False
                         self._joystick = None
+                        self._teardown_exclusive()
                         self._repeat.clear()
                         self._recall.cancel()
                         self._stick = {"x": None, "y": None}
@@ -188,29 +222,40 @@ class WindowsGamepadWatcher(PadControl, GamepadSignals):
         if button == BTN_MODE:
             # CLICK / Kasual active → recall now; HOLD_1S app → arm the hold.
             self._recall.press(kasual_active=self._stack.suppressed, trigger=self._app_trigger)
-        elif button == BTN_SOUTH:
-            self._dispatch(Event.SELECT)
-        elif button == BTN_EAST:
-            self._dispatch(Event.CANCEL)
-        elif button == BTN_NORTH:
-            self._dispatch(Event.CLOSE)
-        elif button == BTN_START:
-            if BTN_SELECT in self._held:
-                self._bridge.btn.emit()
-            else:
-                self._dispatch(Event.MANAGE)
+        else:
+            self._forward_button(button, 1)
+            if button == BTN_SOUTH:
+                self._dispatch(Event.SELECT)
+            elif button == BTN_EAST:
+                self._dispatch(Event.CANCEL)
+            elif button == BTN_NORTH:
+                self._dispatch(Event.CLOSE)
+            elif button == BTN_START:
+                if BTN_SELECT in self._held:
+                    self._bridge.btn.emit()
+                else:
+                    self._dispatch(Event.MANAGE)
 
     def _handle_button_up(self, button: int):
         """Handle button release."""
         self._held.discard(button)
         if button == BTN_MODE:
-            # Cancels a pending hold. The short-press "forward to the app" the
-            # return value reports is moot on Windows — the controller is
-            # cooperative, so the app already saw the guide press itself.
-            self._recall.release(suppressed=self._stack.suppressed)
+            # Cancels a pending hold. The return value reports whether a
+            # short-press synthetic forward to the app is due. In cooperative
+            # mode this is moot (the app already saw the press). In exclusive
+            # mode the app never saw the physical press (HidHide hid it), so
+            # we must forward a synthetic guide press+release to ViGEm —
+            # mirroring the Linux evdev BTN_MODE synthetic forward.
+            forward = self._recall.release(suppressed=self._stack.suppressed)
+            if forward and self._writer is not None:
+                self._writer.set_guide(True)
+                self._writer.set_guide(False)
+        else:
+            self._forward_button(button, 0)
 
     def _handle_axis(self, axis: int, value: float):
         """Handle analog stick movement."""
+        self._forward_axis(axis, value)
         if axis == 0:
             self._handle_stick_axis("x", value, Event.LEFT, Event.RIGHT)
         elif axis == 1:
@@ -242,6 +287,7 @@ class WindowsGamepadWatcher(PadControl, GamepadSignals):
 
         x, y = value
         logger.debug("Hat motion: hat=%d, x=%d, y=%d", hat, x, y)
+        self._forward_hat(x, y)
         new_x = None
         new_y = None
 
@@ -270,6 +316,66 @@ class WindowsGamepadWatcher(PadControl, GamepadSignals):
         elif y == 0 and self._hat_state["y"] is not None:
             self._repeat.release(self._hat_state["y"])
             self._hat_state["y"] = None
+
+    # ── Exclusive-mode forwarding to ViGEm ─────────────────────────────────
+
+    def _forward_button(self, button: int, value: int) -> None:
+        """Forward a button event to the virtual pad (exclusive mode only).
+
+        Gated by ``not self._stack.suppressed``: when Kasual's UI is active,
+        the virtual pad goes quiet so foreground apps don't react. BTN_MODE is
+        never forwarded here — it goes through the synthetic guide pulse in
+        ``_handle_button_up``.
+        """
+        if self._writer is not None and not self._stack.suppressed:
+            self._writer.write_button(button, value)
+
+    def _forward_axis(self, axis: int, value: float) -> None:
+        """Forward an analog axis to the virtual pad (exclusive mode only)."""
+        if self._writer is not None and not self._stack.suppressed:
+            self._writer.write_axis(axis, value)
+
+    def _forward_hat(self, x: int, y: int) -> None:
+        """Forward the D-pad to the virtual pad (exclusive mode only)."""
+        if self._writer is not None and not self._stack.suppressed:
+            self._writer.write_hat(x, y)
+
+    def _setup_exclusive(self) -> None:
+        """Set up HidHide + ViGEm when a gamepad connects (exclusive mode)."""
+        if not self._exclusive:
+            return
+        try:
+            from infrastructure.windows.input.hidhide import HidHideClient
+            from infrastructure.windows.input.vigembus_writer import VigemWriter
+
+            self._hidhide = HidHideClient()
+            self._hidhide.register_self()
+            self._pad_instance_ids = HidHideClient.resolve_gamepad_instance_ids()
+            for instance_id in self._pad_instance_ids:
+                self._hidhide.hide_device(instance_id)
+
+            self._writer = VigemWriter(name="kasual-vpad")
+            self._writer.connect()
+        except Exception as exc:
+            logger.warning("Exclusive mode setup failed, falling back: %s", exc)
+            self._teardown_exclusive()
+
+    def _teardown_exclusive(self) -> None:
+        """Tear down HidHide + ViGEm when a gamepad disconnects."""
+        if self._writer is not None:
+            try:
+                self._writer.disconnect()
+            except Exception:
+                pass
+            self._writer = None
+        if self._hidhide is not None:
+            try:
+                self._hidhide.unhide_all()
+                self._hidhide.close()
+            except Exception:
+                pass
+            self._hidhide = None
+        self._pad_instance_ids = []
 
     def _dispatch(self, event: str):
         """Queue event for delivery on the Qt main thread."""
@@ -335,14 +441,16 @@ class WindowsGamepadWatcher(PadControl, GamepadSignals):
 
     def refresh(self) -> None:
         """Reinitialize joystick subsystem."""
+        self._teardown_exclusive()
         self._repeat.clear()
         self._recall.cancel()
         pygame.joystick.quit()
         pygame.joystick.init()
 
     def shutdown(self):
-        """Stop the watcher thread."""
+        """Stop the watcher thread and clean up exclusive-mode resources."""
         self._running = False
         if self._thread.is_alive():
             self._thread.join(timeout=1.0)
+        self._teardown_exclusive()
         pygame.quit()

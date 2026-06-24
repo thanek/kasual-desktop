@@ -55,7 +55,7 @@ if _IS_WINDOWS:
     # is pumped by SDL's video subsystem, so display.init() is required for
     # JOYBUTTONDOWN / JOYAXISMOTION / JOYHATMOTION to be delivered. Doing this
     # at module level (rather than in find_pad) ensures it runs on the main
-    # thread, mirroring infrastructure.windows.gamepad_watcher.
+    # thread, mirroring infrastructure.windows.input.gamepad_watcher.
     pygame.init()
     pygame.joystick.init()
     pygame.display.init()
@@ -85,16 +85,34 @@ if _IS_WINDOWS:
             self._joy = joystick
 
     def find_pad(names: list[str], timeout: float = 10.0) -> _PygamePad:
-        """Find the first connected gamepad via pygame.
+        """Find a connected gamepad via pygame, preferring a named virtual pad.
 
-        On Windows the controller is cooperative (Kasual doesn't grab it), so
-        we just take the first joystick. The *names* argument is ignored —
-        we don't filter by device name because XInput doesn't expose evdev
-        names. *timeout* is respected for the wait-for-connect case.
+        In exclusive mode (Kasual with ViGEmBus + HidHide), the physical pad is
+        hidden from this process (``pythonw.exe`` is not whitelisted) and only
+        the virtual ``kasual-vpad`` is visible. We scan all joysticks and pick
+        the first whose name matches an entry in *names* (the virtual pad name
+        is listed first, so it wins over the physical pad name).
+
+        In cooperative mode (no drivers), no virtual pad exists, so the name
+        search fails and we fall back to ``Joystick(0)`` — the physical pad,
+        which is all that's visible. *timeout* is respected for the
+        wait-for-connect case.
         """
         deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
-            if pygame.joystick.get_count() > 0:
+            count = pygame.joystick.get_count()
+            if count > 0:
+                # Try to find a named match (virtual pad in exclusive mode).
+                for i in range(count):
+                    try:
+                        joy = pygame.joystick.Joystick(i)
+                        name = joy.get_name()
+                        if name in names:
+                            joy.init()
+                            return _PygamePad(joy)
+                    except Exception:
+                        pass
+                # No name match → cooperative mode, take the first joystick.
                 joy = pygame.joystick.Joystick(0)
                 joy.init()
                 return _PygamePad(joy)

@@ -76,7 +76,7 @@ def main():
     version = get_version()
 
     # ── OS-specific adapters ────────────────────────────────────────────────
-    from infrastructure.windows.gamepad_watcher import WindowsGamepadWatcher
+    from infrastructure.windows.input.gamepad_watcher import WindowsGamepadWatcher
     from infrastructure.windows.window_manager import WindowsWindowManager
     from infrastructure.windows.wallpaper import WindowsSystemWallpaper
     from infrastructure.windows.app_manager import WindowsAppManager

@@ -16,7 +16,7 @@ from PyQt6.QtWidgets import QApplication
 from application import Application
 from version import get_version
 from infrastructure.common.audio.feedback import SoundFeedback
-from infrastructure.kde.gamepad_watcher import GamepadWatcher
+from infrastructure.kde.input.gamepad_watcher import GamepadWatcher
 from infrastructure.common.qt.desktop import build_desktop
 from infrastructure.kde.qt.desktop.deferred_hide import DeferredHide
 from infrastructure.kde.qt.desktop.surface import LayerShellSurface
