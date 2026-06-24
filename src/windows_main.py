@@ -78,6 +78,14 @@ def main():
         sys.exit(0)
     app.aboutToQuit.connect(guard.release)
 
+    # Localization: load the system-locale .qm and route domain.shared.i18n
+    # through Qt — the same call the Linux main.py makes. Done before any widget
+    # is built so every string resolves translated. The in-process log viewer
+    # (LogWindow) shares this QApplication, so one call covers it too (unlike
+    # Linux, where the log viewer is a separate process that translates itself).
+    from infrastructure.common.qt.i18n import install_translations
+    install_translations(app, str(Path(__file__).parent.parent / "locale"))
+
     from version import get_version
     version = get_version()
 
