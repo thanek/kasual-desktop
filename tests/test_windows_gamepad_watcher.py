@@ -389,6 +389,25 @@ class TestConnectionState:
         mock_watcher._on_connected_main()
         assert len(got) == 1
 
+    def test_on_connected_replays_to_late_subscriber(self, mock_watcher, qapp):
+        # A subscriber that registers after the pad already connected (e.g. the
+        # controller wired only after onboarding via --provision) still learns the
+        # current state via a deferred replay — otherwise the Desktop never
+        # surfaces. Mirrors the Linux watcher's on_connected replay.
+        mock_watcher._connected = True
+        got = []
+        mock_watcher.on_connected(lambda evt: got.append(evt))
+        assert got == []                 # deferred onto the event loop, not sync
+        qapp.processEvents()
+        assert len(got) == 1
+
+    def test_on_connected_no_replay_when_disconnected(self, mock_watcher, qapp):
+        # No pad connected → a fresh subscriber gets nothing until a real connect.
+        got = []
+        mock_watcher.on_connected(lambda evt: got.append(evt))
+        qapp.processEvents()
+        assert got == []
+
     def test_on_disconnected_delivers_event(self, mock_watcher, qapp):
         got = []
         mock_watcher.on_disconnected(lambda evt: got.append(evt))

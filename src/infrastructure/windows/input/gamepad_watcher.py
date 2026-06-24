@@ -18,7 +18,7 @@ import threading
 from typing import Callable
 
 import pygame
-from PyQt6.QtCore import QObject, pyqtSignal
+from PyQt6.QtCore import QObject, QTimer, pyqtSignal
 
 from domain.input.gamepad_events import (
     BtnModePressed,
@@ -300,7 +300,14 @@ class WindowsGamepadWatcher(PadControl, GamepadSignals):
         return self._btn_mode_emitter.subscribe(lambda _evt: handler())
 
     def on_connected(self, handler: Callable[[GamepadConnected], None]) -> Unsubscribe:
-        return self._connected_emitter.subscribe(handler)
+        unsubscribe = self._connected_emitter.subscribe(handler)
+        # Replay the current state to a late subscriber: if the pad was already
+        # connected before this subscription, the connect signal fired with no
+        # listener (e.g. the controller is wired only after onboarding via
+        # --provision), so deliver it now, deferred onto the event loop.
+        if self._connected:
+            QTimer.singleShot(0, lambda: handler(GamepadConnected()))
+        return unsubscribe
 
     def on_disconnected(self, handler: Callable[[GamepadDisconnected], None]) -> Unsubscribe:
         return self._disconnected_emitter.subscribe(handler)
