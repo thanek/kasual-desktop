@@ -256,6 +256,71 @@ _hid.HidD_GetAttributes.argtypes = [wintypes.HANDLE, ctypes.c_void_p]
 _hid.HidD_GetHidGuid.restype = None
 _hid.HidD_GetHidGuid.argtypes = [ctypes.c_void_p]
 
+# HidD_GetPreparsedData / HidD_FreePreparsedData / HidP_GetCaps — used to read a
+# device's HID usage page/usage so we hide ONLY gamepads, never mice/keyboards
+# that happen to share a vendor ID (e.g. Logitech VID_046D, Microsoft VID_045E).
+_hid.HidD_GetPreparsedData.restype = wintypes.BOOLEAN
+_hid.HidD_GetPreparsedData.argtypes = [wintypes.HANDLE, ctypes.POINTER(ctypes.c_void_p)]
+
+_hid.HidD_FreePreparsedData.restype = wintypes.BOOLEAN
+_hid.HidD_FreePreparsedData.argtypes = [ctypes.c_void_p]
+
+_hid.HidP_GetCaps.restype = ctypes.c_long  # NTSTATUS
+_hid.HidP_GetCaps.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
+
+# SetupAPI device-interface enumeration (needed to open each HID device by its
+# interface path so we can interrogate its usage page).
+_setupapi.SetupDiEnumDeviceInterfaces.restype = wintypes.BOOL
+_setupapi.SetupDiEnumDeviceInterfaces.argtypes = [
+    ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, wintypes.DWORD, ctypes.c_void_p,
+]
+
+_setupapi.SetupDiGetDeviceInterfaceDetailW.restype = wintypes.BOOL
+_setupapi.SetupDiGetDeviceInterfaceDetailW.argtypes = [
+    ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, wintypes.DWORD,
+    ctypes.POINTER(wintypes.DWORD), ctypes.c_void_p,
+]
+
+# HID usage page/usage for game controllers (HID Usage Tables §4 Generic Desktop).
+HID_USAGE_PAGE_GENERIC = 0x01
+HID_USAGE_JOYSTICK     = 0x04
+HID_USAGE_GAMEPAD      = 0x05
+HIDP_STATUS_SUCCESS    = 0x00110000  # NTSTATUS returned by HidP_GetCaps on success
+
+
+class _SP_DEVICE_INTERFACE_DATA(ctypes.Structure):
+    _fields_ = [
+        ("cbSize", wintypes.DWORD),
+        ("InterfaceClassGuid", wintypes.BYTE * 16),
+        ("Flags", wintypes.DWORD),
+        ("Reserved", ctypes.c_void_p),  # ULONG_PTR
+    ]
+
+
+class _HIDP_CAPS(ctypes.Structure):
+    """HID capability struct (from hidpi.h). Only Usage/UsagePage are read, but
+    the full layout must be declared so HidP_GetCaps does not overflow the
+    buffer it writes into."""
+
+    _fields_ = [
+        ("Usage", wintypes.USHORT),
+        ("UsagePage", wintypes.USHORT),
+        ("InputReportByteLength", wintypes.USHORT),
+        ("OutputReportByteLength", wintypes.USHORT),
+        ("FeatureReportByteLength", wintypes.USHORT),
+        ("Reserved", wintypes.USHORT * 17),
+        ("NumberLinkCollectionNodes", wintypes.USHORT),
+        ("NumberInputButtonCaps", wintypes.USHORT),
+        ("NumberInputValueCaps", wintypes.USHORT),
+        ("NumberInputDataIndices", wintypes.USHORT),
+        ("NumberOutputButtonCaps", wintypes.USHORT),
+        ("NumberOutputValueCaps", wintypes.USHORT),
+        ("NumberOutputDataIndices", wintypes.USHORT),
+        ("NumberFeatureButtonCaps", wintypes.USHORT),
+        ("NumberFeatureValueCaps", wintypes.USHORT),
+        ("NumberFeatureDataIndices", wintypes.USHORT),
+    ]
+
 
 # SP_DEVINFO_DATA
 class _SP_DEVINFO_DATA(ctypes.Structure):
@@ -273,9 +338,15 @@ def _enum_hid_gamepads() -> list[str]:
     Returns their device instance paths (e.g.
     ``HID\\VID_045E&PID_02FD&IG_00\\7&1A2B3C4D&0&0000``).
 
-    Uses SetupAPI to enumerate the HID class, then opens each device to check
-    its HID usage page/usage. Filters to usage page 0x01 (Generic Desktop) and
-    usage 0x04 (Joystick) or 0x05 (Gamepad).
+    Uses SetupAPI to enumerate the HID class, then opens each device interface
+    and reads its HID usage page/usage via ``HidP_GetCaps``. Filters to usage
+    page 0x01 (Generic Desktop) and usage 0x04 (Joystick) or 0x05 (Gamepad).
+
+    This authoritative usage-page check (rather than a vendor-ID guess) is what
+    keeps us from ever blacklisting a mouse or keyboard that shares a vendor ID
+    with a gamepad maker (Logitech, Microsoft, etc.) — hiding those would cut
+    the user's pointer/keyboard off from every non-whitelisted process. A device
+    we cannot open or interrogate is skipped (fail-safe: never hide the unknown).
     """
     # Get the HID interface GUID
     guid_buf = (wintypes.BYTE * 16)()
@@ -292,19 +363,88 @@ def _enum_hid_gamepads() -> list[str]:
     try:
         index = 0
         while True:
+            iface = _SP_DEVICE_INTERFACE_DATA()
+            iface.cbSize = ctypes.sizeof(_SP_DEVICE_INTERFACE_DATA)
+            if not _setupapi.SetupDiEnumDeviceInterfaces(
+                devs, None, ctypes.byref(guid_buf), index, ctypes.byref(iface),
+            ):
+                break  # No more interfaces
+            index += 1
+
             dev_info = _SP_DEVINFO_DATA()
             dev_info.cbSize = ctypes.sizeof(_SP_DEVINFO_DATA)
-            if not _setupapi.SetupDiEnumDeviceInfo(devs, index, ctypes.byref(dev_info)):
-                break  # No more devices
+            device_path = _get_interface_path(devs, iface, dev_info)
+            if not device_path:
+                continue
 
-            instance_path = _get_device_instance_id(devs, dev_info)
-            if instance_path and _is_gamepad_device(instance_path):
-                instance_paths.append(instance_path)
-            index += 1
+            usage = _hid_usage(device_path)
+            if usage is None:
+                continue  # Can't interrogate → don't hide it.
+            usage_page, usage_id = usage
+            if usage_page == HID_USAGE_PAGE_GENERIC and usage_id in (
+                HID_USAGE_JOYSTICK, HID_USAGE_GAMEPAD,
+            ):
+                instance_path = _get_device_instance_id(devs, dev_info)
+                if instance_path:
+                    instance_paths.append(instance_path)
     finally:
         _setupapi.SetupDiDestroyDeviceInfoList(devs)
 
     return instance_paths
+
+
+def _get_interface_path(devs: int, iface: _SP_DEVICE_INTERFACE_DATA,
+                        dev_info: _SP_DEVINFO_DATA) -> str:
+    """Resolve a device-interface element to its openable device path.
+
+    Also fills *dev_info* with the owning device node, so the caller can read
+    its instance id with :func:`_get_device_instance_id`.
+    """
+    req = wintypes.DWORD(0)
+    # First call: query the required buffer size.
+    _setupapi.SetupDiGetDeviceInterfaceDetailW(
+        devs, ctypes.byref(iface), None, 0, ctypes.byref(req), None,
+    )
+    if req.value == 0:
+        return ""
+    buf = ctypes.create_string_buffer(req.value)
+    # cbSize is the size of the FIXED part of SP_DEVICE_INTERFACE_DETAIL_DATA_W:
+    # 8 on 64-bit (alignment quirk), 6 on 32-bit. The DevicePath string itself
+    # still starts immediately after the DWORD, at byte offset 4.
+    cb = 8 if ctypes.sizeof(ctypes.c_void_p) == 8 else 6
+    ctypes.cast(buf, ctypes.POINTER(wintypes.DWORD))[0] = cb
+    if not _setupapi.SetupDiGetDeviceInterfaceDetailW(
+        devs, ctypes.byref(iface), buf, req.value, None, ctypes.byref(dev_info),
+    ):
+        return ""
+    return ctypes.wstring_at(ctypes.addressof(buf) + ctypes.sizeof(wintypes.DWORD))
+
+
+def _hid_usage(device_path: str) -> tuple[int, int] | None:
+    """Return ``(usage_page, usage)`` for a HID device interface path.
+
+    Opens the device with query-only access (0) and shared read/write so it
+    never disturbs a device another process already holds. Returns ``None`` on
+    any failure (the device cannot be opened/parsed), so callers fail safe.
+    """
+    handle = _kernel32.CreateFileW(
+        device_path, 0, FILE_SHARE_ALL, None, OPEN_EXISTING, 0, None,
+    )
+    if handle == INVALID_HANDLE_VALUE:
+        return None
+    try:
+        preparsed = ctypes.c_void_p(0)
+        if not _hid.HidD_GetPreparsedData(handle, ctypes.byref(preparsed)):
+            return None
+        try:
+            caps = _HIDP_CAPS()
+            if _hid.HidP_GetCaps(preparsed, ctypes.byref(caps)) != HIDP_STATUS_SUCCESS:
+                return None
+            return (caps.UsagePage, caps.Usage)
+        finally:
+            _hid.HidD_FreePreparsedData(preparsed)
+    finally:
+        _kernel32.CloseHandle(handle)
 
 
 def _get_device_instance_id(devs: int, dev_info: _SP_DEVINFO_DATA) -> str:
@@ -325,12 +465,13 @@ def _get_device_instance_id(devs: int, dev_info: _SP_DEVINFO_DATA) -> str:
 
 
 def _is_gamepad_device(instance_path: str) -> bool:
-    """Heuristic: does this HID device instance path look like a gamepad?
+    """Coarse heuristic: does this HID instance path look like a gamepad?
 
-    Checks for the ``HID\\`` prefix (HID-class device) and known gamepad vendor
-    IDs in the path. This is simpler than opening each device for HID capability
-    interrogation and is sufficient for the common case. Refined in a future
-    iteration to use ``HidD_GetAttributes`` + usage-page checking if needed.
+    Checks for the ``HID\\`` prefix and a known gamepad vendor ID. This is NOT
+    the device-hiding gate — :func:`_enum_hid_gamepads` interrogates the real
+    HID usage page instead, because a vendor ID alone is ambiguous (Logitech and
+    Microsoft also make the mice/keyboards we must never hide). Kept as a cheap
+    secondary check and for diagnostics.
     """
     upper = instance_path.upper()
     if not upper.startswith("HID\\"):
@@ -392,13 +533,27 @@ class HidHideClient:
             self._handle = None
 
     def ping(self) -> bool:
-        """Check if the HidHide driver is reachable (for probe_drivers)."""
+        """Check if the HidHide driver is reachable (for probe_drivers).
+
+        Closes the handle before returning: HidHide's control device allows only
+        a single open handle, so a leaked probe handle makes the later
+        register/hide open fail with ERROR_ACCESS_DENIED.
+        """
         try:
             self._open()
             self.get_active()
             return True
         except Exception:
             return False
+        finally:
+            self.close()
+
+    def __del__(self):
+        # Defensive: never leave the single-open control handle dangling.
+        try:
+            self.close()
+        except Exception:
+            pass
 
     # ── Whitelist (process image paths) ──────────────────────────────────────
 

@@ -1,15 +1,16 @@
 """Unit tests for WindowsGamepadWatcher (pygame implementation).
 
 Mirror of the Linux ``test_gamepad_watcher.py``: same handler-stack contract,
-same navigation-event mapping, but the source events come from pygame
-(``JOYBUTTONDOWN``, ``JOYAXISMOTION``, ``JOYHATMOTION``) instead of evdev.
+same navigation-event mapping, but the source events come from pygame's SDL
+GameController API (``CONTROLLERBUTTONDOWN``, ``CONTROLLERAXISMOTION``) instead
+of evdev.
 
 Tests:
   - handler stack (push/pop, LIFO, top_handler, inject)
   - button mapping: SOUTH→SELECT, EAST→CANCEL, NORTH→CLOSE, START→MANAGE
   - START+SELECT held → BTN_MODE
-  - stick axis: threshold/hysteresis (_handle_stick_axis, _handle_axis)
-  - D-pad via _handle_hat (pygame hat value tuple)
+  - stick axis: threshold/hysteresis (_handle_stick_axis, _handle_axis), int16
+  - D-pad as discrete buttons (DPAD_* → directions; D-pad-up ≠ overlay)
   - BTN_MODE recall trigger (CLICK vs HOLD_1S) — domain logic lives in
     RecallTrigger (covered by test_recall_trigger.py); here we verify the
     watcher wires set_app_btn_mode_trigger and that recall emits btn_mode
@@ -33,6 +34,7 @@ if sys.platform != "win32":
 
 from infrastructure.windows.input.gamepad_watcher import (
     BTN_EAST, BTN_MODE, BTN_NORTH, BTN_SELECT, BTN_SOUTH, BTN_START, BTN_WEST,
+    DPAD_UP, DPAD_DOWN, DPAD_LEFT, DPAD_RIGHT,
     STICK_RESET, STICK_THRESHOLD,
     WindowsGamepadWatcher,
 )
@@ -65,6 +67,7 @@ def mock_watcher(qapp):
          patch("infrastructure.windows.input.gamepad_watcher.pygame.init"), \
          patch("infrastructure.windows.input.gamepad_watcher.pygame.joystick.init"), \
          patch("infrastructure.windows.input.gamepad_watcher.pygame.display.init"), \
+         patch("infrastructure.windows.input.gamepad_watcher.game_controller.init"), \
          patch("infrastructure.windows.input.gamepad_watcher.probe_drivers", _cooperative_caps):
         gw = WindowsGamepadWatcher()
     yield gw
@@ -208,10 +211,12 @@ class TestButtonMapping:
 # ── Stick analogowy — threshold / hysteresis ──────────────────────────────────
 
 class TestStickAxis:
+    # SDL GameController axes are int16 (-32768..32767); 28000 is past the
+    # threshold, 12000 sits in the dead zone, 2000 is below the reset line.
     def test_positive_x_emits_right(self, mock_watcher, qapp):
         received = []
         mock_watcher.push_handler(lambda e: received.append(e))
-        mock_watcher._handle_axis(0, 0.9)   # axis 0 = x
+        mock_watcher._handle_axis(0, 28000)   # axis 0 = x
         qapp.processEvents()
         assert received == [Event.RIGHT]
         assert mock_watcher._stick["x"] == Event.RIGHT
@@ -219,49 +224,49 @@ class TestStickAxis:
     def test_negative_x_emits_left(self, mock_watcher, qapp):
         received = []
         mock_watcher.push_handler(lambda e: received.append(e))
-        mock_watcher._handle_axis(0, -0.9)
+        mock_watcher._handle_axis(0, -28000)
         qapp.processEvents()
         assert received == [Event.LEFT]
 
     def test_positive_y_emits_down(self, mock_watcher, qapp):
-        # pygame axis 1: positive = down (joystick convention).
+        # SDL axis 1: positive = down.
         received = []
         mock_watcher.push_handler(lambda e: received.append(e))
-        mock_watcher._handle_axis(1, 0.9)
+        mock_watcher._handle_axis(1, 28000)
         qapp.processEvents()
         assert received == [Event.DOWN]
 
     def test_negative_y_emits_up(self, mock_watcher, qapp):
         received = []
         mock_watcher.push_handler(lambda e: received.append(e))
-        mock_watcher._handle_axis(1, -0.9)
+        mock_watcher._handle_axis(1, -28000)
         qapp.processEvents()
         assert received == [Event.UP]
 
     def test_no_repeat_same_direction(self, mock_watcher, qapp):
         received = []
         mock_watcher.push_handler(lambda e: received.append(e))
-        mock_watcher._handle_axis(0, 0.9)
+        mock_watcher._handle_axis(0, 28000)
         qapp.processEvents()
-        mock_watcher._handle_axis(0, 0.95)   # still right, no new event
+        mock_watcher._handle_axis(0, 30000)   # still right, no new event
         qapp.processEvents()
         assert received == [Event.RIGHT]
 
     def test_reset_below_hysteresis(self, mock_watcher, qapp):
-        mock_watcher._handle_axis(0, 0.9)
+        mock_watcher._handle_axis(0, 28000)
         qapp.processEvents()
         received = []
         mock_watcher.push_handler(lambda e: received.append(e))
-        mock_watcher._handle_axis(0, 0.05)   # below STICK_RESET
+        mock_watcher._handle_axis(0, 2000)   # below STICK_RESET
         qapp.processEvents()
         assert received == []   # reset doesn't emit, only clears state
         assert mock_watcher._stick["x"] is None
 
     def test_dead_zone_between_reset_and_threshold(self, mock_watcher, qapp):
-        # 0.3 is > STICK_RESET (0.1) but < STICK_THRESHOLD (0.5) → no event.
+        # 12000 is > STICK_RESET (8000) but < STICK_THRESHOLD (16000) → no event.
         received = []
         mock_watcher.push_handler(lambda e: received.append(e))
-        mock_watcher._handle_axis(0, 0.3)
+        mock_watcher._handle_axis(0, 12000)
         qapp.processEvents()
         assert received == []
         assert mock_watcher._stick["x"] is None
@@ -269,67 +274,57 @@ class TestStickAxis:
     def test_axis_2_and_3_ignored(self, mock_watcher, qapp):
         received = []
         mock_watcher.push_handler(lambda e: received.append(e))
-        mock_watcher._handle_axis(2, 0.9)
-        mock_watcher._handle_axis(3, 0.9)
+        mock_watcher._handle_axis(2, 28000)
+        mock_watcher._handle_axis(3, 28000)
         qapp.processEvents()
         assert received == []
 
 
-# ── D-pad (hat) ───────────────────────────────────────────────────────────────
+# ── D-pad (discrete buttons via the GameController API) ────────────────────────
 
-class TestHat:
-    def test_hat_left(self, mock_watcher, qapp):
+class TestDpad:
+    def test_dpad_left(self, mock_watcher, qapp):
         received = []
         mock_watcher.push_handler(lambda e: received.append(e))
-        mock_watcher._handle_hat(0, (-1, 0))
+        mock_watcher._handle_button_down(DPAD_LEFT)
         qapp.processEvents()
         assert received == [Event.LEFT]
 
-    def test_hat_right(self, mock_watcher, qapp):
+    def test_dpad_right(self, mock_watcher, qapp):
         received = []
         mock_watcher.push_handler(lambda e: received.append(e))
-        mock_watcher._handle_hat(0, (1, 0))
+        mock_watcher._handle_button_down(DPAD_RIGHT)
         qapp.processEvents()
         assert received == [Event.RIGHT]
 
-    def test_hat_down(self, mock_watcher, qapp):
-        # pygame hat y: -1 = down.
+    def test_dpad_down(self, mock_watcher, qapp):
         received = []
         mock_watcher.push_handler(lambda e: received.append(e))
-        mock_watcher._handle_hat(0, (0, -1))
+        mock_watcher._handle_button_down(DPAD_DOWN)
         qapp.processEvents()
         assert received == [Event.DOWN]
 
-    def test_hat_up(self, mock_watcher, qapp):
+    def test_dpad_up_emits_up_not_btn_mode(self, mock_watcher, qapp):
+        # Regression: D-pad-up must NOT open the overlay. On an 8BitDo X-input
+        # pad the raw joystick index for D-pad-up collided with the guide index,
+        # which is exactly what the GameController API fixes.
         received = []
+        fired = []
         mock_watcher.push_handler(lambda e: received.append(e))
-        mock_watcher._handle_hat(0, (0, 1))
+        mock_watcher.on_btn_mode(lambda: fired.append(True))
+        mock_watcher._handle_button_down(DPAD_UP)
         qapp.processEvents()
         assert received == [Event.UP]
+        assert fired == []
 
-    def test_hat_center_clears_state(self, mock_watcher, qapp):
-        mock_watcher._handle_hat(0, (-1, 0))
+    def test_dpad_release_stops_repeat(self, mock_watcher, qapp):
+        mock_watcher._handle_button_down(DPAD_LEFT)
         qapp.processEvents()
         received = []
         mock_watcher.push_handler(lambda e: received.append(e))
-        mock_watcher._handle_hat(0, (0, 0))
+        mock_watcher._handle_button_up(DPAD_LEFT)
         qapp.processEvents()
-        assert received == []   # center doesn't emit
-        assert mock_watcher._hat_state["x"] is None
-
-    def test_hat_nonzero_index_ignored(self, mock_watcher, qapp):
-        received = []
-        mock_watcher.push_handler(lambda e: received.append(e))
-        mock_watcher._handle_hat(1, (-1, 0))
-        qapp.processEvents()
-        assert received == []
-
-    def test_diagonal_emits_both(self, mock_watcher, qapp):
-        received = []
-        mock_watcher.push_handler(lambda e: received.append(e))
-        mock_watcher._handle_hat(0, (-1, 1))   # left + up
-        qapp.processEvents()
-        assert Event.LEFT in received and Event.UP in received
+        assert received == []   # release doesn't emit a nav event
 
 
 # ── BTN_MODE — logika triggera ─────────────────────────────────────────────────
@@ -414,15 +409,20 @@ class TestConnectionState:
 # ── refresh / shutdown ────────────────────────────────────────────────────────
 
 class TestLifecycle:
-    def test_refresh_reinits_joystick_subsystem(self, mock_watcher):
-        with patch("infrastructure.windows.input.gamepad_watcher.pygame.joystick") as js:
+    def test_refresh_reinits_controller_subsystem(self, mock_watcher):
+        with patch("infrastructure.windows.input.gamepad_watcher.pygame.joystick") as js, \
+             patch("infrastructure.windows.input.gamepad_watcher.game_controller") as gc:
             mock_watcher.refresh()
             js.quit.assert_called_once()
             js.init.assert_called_once()
+            gc.quit.assert_called_once()
+            gc.init.assert_called_once()
 
     def test_refresh_clears_repeat_and_recall(self, mock_watcher):
         mock_watcher._repeat.press(Event.UP)
-        mock_watcher.refresh()
+        with patch("infrastructure.windows.input.gamepad_watcher.pygame.joystick"), \
+             patch("infrastructure.windows.input.gamepad_watcher.game_controller"):
+            mock_watcher.refresh()
         # No exception means the repeat/recall were cleared; their internal
         # state is domain-tested in test_direction_repeat / test_recall_trigger.
 
@@ -528,25 +528,25 @@ class TestExclusiveForwarding:
 
     def test_axis_forwarded_when_not_suppressed(self, mock_watcher, qapp):
         gw = self._exclusive_watcher(mock_watcher)
-        gw._handle_axis(0, 0.9)
-        gw._writer.write_axis.assert_called_once_with(0, 0.9)
+        gw._handle_axis(0, 28000)
+        gw._writer.write_axis.assert_called_once_with(0, 28000)
 
     def test_axis_not_forwarded_when_suppressed(self, mock_watcher, qapp):
         gw = self._exclusive_watcher(mock_watcher)
         gw.push_handler(lambda e: None)
-        gw._handle_axis(0, 0.9)
+        gw._handle_axis(0, 28000)
         gw._writer.write_axis.assert_not_called()
 
-    def test_hat_forwarded_when_not_suppressed(self, mock_watcher, qapp):
+    def test_dpad_forwarded_when_not_suppressed(self, mock_watcher, qapp):
         gw = self._exclusive_watcher(mock_watcher)
-        gw._handle_hat(0, (-1, 0))
-        gw._writer.write_hat.assert_called_once_with(-1, 0)
+        gw._handle_button_down(DPAD_LEFT)
+        gw._writer.write_button.assert_called_once_with(DPAD_LEFT, 1)
 
-    def test_hat_not_forwarded_when_suppressed(self, mock_watcher, qapp):
+    def test_dpad_not_forwarded_when_suppressed(self, mock_watcher, qapp):
         gw = self._exclusive_watcher(mock_watcher)
         gw.push_handler(lambda e: None)
-        gw._handle_hat(0, (-1, 0))
-        gw._writer.write_hat.assert_not_called()
+        gw._handle_button_down(DPAD_LEFT)
+        gw._writer.write_button.assert_not_called()
 
 
 class _ImmediateTimer:
@@ -591,3 +591,113 @@ class TestCooperativeFallback:
     def test_both_present_enables_exclusive(self, qapp):
         caps = DriverCapabilities(vigembus=True, hidhide=True)
         assert caps.exclusive is True
+
+
+# ── Exclusive-mode setup ──────────────────────────────────────────────────────
+
+class TestExclusiveSetup:
+    """_setup_exclusive must hide the physical pad and activate the cloak only
+    when a real HID gamepad node exists; otherwise it falls back to cooperative
+    (no virtual pad) so an XInput-only pad isn't duplicated."""
+
+    def _make_exclusive(self, mock_watcher):
+        mock_watcher._exclusive = True
+        return mock_watcher
+
+    def test_setup_falls_back_when_no_hid_node(self, mock_watcher):
+        gw = self._make_exclusive(mock_watcher)
+        with patch("infrastructure.windows.input.hidhide.HidHideClient") as HH, \
+             patch("infrastructure.windows.input.vigembus_writer.VigemWriter") as VW:
+            HH.resolve_gamepad_instance_ids.return_value = []
+            gw._setup_exclusive()
+        # No node to hide → no virtual pad created (avoids a duplicate XInput pad).
+        assert gw._writer is None
+        VW.assert_not_called()
+
+    def test_setup_hides_activates_and_connects_when_node_present(self, mock_watcher):
+        gw = self._make_exclusive(mock_watcher)
+        instance = r"HID\VID_054C&PID_0CE6\7&1"   # DInput pad, no IG_
+        hh = MagicMock()
+        with patch("infrastructure.windows.input.hidhide.HidHideClient") as HH, \
+             patch("infrastructure.windows.input.vigembus_writer.VigemWriter") as VW:
+            HH.resolve_gamepad_instance_ids.return_value = [instance]
+            HH.return_value = hh
+            gw._setup_exclusive()
+        hh.register_self.assert_called_once()
+        hh.set_active.assert_called_once_with(True)   # cloak must be activated
+        hh.hide_device.assert_called_once_with(instance)
+        VW.return_value.connect.assert_called_once()
+        assert gw._writer is VW.return_value
+
+    def test_setup_falls_back_for_xinput_pad(self, mock_watcher):
+        # An XInput-backed pad (HID path contains IG_) can't be hidden from the
+        # XInput API, so exclusive must fall back rather than create a 2nd pad.
+        gw = self._make_exclusive(mock_watcher)
+        with patch("infrastructure.windows.input.hidhide.HidHideClient") as HH, \
+             patch("infrastructure.windows.input.vigembus_writer.VigemWriter") as VW:
+            HH.resolve_gamepad_instance_ids.return_value = [
+                r"HID\VID_2DC8&PID_3106&IG_00\B&2599DE0F&0&0000",
+            ]
+            gw._setup_exclusive()
+        assert gw._writer is None
+        VW.assert_not_called()
+
+    def test_setup_noop_in_cooperative_mode(self, mock_watcher):
+        # _exclusive stays False (default fixture) → setup does nothing.
+        with patch("infrastructure.windows.input.hidhide.HidHideClient") as HH:
+            mock_watcher._setup_exclusive()
+        HH.resolve_gamepad_instance_ids.assert_not_called()
+        assert mock_watcher._writer is None
+
+    def test_refresh_reestablishes_exclusive_when_connected(self, mock_watcher):
+        gw = self._make_exclusive(mock_watcher)
+        gw._connected = True
+        with patch("infrastructure.windows.input.gamepad_watcher.pygame.joystick"), \
+             patch("infrastructure.windows.input.gamepad_watcher.game_controller"), \
+             patch.object(gw, "_setup_exclusive") as setup, \
+             patch.object(gw, "_teardown_exclusive") as teardown:
+            gw.refresh()
+        teardown.assert_called_once()
+        setup.assert_called_once()
+
+    def test_refresh_skips_resetup_when_disconnected(self, mock_watcher):
+        gw = self._make_exclusive(mock_watcher)
+        gw._connected = False
+        with patch("infrastructure.windows.input.gamepad_watcher.pygame.joystick"), \
+             patch("infrastructure.windows.input.gamepad_watcher.game_controller"), \
+             patch.object(gw, "_setup_exclusive") as setup:
+            gw.refresh()
+        setup.assert_not_called()
+
+
+# ── Duplicate-view dedup ──────────────────────────────────────────────────────
+
+class TestDuplicateViewDedup:
+    """A pad open as several SDL views (DInput + XInput) delivers each physical
+    press once per view; the held-set must collapse those to a single event so
+    navigation doesn't double-fire. (Guide only comes from the XInput view, so
+    it isn't duplicated — the dedup is purely about the shared buttons.)"""
+
+    def test_duplicate_button_down_dispatches_once(self, mock_watcher, qapp):
+        received = []
+        mock_watcher.push_handler(lambda e: received.append(e))
+        mock_watcher._handle_button_down(BTN_SOUTH)   # view 1
+        mock_watcher._handle_button_down(BTN_SOUTH)   # view 2 — duplicate, ignored
+        qapp.processEvents()
+        assert received == [Event.SELECT]
+
+    def test_release_then_repress_dispatches_again(self, mock_watcher, qapp):
+        received = []
+        mock_watcher.push_handler(lambda e: received.append(e))
+        mock_watcher._handle_button_down(BTN_SOUTH)
+        mock_watcher._handle_button_up(BTN_SOUTH)
+        mock_watcher._handle_button_down(BTN_SOUTH)   # genuine second press
+        qapp.processEvents()
+        assert received == [Event.SELECT, Event.SELECT]
+
+    def test_duplicate_button_down_forwards_to_vigem_once(self, mock_watcher):
+        mock_watcher._exclusive = True
+        mock_watcher._writer = MagicMock()
+        mock_watcher._handle_button_down(BTN_SOUTH)
+        mock_watcher._handle_button_down(BTN_SOUTH)   # duplicate
+        mock_watcher._writer.write_button.assert_called_once_with(BTN_SOUTH, 1)

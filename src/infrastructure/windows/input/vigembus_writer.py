@@ -50,14 +50,6 @@ XUSB_GAMEPAD_B              = 0x2000
 XUSB_GAMEPAD_X              = 0x4000
 XUSB_GAMEPAD_Y              = 0x8000
 
-# All D-pad bits, used to clear the D-pad state in one operation.
-_DPAD_MASK = (
-    XUSB_GAMEPAD_DPAD_UP
-    | XUSB_GAMEPAD_DPAD_DOWN
-    | XUSB_GAMEPAD_DPAD_LEFT
-    | XUSB_GAMEPAD_DPAD_RIGHT
-)
-
 
 class XUSB_REPORT(ctypes.Structure):
     """XINPUT_GAMEPAD-compatible report struct (from ViGEm Common.h).
@@ -77,44 +69,68 @@ class XUSB_REPORT(ctypes.Structure):
     ]
 
 
-# ── pygame button index → XUSB bitmask ───────────────────────────────────────
-# Mirrors the BTN_* constants in gamepad_watcher.py. BTN_MODE (guide) is
-# intentionally absent — it is forwarded via set_guide() as a synthetic pulse,
-# never in real-time (matching the Linux evdev model).
-PG_BTN_SOUTH  = 0   # A
-PG_BTN_EAST   = 1   # B
-PG_BTN_WEST   = 2   # X
-PG_BTN_NORTH  = 3   # Y
-PG_BTN_TL     = 4   # LB
-PG_BTN_TR     = 5   # RB
-PG_BTN_SELECT = 6   # Back / View
-PG_BTN_START  = 7   # Start / Menu
+# ── SDL GameController button → XUSB bitmask ──────────────────────────────────
+# The watcher forwards *semantic* SDL_GameControllerButton values (stable enum,
+# mirrored by gamepad_watcher's BTN_*/DPAD_* constants), so we map them straight
+# to XUSB bits. CB_GUIDE is intentionally absent — Guide is forwarded via
+# set_guide() as a synthetic pulse, never in real-time (Linux evdev model).
+CB_A             = 0
+CB_B             = 1
+CB_X             = 2
+CB_Y             = 3
+CB_BACK          = 4
+CB_GUIDE         = 5
+CB_START         = 6
+CB_LEFTSTICK     = 7
+CB_RIGHTSTICK    = 8
+CB_LEFTSHOULDER  = 9
+CB_RIGHTSHOULDER = 10
+CB_DPAD_UP       = 11
+CB_DPAD_DOWN     = 12
+CB_DPAD_LEFT     = 13
+CB_DPAD_RIGHT    = 14
 
-_PG_BUTTON_TO_XUSB: dict[int, int] = {
-    PG_BTN_SOUTH:  XUSB_GAMEPAD_A,
-    PG_BTN_EAST:   XUSB_GAMEPAD_B,
-    PG_BTN_WEST:   XUSB_GAMEPAD_X,
-    PG_BTN_NORTH:  XUSB_GAMEPAD_Y,
-    PG_BTN_TL:     XUSB_GAMEPAD_LEFT_SHOULDER,
-    PG_BTN_TR:     XUSB_GAMEPAD_RIGHT_SHOULDER,
-    PG_BTN_SELECT: XUSB_GAMEPAD_BACK,
-    PG_BTN_START:  XUSB_GAMEPAD_START,
+_BUTTON_TO_XUSB: dict[int, int] = {
+    CB_A:             XUSB_GAMEPAD_A,
+    CB_B:             XUSB_GAMEPAD_B,
+    CB_X:             XUSB_GAMEPAD_X,
+    CB_Y:             XUSB_GAMEPAD_Y,
+    CB_BACK:          XUSB_GAMEPAD_BACK,
+    CB_START:         XUSB_GAMEPAD_START,
+    CB_LEFTSTICK:     XUSB_GAMEPAD_LEFT_THUMB,
+    CB_RIGHTSTICK:    XUSB_GAMEPAD_RIGHT_THUMB,
+    CB_LEFTSHOULDER:  XUSB_GAMEPAD_LEFT_SHOULDER,
+    CB_RIGHTSHOULDER: XUSB_GAMEPAD_RIGHT_SHOULDER,
+    CB_DPAD_UP:       XUSB_GAMEPAD_DPAD_UP,
+    CB_DPAD_DOWN:     XUSB_GAMEPAD_DPAD_DOWN,
+    CB_DPAD_LEFT:     XUSB_GAMEPAD_DPAD_LEFT,
+    CB_DPAD_RIGHT:    XUSB_GAMEPAD_DPAD_RIGHT,
 }
 
-# ── pygame axis index → XUSB_REPORT field name ───────────────────────────────
-# pygame axis 0/1 = left stick, 2/3 = right stick, 4 = LT, 5 = RT.
-_PG_AXIS_TO_FIELD: dict[int, str] = {
-    0: "sThumbLX",
-    1: "sThumbLY",
-    2: "sThumbRX",
-    3: "sThumbRY",
-    4: "bLeftTrigger",
-    5: "bRightTrigger",
+# ── SDL GameController axis → XUSB_REPORT field name ──────────────────────────
+CA_LEFTX        = 0
+CA_LEFTY        = 1
+CA_RIGHTX       = 2
+CA_RIGHTY       = 3
+CA_TRIGGERLEFT  = 4
+CA_TRIGGERRIGHT = 5
+
+_AXIS_TO_FIELD: dict[int, str] = {
+    CA_LEFTX:        "sThumbLX",
+    CA_LEFTY:        "sThumbLY",
+    CA_RIGHTX:       "sThumbRX",
+    CA_RIGHTY:       "sThumbRY",
+    CA_TRIGGERLEFT:  "bLeftTrigger",
+    CA_TRIGGERRIGHT: "bRightTrigger",
 }
 
-# pygame Y axes are positive=down (joystick convention); XInput expects
-# positive=up, so these axes are negated during normalisation.
-_Y_AXES = frozenset({1, 3})
+# Max magnitude of an SDL trigger axis (0..32767), used to scale to the u8 XUSB
+# trigger range.
+_TRIGGER_MAX = 32767
+
+# SDL Y sticks are positive=down; XInput expects positive=up, so these axes are
+# negated during normalisation.
+_Y_AXES = frozenset({CA_LEFTY, CA_RIGHTY})
 
 
 def _load_vigem_dll() -> ctypes.WinDLL:
@@ -197,8 +213,8 @@ class VigemWriter:
 
         writer = VigemWriter()
         writer.connect()
-        writer.write_button(PG_BTN_SOUTH, 1)   # press A
-        writer.write_button(PG_BTN_SOUTH, 0)   # release A
+        writer.write_button(CB_A, 1)            # press A
+        writer.write_button(CB_A, 0)            # release A
         writer.set_guide(True)                  # synthetic guide press
         writer.set_guide(False)                 # synthetic guide release
         writer.disconnect()
@@ -285,13 +301,15 @@ class VigemWriter:
     # ── Event-style writes (mirror evdev semantics) ────────────────────────
 
     def write_button(self, button: int, value: int) -> None:
-        """Set or clear a button by pygame index.
+        """Set or clear a button by SDL GameController button value.
 
-        ``button`` is a pygame button index (0=A, 1=B, …). ``value`` is 1 for
-        press, 0 for release. Buttons not in the mapping (e.g. BTN_MODE) are
-        silently ignored — BTN_MODE goes through :meth:`set_guide`.
+        ``button`` is a semantic SDL_GameControllerButton value (0=A, 1=B, …,
+        11-14 = D-pad). ``value`` is 1 for press, 0 for release. Buttons not in
+        the mapping (e.g. Guide) are silently ignored — Guide goes through
+        :meth:`set_guide`. The D-pad arrives here as discrete buttons (the
+        GameController API never reports it as a hat).
         """
-        mask = _PG_BUTTON_TO_XUSB.get(button)
+        mask = _BUTTON_TO_XUSB.get(button)
         if mask is None:
             return
         if value:
@@ -300,45 +318,24 @@ class VigemWriter:
             self._report.wButtons &= ~mask
         self._flush()
 
-    def write_axis(self, axis: int, value: float) -> None:
-        """Set an axis by pygame index.
+    def write_axis(self, axis: int, value: int) -> None:
+        """Set an axis by SDL GameController axis value.
 
-        ``axis`` is a pygame axis index (0=LX, 1=LY, 2=RX, 3=RY, 4=LT, 5=RT).
-        ``value`` is the raw pygame float (-1..1 for sticks, -1..1 for triggers
-        where -1 is rest and 1 is fully pressed). Normalised internally to the
-        XInput ranges (s16 for sticks, u8 for triggers). Y sticks are inverted
-        because pygame uses positive=down while XInput uses positive=up.
+        ``axis`` is a semantic axis value (0=LX, 1=LY, 2=RX, 3=RY, 4=LT, 5=RT).
+        ``value`` is the raw SDL int16: -32768..32767 for sticks, 0..32767 for
+        triggers. Sticks pass through to the s16 XUSB range (Y inverted, since
+        SDL uses positive=down while XInput uses positive=up); triggers scale to
+        the u8 (0..255) XUSB range.
         """
-        field = _PG_AXIS_TO_FIELD.get(axis)
+        field = _AXIS_TO_FIELD.get(axis)
         if field is None:
             return
         if field.startswith("sThumb"):
-            normalised = value if axis not in _Y_AXES else -value
-            # Use 32768 as the multiplier so -1.0 maps to -32768 (full range),
-            # then clamp to the s16 range (positive max is 32767).
-            setattr(self._report, field, _clamp_s16(int(normalised * 32768)))
+            normalised = -value if axis in _Y_AXES else value
+            setattr(self._report, field, _clamp_s16(normalised))
         else:
-            # Trigger: pygame -1 (rest) .. 1 (pressed) → 0..255
-            setattr(self._report, field, _clamp_u8(int((value + 1) / 2 * 255)))
-        self._flush()
-
-    def write_hat(self, x: int, y: int) -> None:
-        """Set the D-pad from a pygame hat value.
-
-        ``x``: -1=left, 0=center, 1=right. ``y``: -1=down, 0=center, 1=up
-        (pygame convention: y=1 is up). All D-pad bits are cleared first, then
-        the new direction bits are set. XInput uses individual D-pad buttons,
-        not a HAT value.
-        """
-        self._report.wButtons &= ~_DPAD_MASK
-        if x == -1:
-            self._report.wButtons |= XUSB_GAMEPAD_DPAD_LEFT
-        elif x == 1:
-            self._report.wButtons |= XUSB_GAMEPAD_DPAD_RIGHT
-        if y == -1:
-            self._report.wButtons |= XUSB_GAMEPAD_DPAD_DOWN
-        elif y == 1:
-            self._report.wButtons |= XUSB_GAMEPAD_DPAD_UP
+            # Trigger: SDL 0..32767 → 0..255.
+            setattr(self._report, field, _clamp_u8(round(value * 255 / _TRIGGER_MAX)))
         self._flush()
 
     def set_guide(self, value: bool) -> None:
@@ -348,6 +345,15 @@ class VigemWriter:
             self._report.wButtons |= XUSB_GAMEPAD_GUIDE
         else:
             self._report.wButtons &= ~XUSB_GAMEPAD_GUIDE
+        self._flush()
+
+    def reset(self) -> None:
+        """Release everything: zero the whole report and flush.
+
+        Used when Kasual's UI takes over (forwarding stops mid-input) so the
+        virtual pad doesn't leave a button or stick latched down under the
+        foreground app."""
+        self._report = XUSB_REPORT()
         self._flush()
 
     def syn(self) -> None:

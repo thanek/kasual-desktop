@@ -1,5 +1,5 @@
 """
-Windows gamepad implementation using pygame.
+Windows gamepad implementation using pygame's SDL **GameController** API.
 
 Two modes, decided at startup by driver_probe:
 
@@ -21,15 +21,33 @@ press that didn't recall the Kasual menu is forwarded to the virtual pad as a
 synthetic guide press+release (so Steam still sees its guide button). In
 cooperative mode the synthetic forward is moot (the app already saw the press).
 
-Uses JOY* events (joystick API) which work with most controllers
-including 8BitDo, Xbox, PlayStation (via XInput).
+Why the GameController API (and not the raw joystick API)? Raw joystick button
+*indices* are device- and mode-specific. An 8BitDo Ultimate in X-input mode, for
+example, enumerates as an "Xbox 360 Controller for Windows" whose D-pad arrives
+as buttons (D-pad-up = button 10) and whose Guide button isn't exposed at all —
+so a hardcoded index table silently maps D-pad-up onto BTN_MODE and never sees
+Guide. SDL's GameController layer applies its controller database to give stable
+*semantic* buttons (A/B/X/Y, D-pad, Guide) and normalised axes regardless of the
+controller, which is what the rest of this class relies on.
 """
 
 import logging
+import os
 import threading
+import time
 from typing import Callable
 
+# Force SDL to read XInput controllers through the XInput backend rather than
+# RawInput. SDL's RawInput path enumerates Xbox / 8BitDo-X-input pads several
+# times over and only recovers the Guide button by correlating with XInput — a
+# correlation that silently fails on some setups, leaving BTN_MODE (Guide) dead
+# and the pad enumerated 4×. The XInput backend reads Guide directly (via
+# XInputGetStateEx). This must be set before SDL initialises its joystick
+# subsystem; setdefault lets an explicit environment override stand.
+os.environ.setdefault("SDL_JOYSTICK_RAWINPUT", "0")
+
 import pygame
+from pygame._sdl2 import controller as game_controller
 from PyQt6.QtCore import QObject, pyqtSignal
 
 from domain.input.gamepad_events import (
@@ -48,26 +66,46 @@ from infrastructure.windows.input.driver_probe import DriverCapabilities, probe_
 
 logger = logging.getLogger(__name__)
 
-STICK_THRESHOLD = 0.5
-STICK_RESET = 0.1
+# SDL GameController axes report int16: sticks -32768..32767, triggers 0..32767.
+STICK_THRESHOLD = 16000
+STICK_RESET = 8000
 
-# Standard XInput/SDL button indices (verified on an 8BitDo Ultimate in X-input
-# mode). The previous values had Start/Select on the bumpers and X/Y swapped.
-BTN_SOUTH = 0    # A
-BTN_EAST = 1     # B
-BTN_WEST = 2     # X
-BTN_NORTH = 3    # Y
-BTN_TL = 4       # LB
-BTN_TR = 5       # RB
-BTN_SELECT = 6   # Back / View
-BTN_START = 7    # Start / Menu
-BTN_MODE = 10    # Guide / Home
+# How long the synthetic Guide (BTN_MODE short-press) pulse is held on the
+# virtual pad. Unlike evdev — where the press+release are two timestamped
+# events Steam always sees — an XInput consumer polls the pad state at ~60-250
+# Hz, so a zero-duration pulse can fall between polls and be missed. Holding it
+# for a few frames guarantees the guide tap is observed.
+GUIDE_PULSE_SECONDS = 0.05
 
-HAT_CENTER = 0
-HAT_UP = 1
-HAT_RIGHT = 2
-HAT_DOWN = 3
-HAT_LEFT = 4
+# Semantic buttons from the SDL GameController API. SDL's controller database
+# maps every supported pad onto these, so they are correct across Xbox, 8BitDo
+# (X-input → reports as Xbox360, D-pad as buttons, Guide via XInput), DualSense,
+# etc. — unlike raw joystick indices, which differ per device/mode.
+BTN_SOUTH  = pygame.CONTROLLER_BUTTON_A             # A
+BTN_EAST   = pygame.CONTROLLER_BUTTON_B             # B
+BTN_WEST   = pygame.CONTROLLER_BUTTON_X             # X
+BTN_NORTH  = pygame.CONTROLLER_BUTTON_Y             # Y
+BTN_SELECT = pygame.CONTROLLER_BUTTON_BACK          # Back / View
+BTN_START  = pygame.CONTROLLER_BUTTON_START         # Start / Menu
+BTN_MODE   = pygame.CONTROLLER_BUTTON_GUIDE         # Guide / Home
+BTN_TL     = pygame.CONTROLLER_BUTTON_LEFTSHOULDER  # LB
+BTN_TR     = pygame.CONTROLLER_BUTTON_RIGHTSHOULDER # RB
+DPAD_UP    = pygame.CONTROLLER_BUTTON_DPAD_UP
+DPAD_DOWN  = pygame.CONTROLLER_BUTTON_DPAD_DOWN
+DPAD_LEFT  = pygame.CONTROLLER_BUTTON_DPAD_LEFT
+DPAD_RIGHT = pygame.CONTROLLER_BUTTON_DPAD_RIGHT
+
+# D-pad button → navigation direction (also the auto-repeat key). With the
+# GameController API the D-pad is always discrete buttons, never a hat.
+_DPAD_TO_EVENT = {
+    DPAD_UP:    Event.UP,
+    DPAD_DOWN:  Event.DOWN,
+    DPAD_LEFT:  Event.LEFT,
+    DPAD_RIGHT: Event.RIGHT,
+}
+
+AXIS_LEFTX = pygame.CONTROLLER_AXIS_LEFTX
+AXIS_LEFTY = pygame.CONTROLLER_AXIS_LEFTY
 
 
 class _Bridge(QObject):
@@ -80,7 +118,8 @@ class _Bridge(QObject):
 
 class WindowsGamepadWatcher(PadControl, GamepadSignals):
     """
-    Reads events from a gamepad using pygame in a background thread.
+    Reads events from a gamepad using pygame's GameController API in a
+    background thread.
 
     Implements two domain ports: `PadControl` and `GamepadSignals`.
 
@@ -101,7 +140,15 @@ class WindowsGamepadWatcher(PadControl, GamepadSignals):
         self._stack = InputFocusStack()
         self._connected = False
         self._running = True
-        self._joystick = None
+        # A pad can enumerate as several SDL controllers at once: a DInput/HID
+        # view (no Guide button) plus one or more XInput views (Guide button
+        # present, but only readable via the XInput backend — hence the
+        # SDL_JOYSTICK_RAWINPUT=0 hint above). We open EVERY view and read from
+        # all of them, deduping duplicate button-downs of the same physical
+        # press (see _handle_button_down). That way Guide events (which only the
+        # XInput view emits) get through without us having to guess which view /
+        # XInput slot carries the real input. Keyed by SDL instance id.
+        self._controllers: dict[int, object] = {}
 
         # Driver probe: exclusive mode requires BOTH ViGEmBus and HidHide.
         # If either is missing, fall back to cooperative (D4 all-or-nothing).
@@ -117,10 +164,18 @@ class WindowsGamepadWatcher(PadControl, GamepadSignals):
                 self._caps.vigembus, self._caps.hidhide,
             )
 
-        # Exclusive-mode state (None in cooperative mode).
+        # Exclusive-mode state (None in cooperative mode). Setup/teardown can be
+        # driven from the read loop (connect/disconnect) AND the GUI thread
+        # (refresh/shutdown), so they are serialised by a reentrant lock — the
+        # except path in _setup_exclusive re-enters via _teardown_exclusive.
         self._writer = None        # VigemWriter, set on gamepad connect
         self._hidhide = None       # HidHideClient, set on gamepad connect
         self._pad_instance_ids: list[str] = []  # for unhide on disconnect/shutdown
+        self._exclusive_lock = threading.RLock()
+        # Last suppressed state seen by the loop — so the moment our UI takes
+        # over we can neutralise the virtual pad once (release any held input),
+        # rather than leaving a button/stick stuck down under the foreground app.
+        self._last_suppressed = False
 
         self._btn_mode_emitter = EventEmitter[BtnModePressed]()
         self._connected_emitter = EventEmitter[GamepadConnected]()
@@ -145,11 +200,11 @@ class WindowsGamepadWatcher(PadControl, GamepadSignals):
 
         pygame.init()
         pygame.joystick.init()
+        game_controller.init()
         pygame.display.init()
 
         self._held = set()
         self._stick = {"x": None, "y": None}
-        self._hat_state = {"x": None, "y": None}
         # Auto-fire: a held direction re-emits like a keyboard key-repeat. Pure
         # timing policy lives in the domain; the loop polls due() each tick (the
         # 60 fps tick is well under the repeat interval, so none are missed).
@@ -174,67 +229,101 @@ class WindowsGamepadWatcher(PadControl, GamepadSignals):
                 continue
 
             for event in events:
-                if event.type == pygame.JOYDEVICEADDED:
-                    joy_id = event.device_index
-                    logger.info("Gamepad connected: %d", joy_id)
-                    if not self._connected:
+                if event.type == pygame.CONTROLLERDEVICEADDED:
+                    try:
+                        ctrl = game_controller.Controller(event.device_index)
+                    except Exception as exc:
+                        logger.warning("Could not open controller %s: %s",
+                                       event.device_index, exc)
+                        continue
+                    was_empty = not self._controllers
+                    self._controllers[ctrl.id] = ctrl
+                    logger.info("Controller added: %s (%d view(s) open)",
+                                ctrl.name, len(self._controllers))
+                    if was_empty:
                         self._connected = True
-                        self._joystick = pygame.joystick.Joystick(joy_id)
-                        self._joystick.init()
-                        logger.info("Joystick initialized: %s", self._joystick.get_name())
                         self._setup_exclusive()
                         self._emit_connected()
 
-                elif event.type == pygame.JOYDEVICEREMOVED:
-                    logger.info("Gamepad disconnected")
-                    if self._connected:
+                elif event.type == pygame.CONTROLLERDEVICEREMOVED:
+                    ctrl = self._controllers.pop(event.instance_id, None)
+                    if ctrl is not None:
+                        try:
+                            ctrl.quit()
+                        except Exception:
+                            pass
+                    if self._connected and not self._controllers:
+                        logger.info("Controller disconnected")
                         self._connected = False
-                        self._joystick = None
                         self._teardown_exclusive()
                         self._repeat.clear()
                         self._recall.cancel()
                         self._stick = {"x": None, "y": None}
-                        self._hat_state = {"x": None, "y": None}
                         self._emit_disconnected()
 
-                elif event.type == pygame.JOYBUTTONDOWN:
+                elif event.type == pygame.CONTROLLERBUTTONDOWN:
                     self._handle_button_down(event.button)
 
-                elif event.type == pygame.JOYBUTTONUP:
+                elif event.type == pygame.CONTROLLERBUTTONUP:
                     self._handle_button_up(event.button)
 
-                elif event.type == pygame.JOYAXISMOTION:
+                elif event.type == pygame.CONTROLLERAXISMOTION:
                     self._handle_axis(event.axis, event.value)
-
-                elif event.type == pygame.JOYHATMOTION:
-                    self._handle_hat(event.hat, event.value)
 
             # Re-emit the held direction when its next auto-repeat is due.
             repeated = self._repeat.due()
             if repeated is not None:
                 self._dispatch(repeated)
 
+            # When our UI takes control (suppressed flips True), forwarding to
+            # the virtual pad stops mid-input — any button/stick held at that
+            # instant would otherwise stay latched down under the foreground
+            # app. Release everything once on the transition.
+            suppressed = self._stack.suppressed
+            if suppressed and not self._last_suppressed:
+                writer = self._writer
+                if writer is not None:
+                    writer.reset()
+            self._last_suppressed = suppressed
+
     def _handle_button_down(self, button: int):
-        """Handle button press."""
+        """Handle button press.
+
+        When a pad is open as several views (DInput + XInput), one physical
+        press arrives once per view. The held-set dedups it: a button already
+        held is a duplicate from another view and is ignored, so navigation
+        fires once. (Button-up is naturally idempotent — releasing an already-
+        released button is a no-op — so it needs no guard.)
+        """
+        if button in self._held:
+            return
         self._held.add(button)
         logger.debug("Button down: %d", button)
 
         if button == BTN_MODE:
             # CLICK / Kasual active → recall now; HOLD_1S app → arm the hold.
+            # Never forwarded as a normal button — only as a synthetic guide
+            # pulse on release (see _handle_button_up).
             self._recall.press(kasual_active=self._stack.suppressed, trigger=self._app_trigger)
+            return
+
+        self._forward_button(button, 1)
+        if button == BTN_SOUTH:
+            self._dispatch(Event.SELECT)
+        elif button == BTN_EAST:
+            self._dispatch(Event.CANCEL)
+        elif button == BTN_NORTH:
+            self._dispatch(Event.CLOSE)
+        elif button == BTN_START:
+            if BTN_SELECT in self._held:
+                self._bridge.btn.emit()
+            else:
+                self._dispatch(Event.MANAGE)
         else:
-            self._forward_button(button, 1)
-            if button == BTN_SOUTH:
-                self._dispatch(Event.SELECT)
-            elif button == BTN_EAST:
-                self._dispatch(Event.CANCEL)
-            elif button == BTN_NORTH:
-                self._dispatch(Event.CLOSE)
-            elif button == BTN_START:
-                if BTN_SELECT in self._held:
-                    self._bridge.btn.emit()
-                else:
-                    self._dispatch(Event.MANAGE)
+            direction = _DPAD_TO_EVENT.get(button)
+            if direction is not None:
+                self._dispatch(direction)
+                self._repeat.press(direction)
 
     def _handle_button_up(self, button: int):
         """Handle button release."""
@@ -247,25 +336,27 @@ class WindowsGamepadWatcher(PadControl, GamepadSignals):
             # we must forward a synthetic guide press+release to ViGEm —
             # mirroring the Linux evdev BTN_MODE synthetic forward.
             forward = self._recall.release(suppressed=self._stack.suppressed)
-            if forward and self._writer is not None:
-                self._writer.set_guide(True)
-                self._writer.set_guide(False)
-        else:
-            self._forward_button(button, 0)
+            writer = self._writer
+            if forward and writer is not None:
+                writer.set_guide(True)
+                time.sleep(GUIDE_PULSE_SECONDS)
+                writer.set_guide(False)
+            return
 
-    def _handle_axis(self, axis: int, value: float):
-        """Handle analog stick movement."""
+        self._forward_button(button, 0)
+        direction = _DPAD_TO_EVENT.get(button)
+        if direction is not None:
+            self._repeat.release(direction)
+
+    def _handle_axis(self, axis: int, value: int):
+        """Handle analog stick movement (left stick navigates; others forward only)."""
         self._forward_axis(axis, value)
-        if axis == 0:
+        if axis == AXIS_LEFTX:
             self._handle_stick_axis("x", value, Event.LEFT, Event.RIGHT)
-        elif axis == 1:
+        elif axis == AXIS_LEFTY:
             self._handle_stick_axis("y", value, Event.UP, Event.DOWN)
-        elif axis == 2:
-            pass
-        elif axis == 3:
-            pass
 
-    def _handle_stick_axis(self, axis: str, value: float, neg_event: str, pos_event: str):
+    def _handle_stick_axis(self, axis: str, value: int, neg_event: str, pos_event: str):
         """Handle stick axis with threshold and hysteresis."""
         if value < -STICK_THRESHOLD and self._stick[axis] != neg_event:
             self._stick[axis] = neg_event
@@ -280,43 +371,6 @@ class WindowsGamepadWatcher(PadControl, GamepadSignals):
                 self._repeat.release(self._stick[axis])
             self._stick[axis] = None
 
-    def _handle_hat(self, hat: int, value: tuple[int, int]):
-        """Handle D-pad (hat) movement."""
-        if hat != 0:
-            return
-
-        x, y = value
-        logger.debug("Hat motion: hat=%d, x=%d, y=%d", hat, x, y)
-        self._forward_hat(x, y)
-        new_x = None
-        new_y = None
-
-        if x == -1:
-            new_x = Event.LEFT
-        elif x == 1:
-            new_x = Event.RIGHT
-
-        if y == -1:
-            new_y = Event.DOWN
-        elif y == 1:
-            new_y = Event.UP
-
-        if new_x and self._hat_state["x"] != new_x:
-            self._hat_state["x"] = new_x
-            self._dispatch(new_x)
-            self._repeat.press(new_x)
-        elif x == 0 and self._hat_state["x"] is not None:
-            self._repeat.release(self._hat_state["x"])
-            self._hat_state["x"] = None
-
-        if new_y and self._hat_state["y"] != new_y:
-            self._hat_state["y"] = new_y
-            self._dispatch(new_y)
-            self._repeat.press(new_y)
-        elif y == 0 and self._hat_state["y"] is not None:
-            self._repeat.release(self._hat_state["y"])
-            self._hat_state["y"] = None
-
     # ── Exclusive-mode forwarding to ViGEm ─────────────────────────────────
 
     def _forward_button(self, button: int, value: int) -> None:
@@ -326,56 +380,90 @@ class WindowsGamepadWatcher(PadControl, GamepadSignals):
         the virtual pad goes quiet so foreground apps don't react. BTN_MODE is
         never forwarded here — it goes through the synthetic guide pulse in
         ``_handle_button_up``.
+
+        ``self._writer`` is read into a local once: teardown (on another thread)
+        may null it between the guard and the call, so the local keeps the write
+        consistent without locking the per-event hot path.
         """
-        if self._writer is not None and not self._stack.suppressed:
-            self._writer.write_button(button, value)
+        writer = self._writer
+        if writer is not None and not self._stack.suppressed:
+            writer.write_button(button, value)
 
-    def _forward_axis(self, axis: int, value: float) -> None:
+    def _forward_axis(self, axis: int, value: int) -> None:
         """Forward an analog axis to the virtual pad (exclusive mode only)."""
-        if self._writer is not None and not self._stack.suppressed:
-            self._writer.write_axis(axis, value)
-
-    def _forward_hat(self, x: int, y: int) -> None:
-        """Forward the D-pad to the virtual pad (exclusive mode only)."""
-        if self._writer is not None and not self._stack.suppressed:
-            self._writer.write_hat(x, y)
+        writer = self._writer
+        if writer is not None and not self._stack.suppressed:
+            writer.write_axis(axis, value)
 
     def _setup_exclusive(self) -> None:
-        """Set up HidHide + ViGEm when a gamepad connects (exclusive mode)."""
+        """Set up HidHide + ViGEm when a gamepad connects (exclusive mode).
+
+        If no physical gamepad HID node can be found to hide, we deliberately do
+        NOT create the virtual pad. HidHide can only cloak devices on the HID
+        stack; an XInput-only controller (Xbox / 8BitDo X-input) exposes no such
+        node, so its events would still bleed to the foreground app via XInput.
+        Adding a virtual pad on top of that would make Steam see *two* pads —
+        worse than cooperative. So we fall back to cooperative for the session
+        (D4 all-or-nothing): single physical pad, no isolation, no duplicate.
+        """
         if not self._exclusive:
             return
-        try:
-            from infrastructure.windows.input.hidhide import HidHideClient
-            from infrastructure.windows.input.vigembus_writer import VigemWriter
+        with self._exclusive_lock:
+            try:
+                from infrastructure.windows.input.hidhide import HidHideClient
+                from infrastructure.windows.input.vigembus_writer import VigemWriter
 
-            self._hidhide = HidHideClient()
-            self._hidhide.register_self()
-            self._pad_instance_ids = HidHideClient.resolve_gamepad_instance_ids()
-            for instance_id in self._pad_instance_ids:
-                self._hidhide.hide_device(instance_id)
+                instance_ids = HidHideClient.resolve_gamepad_instance_ids()
+                # XInput-backed pads carry "IG_" (Interface Gamepad) in their HID
+                # instance path. Steam/games read those through the XInput API
+                # (xusb), which HidHide CANNOT cloak — hiding their HID node
+                # leaves them visible via XInput while we add the virtual pad on
+                # top, so the foreground app sees TWO pads (worse than
+                # cooperative). Only pure DInput/HID gamepads (no IG_) can truly
+                # be isolated; for an XInput pad we fall back to cooperative.
+                hideable = [i for i in instance_ids if "IG_" not in i.upper()]
+                if not hideable:
+                    logger.warning(
+                        "Exclusive mode: the gamepad is XInput-backed (HID path "
+                        "has IG_) or exposes no hideable HID node — HidHide cannot "
+                        "hide it from the XInput API. Falling back to cooperative "
+                        "to avoid a duplicate virtual pad. Switch the controller "
+                        "to DirectInput mode for full isolation."
+                    )
+                    return
 
-            self._writer = VigemWriter(name="kasual-vpad")
-            self._writer.connect()
-        except Exception as exc:
-            logger.warning("Exclusive mode setup failed, falling back: %s", exc)
-            self._teardown_exclusive()
+                self._hidhide = HidHideClient()
+                self._hidhide.register_self()
+                # Blacklisting a device only cloaks it while the filter is
+                # active; without this the physical pad stays visible.
+                self._hidhide.set_active(True)
+                self._pad_instance_ids = hideable
+                for instance_id in hideable:
+                    self._hidhide.hide_device(instance_id)
+
+                self._writer = VigemWriter(name="kasual-vpad")
+                self._writer.connect()
+            except Exception as exc:
+                logger.warning("Exclusive mode setup failed, falling back: %s", exc)
+                self._teardown_exclusive()
 
     def _teardown_exclusive(self) -> None:
         """Tear down HidHide + ViGEm when a gamepad disconnects."""
-        if self._writer is not None:
-            try:
-                self._writer.disconnect()
-            except Exception:
-                pass
-            self._writer = None
-        if self._hidhide is not None:
-            try:
-                self._hidhide.unhide_all()
-                self._hidhide.close()
-            except Exception:
-                pass
-            self._hidhide = None
-        self._pad_instance_ids = []
+        with self._exclusive_lock:
+            if self._writer is not None:
+                try:
+                    self._writer.disconnect()
+                except Exception:
+                    pass
+                self._writer = None
+            if self._hidhide is not None:
+                try:
+                    self._hidhide.unhide_all()
+                    self._hidhide.close()
+                except Exception:
+                    pass
+                self._hidhide = None
+            self._pad_instance_ids = []
 
     def _dispatch(self, event: str):
         """Queue event for delivery on the Qt main thread."""
@@ -440,12 +528,29 @@ class WindowsGamepadWatcher(PadControl, GamepadSignals):
         self._app_trigger = trigger
 
     def refresh(self) -> None:
-        """Reinitialize joystick subsystem."""
+        """Reinitialize the controller subsystem (e.g. after a foreground app exits).
+
+        Tears the virtual pad / HidHide cloak down and rebuilds them: an app
+        like Steam may have plugged its own ViGEm targets or toggled HidHide
+        while running, so after it quits we re-establish our own exclusive setup
+        rather than leaving the physical pad unhidden and the virtual pad gone.
+        """
         self._teardown_exclusive()
         self._repeat.clear()
         self._recall.cancel()
+        for ctrl in self._controllers.values():
+            try:
+                ctrl.quit()
+            except Exception:
+                pass
+        self._controllers = {}
+        self._active_id = None
         pygame.joystick.quit()
         pygame.joystick.init()
+        game_controller.quit()
+        game_controller.init()
+        if self._connected:
+            self._setup_exclusive()
 
     def shutdown(self):
         """Stop the watcher thread and clean up exclusive-mode resources."""
@@ -453,4 +558,11 @@ class WindowsGamepadWatcher(PadControl, GamepadSignals):
         if self._thread.is_alive():
             self._thread.join(timeout=1.0)
         self._teardown_exclusive()
+        for ctrl in self._controllers.values():
+            try:
+                ctrl.quit()
+            except Exception:
+                pass
+        self._controllers = {}
+        self._active_id = None
         pygame.quit()

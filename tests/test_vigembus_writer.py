@@ -24,8 +24,10 @@ if sys.platform != "win32":
     pytest.skip("Windows-only test; needs ctypes.WinDLL", allow_module_level=True)
 
 from infrastructure.windows.input.vigembus_writer import (
-    PG_BTN_EAST, PG_BTN_NORTH, PG_BTN_SELECT, PG_BTN_SOUTH, PG_BTN_START,
-    PG_BTN_TL, PG_BTN_TR, PG_BTN_WEST,
+    CB_A, CB_B, CB_X, CB_Y, CB_BACK, CB_START,
+    CB_LEFTSHOULDER, CB_RIGHTSHOULDER,
+    CB_DPAD_UP, CB_DPAD_DOWN, CB_DPAD_LEFT, CB_DPAD_RIGHT,
+    CA_LEFTX, CA_LEFTY, CA_RIGHTX, CA_RIGHTY, CA_TRIGGERLEFT, CA_TRIGGERRIGHT,
     VIGEM_ERROR_NONE,
     XUSB_GAMEPAD_A, XUSB_GAMEPAD_B, XUSB_GAMEPAD_BACK, XUSB_GAMEPAD_GUIDE,
     XUSB_GAMEPAD_LEFT_SHOULDER, XUSB_GAMEPAD_RIGHT_SHOULDER, XUSB_GAMEPAD_START,
@@ -119,40 +121,40 @@ class TestLifecycle:
 
 class TestButtonWrites:
     def test_south_press_sets_a_bit(self, writer):
-        writer.write_button(PG_BTN_SOUTH, 1)
+        writer.write_button(CB_A, 1)
         assert writer.report.wButtons & XUSB_GAMEPAD_A
 
     def test_south_release_clears_a_bit(self, writer):
-        writer.write_button(PG_BTN_SOUTH, 1)
-        writer.write_button(PG_BTN_SOUTH, 0)
+        writer.write_button(CB_A, 1)
+        writer.write_button(CB_A, 0)
         assert not (writer.report.wButtons & XUSB_GAMEPAD_A)
 
     def test_east_press_sets_b_bit(self, writer):
-        writer.write_button(PG_BTN_EAST, 1)
+        writer.write_button(CB_B, 1)
         assert writer.report.wButtons & XUSB_GAMEPAD_B
 
     def test_west_press_sets_x_bit(self, writer):
-        writer.write_button(PG_BTN_WEST, 1)
+        writer.write_button(CB_X, 1)
         assert writer.report.wButtons & XUSB_GAMEPAD_X
 
     def test_north_press_sets_y_bit(self, writer):
-        writer.write_button(PG_BTN_NORTH, 1)
+        writer.write_button(CB_Y, 1)
         assert writer.report.wButtons & XUSB_GAMEPAD_Y
 
     def test_tl_press_sets_left_shoulder(self, writer):
-        writer.write_button(PG_BTN_TL, 1)
+        writer.write_button(CB_LEFTSHOULDER, 1)
         assert writer.report.wButtons & XUSB_GAMEPAD_LEFT_SHOULDER
 
     def test_tr_press_sets_right_shoulder(self, writer):
-        writer.write_button(PG_BTN_TR, 1)
+        writer.write_button(CB_RIGHTSHOULDER, 1)
         assert writer.report.wButtons & XUSB_GAMEPAD_RIGHT_SHOULDER
 
     def test_select_press_sets_back(self, writer):
-        writer.write_button(PG_BTN_SELECT, 1)
+        writer.write_button(CB_BACK, 1)
         assert writer.report.wButtons & XUSB_GAMEPAD_BACK
 
     def test_start_press_sets_start(self, writer):
-        writer.write_button(PG_BTN_START, 1)
+        writer.write_button(CB_START, 1)
         assert writer.report.wButtons & XUSB_GAMEPAD_START
 
     def test_unknown_button_is_ignored(self, writer):
@@ -160,7 +162,7 @@ class TestButtonWrites:
         assert writer.report.wButtons == 0
 
     def test_flush_sends_update(self, writer):
-        writer.write_button(PG_BTN_SOUTH, 1)
+        writer.write_button(CB_A, 1)
         writer._dll.vigem_target_x360_update.assert_called()
         # The update call receives the report struct.
         call_args = writer._dll.vigem_target_x360_update.call_args
@@ -191,86 +193,84 @@ class TestGuideButton:
 
 class TestAxisWrites:
     def test_left_stick_x_full_right(self, writer):
-        writer.write_axis(0, 1.0)
+        writer.write_axis(CA_LEFTX, 32767)
         assert writer.report.sThumbLX == 32767
 
     def test_left_stick_x_full_left(self, writer):
-        writer.write_axis(0, -1.0)
+        writer.write_axis(CA_LEFTX, -32768)
         assert writer.report.sThumbLX == -32768
 
     def test_left_stick_y_full_up(self, writer):
-        # pygame Y: -1 = up. XInput Y: +32767 = up. So -1 → +32767 (inverted).
-        writer.write_axis(1, -1.0)
+        # SDL Y: -32768 = up. XInput Y: +32767 = up. So -32768 → +32767 (inverted+clamped).
+        writer.write_axis(CA_LEFTY, -32768)
         assert writer.report.sThumbLY == 32767
 
     def test_left_stick_y_full_down(self, writer):
-        # pygame Y: 1 = down. XInput Y: -32768 = down. So 1 → -32768.
-        writer.write_axis(1, 1.0)
-        assert writer.report.sThumbLY == -32768
+        # SDL Y: +32767 = down. XInput Y: negative = down. So 32767 → -32767 (inverted).
+        writer.write_axis(CA_LEFTY, 32767)
+        assert writer.report.sThumbLY == -32767
 
     def test_right_stick_x(self, writer):
-        writer.write_axis(2, 0.5)
+        writer.write_axis(CA_RIGHTX, 16384)
         assert writer.report.sThumbRX == 16384
 
     def test_right_stick_y_inverted(self, writer):
-        writer.write_axis(3, -1.0)
+        writer.write_axis(CA_RIGHTY, -32768)
         assert writer.report.sThumbRY == 32767
 
     def test_left_trigger_rest(self, writer):
-        # pygame trigger: -1 = rest. XInput trigger: 0 = rest.
-        writer.write_axis(4, -1.0)
+        # SDL trigger: 0 = rest. XInput trigger: 0 = rest.
+        writer.write_axis(CA_TRIGGERLEFT, 0)
         assert writer.report.bLeftTrigger == 0
 
     def test_left_trigger_full(self, writer):
-        # pygame trigger: 1 = fully pressed. XInput trigger: 255 = full.
-        writer.write_axis(4, 1.0)
+        # SDL trigger: 32767 = full. XInput trigger: 255 = full.
+        writer.write_axis(CA_TRIGGERLEFT, 32767)
         assert writer.report.bLeftTrigger == 255
 
     def test_right_trigger_half(self, writer):
-        # pygame trigger: 0 = halfway. → (0+1)/2 * 255 = 127.
-        writer.write_axis(5, 0.0)
-        assert writer.report.bRightTrigger == 127
+        # SDL trigger ≈ half (16384) → round(16384*255/32767) = 128.
+        writer.write_axis(CA_TRIGGERRIGHT, 16384)
+        assert writer.report.bRightTrigger == 128
 
     def test_unknown_axis_is_ignored(self, writer):
-        writer.write_axis(99, 1.0)
+        writer.write_axis(99, 32767)
         # No exception, no state change.
 
     def test_axis_clamps_to_s16_range(self, writer):
-        writer.write_axis(0, 2.0)  # beyond 1.0 → clamped to 32767
+        writer.write_axis(CA_LEFTX, 40000)  # beyond range → clamped to 32767
         assert writer.report.sThumbLX == 32767
 
 
-# ── D-pad (hat) ──────────────────────────────────────────────────────────────
+# ── D-pad (now discrete buttons via the GameController API) ───────────────────
 
-class TestHatWrites:
-    def test_hat_up(self, writer):
-        writer.write_hat(0, 1)  # y=1 = up
+class TestDpadWrites:
+    def test_dpad_up(self, writer):
+        writer.write_button(CB_DPAD_UP, 1)
         assert writer.report.wButtons & XUSB_GAMEPAD_DPAD_UP
         assert not (writer.report.wButtons & XUSB_GAMEPAD_DPAD_DOWN)
 
-    def test_hat_down(self, writer):
-        writer.write_hat(0, -1)  # y=-1 = down
+    def test_dpad_down(self, writer):
+        writer.write_button(CB_DPAD_DOWN, 1)
         assert writer.report.wButtons & XUSB_GAMEPAD_DPAD_DOWN
         assert not (writer.report.wButtons & XUSB_GAMEPAD_DPAD_UP)
 
-    def test_hat_left(self, writer):
-        writer.write_hat(-1, 0)
+    def test_dpad_left(self, writer):
+        writer.write_button(CB_DPAD_LEFT, 1)
         assert writer.report.wButtons & XUSB_GAMEPAD_DPAD_LEFT
 
-    def test_hat_right(self, writer):
-        writer.write_hat(1, 0)
+    def test_dpad_right(self, writer):
+        writer.write_button(CB_DPAD_RIGHT, 1)
         assert writer.report.wButtons & XUSB_GAMEPAD_DPAD_RIGHT
 
-    def test_hat_center_clears_all_dpad(self, writer):
-        writer.write_hat(-1, 0)
-        writer.write_hat(0, 0)
+    def test_dpad_release_clears_bit(self, writer):
+        writer.write_button(CB_DPAD_LEFT, 1)
+        writer.write_button(CB_DPAD_LEFT, 0)
         assert not (writer.report.wButtons & XUSB_GAMEPAD_DPAD_LEFT)
-        assert not (writer.report.wButtons & XUSB_GAMEPAD_DPAD_RIGHT)
-        assert not (writer.report.wButtons & XUSB_GAMEPAD_DPAD_UP)
-        assert not (writer.report.wButtons & XUSB_GAMEPAD_DPAD_DOWN)
 
-    def test_hat_diagonal_up_left(self, writer):
-        writer.write_hat(-1, 1)
+    def test_dpad_diagonal_up_left(self, writer):
+        writer.write_button(CB_DPAD_UP, 1)
+        writer.write_button(CB_DPAD_LEFT, 1)
         assert writer.report.wButtons & XUSB_GAMEPAD_DPAD_UP
         assert writer.report.wButtons & XUSB_GAMEPAD_DPAD_LEFT
 
@@ -281,3 +281,18 @@ class TestSyn:
     def test_syn_is_noop(self, writer):
         writer.syn()  # should not raise, should not send an update
         # syn() doesn't call vigem_target_x360_update.
+
+
+# ── reset() ──────────────────────────────────────────────────────────────────
+
+class TestReset:
+    def test_reset_clears_held_state_and_flushes(self, writer):
+        writer.write_button(CB_A, 1)           # A held
+        writer.write_button(CB_DPAD_LEFT, 1)   # D-pad left held
+        assert writer.report.wButtons != 0
+        writer._dll.vigem_target_x360_update.reset_mock()
+        writer.reset()
+        assert writer.report.wButtons == 0
+        assert writer.report.sThumbLX == 0
+        # The neutral report was flushed to the pad.
+        writer._dll.vigem_target_x360_update.assert_called_once()
