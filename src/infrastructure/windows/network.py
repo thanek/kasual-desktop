@@ -21,6 +21,7 @@ from ctypes import wintypes
 
 from domain.network.control import NetworkControl
 from domain.network.status import NetworkKind, NetworkStatus
+from infrastructure.windows._win32 import SEE_MASK_NOCLOSEPROCESS, _SHELLEXECUTEINFO
 
 logger = logging.getLogger(__name__)
 
@@ -73,30 +74,12 @@ def _primary_interface() -> str | None:
 
 # ── Elevated netsh via ShellExecuteEx (runas verb) ───────────────────────────
 
-SEE_MASK_NOCLOSEPROCESS = 0x00000040
+# SEE_MASK_NOCLOSEPROCESS and _SHELLEXECUTEINFO come from the shared
+# ``_win32`` module so callers here and in ``app_manager`` register exactly the
+# same struct type on the shared ``ShellExecuteExW`` argument type.
 SW_HIDE = 0
 WAIT_TIMEOUT = 0x00000102
 WAIT_FAILED = 0xFFFFFFFF
-
-
-class _SHELLEXECUTEINFO(ctypes.Structure):
-    _fields_ = [
-        ("cbSize",         wintypes.DWORD),
-        ("fMask",          wintypes.ULONG),
-        ("hwnd",           wintypes.HWND),
-        ("lpVerb",         wintypes.LPCWSTR),
-        ("lpFile",         wintypes.LPCWSTR),
-        ("lpParameters",   wintypes.LPCWSTR),
-        ("lpDirectory",    wintypes.LPCWSTR),
-        ("nShow",          wintypes.INT),
-        ("hInstApp",       wintypes.HINSTANCE),
-        ("lpIDList",       ctypes.c_void_p),
-        ("lpClass",        wintypes.LPCWSTR),
-        ("hkeyClass",      wintypes.HKEY),
-        ("dwHotKey",       wintypes.DWORD),
-        ("hIconOrMonitor", wintypes.HANDLE),
-        ("hProcess",       wintypes.HANDLE),
-    ]
 
 
 # Explicit signatures so the unsigned DWORD return of WaitForSingleObject isn't
@@ -104,8 +87,6 @@ class _SHELLEXECUTEINFO(ctypes.Structure):
 # and never match the constant below.
 _shell32 = ctypes.windll.shell32
 _kernel32 = ctypes.windll.kernel32
-_shell32.ShellExecuteExW.argtypes = [ctypes.POINTER(_SHELLEXECUTEINFO)]
-_shell32.ShellExecuteExW.restype = wintypes.BOOL
 _kernel32.WaitForSingleObject.argtypes = [wintypes.HANDLE, wintypes.DWORD]
 _kernel32.WaitForSingleObject.restype = wintypes.DWORD
 _kernel32.GetExitCodeProcess.argtypes = [wintypes.HANDLE, ctypes.POINTER(wintypes.DWORD)]
