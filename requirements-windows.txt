@@ -1,0 +1,20 @@
+# Windows-only runtime dependencies, in addition to requirements.txt.
+#
+# The base requirements.txt covers the cross-platform deps (pygame, PyQt6,
+# qtawesome). These are the extra adapters infrastructure/windows/ needs:
+#   pywin32   — Win32 API (window/app management, brightness via WMI, shell icons)
+#   comtypes  — Core Audio (volume control)
+#   psutil    — network interface sampling
+# Install into the venv kasual.ps1 uses:  pip install -r requirements-windows.txt
+pywin32
+comtypes
+psutil
+
+# WinRT projection — Action Center notifications (UserNotificationListener).
+# Split packages of Microsoft's Python/WinRT; winrt-runtime is the shared base.
+winrt-runtime
+winrt-Windows.Foundation
+winrt-Windows.Foundation.Collections
+winrt-Windows.ApplicationModel
+winrt-Windows.UI.Notifications
+winrt-Windows.UI.Notifications.Management

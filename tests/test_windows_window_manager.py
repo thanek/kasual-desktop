@@ -35,7 +35,7 @@ pytestmark = pytest.mark.skipif(
 )
 
 from domain.catalog.window import Window
-from infrastructure.windows.window_manager import (
+from infrastructure.windows.wm.window_manager import (
     GW_OWNER, GWL_EXSTYLE, WS_EX_APPWINDOW, WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW,
     WindowsWindowManager, _exe_basename, _get_exe_path, _is_taskbar_eligible,
     _resolve_uwp_pid, _SKIP_EXES,
@@ -49,7 +49,7 @@ class TestIsTaskbarEligible:
 
     def _window(self, ex_style=0, owner=0):
         """Set up a window with the given extended style and owner hwnd."""
-        with patch("infrastructure.windows.window_manager.ctypes.windll") as windll:
+        with patch("infrastructure.windows.wm.window_manager.ctypes.windll") as windll:
             windll.user32.GetWindowLongW.return_value = ex_style
             windll.user32.GetWindow.return_value = owner
             return _is_taskbar_eligible(0x100)
@@ -78,7 +78,7 @@ class TestIsTaskbarEligible:
 
     def test_exception_is_permissive(self):
         # A Win32 error must NOT drop a genuine app window — return True.
-        with patch("infrastructure.windows.window_manager.ctypes.windll") as windll:
+        with patch("infrastructure.windows.wm.window_manager.ctypes.windll") as windll:
             windll.user32.GetWindowLongW.side_effect = OSError("denied")
             assert _is_taskbar_eligible(0x100) is True
 
@@ -87,10 +87,10 @@ class TestIsTaskbarEligible:
 
 class TestExePath:
     def test_returns_path_on_success(self):
-        with patch("infrastructure.windows.window_manager.ctypes.windll") as windll, \
-             patch("infrastructure.windows.window_manager.ctypes.c_ulong") as culong, \
-             patch("infrastructure.windows.window_manager.ctypes.create_unicode_buffer") as buf, \
-             patch("infrastructure.windows.window_manager.ctypes.byref", lambda o: o):
+        with patch("infrastructure.windows.wm.window_manager.ctypes.windll") as windll, \
+             patch("infrastructure.windows.wm.window_manager.ctypes.c_ulong") as culong, \
+             patch("infrastructure.windows.wm.window_manager.ctypes.create_unicode_buffer") as buf, \
+             patch("infrastructure.windows.wm.window_manager.ctypes.byref", lambda o: o):
             windll.kernel32.OpenProcess.return_value = 0x10
             # QueryFullProcessImageNameW writes into the buffer; the mock fills
             # .value via the side_effect so the production code reads it back.
@@ -104,39 +104,39 @@ class TestExePath:
         windll.kernel32.CloseHandle.assert_called_once_with(0x10)
 
     def test_returns_none_when_open_process_fails(self):
-        with patch("infrastructure.windows.window_manager.ctypes.windll") as windll:
+        with patch("infrastructure.windows.wm.window_manager.ctypes.windll") as windll:
             windll.kernel32.OpenProcess.return_value = 0   # no handle
             assert _get_exe_path(1234) is None
 
     def test_returns_none_when_query_fails(self):
-        with patch("infrastructure.windows.window_manager.ctypes.windll") as windll, \
-             patch("infrastructure.windows.window_manager.ctypes.c_ulong"), \
-             patch("infrastructure.windows.window_manager.ctypes.create_unicode_buffer"), \
-             patch("infrastructure.windows.window_manager.ctypes.byref", lambda o: o):
+        with patch("infrastructure.windows.wm.window_manager.ctypes.windll") as windll, \
+             patch("infrastructure.windows.wm.window_manager.ctypes.c_ulong"), \
+             patch("infrastructure.windows.wm.window_manager.ctypes.create_unicode_buffer"), \
+             patch("infrastructure.windows.wm.window_manager.ctypes.byref", lambda o: o):
             windll.kernel32.OpenProcess.return_value = 0x10
             windll.kernel32.QueryFullProcessImageNameW.return_value = 0
             assert _get_exe_path(1234) is None
         windll.kernel32.CloseHandle.assert_called_once_with(0x10)
 
     def test_returns_none_on_exception(self):
-        with patch("infrastructure.windows.window_manager.ctypes.windll") as windll:
+        with patch("infrastructure.windows.wm.window_manager.ctypes.windll") as windll:
             windll.kernel32.OpenProcess.side_effect = OSError
             assert _get_exe_path(1234) is None
 
 
 class TestExeBasename:
     def test_lowercased_basename_without_extension(self):
-        with patch("infrastructure.windows.window_manager._get_exe_path",
+        with patch("infrastructure.windows.wm.window_manager._get_exe_path",
                    return_value="C:\\Program Files\\MyApp.exe"):
             assert _exe_basename(1234) == "myapp"
 
     def test_returns_empty_string_when_path_none(self):
-        with patch("infrastructure.windows.window_manager._get_exe_path",
+        with patch("infrastructure.windows.wm.window_manager._get_exe_path",
                    return_value=None):
             assert _exe_basename(1234) == ""
 
     def test_handles_dotted_exe_name(self):
-        with patch("infrastructure.windows.window_manager._get_exe_path",
+        with patch("infrastructure.windows.wm.window_manager._get_exe_path",
                    return_value="C:\\bin\\my.app.exe"):
             assert _exe_basename(1234) == "my.app"
 
@@ -147,9 +147,9 @@ class TestResolveUwpPid:
     """For a UWP frame-host window, find the PID of the real hosted app."""
 
     def test_returns_first_child_with_different_pid(self):
-        with patch("infrastructure.windows.window_manager.ctypes.windll") as windll, \
-             patch("infrastructure.windows.window_manager.ctypes.WINFUNCTYPE") as wfunctype, \
-             patch("infrastructure.windows.window_manager._get_pid") as get_pid:
+        with patch("infrastructure.windows.wm.window_manager.ctypes.windll") as windll, \
+             patch("infrastructure.windows.wm.window_manager.ctypes.WINFUNCTYPE") as wfunctype, \
+             patch("infrastructure.windows.wm.window_manager._get_pid") as get_pid:
             # Children enumerate with PIDs [host_pid, 1000, 2000]; the first
             # one that differs from host_pid (1000) is returned.
             get_pid.side_effect = lambda hwnd: {1: 100, 2: 100, 3: 1000}[int(hwnd)]
@@ -181,9 +181,9 @@ class TestResolveUwpPid:
             assert result is None or isinstance(result, int)
 
     def test_returns_none_when_no_children(self):
-        with patch("infrastructure.windows.window_manager.ctypes.windll") as windll, \
-             patch("infrastructure.windows.window_manager.ctypes.WINFUNCTYPE") as wfunctype, \
-             patch("infrastructure.windows.window_manager._get_pid", return_value=100):
+        with patch("infrastructure.windows.wm.window_manager.ctypes.windll") as windll, \
+             patch("infrastructure.windows.wm.window_manager.ctypes.WINFUNCTYPE") as wfunctype, \
+             patch("infrastructure.windows.wm.window_manager._get_pid", return_value=100):
             # All children have the host PID → no real app found.
             captured_cb = []
 
@@ -200,8 +200,8 @@ class TestResolveUwpPid:
             # The function returns None when no differing child was found.
 
     def test_exception_returns_none(self):
-        with patch("infrastructure.windows.window_manager.ctypes.windll") as windll, \
-             patch("infrastructure.windows.window_manager.ctypes.WINFUNCTYPE") as wfunctype:
+        with patch("infrastructure.windows.wm.window_manager.ctypes.windll") as windll, \
+             patch("infrastructure.windows.wm.window_manager.ctypes.WINFUNCTYPE") as wfunctype:
             windll.user32.EnumChildWindows.side_effect = OSError
             wfunctype.return_value = lambda cb: cb
             assert _resolve_uwp_pid(0x100, host_pid=100) is None
@@ -240,7 +240,7 @@ class TestSkipExes:
 def wm(qapp):
     """WindowManager with the periodic refresh timer stopped (no real Qt timer
     fires) and our_pid pinned so the test process's own windows are filtered."""
-    with patch("infrastructure.windows.window_manager.ctypes.windll"):
+    with patch("infrastructure.windows.wm.window_manager.ctypes.windll"):
         m = WindowsWindowManager()
     return m
 
@@ -294,13 +294,13 @@ def _title_for(hwnd, windows):
 
 class TestEnumWindows:
     def test_visible_window_with_title_becomes_tile(self, wm):
-        with patch("infrastructure.windows.window_manager.ctypes.windll") as windll, \
-             patch("infrastructure.windows.window_manager._get_pid", return_value=1000), \
-             patch("infrastructure.windows.window_manager._exe_basename",
+        with patch("infrastructure.windows.wm.window_manager.ctypes.windll") as windll, \
+             patch("infrastructure.windows.wm.window_manager._get_pid", return_value=1000), \
+             patch("infrastructure.windows.wm.window_manager._exe_basename",
                    return_value="foo"), \
-             patch("infrastructure.windows.window_manager._is_taskbar_eligible",
+             patch("infrastructure.windows.wm.window_manager._is_taskbar_eligible",
                    return_value=True), \
-             patch("infrastructure.windows.window_manager._is_visible",
+             patch("infrastructure.windows.wm.window_manager._is_visible",
                    return_value=True):
             _setup_enum(windll, windows=[(0x10, 1000, "Foo", True)])
             result = wm._enum_windows()
@@ -310,49 +310,49 @@ class TestEnumWindows:
         assert result[0].pid == 1000
 
     def test_invisible_window_skipped(self, wm):
-        with patch("infrastructure.windows.window_manager.ctypes.windll") as windll, \
-             patch("infrastructure.windows.window_manager._get_pid", return_value=1000), \
-             patch("infrastructure.windows.window_manager._exe_basename",
+        with patch("infrastructure.windows.wm.window_manager.ctypes.windll") as windll, \
+             patch("infrastructure.windows.wm.window_manager._get_pid", return_value=1000), \
+             patch("infrastructure.windows.wm.window_manager._exe_basename",
                    return_value="foo"), \
-             patch("infrastructure.windows.window_manager._is_taskbar_eligible",
+             patch("infrastructure.windows.wm.window_manager._is_taskbar_eligible",
                    return_value=True), \
-             patch("infrastructure.windows.window_manager._is_visible",
+             patch("infrastructure.windows.wm.window_manager._is_visible",
                    return_value=False):
             _setup_enum(windll, windows=[(0x10, 1000, "Foo", False)])
             assert wm._enum_windows() == []
 
     def test_taskbar_ineligible_window_skipped(self, wm):
-        with patch("infrastructure.windows.window_manager.ctypes.windll") as windll, \
-             patch("infrastructure.windows.window_manager._get_pid", return_value=1000), \
-             patch("infrastructure.windows.window_manager._exe_basename",
+        with patch("infrastructure.windows.wm.window_manager.ctypes.windll") as windll, \
+             patch("infrastructure.windows.wm.window_manager._get_pid", return_value=1000), \
+             patch("infrastructure.windows.wm.window_manager._exe_basename",
                    return_value="foo"), \
-             patch("infrastructure.windows.window_manager._is_taskbar_eligible",
+             patch("infrastructure.windows.wm.window_manager._is_taskbar_eligible",
                    return_value=False), \
-             patch("infrastructure.windows.window_manager._is_visible",
+             patch("infrastructure.windows.wm.window_manager._is_visible",
                    return_value=True):
             _setup_enum(windll, windows=[(0x10, 1000, "Foo", True)])
             assert wm._enum_windows() == []
 
     def test_empty_title_skipped(self, wm):
-        with patch("infrastructure.windows.window_manager.ctypes.windll") as windll, \
-             patch("infrastructure.windows.window_manager._get_pid", return_value=1000), \
-             patch("infrastructure.windows.window_manager._exe_basename",
+        with patch("infrastructure.windows.wm.window_manager.ctypes.windll") as windll, \
+             patch("infrastructure.windows.wm.window_manager._get_pid", return_value=1000), \
+             patch("infrastructure.windows.wm.window_manager._exe_basename",
                    return_value="foo"), \
-             patch("infrastructure.windows.window_manager._is_taskbar_eligible",
+             patch("infrastructure.windows.wm.window_manager._is_taskbar_eligible",
                    return_value=True), \
-             patch("infrastructure.windows.window_manager._is_visible",
+             patch("infrastructure.windows.wm.window_manager._is_visible",
                    return_value=True):
             _setup_enum(windll, windows=[(0x10, 1000, "", True)])
             assert wm._enum_windows() == []
 
     def test_whitespace_only_title_skipped(self, wm):
-        with patch("infrastructure.windows.window_manager.ctypes.windll") as windll, \
-             patch("infrastructure.windows.window_manager._get_pid", return_value=1000), \
-             patch("infrastructure.windows.window_manager._exe_basename",
+        with patch("infrastructure.windows.wm.window_manager.ctypes.windll") as windll, \
+             patch("infrastructure.windows.wm.window_manager._get_pid", return_value=1000), \
+             patch("infrastructure.windows.wm.window_manager._exe_basename",
                    return_value="foo"), \
-             patch("infrastructure.windows.window_manager._is_taskbar_eligible",
+             patch("infrastructure.windows.wm.window_manager._is_taskbar_eligible",
                    return_value=True), \
-             patch("infrastructure.windows.window_manager._is_visible",
+             patch("infrastructure.windows.wm.window_manager._is_visible",
                    return_value=True):
             _setup_enum(windll, windows=[(0x10, 1000, "   ", True)])
             assert wm._enum_windows() == []
@@ -360,41 +360,41 @@ class TestEnumWindows:
     def test_own_pid_skipped(self, wm):
         # The Kasual process's own windows must not surface as tiles.
         wm._our_pid = 9999
-        with patch("infrastructure.windows.window_manager.ctypes.windll") as windll, \
-             patch("infrastructure.windows.window_manager._get_pid",
+        with patch("infrastructure.windows.wm.window_manager.ctypes.windll") as windll, \
+             patch("infrastructure.windows.wm.window_manager._get_pid",
                    return_value=9999), \
-             patch("infrastructure.windows.window_manager._exe_basename",
+             patch("infrastructure.windows.wm.window_manager._exe_basename",
                    return_value="kasual"), \
-             patch("infrastructure.windows.window_manager._is_taskbar_eligible",
+             patch("infrastructure.windows.wm.window_manager._is_taskbar_eligible",
                    return_value=True), \
-             patch("infrastructure.windows.window_manager._is_visible",
+             patch("infrastructure.windows.wm.window_manager._is_visible",
                    return_value=True):
             _setup_enum(windll, windows=[(0x10, 9999, "Kasual", True)],
                         our_pid=9999)
             assert wm._enum_windows() == []
 
     def test_skip_exes_filtered(self, wm):
-        with patch("infrastructure.windows.window_manager.ctypes.windll") as windll, \
-             patch("infrastructure.windows.window_manager._get_pid",
+        with patch("infrastructure.windows.wm.window_manager.ctypes.windll") as windll, \
+             patch("infrastructure.windows.wm.window_manager._get_pid",
                    return_value=1000), \
-             patch("infrastructure.windows.window_manager._exe_basename",
+             patch("infrastructure.windows.wm.window_manager._exe_basename",
                    return_value="explorer"), \
-             patch("infrastructure.windows.window_manager._is_taskbar_eligible",
+             patch("infrastructure.windows.wm.window_manager._is_taskbar_eligible",
                    return_value=True), \
-             patch("infrastructure.windows.window_manager._is_visible",
+             patch("infrastructure.windows.wm.window_manager._is_visible",
                    return_value=True):
             _setup_enum(windll, windows=[(0x10, 1000, "File Explorer", True)])
             assert wm._enum_windows() == []
 
     def test_active_window_marked(self, wm):
-        with patch("infrastructure.windows.window_manager.ctypes.windll") as windll, \
-             patch("infrastructure.windows.window_manager._get_pid",
+        with patch("infrastructure.windows.wm.window_manager.ctypes.windll") as windll, \
+             patch("infrastructure.windows.wm.window_manager._get_pid",
                    return_value=1000), \
-             patch("infrastructure.windows.window_manager._exe_basename",
+             patch("infrastructure.windows.wm.window_manager._exe_basename",
                    return_value="foo"), \
-             patch("infrastructure.windows.window_manager._is_taskbar_eligible",
+             patch("infrastructure.windows.wm.window_manager._is_taskbar_eligible",
                    return_value=True), \
-             patch("infrastructure.windows.window_manager._is_visible",
+             patch("infrastructure.windows.wm.window_manager._is_visible",
                    return_value=True):
             _setup_enum(windll,
                         windows=[(0x10, 1000, "Foo", True),
@@ -408,14 +408,14 @@ class TestEnumWindows:
     def test_enum_windows_exception_returns_partial_list(self, wm):
         # If EnumWindows itself raises, the manager logs and returns whatever
         # it collected so far (possibly empty) — never propagates.
-        with patch("infrastructure.windows.window_manager.ctypes.windll") as windll, \
-             patch("infrastructure.windows.window_manager._is_visible",
+        with patch("infrastructure.windows.wm.window_manager.ctypes.windll") as windll, \
+             patch("infrastructure.windows.wm.window_manager._is_visible",
                    return_value=True), \
-             patch("infrastructure.windows.window_manager._is_taskbar_eligible",
+             patch("infrastructure.windows.wm.window_manager._is_taskbar_eligible",
                    return_value=True), \
-             patch("infrastructure.windows.window_manager._get_pid",
+             patch("infrastructure.windows.wm.window_manager._get_pid",
                    return_value=1000), \
-             patch("infrastructure.windows.window_manager._exe_basename",
+             patch("infrastructure.windows.wm.window_manager._exe_basename",
                    return_value="foo"):
             windll.user32.EnumWindows.side_effect = OSError("boom")
             windll.user32.GetForegroundWindow.return_value = 0
@@ -466,7 +466,7 @@ class TestRefreshDedup:
 
     def test_request_list_refresh_skips_when_pending(self, wm):
         wm._refresh_pending = True
-        with patch("infrastructure.windows.window_manager.QTimer") as qtimer:
+        with patch("infrastructure.windows.wm.window_manager.QTimer") as qtimer:
             wm._request_list_refresh()
         qtimer.singleShot.assert_not_called()
 
@@ -510,29 +510,29 @@ class TestPerPidOps:
         }
 
     def test_activate_window_calls_set_foreground(self, wm):
-        with patch("infrastructure.windows.window_manager.ctypes.windll") as windll:
+        with patch("infrastructure.windows.wm.window_manager.ctypes.windll") as windll:
             wm.activate_window("100")
             windll.user32.ShowWindow.assert_called_once_with(100, 9)
             windll.user32.SetForegroundWindow.assert_called_once_with(100)
 
     def test_activate_window_swallows_exception(self, wm):
-        with patch("infrastructure.windows.window_manager.ctypes.windll") as windll:
+        with patch("infrastructure.windows.wm.window_manager.ctypes.windll") as windll:
             windll.user32.SetForegroundWindow.side_effect = OSError
             wm.activate_window("100")   # must not raise
 
     def test_close_window_posts_wm_close(self, wm):
-        with patch("infrastructure.windows.window_manager.ctypes.windll") as windll:
+        with patch("infrastructure.windows.wm.window_manager.ctypes.windll") as windll:
             wm.close_window("200")
             windll.user32.PostMessageW.assert_called_once_with(200, 0x0010, 0, 0)
 
     def test_close_window_swallows_exception(self, wm):
-        with patch("infrastructure.windows.window_manager.ctypes.windll") as windll:
+        with patch("infrastructure.windows.wm.window_manager.ctypes.windll") as windll:
             windll.user32.PostMessageW.side_effect = OSError
             wm.close_window("200")   # must not raise
 
     def test_minimize_windows_for_pids(self, wm):
         self._seed_cache(wm, [(0x10, 100, "A"), (0x20, 200, "B"), (0x30, 300, "C")])
-        with patch("infrastructure.windows.window_manager.ctypes.windll") as windll:
+        with patch("infrastructure.windows.wm.window_manager.ctypes.windll") as windll:
             wm.minimize_windows_for_pids({100, 300})
             minimized = {c.args[0] for c in windll.user32.ShowWindow.call_args_list}
         assert minimized == {0x10, 0x30}
@@ -542,7 +542,7 @@ class TestPerPidOps:
 
     def test_minimize_windows_swallows_exception(self, wm):
         self._seed_cache(wm, [(0x10, 100, "A")])
-        with patch("infrastructure.windows.window_manager.ctypes.windll") as windll:
+        with patch("infrastructure.windows.wm.window_manager.ctypes.windll") as windll:
             windll.user32.ShowWindow.side_effect = OSError
             wm.minimize_windows_for_pids({100})   # must not raise
 
@@ -562,40 +562,40 @@ class TestPerPidOps:
         act.assert_not_called()
 
     def test_raise_self_brings_foreground_to_top(self, wm):
-        with patch("infrastructure.windows.window_manager.ctypes.windll") as windll:
+        with patch("infrastructure.windows.wm.window_manager.ctypes.windll") as windll:
             windll.user32.GetForegroundWindow.return_value = 0x50
             wm.raise_self()
             windll.user32.BringWindowToTop.assert_called_once_with(0x50)
             windll.user32.ShowWindow.assert_called_once_with(0x50, 9)
 
     def test_raise_self_noop_when_no_foreground(self, wm):
-        with patch("infrastructure.windows.window_manager.ctypes.windll") as windll:
+        with patch("infrastructure.windows.wm.window_manager.ctypes.windll") as windll:
             windll.user32.GetForegroundWindow.return_value = 0
             wm.raise_self()
             windll.user32.BringWindowToTop.assert_not_called()
 
     def test_raise_windows_for_pid_exact(self, wm):
         self._seed_cache(wm, [(0x10, 100, "A"), (0x20, 200, "B")])
-        with patch("infrastructure.windows.window_manager.ctypes.windll") as windll:
+        with patch("infrastructure.windows.wm.window_manager.ctypes.windll") as windll:
             wm.raise_windows_for_pid_exact(100)
             windll.user32.BringWindowToTop.assert_called_once_with(0x10)
             windll.user32.ShowWindow.assert_called_once_with(0x10, 9)
 
     def test_raise_windows_for_pid_exact_breaks_after_first(self, wm):
         self._seed_cache(wm, [(0x10, 100, "A"), (0x20, 100, "B")])
-        with patch("infrastructure.windows.window_manager.ctypes.windll") as windll:
+        with patch("infrastructure.windows.wm.window_manager.ctypes.windll") as windll:
             wm.raise_windows_for_pid_exact(100)
             # Only the first match is raised, not both.
             assert windll.user32.BringWindowToTop.call_count == 1
 
     def test_raise_windows_for_pid_exact_noop_when_no_match(self, wm):
         self._seed_cache(wm, [(0x10, 100, "A")])
-        with patch("infrastructure.windows.window_manager.ctypes.windll") as windll:
+        with patch("infrastructure.windows.wm.window_manager.ctypes.windll") as windll:
             wm.raise_windows_for_pid_exact(999)
             windll.user32.BringWindowToTop.assert_not_called()
 
     def test_raise_windows_for_pid_exact_swallows_exception(self, wm):
         self._seed_cache(wm, [(0x10, 100, "A")])
-        with patch("infrastructure.windows.window_manager.ctypes.windll") as windll:
+        with patch("infrastructure.windows.wm.window_manager.ctypes.windll") as windll:
             windll.user32.BringWindowToTop.side_effect = OSError
             wm.raise_windows_for_pid_exact(100)   # must not raise

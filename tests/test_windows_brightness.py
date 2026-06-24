@@ -29,7 +29,7 @@ if sys.platform != "win32":
     pytest.skip("Windows-only test; needs ctypes.windll", allow_module_level=True)
 
 from domain.system.brightness import Brightness
-from infrastructure.windows.brightness import (
+from infrastructure.windows.display.brightness import (
     _build_ramp, _collect_monitor_dcs, _GammaRampBrightnessControl,
     _SbcBrightnessControl, WindowsBrightnessControl,
 )
@@ -99,13 +99,13 @@ class TestBuildRamp:
 class TestBackendSelection:
     def test_uses_sbc_when_probe_succeeds(self):
         sbc_ctrl = MagicMock()
-        with patch("infrastructure.windows.brightness._probe_sbc",
+        with patch("infrastructure.windows.display.brightness._probe_sbc",
                    return_value=sbc_ctrl):
             ctrl = WindowsBrightnessControl()
         assert ctrl._backend is sbc_ctrl
 
     def test_falls_back_to_gamma_ramp_when_sbc_unavailable(self):
-        with patch("infrastructure.windows.brightness._probe_sbc",
+        with patch("infrastructure.windows.display.brightness._probe_sbc",
                    return_value=None):
             ctrl = WindowsBrightnessControl()
         assert isinstance(ctrl._backend, _GammaRampBrightnessControl)
@@ -113,14 +113,14 @@ class TestBackendSelection:
     def test_get_delegates_to_backend(self):
         sbc_ctrl = MagicMock()
         sbc_ctrl.get.return_value = Brightness(42)
-        with patch("infrastructure.windows.brightness._probe_sbc",
+        with patch("infrastructure.windows.display.brightness._probe_sbc",
                    return_value=sbc_ctrl):
             ctrl = WindowsBrightnessControl()
         assert ctrl.get().value == 42
 
     def test_set_delegates_to_backend(self):
         sbc_ctrl = MagicMock()
-        with patch("infrastructure.windows.brightness._probe_sbc",
+        with patch("infrastructure.windows.display.brightness._probe_sbc",
                    return_value=sbc_ctrl):
             ctrl = WindowsBrightnessControl()
         ctrl.set(Brightness(60))
@@ -180,11 +180,11 @@ class TestGammaRampBrightnessControl:
 
     def test_set_applies_ramp_to_all_dcs(self):
         ctrl = _GammaRampBrightnessControl()
-        with patch("infrastructure.windows.brightness._collect_monitor_dcs",
+        with patch("infrastructure.windows.display.brightness._collect_monitor_dcs",
                    return_value=[0x10, 0x20]), \
-             patch("infrastructure.windows.brightness.gdi32") as gdi32, \
-             patch("infrastructure.windows.brightness._build_ramp") as build, \
-             patch("infrastructure.windows.brightness.ctypes.byref", lambda o: o):
+             patch("infrastructure.windows.display.brightness.gdi32") as gdi32, \
+             patch("infrastructure.windows.display.brightness._build_ramp") as build, \
+             patch("infrastructure.windows.display.brightness.ctypes.byref", lambda o: o):
             gdi32.SetDeviceGammaRamp.return_value = 1   # success on both
             ctrl.set(Brightness(60))
         assert gdi32.SetDeviceGammaRamp.call_count == 2
@@ -192,11 +192,11 @@ class TestGammaRampBrightnessControl:
 
     def test_rejected_ramp_holds_last_level(self):
         ctrl = _GammaRampBrightnessControl()
-        with patch("infrastructure.windows.brightness._collect_monitor_dcs",
+        with patch("infrastructure.windows.display.brightness._collect_monitor_dcs",
                    return_value=[0x10]), \
-             patch("infrastructure.windows.brightness.gdi32") as gdi32, \
-             patch("infrastructure.windows.brightness._build_ramp"), \
-             patch("infrastructure.windows.brightness.ctypes.byref", lambda o: o):
+             patch("infrastructure.windows.display.brightness.gdi32") as gdi32, \
+             patch("infrastructure.windows.display.brightness._build_ramp"), \
+             patch("infrastructure.windows.display.brightness.ctypes.byref", lambda o: o):
             gdi32.SetDeviceGammaRamp.return_value = 0   # rejected
             ctrl.set(Brightness(30))
         # Screen held at last accepted level (100 — the identity start).
@@ -204,7 +204,7 @@ class TestGammaRampBrightnessControl:
 
     def test_no_dcs_warns_and_holds(self):
         ctrl = _GammaRampBrightnessControl()
-        with patch("infrastructure.windows.brightness._collect_monitor_dcs",
+        with patch("infrastructure.windows.display.brightness._collect_monitor_dcs",
                    return_value=[]):
             ctrl.set(Brightness(50))
         assert ctrl.get().value == 100   # unchanged
@@ -212,11 +212,11 @@ class TestGammaRampBrightnessControl:
     def test_delete_dc_always_called_in_finally(self):
         # Even if SetDeviceGammaRamp raises, the DCs must be freed.
         ctrl = _GammaRampBrightnessControl()
-        with patch("infrastructure.windows.brightness._collect_monitor_dcs",
+        with patch("infrastructure.windows.display.brightness._collect_monitor_dcs",
                    return_value=[0x10, 0x20]), \
-             patch("infrastructure.windows.brightness.gdi32") as gdi32, \
-             patch("infrastructure.windows.brightness._build_ramp"), \
-             patch("infrastructure.windows.brightness.ctypes.byref", lambda o: o):
+             patch("infrastructure.windows.display.brightness.gdi32") as gdi32, \
+             patch("infrastructure.windows.display.brightness._build_ramp"), \
+             patch("infrastructure.windows.display.brightness.ctypes.byref", lambda o: o):
             gdi32.SetDeviceGammaRamp.side_effect = OSError("boom")
             ctrl.set(Brightness(50))   # must not raise
         assert gdi32.DeleteDC.call_count == 2
@@ -224,11 +224,11 @@ class TestGammaRampBrightnessControl:
     def test_partial_failure_still_frees_all_dcs(self):
         # One DC rejects, the other accepts — both must still be freed.
         ctrl = _GammaRampBrightnessControl()
-        with patch("infrastructure.windows.brightness._collect_monitor_dcs",
+        with patch("infrastructure.windows.display.brightness._collect_monitor_dcs",
                    return_value=[0x10, 0x20]), \
-             patch("infrastructure.windows.brightness.gdi32") as gdi32, \
-             patch("infrastructure.windows.brightness._build_ramp"), \
-             patch("infrastructure.windows.brightness.ctypes.byref", lambda o: o):
+             patch("infrastructure.windows.display.brightness.gdi32") as gdi32, \
+             patch("infrastructure.windows.display.brightness._build_ramp"), \
+             patch("infrastructure.windows.display.brightness.ctypes.byref", lambda o: o):
             gdi32.SetDeviceGammaRamp.side_effect = [1, 0]   # first ok, second rejects
             ctrl.set(Brightness(40))
         assert gdi32.DeleteDC.call_count == 2
@@ -237,7 +237,7 @@ class TestGammaRampBrightnessControl:
 
     def test_set_swallows_exception(self):
         ctrl = _GammaRampBrightnessControl()
-        with patch("infrastructure.windows.brightness._collect_monitor_dcs",
+        with patch("infrastructure.windows.display.brightness._collect_monitor_dcs",
                    side_effect=OSError("unexpected")):
             ctrl.set(Brightness(50))   # must not raise
 
@@ -246,12 +246,12 @@ class TestGammaRampBrightnessControl:
 
 class TestCollectMonitorDcs:
     def test_returns_dc_per_monitor(self):
-        with patch("infrastructure.windows.brightness.user32") as user32, \
-             patch("infrastructure.windows.brightness.gdi32") as gdi32, \
-             patch("infrastructure.windows.brightness.ctypes.WINFUNCTYPE") as wfunctype, \
-             patch("infrastructure.windows.brightness._MONITORINFOEXW"), \
-             patch("infrastructure.windows.brightness.ctypes.byref", lambda o: o), \
-             patch("infrastructure.windows.brightness.ctypes.sizeof", return_value=64):
+        with patch("infrastructure.windows.display.brightness.user32") as user32, \
+             patch("infrastructure.windows.display.brightness.gdi32") as gdi32, \
+             patch("infrastructure.windows.display.brightness.ctypes.WINFUNCTYPE") as wfunctype, \
+             patch("infrastructure.windows.display.brightness._MONITORINFOEXW"), \
+             patch("infrastructure.windows.display.brightness.ctypes.byref", lambda o: o), \
+             patch("infrastructure.windows.display.brightness.ctypes.sizeof", return_value=64):
             user32.GetMonitorInfoW.return_value = 1
             gdi32.CreateDCW.return_value = 0x100
             # Capture the EnumDisplayMonitors callback and invoke it twice
@@ -271,19 +271,19 @@ class TestCollectMonitorDcs:
         assert gdi32.CreateDCW.call_count == 2
 
     def test_returns_empty_when_enum_raises(self):
-        with patch("infrastructure.windows.brightness.user32") as user32, \
-             patch("infrastructure.windows.brightness.ctypes.WINFUNCTYPE") as wfunctype:
+        with patch("infrastructure.windows.display.brightness.user32") as user32, \
+             patch("infrastructure.windows.display.brightness.ctypes.WINFUNCTYPE") as wfunctype:
             user32.EnumDisplayMonitors.side_effect = OSError
             wfunctype.return_value = lambda cb: cb
             assert _collect_monitor_dcs() == []
 
     def test_skips_monitor_when_info_fails(self):
-        with patch("infrastructure.windows.brightness.user32") as user32, \
-             patch("infrastructure.windows.brightness.gdi32") as gdi32, \
-             patch("infrastructure.windows.brightness.ctypes.WINFUNCTYPE") as wfunctype, \
-             patch("infrastructure.windows.brightness._MONITORINFOEXW"), \
-             patch("infrastructure.windows.brightness.ctypes.byref", lambda o: o), \
-             patch("infrastructure.windows.brightness.ctypes.sizeof", return_value=64):
+        with patch("infrastructure.windows.display.brightness.user32") as user32, \
+             patch("infrastructure.windows.display.brightness.gdi32") as gdi32, \
+             patch("infrastructure.windows.display.brightness.ctypes.WINFUNCTYPE") as wfunctype, \
+             patch("infrastructure.windows.display.brightness._MONITORINFOEXW"), \
+             patch("infrastructure.windows.display.brightness.ctypes.byref", lambda o: o), \
+             patch("infrastructure.windows.display.brightness.ctypes.sizeof", return_value=64):
             user32.GetMonitorInfoW.return_value = 0   # info lookup fails
             captured = []
 

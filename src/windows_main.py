@@ -36,7 +36,7 @@ def _setup_logging() -> Path:
     show an empty / missing file. ``KASUAL_DEBUG`` lowers the level to DEBUG;
     the default is INFO (matches Linux).
     """
-    log_dir = Path(os.environ.get("LOCALAPPDATA", str(Path.home()))) / "kasual"
+    log_dir = Path(os.environ.get("LOCALAPPDATA", str(Path.home()))) / "kasual-desktop"
     log_dir.mkdir(parents=True, exist_ok=True)
     log_file = log_dir / "kasual.log"
 
@@ -90,10 +90,10 @@ def main():
     version = get_version()
 
     # ── OS-specific adapters ────────────────────────────────────────────────
-    from infrastructure.windows.gamepad_watcher import WindowsGamepadWatcher
-    from infrastructure.windows.window_manager import WindowsWindowManager
-    from infrastructure.windows.wallpaper import WindowsSystemWallpaper
-    from infrastructure.windows.app_manager import WindowsAppManager
+    from infrastructure.windows.input.gamepad_watcher import WindowsGamepadWatcher
+    from infrastructure.windows.wm.window_manager import WindowsWindowManager
+    from infrastructure.windows.display.wallpaper import WindowsSystemWallpaper
+    from infrastructure.windows.catalog.app_manager import WindowsAppManager
     from infrastructure.windows.qt.desktop_surface import WindowsDesktopSurface, TimedLaunchHide
 
     surface = WindowsDesktopSurface()
@@ -112,11 +112,11 @@ def main():
     feedback.init()
 
     # ── System adapters ─────────────────────────────────────────────────────
-    from infrastructure.windows.power import WindowsPowerControl
-    from infrastructure.windows.volume import WindowsVolumeControl
-    from infrastructure.windows.brightness import WindowsBrightnessControl
-    from infrastructure.windows.network import WindowsNetworkProbe, WindowsNetworkControl
-    from infrastructure.windows.app_pinning import WindowsAppPinning
+    from infrastructure.windows.power.power import WindowsPowerControl
+    from infrastructure.windows.audio.volume import WindowsVolumeControl
+    from infrastructure.windows.display.brightness import WindowsBrightnessControl
+    from infrastructure.windows.network.network import WindowsNetworkProbe, WindowsNetworkControl
+    from infrastructure.windows.catalog.app_pinning import WindowsAppPinning
     from infrastructure.common.qt.scheduler import QtScheduler
     from domain.notifications.center import NotificationCenter
 
@@ -125,14 +125,13 @@ def main():
     # ── Catalog ─────────────────────────────────────────────────────────────
     # The same freedesktop .desktop store as Linux (app_config is pure Python;
     # only config_root() differs — %APPDATA% on Windows). The catalog, tile order
-    # and colours persist across restarts.
-    from pathlib import Path
+    # and colours persist across restarts. (Path is imported at module scope.)
     from domain.provisioning.provisioning import Provisioning as ProvisioningUseCase
     from infrastructure.common.catalog.app_config import (
         load_apps, DesktopAppProvisioning,
         DesktopTileOrderStore, DesktopTileColorStore,
     )
-    from infrastructure.windows.app_discovery import WindowsAppDiscovery
+    from infrastructure.windows.catalog.app_discovery import WindowsAppDiscovery
 
     provisioning = DesktopAppProvisioning()
     provisioning_uc = ProvisioningUseCase(
@@ -152,7 +151,15 @@ def main():
         from infrastructure.common.qt.overlays.about_overlay import AboutOverlay
         from infrastructure.common.qt.overlays.home_overlay import HomeOverlayFactory
         from infrastructure.windows.qt.log_window import LogWindow
+        from infrastructure.windows.notifications.listener import WindowsNotificationSource
         from application import Application
+
+        # Recent-notifications feature (mirrors KDE): the Windows source (WinRT
+        # Action-Center poller) feeds the platform-agnostic NotificationCenter,
+        # which the Desktop's overlay reads. Wired here, started below.
+        notification_center = NotificationCenter()
+        notification_source = WindowsNotificationSource()
+        notification_source.on_notification(notification_center.record)
 
         desktop = build_desktop(
             apps=load_apps(),
@@ -165,7 +172,7 @@ def main():
             power=power,
             scheduler=QtScheduler(),
             process_manager=process_manager,
-            notifications=NotificationCenter(),
+            notifications=notification_center,
             network_control=WindowsNetworkControl(),
             order_store=DesktopTileOrderStore(),
             color_store=DesktopTileColorStore(),
@@ -199,6 +206,18 @@ def main():
             hud=_StubHud(),
         )
         _refs.update(desktop=desktop, tray=tray, controller=controller)
+
+        # Keep the top-bar notifications badge in sync with the in-memory count.
+        # Subscribed after `record` above, so the count is already updated when
+        # this runs; delivered on the GUI thread by the source's signal hop.
+        notification_source.on_notification(
+            lambda _n: desktop.refresh_notification_badge()
+        )
+        _refs["notification_source"] = notification_source
+        # Start polling only once the event loop is running, so the WinRT
+        # access request / first poll never sits on the critical startup path.
+        QTimer.singleShot(0, notification_source.start)
+        app.aboutToQuit.connect(notification_source.stop)
 
         # Top-bar network indicator: a polling monitor over the Windows probe
         # (reuses the domain PollingNetworkMonitor), feeding the Desktop.

@@ -24,7 +24,7 @@ from domain.catalog.app import App
 from domain.catalog.window import Window
 
 from infrastructure.common.catalog.pinning_base import AppPinningBase
-from infrastructure.windows.window_manager import _get_exe_path
+from infrastructure.windows.wm.window_manager import _get_exe_path
 
 logger = logging.getLogger(__name__)
 

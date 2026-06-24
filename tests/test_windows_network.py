@@ -32,7 +32,7 @@ if sys.platform != "win32":
     pytest.skip("Windows-only test; needs ctypes.windll", allow_module_level=True)
 
 from domain.network.status import NetworkKind, NetworkStatus
-from infrastructure.windows.network import (
+from infrastructure.windows.network.network import (
     WAIT_FAILED, WAIT_TIMEOUT, _classify, _ipv4, _primary_interface,
     _runas_netsh, _SKIP, WindowsNetworkControl, WindowsNetworkProbe,
 )
@@ -215,11 +215,11 @@ class TestNetworkProbeRead:
 class TestRunasNetsh:
     def _run(self, shell_exec_ok=1, hProcess=0x100, wait_rc=0, exit_code=0):
         """Run _runas_netsh with mocked Win32 calls; returns (result, mocks)."""
-        with patch("infrastructure.windows.network._shell32") as shell32, \
-             patch("infrastructure.windows.network._kernel32") as kernel32, \
-             patch("infrastructure.windows.network.wintypes") as wintypes, \
-             patch("infrastructure.windows.network.ctypes.byref", lambda o: o), \
-             patch("infrastructure.windows.network.ctypes.sizeof", return_value=64):
+        with patch("infrastructure.windows.network.network._shell32") as shell32, \
+             patch("infrastructure.windows.network.network._kernel32") as kernel32, \
+             patch("infrastructure.windows.network.network.wintypes") as wintypes, \
+             patch("infrastructure.windows.network.network.ctypes.byref", lambda o: o), \
+             patch("infrastructure.windows.network.network.ctypes.sizeof", return_value=64):
             shell32.ShellExecuteExW.return_value = shell_exec_ok
             kernel32.WaitForSingleObject.return_value = wait_rc
             # wintypes.DWORD() is constructed then filled by GetExitCodeProcess.
@@ -277,9 +277,9 @@ class TestWindowsNetworkControl:
 
     def test_disconnect_remembers_interface_on_success(self):
         ctrl = WindowsNetworkControl()
-        with patch("infrastructure.windows.network._primary_interface",
+        with patch("infrastructure.windows.network.network._primary_interface",
                    return_value="Ethernet"), \
-             patch("infrastructure.windows.network._runas_netsh",
+             patch("infrastructure.windows.network.network._runas_netsh",
                    return_value=True):
             ctrl.disconnect()
         assert ctrl.can_reconnect() is True
@@ -288,18 +288,18 @@ class TestWindowsNetworkControl:
         # UAC declined or netsh failed — don't remember, so can_reconnect stays
         # False and the overlay reflects reality.
         ctrl = WindowsNetworkControl()
-        with patch("infrastructure.windows.network._primary_interface",
+        with patch("infrastructure.windows.network.network._primary_interface",
                    return_value="Ethernet"), \
-             patch("infrastructure.windows.network._runas_netsh",
+             patch("infrastructure.windows.network.network._runas_netsh",
                    return_value=False):
             ctrl.disconnect()
         assert ctrl.can_reconnect() is False
 
     def test_disconnect_noop_when_no_primary_interface(self):
         ctrl = WindowsNetworkControl()
-        with patch("infrastructure.windows.network._primary_interface",
+        with patch("infrastructure.windows.network.network._primary_interface",
                    return_value=None), \
-             patch("infrastructure.windows.network._runas_netsh") as runas:
+             patch("infrastructure.windows.network.network._runas_netsh") as runas:
             ctrl.disconnect()
         runas.assert_not_called()
         assert ctrl.can_reconnect() is False
@@ -307,7 +307,7 @@ class TestWindowsNetworkControl:
     def test_reconnect_restores_disabled_interface(self):
         ctrl = WindowsNetworkControl()
         ctrl._last_interface = "Ethernet"
-        with patch("infrastructure.windows.network._runas_netsh",
+        with patch("infrastructure.windows.network.network._runas_netsh",
                    return_value=True) as runas:
             ctrl.reconnect()
         # The same interface that was disabled is brought back up (admin=enable).
@@ -317,7 +317,7 @@ class TestWindowsNetworkControl:
 
     def test_reconnect_noop_when_nothing_disabled(self):
         ctrl = WindowsNetworkControl()
-        with patch("infrastructure.windows.network._runas_netsh") as runas:
+        with patch("infrastructure.windows.network.network._runas_netsh") as runas:
             ctrl.reconnect()
         runas.assert_not_called()
 
@@ -326,7 +326,7 @@ class TestWindowsNetworkControl:
         # remembered interface so the user can retry.
         ctrl = WindowsNetworkControl()
         ctrl._last_interface = "Wi-Fi"
-        with patch("infrastructure.windows.network._runas_netsh",
+        with patch("infrastructure.windows.network.network._runas_netsh",
                    return_value=False):
             ctrl.reconnect()
         assert ctrl.can_reconnect() is True

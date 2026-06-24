@@ -16,7 +16,7 @@ pytestmark = pytest.mark.skipif(
     reason="Tests Windows Win32/ctypes adapters; needs ctypes.windll",
 )
 
-from infrastructure.windows.wallpaper import WindowsSystemWallpaper
+from infrastructure.windows.display.wallpaper import WindowsSystemWallpaper
 
 
 class TestCurrent:
@@ -28,16 +28,16 @@ class TestCurrent:
             buf.value = str(img)
             return 1
 
-        with patch("infrastructure.windows.wallpaper.ctypes.windll") as windll, \
-             patch("infrastructure.windows.wallpaper.ctypes.create_unicode_buffer") as buf:
+        with patch("infrastructure.windows.display.wallpaper.ctypes.windll") as windll, \
+             patch("infrastructure.windows.display.wallpaper.ctypes.create_unicode_buffer") as buf:
             windll.user32.SystemParametersInfoW.side_effect = _spi
             result = WindowsSystemWallpaper().current()
         assert result is not None
         assert result.image_path == str(img)
 
     def test_returns_none_when_api_returns_zero(self):
-        with patch("infrastructure.windows.wallpaper.ctypes.windll") as windll, \
-             patch("infrastructure.windows.wallpaper.ctypes.create_unicode_buffer"):
+        with patch("infrastructure.windows.display.wallpaper.ctypes.windll") as windll, \
+             patch("infrastructure.windows.display.wallpaper.ctypes.create_unicode_buffer"):
             windll.user32.SystemParametersInfoW.return_value = 0
             assert WindowsSystemWallpaper().current() is None
 
@@ -46,8 +46,8 @@ class TestCurrent:
             buf.value = ""
             return 1
 
-        with patch("infrastructure.windows.wallpaper.ctypes.windll") as windll, \
-             patch("infrastructure.windows.wallpaper.ctypes.create_unicode_buffer"):
+        with patch("infrastructure.windows.display.wallpaper.ctypes.windll") as windll, \
+             patch("infrastructure.windows.display.wallpaper.ctypes.create_unicode_buffer"):
             windll.user32.SystemParametersInfoW.side_effect = _spi
             assert WindowsSystemWallpaper().current() is None
 
@@ -56,14 +56,14 @@ class TestCurrent:
             buf.value = "C:\\does\\not\\exist.jpg"
             return 1
 
-        with patch("infrastructure.windows.wallpaper.ctypes.windll") as windll, \
-             patch("infrastructure.windows.wallpaper.ctypes.create_unicode_buffer"), \
-             patch("infrastructure.windows.wallpaper.os.path.exists",
+        with patch("infrastructure.windows.display.wallpaper.ctypes.windll") as windll, \
+             patch("infrastructure.windows.display.wallpaper.ctypes.create_unicode_buffer"), \
+             patch("infrastructure.windows.display.wallpaper.os.path.exists",
                    return_value=False):
             windll.user32.SystemParametersInfoW.side_effect = _spi
             assert WindowsSystemWallpaper().current() is None
 
     def test_returns_none_on_exception(self):
-        with patch("infrastructure.windows.wallpaper.ctypes.windll") as windll:
+        with patch("infrastructure.windows.display.wallpaper.ctypes.windll") as windll:
             windll.user32.SystemParametersInfoW.side_effect = OSError
             assert WindowsSystemWallpaper().current() is None

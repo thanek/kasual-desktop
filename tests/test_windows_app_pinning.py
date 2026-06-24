@@ -30,7 +30,7 @@ pytestmark = pytest.mark.skipif(
 )
 
 from domain.catalog.window import Window
-from infrastructure.windows.app_pinning import WindowsAppPinning, _file_description
+from infrastructure.windows.catalog.app_pinning import WindowsAppPinning, _file_description
 
 
 @pytest.fixture
@@ -54,9 +54,9 @@ def _entry(path):
 
 class TestPinResolve:
     def test_pin_uses_exe_path_as_command(self, appdata):
-        with patch("infrastructure.windows.app_pinning._get_exe_path",
+        with patch("infrastructure.windows.catalog.app_pinning._get_exe_path",
                    return_value="C:\\Program Files\\App\\app.exe"), \
-             patch("infrastructure.windows.app_pinning._file_description",
+             patch("infrastructure.windows.catalog.app_pinning._file_description",
                    return_value="My App"):
             app = WindowsAppPinning().pin(
                 Window(id="w1", title="Anything", pid=42, resource_class="app"))
@@ -69,9 +69,9 @@ class TestPinResolve:
         # _join_exec shlex-quotes each token (backslash triggers quoting), so
         # the raw INI value carries single quotes; load_apps unquotes them back
         # via shlex.split. We assert on the raw INI form here.
-        with patch("infrastructure.windows.app_pinning._get_exe_path",
+        with patch("infrastructure.windows.catalog.app_pinning._get_exe_path",
                    return_value="C:\\App\\foo.exe"), \
-             patch("infrastructure.windows.app_pinning._file_description",
+             patch("infrastructure.windows.catalog.app_pinning._file_description",
                    return_value="Foo"):
             WindowsAppPinning().pin(
                 Window(id="w1", title="Foo Window", pid=7, resource_class="foo"))
@@ -84,7 +84,7 @@ class TestPinResolve:
         assert entry["X-Kasual-Order"] == "0"
 
     def test_pin_returns_none_when_exe_unresolvable(self, appdata):
-        with patch("infrastructure.windows.app_pinning._get_exe_path",
+        with patch("infrastructure.windows.catalog.app_pinning._get_exe_path",
                    return_value=None):
             app = WindowsAppPinning().pin(
                 Window(id="w1", title="X", pid=42, resource_class="x"))
@@ -93,7 +93,7 @@ class TestPinResolve:
 
     def test_pin_returns_none_when_pid_zero(self, appdata):
         # pid=0 means we never even try to resolve the exe.
-        with patch("infrastructure.windows.app_pinning._get_exe_path") as gp:
+        with patch("infrastructure.windows.catalog.app_pinning._get_exe_path") as gp:
             app = WindowsAppPinning().pin(
                 Window(id="w1", title="X", pid=0, resource_class="x"))
         assert app is None
@@ -104,9 +104,9 @@ class TestPinResolve:
 
 class TestPinNameFallback:
     def _pin_with(self, appdata, *, file_desc, resource_class, title):
-        with patch("infrastructure.windows.app_pinning._get_exe_path",
+        with patch("infrastructure.windows.catalog.app_pinning._get_exe_path",
                    return_value="C:\\App\\x.exe"), \
-             patch("infrastructure.windows.app_pinning._file_description",
+             patch("infrastructure.windows.catalog.app_pinning._file_description",
                    return_value=file_desc):
             return WindowsAppPinning().pin(
                 Window(id="w1", title=title, pid=1, resource_class=resource_class))
@@ -146,9 +146,9 @@ class TestPinNameFallback:
 
 class TestPersistPlacement:
     def _pin(self, appdata, resource_class="foo"):
-        with patch("infrastructure.windows.app_pinning._get_exe_path",
+        with patch("infrastructure.windows.catalog.app_pinning._get_exe_path",
                    return_value="C:\\App\\x.exe"), \
-             patch("infrastructure.windows.app_pinning._file_description",
+             patch("infrastructure.windows.catalog.app_pinning._file_description",
                    return_value="X"):
             return WindowsAppPinning().pin(
                 Window(id="w1", title="t", pid=1, resource_class=resource_class))
@@ -229,58 +229,58 @@ class TestFileDescription:
         )
 
     def test_returns_file_description(self):
-        with patch("infrastructure.windows.app_pinning.ctypes") as ctypes_mod:
+        with patch("infrastructure.windows.catalog.app_pinning.ctypes") as ctypes_mod:
             windll = ctypes_mod.windll
             self._setup(windll, desc="Microsoft Edge")
             # Patch the unpack + wstring_at helpers the production code uses to
             # pull the language/codepage and the description string out of the
             # raw buffer.
-            with patch("infrastructure.windows.app_pinning.struct.unpack",
+            with patch("infrastructure.windows.catalog.app_pinning.struct.unpack",
                        return_value=(0x0409, 0xb004)), \
-                 patch("infrastructure.windows.app_pinning.ctypes.wstring_at",
+                 patch("infrastructure.windows.catalog.app_pinning.ctypes.wstring_at",
                        return_value="Microsoft Edge\x00"):
                 assert _file_description("C:\\edge.exe") == "Microsoft Edge"
 
     def test_returns_none_when_no_version_info(self):
-        with patch("infrastructure.windows.app_pinning.ctypes") as ctypes_mod:
+        with patch("infrastructure.windows.catalog.app_pinning.ctypes") as ctypes_mod:
             windll = ctypes_mod.windll
             windll.version.GetFileVersionInfoSizeW.return_value = 0
             assert _file_description("C:\\x.exe") is None
 
     def test_returns_none_when_get_file_version_info_fails(self):
-        with patch("infrastructure.windows.app_pinning.ctypes") as ctypes_mod:
+        with patch("infrastructure.windows.catalog.app_pinning.ctypes") as ctypes_mod:
             windll = ctypes_mod.windll
             self._setup(windll, get_info_ok=False)
             assert _file_description("C:\\x.exe") is None
 
     def test_returns_none_when_translation_missing(self):
-        with patch("infrastructure.windows.app_pinning.ctypes") as ctypes_mod:
+        with patch("infrastructure.windows.catalog.app_pinning.ctypes") as ctypes_mod:
             windll = ctypes_mod.windll
             self._setup(windll, translation_ok=False)
             assert _file_description("C:\\x.exe") is None
 
     def test_returns_none_when_file_description_missing(self):
-        with patch("infrastructure.windows.app_pinning.ctypes") as ctypes_mod:
+        with patch("infrastructure.windows.catalog.app_pinning.ctypes") as ctypes_mod:
             windll = ctypes_mod.windll
             self._setup(windll, desc_ok=False)
-            with patch("infrastructure.windows.app_pinning.struct.unpack",
+            with patch("infrastructure.windows.catalog.app_pinning.struct.unpack",
                        return_value=(0x0409, 0xb004)):
                 assert _file_description("C:\\x.exe") is None
 
     def test_strips_whitespace_and_nulls(self):
-        with patch("infrastructure.windows.app_pinning.ctypes") as ctypes_mod:
+        with patch("infrastructure.windows.catalog.app_pinning.ctypes") as ctypes_mod:
             windll = ctypes_mod.windll
             self._setup(windll, desc="ignored")
-            with patch("infrastructure.windows.app_pinning.struct.unpack",
+            with patch("infrastructure.windows.catalog.app_pinning.struct.unpack",
                        return_value=(0x0409, 0xb004)), \
-                 patch("infrastructure.windows.app_pinning.ctypes.wstring_at",
+                 patch("infrastructure.windows.catalog.app_pinning.ctypes.wstring_at",
                        return_value="  Spaced Name  \x00"):
                 # C strings are null-terminated; the trailing \x00 is stripped,
                 # then surrounding whitespace.
                 assert _file_description("C:\\x.exe") == "Spaced Name"
 
     def test_returns_none_on_exception(self):
-        with patch("infrastructure.windows.app_pinning.ctypes") as ctypes_mod:
+        with patch("infrastructure.windows.catalog.app_pinning.ctypes") as ctypes_mod:
             ctypes_mod.windll.version.GetFileVersionInfoSizeW.side_effect = OSError
             # Must not raise — the function is best-effort.
             assert _file_description("C:\\x.exe") is None

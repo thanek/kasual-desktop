@@ -34,7 +34,7 @@ pytestmark = pytest.mark.skipif(
 
 from domain.catalog.app import App
 from domain.input.vocabulary import Trigger
-from infrastructure.windows.app_discovery import (
+from infrastructure.windows.catalog.app_discovery import (
     WindowsAppDiscovery, _BUILTINS, _default_candidates, _depth, _slug,
     builtin_candidates, discover_candidates,
 )
@@ -48,35 +48,35 @@ _PROJECT_ROOT = "infrastructure.common.bundled.project_root"
 
 class TestIsAvailable:
     def test_path_resolvable_binary_is_available(self):
-        with patch("infrastructure.windows.app_discovery.shutil.which",
+        with patch("infrastructure.windows.catalog.app_discovery.shutil.which",
                    return_value="C:\\Windows\\notepad.exe"):
             assert WindowsAppDiscovery().is_available("notepad") is True
 
     def test_ms_protocol_scheme_is_available(self):
-        with patch("infrastructure.windows.app_discovery.shutil.which",
+        with patch("infrastructure.windows.catalog.app_discovery.shutil.which",
                    return_value=None):
             assert WindowsAppDiscovery().is_available("ms-settings:") is True
 
     def test_existing_lnk_is_available(self, tmp_path):
         lnk = tmp_path / "app.lnk"
         lnk.write_text("x")
-        with patch("infrastructure.windows.app_discovery.shutil.which",
+        with patch("infrastructure.windows.catalog.app_discovery.shutil.which",
                    return_value=None):
             assert WindowsAppDiscovery().is_available(str(lnk)) is True
 
     def test_existing_file_is_available(self, tmp_path):
         f = tmp_path / "app.exe"
         f.write_text("x")
-        with patch("infrastructure.windows.app_discovery.shutil.which",
+        with patch("infrastructure.windows.catalog.app_discovery.shutil.which",
                    return_value=None):
             assert WindowsAppDiscovery().is_available(str(f)) is True
 
     def test_missing_command_is_not_available(self):
-        with patch("infrastructure.windows.app_discovery.shutil.which",
+        with patch("infrastructure.windows.catalog.app_discovery.shutil.which",
                    return_value=None), \
-             patch("infrastructure.windows.app_discovery.Path.is_file",
+             patch("infrastructure.windows.catalog.app_discovery.Path.is_file",
                    return_value=False), \
-             patch("infrastructure.windows.app_discovery.Path.exists",
+             patch("infrastructure.windows.catalog.app_discovery.Path.exists",
                    return_value=False):
             assert WindowsAppDiscovery().is_available("nope") is False
 
@@ -97,7 +97,7 @@ def _rows(*triples):
 
 
 def _patch_scan(rows):
-    return patch("infrastructure.windows.app_discovery._scan_start_menu",
+    return patch("infrastructure.windows.catalog.app_discovery._scan_start_menu",
                  return_value=rows)
 
 
@@ -418,18 +418,18 @@ class TestScanStartMenu:
 
     def test_parses_name_tab_lnk_tab_target(self):
         out = "Firefox\tC:\\ff.lnk\tC:\\ff.exe\n".encode("utf-8")
-        with patch("infrastructure.windows.app_discovery.subprocess.run",
+        with patch("infrastructure.windows.catalog.app_discovery.subprocess.run",
                    return_value=self._proc(out)):
-            from infrastructure.windows.app_discovery import _scan_start_menu
+            from infrastructure.windows.catalog.app_discovery import _scan_start_menu
             rows = _scan_start_menu()
         assert rows == [("Firefox", "C:\\ff.lnk", "C:\\ff.exe")]
 
     def test_parses_multiple_lines(self):
         out = ("A\tC:\\a.lnk\tC:\\a.exe\n"
                "B\tC:\\b.lnk\tC:\\b.exe\n").encode("utf-8")
-        with patch("infrastructure.windows.app_discovery.subprocess.run",
+        with patch("infrastructure.windows.catalog.app_discovery.subprocess.run",
                    return_value=self._proc(out)):
-            from infrastructure.windows.app_discovery import _scan_start_menu
+            from infrastructure.windows.catalog.app_discovery import _scan_start_menu
             rows = _scan_start_menu()
         assert len(rows) == 2
 
@@ -437,32 +437,32 @@ class TestScanStartMenu:
         out = ("A\tC:\\a.lnk\tC:\\a.exe\n"
                "BadLine\n"
                "B\tC:\\b.lnk\tC:\\b.exe\n").encode("utf-8")
-        with patch("infrastructure.windows.app_discovery.subprocess.run",
+        with patch("infrastructure.windows.catalog.app_discovery.subprocess.run",
                    return_value=self._proc(out)):
-            from infrastructure.windows.app_discovery import _scan_start_menu
+            from infrastructure.windows.catalog.app_discovery import _scan_start_menu
             rows = _scan_start_menu()
         assert len(rows) == 2
 
     def test_skips_lines_with_empty_name(self):
         out = ("\tC:\\a.lnk\tC:\\a.exe\n"
                "B\tC:\\b.lnk\tC:\\b.exe\n").encode("utf-8")
-        with patch("infrastructure.windows.app_discovery.subprocess.run",
+        with patch("infrastructure.windows.catalog.app_discovery.subprocess.run",
                    return_value=self._proc(out)):
-            from infrastructure.windows.app_discovery import _scan_start_menu
+            from infrastructure.windows.catalog.app_discovery import _scan_start_menu
             rows = _scan_start_menu()
         assert len(rows) == 1
         assert rows[0][0] == "B"
 
     def test_strips_whitespace_from_fields(self):
         out = "  Firefox  \t C:\\ff.lnk \t C:\\ff.exe \n".encode("utf-8")
-        with patch("infrastructure.windows.app_discovery.subprocess.run",
+        with patch("infrastructure.windows.catalog.app_discovery.subprocess.run",
                    return_value=self._proc(out)):
-            from infrastructure.windows.app_discovery import _scan_start_menu
+            from infrastructure.windows.catalog.app_discovery import _scan_start_menu
             rows = _scan_start_menu()
         assert rows == [("Firefox", "C:\\ff.lnk", "C:\\ff.exe")]
 
     def test_exception_returns_empty(self):
-        with patch("infrastructure.windows.app_discovery.subprocess.run",
+        with patch("infrastructure.windows.catalog.app_discovery.subprocess.run",
                    side_effect=TimeoutError):
-            from infrastructure.windows.app_discovery import _scan_start_menu
+            from infrastructure.windows.catalog.app_discovery import _scan_start_menu
             assert _scan_start_menu() == []

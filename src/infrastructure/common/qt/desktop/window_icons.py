@@ -249,7 +249,7 @@ def _windows_pid_icon(pid: int):
     executable, resolved from its PID. No-op off Windows."""
     if os.name != 'nt' or not pid:
         return None
-    from infrastructure.windows.window_manager import _get_exe_path
+    from infrastructure.windows.wm.window_manager import _get_exe_path
     from infrastructure.common.qt.icons import shell_icon
     exe = _get_exe_path(pid)
     return shell_icon(exe) if exe else None

@@ -38,7 +38,7 @@ def shell_icon(path: str) -> QIcon | None:
     # On Windows pull the real 256px "jumbo" icon — QFileIconProvider only ever
     # delivers the 32px shell icon (it won't upscale), so tiles looked tiny.
     if os.name == "nt":
-        from infrastructure.windows.win_icons import jumbo_icon
+        from infrastructure.windows.qt.win_icons import jumbo_icon
         jumbo = jumbo_icon(path)
         if jumbo is not None and not jumbo.isNull():
             return jumbo

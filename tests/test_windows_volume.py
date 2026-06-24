@@ -18,7 +18,7 @@ pytestmark = pytest.mark.skipif(
 )
 
 from domain.system.volume import Volume
-from infrastructure.windows.volume import WindowsVolumeControl
+from infrastructure.windows.audio.volume import WindowsVolumeControl
 
 
 def _mock_pycaw(scalar=0.5):

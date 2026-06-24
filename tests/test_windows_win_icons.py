@@ -18,7 +18,7 @@ import pytest
 if sys.platform != "win32":
     pytest.skip("Windows-only test; needs ctypes.windll", allow_module_level=True)
 
-from infrastructure.windows.win_icons import (
+from infrastructure.windows.qt.win_icons import (
     SHIL_EXTRALARGE, SHIL_JUMBO, jumbo_icon,
 )
 
@@ -33,29 +33,29 @@ def mocks():
     c_void_p() with no value is falsy, which would short-circuit the
     ``not himl`` check before the mock can act)."""
     patches = [
-        patch("infrastructure.windows.win_icons._shell32"),
-        patch("infrastructure.windows.win_icons._comctl32"),
-        patch("infrastructure.windows.win_icons._user32"),
-        patch("infrastructure.windows.win_icons._gdi32"),
-        patch("infrastructure.windows.win_icons.ctypes.byref", lambda o: o),
-        patch("infrastructure.windows.win_icons.ctypes.sizeof", return_value=64),
-        patch("infrastructure.windows.win_icons.ctypes.c_void_p",
+        patch("infrastructure.windows.qt.win_icons._shell32"),
+        patch("infrastructure.windows.qt.win_icons._comctl32"),
+        patch("infrastructure.windows.qt.win_icons._user32"),
+        patch("infrastructure.windows.qt.win_icons._gdi32"),
+        patch("infrastructure.windows.qt.win_icons.ctypes.byref", lambda o: o),
+        patch("infrastructure.windows.qt.win_icons.ctypes.sizeof", return_value=64),
+        patch("infrastructure.windows.qt.win_icons.ctypes.c_void_p",
               return_value=MagicMock(__bool__=lambda self: True)),
-        patch("infrastructure.windows.win_icons._SHFILEINFOW"),
-        patch("infrastructure.windows.win_icons._ICONINFO"),
-        patch("infrastructure.windows.win_icons._BITMAP"),
-        patch("infrastructure.windows.win_icons._BITMAPINFOHEADER"),
+        patch("infrastructure.windows.qt.win_icons._SHFILEINFOW"),
+        patch("infrastructure.windows.qt.win_icons._ICONINFO"),
+        patch("infrastructure.windows.qt.win_icons._BITMAP"),
+        patch("infrastructure.windows.qt.win_icons._BITMAPINFOHEADER"),
     ]
     for p in patches:
         p.start()
     yield {
-        "shell32": __import__("infrastructure.windows.win_icons",
+        "shell32": __import__("infrastructure.windows.qt.win_icons",
                               fromlist=["_shell32"])._shell32,
-        "comctl32": __import__("infrastructure.windows.win_icons",
+        "comctl32": __import__("infrastructure.windows.qt.win_icons",
                                fromlist=["_comctl32"])._comctl32,
-        "user32": __import__("infrastructure.windows.win_icons",
+        "user32": __import__("infrastructure.windows.qt.win_icons",
                              fromlist=["_user32"])._user32,
-        "gdi32": __import__("infrastructure.windows.win_icons",
+        "gdi32": __import__("infrastructure.windows.qt.win_icons",
                             fromlist=["_gdi32"])._gdi32,
     }
     for p in patches:
@@ -126,7 +126,7 @@ class TestJumboIcon:
         # On the success path, both hbmColor and hbmMask are freed.
         _setup_chain(mocks)
         # Make the ICONINFO instance report non-null hbmColor / hbmMask.
-        from infrastructure.windows.win_icons import _ICONINFO
+        from infrastructure.windows.qt.win_icons import _ICONINFO
         info = MagicMock()
         info.hbmColor = 0x300
         info.hbmMask = 0x400

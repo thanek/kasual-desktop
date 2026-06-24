@@ -30,7 +30,7 @@ pytestmark = pytest.mark.skipif(
     reason="Tests Windows Win32/ctypes adapters; needs ctypes.windll",
 )
 
-from infrastructure.windows.app_manager import (
+from infrastructure.windows.catalog.app_manager import (
     CREATE_NO_WINDOW,
     WAIT_TIMEOUT,
     WindowsAppManager,
@@ -141,9 +141,9 @@ class TestLaunchExe:
         fallback, so tests that want the Popen path must lie that the file exists.
         """
         proc = _running_proc(pid=pid)
-        with patch("infrastructure.windows.app_manager.subprocess.Popen", return_value=proc) as popen, \
+        with patch("infrastructure.windows.catalog.app_manager.subprocess.Popen", return_value=proc) as popen, \
              patch("infrastructure.common.lifecycle.base_app_manager.threading.Thread"), \
-             patch("infrastructure.windows.app_manager.os.path.exists", return_value=exists):
+             patch("infrastructure.windows.catalog.app_manager.os.path.exists", return_value=exists):
             am.launch(idx, command, args or [])
         return popen, proc
 
@@ -173,7 +173,7 @@ class TestLaunchExe:
     def test_env_merges_app_env(self, qapp):
         am = _make_manager()
         proc = _running_proc(pid=1234)
-        with patch("infrastructure.windows.app_manager.subprocess.Popen", return_value=proc) as popen, \
+        with patch("infrastructure.windows.catalog.app_manager.subprocess.Popen", return_value=proc) as popen, \
              patch("infrastructure.common.lifecycle.base_app_manager.threading.Thread"):
             am.launch(0, "cmd.exe", [], {"FOO": "bar"})
         env = popen.call_args.kwargs["env"]
@@ -189,7 +189,7 @@ class TestLaunchExe:
     def test_ignored_when_same_idx_already_running(self, qapp):
         am = _make_manager()
         am._processes[0] = _running_proc()
-        with patch("infrastructure.windows.app_manager.subprocess.Popen") as popen:
+        with patch("infrastructure.windows.catalog.app_manager.subprocess.Popen") as popen:
             am.launch(0, "foo.exe")
         popen.assert_not_called()
 
@@ -201,38 +201,38 @@ class TestLaunchExe:
 
     def test_starts_monitor_thread(self, qapp):
         am = _make_manager()
-        with patch("infrastructure.windows.app_manager.subprocess.Popen", return_value=_running_proc()), \
+        with patch("infrastructure.windows.catalog.app_manager.subprocess.Popen", return_value=_running_proc()), \
              patch("infrastructure.common.lifecycle.base_app_manager.threading.Thread") as mock_thread, \
-             patch("infrastructure.windows.app_manager.os.path.exists", return_value=True):
+             patch("infrastructure.windows.catalog.app_manager.os.path.exists", return_value=True):
             am.launch(0, "foo.exe")
         mock_thread.assert_called_once()
         mock_thread.return_value.start.assert_called_once()
 
     def test_returns_true_on_successful_launch(self, qapp):
         am = _make_manager()
-        with patch("infrastructure.windows.app_manager.subprocess.Popen", return_value=_running_proc()), \
+        with patch("infrastructure.windows.catalog.app_manager.subprocess.Popen", return_value=_running_proc()), \
              patch("infrastructure.common.lifecycle.base_app_manager.threading.Thread"), \
-             patch("infrastructure.windows.app_manager.os.path.exists", return_value=True):
+             patch("infrastructure.windows.catalog.app_manager.os.path.exists", return_value=True):
             assert am.launch(0, "foo.exe") is True
 
     def test_returns_false_when_already_running(self, qapp):
         am = _make_manager()
         am._processes[0] = _running_proc()
-        with patch("infrastructure.windows.app_manager.subprocess.Popen"):
+        with patch("infrastructure.windows.catalog.app_manager.subprocess.Popen"):
             assert am.launch(0, "foo.exe") is False
 
     def test_returns_false_and_emits_failed_on_file_not_found(self, qapp):
         am = _make_manager()
         failed = []
         am.on_launch_failed(lambda e: failed.append((e.idx, e.error)))
-        with patch("infrastructure.windows.app_manager.subprocess.Popen", side_effect=FileNotFoundError):
+        with patch("infrastructure.windows.catalog.app_manager.subprocess.Popen", side_effect=FileNotFoundError):
             assert am.launch(2, "C:\\nope.exe") is False
         assert failed and failed[0][0] == 2
         assert not am.is_running(2)
 
     def test_returns_false_on_permission_error(self, qapp):
         am = _make_manager()
-        with patch("infrastructure.windows.app_manager.subprocess.Popen", side_effect=PermissionError):
+        with patch("infrastructure.windows.catalog.app_manager.subprocess.Popen", side_effect=PermissionError):
             assert am.launch(0, "C:\\secret.exe") is False
 
 
@@ -241,8 +241,8 @@ class TestLaunchExe:
 class TestLaunchPathResolution:
     def test_find_in_path_returns_absolute_existing(self, qapp):
         am = _make_manager()
-        with patch("infrastructure.windows.app_manager.os.path.isabs", return_value=True), \
-             patch("infrastructure.windows.app_manager.os.path.exists", return_value=True):
+        with patch("infrastructure.windows.catalog.app_manager.os.path.isabs", return_value=True), \
+             patch("infrastructure.windows.catalog.app_manager.os.path.exists", return_value=True):
             assert am._find_in_path("C:\\bin\\app.exe") == "C:\\bin\\app.exe"
 
     def test_find_in_path_resolves_dir(self, qapp, tmp_path):
@@ -270,7 +270,7 @@ class TestLaunchPathResolution:
         am = _make_manager()
         proc = _running_proc(pid=555)
         with patch.dict("os.environ", {"PATH": str(tmp_path)}), \
-             patch("infrastructure.windows.app_manager.subprocess.Popen", return_value=proc) as popen, \
+             patch("infrastructure.windows.catalog.app_manager.subprocess.Popen", return_value=proc) as popen, \
              patch("infrastructure.common.lifecycle.base_app_manager.threading.Thread"):
             am.launch(0, "tool")
         assert popen.call_args[0][0][0] == str(exe)
@@ -283,9 +283,9 @@ class TestLaunchStartfileFallback:
         am = _make_manager()
         received = []
         am.on_started(lambda e: received.append(e.idx))
-        with patch("infrastructure.windows.app_manager.os.path.exists", return_value=False), \
+        with patch("infrastructure.windows.catalog.app_manager.os.path.exists", return_value=False), \
              patch.object(WindowsAppManager, "_find_in_path", return_value=None), \
-             patch("infrastructure.windows.app_manager.os.startfile") as startfile:
+             patch("infrastructure.windows.catalog.app_manager.os.startfile") as startfile:
             assert am.launch(4, "weird-command") is True
         startfile.assert_called_once_with("weird-command")
         assert received == [4]
@@ -294,9 +294,9 @@ class TestLaunchStartfileFallback:
         am = _make_manager()
         failed = []
         am.on_launch_failed(lambda e: failed.append(e.idx))
-        with patch("infrastructure.windows.app_manager.os.path.exists", return_value=False), \
+        with patch("infrastructure.windows.catalog.app_manager.os.path.exists", return_value=False), \
              patch.object(WindowsAppManager, "_find_in_path", return_value=None), \
-             patch("infrastructure.windows.app_manager.os.startfile", side_effect=OSError("no")):
+             patch("infrastructure.windows.catalog.app_manager.os.startfile", side_effect=OSError("no")):
             assert am.launch(4, "weird-command") is False
         assert failed == [4]
 
@@ -312,9 +312,9 @@ class TestLaunchShellExecute:
         ``ShellExecuteExW`` side_effect can mutate ``sei.hProcess`` — the real
         Win32 call writes the handle back through the byref pointer.
         Returns the windll mock and the SHELLEXECUTEINFO instance."""
-        with patch("infrastructure.windows.app_manager.ctypes.windll") as windll, \
-             patch("infrastructure.windows.app_manager.ctypes.byref", lambda obj: obj), \
-             patch("infrastructure.windows.app_manager.ctypes.sizeof", return_value=64), \
+        with patch("infrastructure.windows.catalog.app_manager.ctypes.windll") as windll, \
+             patch("infrastructure.windows.catalog.app_manager.ctypes.byref", lambda obj: obj), \
+             patch("infrastructure.windows.catalog.app_manager.ctypes.sizeof", return_value=64), \
              patch("infrastructure.common.lifecycle.base_app_manager.threading.Thread"):
             windll.shell32.ShellExecuteExW.return_value = 1  # success
             windll.kernel32.GetProcessId.return_value = pid
@@ -346,9 +346,9 @@ class TestLaunchShellExecute:
         am = _make_manager()
         received = []
         am.on_started(lambda e: received.append(e.idx))
-        with patch("infrastructure.windows.app_manager.ctypes.windll") as windll, \
-             patch("infrastructure.windows.app_manager.ctypes.byref", lambda obj: obj), \
-             patch("infrastructure.windows.app_manager.ctypes.sizeof", return_value=64), \
+        with patch("infrastructure.windows.catalog.app_manager.ctypes.windll") as windll, \
+             patch("infrastructure.windows.catalog.app_manager.ctypes.byref", lambda obj: obj), \
+             patch("infrastructure.windows.catalog.app_manager.ctypes.sizeof", return_value=64), \
              patch("infrastructure.common.lifecycle.base_app_manager.threading.Thread"):
             windll.shell32.ShellExecuteExW.return_value = 1
             am.launch(5, "ms-settings:")
@@ -363,9 +363,9 @@ class TestLaunchShellExecute:
         # rejects the fake handle 0x200 (WAIT_FAILED), marking the process
         # exited. Keeping the mock active for the duration of the assertions
         # keeps poll() returning None (WAIT_TIMEOUT) as intended.
-        with patch("infrastructure.windows.app_manager.ctypes.windll") as windll, \
-             patch("infrastructure.windows.app_manager.ctypes.byref", lambda obj: obj), \
-             patch("infrastructure.windows.app_manager.ctypes.sizeof", return_value=64), \
+        with patch("infrastructure.windows.catalog.app_manager.ctypes.windll") as windll, \
+             patch("infrastructure.windows.catalog.app_manager.ctypes.byref", lambda obj: obj), \
+             patch("infrastructure.windows.catalog.app_manager.ctypes.sizeof", return_value=64), \
              patch("infrastructure.common.lifecycle.base_app_manager.threading.Thread"):
             windll.shell32.ShellExecuteExW.return_value = 1
             windll.kernel32.GetProcessId.return_value = 999
@@ -383,9 +383,9 @@ class TestLaunchShellExecute:
         am = _make_manager()
         failed = []
         am.on_launch_failed(lambda e: failed.append(e.idx))
-        with patch("infrastructure.windows.app_manager.ctypes.windll") as windll, \
-             patch("infrastructure.windows.app_manager.ctypes.byref", lambda obj: obj), \
-             patch("infrastructure.windows.app_manager.ctypes.sizeof", return_value=64):
+        with patch("infrastructure.windows.catalog.app_manager.ctypes.windll") as windll, \
+             patch("infrastructure.windows.catalog.app_manager.ctypes.byref", lambda obj: obj), \
+             patch("infrastructure.windows.catalog.app_manager.ctypes.sizeof", return_value=64):
             windll.shell32.ShellExecuteExW.return_value = 0  # failure
             assert am.launch(7, "ms-broken:") is False
         assert failed == [7]
@@ -410,15 +410,15 @@ class TestWinHandle:
 
     def test_poll_timeout_keeps_none_and_returncode(self):
         h = _WinHandle(0x100, 1)
-        with patch("infrastructure.windows.app_manager.ctypes.windll") as windll:
+        with patch("infrastructure.windows.catalog.app_manager.ctypes.windll") as windll:
             windll.kernel32.WaitForSingleObject.return_value = WAIT_TIMEOUT
             assert h.poll() is None
         assert h.returncode is None
 
     def test_poll_signalled_reads_exit_code_and_closes_handle(self):
         h = _WinHandle(0x100, 1)
-        with patch("infrastructure.windows.app_manager.ctypes.windll") as windll, \
-             patch("infrastructure.windows.app_manager.ctypes.byref", lambda obj: obj):
+        with patch("infrastructure.windows.catalog.app_manager.ctypes.windll") as windll, \
+             patch("infrastructure.windows.catalog.app_manager.ctypes.byref", lambda obj: obj):
             windll.kernel32.WaitForSingleObject.return_value = 0  # signalled
 
             def _get_exit(handle, ec):
@@ -430,8 +430,8 @@ class TestWinHandle:
 
     def test_wait_blocks_until_signalled(self):
         h = _WinHandle(0x100, 1)
-        with patch("infrastructure.windows.app_manager.ctypes.windll") as windll, \
-             patch("infrastructure.windows.app_manager.ctypes.byref", lambda obj: obj):
+        with patch("infrastructure.windows.catalog.app_manager.ctypes.windll") as windll, \
+             patch("infrastructure.windows.catalog.app_manager.ctypes.byref", lambda obj: obj):
             windll.kernel32.WaitForSingleObject.return_value = 0
 
             def _get_exit(handle, ec):
@@ -451,19 +451,19 @@ class TestWinHandle:
 
     def test_terminate_calls_TerminateProcess(self):
         h = _WinHandle(0x100, 1)
-        with patch("infrastructure.windows.app_manager.ctypes.windll") as windll:
+        with patch("infrastructure.windows.catalog.app_manager.ctypes.windll") as windll:
             h.terminate()
         windll.kernel32.TerminateProcess.assert_called_once_with(0x100, 1)
 
     def test_terminate_noop_when_no_handle(self):
         h = _WinHandle(0, 1)
-        with patch("infrastructure.windows.app_manager.ctypes.windll") as windll:
+        with patch("infrastructure.windows.catalog.app_manager.ctypes.windll") as windll:
             h.terminate()
         windll.kernel32.TerminateProcess.assert_not_called()
 
     def test_kill_aliases_terminate(self):
         h = _WinHandle(0x100, 1)
-        with patch("infrastructure.windows.app_manager.ctypes.windll") as windll:
+        with patch("infrastructure.windows.catalog.app_manager.ctypes.windll") as windll:
             h.kill()
         windll.kernel32.TerminateProcess.assert_called_once_with(0x100, 1)
 

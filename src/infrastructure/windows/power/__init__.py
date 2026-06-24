@@ -1,0 +1,1 @@
+"""Windows power adapters."""

@@ -1,0 +1,1 @@
+"""Windows input adapters."""

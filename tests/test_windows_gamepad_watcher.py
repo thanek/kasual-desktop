@@ -31,7 +31,7 @@ import pytest
 if sys.platform != "win32":
     pytest.skip("Windows-only test; needs pygame/ctypes.windll", allow_module_level=True)
 
-from infrastructure.windows.gamepad_watcher import (
+from infrastructure.windows.input.gamepad_watcher import (
     BTN_EAST, BTN_MODE, BTN_NORTH, BTN_SELECT, BTN_SOUTH, BTN_START, BTN_WEST,
     STICK_RESET, STICK_THRESHOLD,
     WindowsGamepadWatcher,
@@ -53,10 +53,10 @@ def mock_watcher(qapp):
     fixture's Qt objects are gone (a late fire would raise
     ``AttributeError: '_Bridge' does not have a signal with the signature btn()``
     from a garbage-collected C++ QObject)."""
-    with patch("infrastructure.windows.gamepad_watcher.threading.Thread"), \
-         patch("infrastructure.windows.gamepad_watcher.pygame.init"), \
-         patch("infrastructure.windows.gamepad_watcher.pygame.joystick.init"), \
-         patch("infrastructure.windows.gamepad_watcher.pygame.display.init"):
+    with patch("infrastructure.windows.input.gamepad_watcher.threading.Thread"), \
+         patch("infrastructure.windows.input.gamepad_watcher.pygame.init"), \
+         patch("infrastructure.windows.input.gamepad_watcher.pygame.joystick.init"), \
+         patch("infrastructure.windows.input.gamepad_watcher.pygame.display.init"):
         gw = WindowsGamepadWatcher()
     yield gw
     gw._recall.cancel()
@@ -406,7 +406,7 @@ class TestConnectionState:
 
 class TestLifecycle:
     def test_refresh_reinits_joystick_subsystem(self, mock_watcher):
-        with patch("infrastructure.windows.gamepad_watcher.pygame.joystick") as js:
+        with patch("infrastructure.windows.input.gamepad_watcher.pygame.joystick") as js:
             mock_watcher.refresh()
             js.quit.assert_called_once()
             js.init.assert_called_once()
@@ -420,7 +420,7 @@ class TestLifecycle:
     def test_shutdown_stops_thread_and_quits_pygame(self, mock_watcher):
         mock_watcher._thread = MagicMock()
         mock_watcher._thread.is_alive.return_value = True
-        with patch("infrastructure.windows.gamepad_watcher.pygame.quit") as pg_quit:
+        with patch("infrastructure.windows.input.gamepad_watcher.pygame.quit") as pg_quit:
             mock_watcher.shutdown()
         mock_watcher._thread.join.assert_called_once_with(timeout=1.0)
         pg_quit.assert_called_once()
@@ -429,6 +429,6 @@ class TestLifecycle:
     def test_shutdown_skips_join_when_thread_not_alive(self, mock_watcher):
         mock_watcher._thread = MagicMock()
         mock_watcher._thread.is_alive.return_value = False
-        with patch("infrastructure.windows.gamepad_watcher.pygame.quit"):
+        with patch("infrastructure.windows.input.gamepad_watcher.pygame.quit"):
             mock_watcher.shutdown()
         mock_watcher._thread.join.assert_not_called()

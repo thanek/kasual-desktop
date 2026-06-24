@@ -55,7 +55,7 @@ if _IS_WINDOWS:
     # is pumped by SDL's video subsystem, so display.init() is required for
     # JOYBUTTONDOWN / JOYAXISMOTION / JOYHATMOTION to be delivered. Doing this
     # at module level (rather than in find_pad) ensures it runs on the main
-    # thread, mirroring infrastructure.windows.gamepad_watcher.
+    # thread, mirroring infrastructure.windows.input.gamepad_watcher.
     pygame.init()
     pygame.joystick.init()
     pygame.display.init()
