@@ -71,10 +71,19 @@ def _text_elements(un) -> list[str]:
 
 
 def _creation_time(un) -> datetime:
-    """When the notification was posted (PyWinRT maps DateTime → datetime)."""
+    """When the notification was posted (PyWinRT maps DateTime → datetime).
+
+    WinRT hands back a timezone-aware UTC datetime; the rest of the app (the
+    overlay's ``datetime.now()``, the KDE source) speaks naive *local* time.
+    Convert to naive local so the two are comparable — otherwise computing a
+    relative age subtracts offset-aware from offset-naive and raises."""
     try:
         ct = un.creation_time
-        return ct if isinstance(ct, datetime) else datetime.now()
+        if not isinstance(ct, datetime):
+            return datetime.now()
+        if ct.tzinfo is not None:
+            ct = ct.astimezone().replace(tzinfo=None)
+        return ct
     except Exception:
         return datetime.now()
 

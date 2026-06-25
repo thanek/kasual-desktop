@@ -7,7 +7,7 @@ no WinRT load and runs cross-platform. Emission is tested via the source's signa
 which delivers synchronously here (same-thread emit → direct connection).
 """
 
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 
 from infrastructure.windows.notifications.listener import (
@@ -77,6 +77,19 @@ class TestToNotification:
 
     def test_app_info_error_falls_back(self):
         assert _to_notification(_fake_un(1, app_raises=True)).app_name == "?"
+
+    def test_aware_utc_timestamp_becomes_naive_local(self):
+        # WinRT hands back tz-aware UTC; the rest of the app subtracts it from a
+        # naive datetime.now(), so the stored timestamp must be naive (and the
+        # comparison must not raise an offset-naive/aware TypeError).
+        aware = datetime(2026, 6, 24, 12, 0, 0, tzinfo=timezone(timedelta(hours=2)))
+        n = _to_notification(_fake_un(1, when=aware))
+        assert n.timestamp.tzinfo is None
+        # 12:00 at +02:00 == 10:00 UTC, rendered in the local zone.
+        expected = aware.astimezone().replace(tzinfo=None)
+        assert n.timestamp == expected
+        # Sanity: the value object now subtracts cleanly against naive now().
+        (datetime.now() - n.timestamp)
 
 
 # ── partition_new ──────────────────────────────────────────────────────────────
