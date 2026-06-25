@@ -113,6 +113,10 @@ def active_unmanaged_window(
 # ``wine*`` process; the other launchers speak for themselves. Any ``wine``-
 # prefixed name also counts (comm is truncated to 15 chars, so
 # ``wine64-preloader`` arrives as ``wine64-preloade``).
+#
+# This drives the *default* (Linux) game detection. Windows instead injects an
+# RTSS-backed ``is_game_pid`` predicate (see ``ForegroundInspector`` /
+# ``infrastructure.windows.hud.rtss_shmem``), so this set is not consulted there.
 GAME_LAUNCHERS = frozenset({
     "steam", "steamwebhelper", "reaper", "pressure-vessel", "pv-bwrap",
     "gamescope", "lutris", "heroic", "legendary", "gogdl", "nile",

@@ -40,15 +40,22 @@ class ForegroundInspector:
         app_manager: ProcessManager,
         parent_of: Callable[[int], int | None] = lambda _pid: None,
         process_name_of: Callable[[int], str | None] = lambda _pid: None,
+        is_game_pid: Callable[[int], bool] | None = None,
     ) -> None:
         self._foreground      = foreground
         self._wm              = window_manager
         self._apps            = apps
         self._app_manager     = app_manager
-        # /proc readers for the game-detection ancestry walk (foreground_is_game);
-        # injected so the inspector stays Qt-free and filesystem-free.
+        # /proc readers for the default game-detection ancestry walk
+        # (foreground_is_game); injected so the inspector stays Qt-free and
+        # filesystem-free.
         self._parent_of       = parent_of
         self._process_name_of = process_name_of
+        # Optional platform override for "is this pid a game". When given it
+        # replaces the launcher-ancestry walk entirely — Windows wires the RTSS
+        # signal here (RTSS knows which foreground process it is rendering an OSD
+        # into), which is authoritative where the process tree is not.
+        self._is_game_pid     = is_game_pid
 
     def current_app(self) -> Target | None:
         """The foreground Target, or None on the bare Desktop.
@@ -99,13 +106,27 @@ class ForegroundInspector:
         without that category, so it correctly does not qualify."""
         target = self._foreground.current
         if isinstance(target, WindowTarget):
-            return bool(target.pid) and self._descends_from_launcher(target.pid)
+            result = bool(target.pid) and self._pid_is_game(target.pid)
+            logger.debug("foreground_is_game: WindowTarget %r pid=%s -> %s",
+                         target.name, target.pid, result)
+            return result
         if isinstance(target, AppTarget):
             window = active_unmanaged_window(self._wm.cached_windows(), self._apps)
             if window is not None and window.pid:
-                return self._descends_from_launcher(window.pid)
-            return self._apps[target.index].is_game
+                result = self._pid_is_game(window.pid)
+                logger.debug("foreground_is_game: AppTarget %r, active window %r pid=%s -> %s",
+                             target.name, window.title, window.pid, result)
+                return result
+            result = self._apps[target.index].is_game
+            logger.debug("foreground_is_game: AppTarget %r, no active window -> Categories=Game? %s",
+                         target.name, result)
+            return result
+        logger.debug("foreground_is_game: no foreground target -> False")
         return False
 
-    def _descends_from_launcher(self, pid: int) -> bool:
+    def _pid_is_game(self, pid: int) -> bool:
+        """Whether *pid* belongs to a game — the injected platform predicate when
+        given, else the default launcher-ancestry walk."""
+        if self._is_game_pid is not None:
+            return self._is_game_pid(pid)
         return descends_from_launcher(pid, self._process_name_of, self._parent_of)

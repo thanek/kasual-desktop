@@ -54,14 +54,6 @@ def _setup_logging() -> Path:
 logger = logging.getLogger(__name__)
 
 
-class _StubHud:
-    """No in-game HUD on Windows — gates the HUD toggle out of the Home Overlay."""
-    def is_available(self) -> bool: return False
-    def is_enabled(self) -> bool: return False
-    def enable(self) -> None: pass
-    def disable(self) -> None: pass
-
-
 def main():
     from PyQt6.QtCore import QTimer
     from PyQt6.QtWidgets import QApplication
@@ -117,6 +109,9 @@ def main():
     from infrastructure.windows.display.brightness import WindowsBrightnessControl
     from infrastructure.windows.network.network import WindowsNetworkProbe, WindowsNetworkControl
     from infrastructure.windows.catalog.app_pinning import WindowsAppPinning
+    from infrastructure.windows.hud.rtss import WindowsRtssHudControl
+    from infrastructure.windows.hud.rtss_shmem import RtssAppProbe
+    from infrastructure.windows.proc import parent_pid, process_name
     from infrastructure.common.qt.scheduler import QtScheduler
     from domain.notifications.center import NotificationCenter
 
@@ -178,6 +173,15 @@ def main():
             color_store=DesktopTileColorStore(),
             app_pinning=WindowsAppPinning(),
             surface=surface,
+            # Process-tree readers for recall-trigger inheritance (a game window
+            # inherits its launcher tile's BTN_MODE trigger).
+            parent_of=parent_pid,
+            process_name_of=process_name,
+            # Game detection for the in-game HUD toggle: ask RTSS which foreground
+            # process it is rendering an OSD into, rather than guessing from the
+            # process tree (Steam/launcher reparenting makes the ancestry walk
+            # unreliable on Windows). RTSS is authoritative for the HUD anyway.
+            is_game_pid=RtssAppProbe().is_3d_app,
             # Protocol apps (ms-settings) have no detectable window to wait on, so
             # hide on a short timer and let the surface's foreground monitor bring
             # the Desktop back; the builder's wm/pm/apps/on_hide args don't apply.
@@ -203,7 +207,7 @@ def main():
             tray=tray,
             wm=wm,
             overlay_factory=HomeOverlayFactory(gamepad, feedback),
-            hud=_StubHud(),
+            hud=WindowsRtssHudControl(),
         )
         _refs.update(desktop=desktop, tray=tray, controller=controller)
 

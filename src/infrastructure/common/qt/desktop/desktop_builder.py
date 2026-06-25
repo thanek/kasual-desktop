@@ -88,14 +88,18 @@ def build_desktop(
     deferred_hide_factory: 'Callable[[WindowManager, ProcessManager, LiveCatalog, Callable[[], None]], LaunchHide] | None' = None,
     parent_of: Callable[[int], int | None] | None = None,
     process_name_of: Callable[[int], str | None] | None = None,
+    is_game_pid: Callable[[int], bool] | None = None,
 ) -> Desktop:
     """Build a fully wired Desktop: the view widget plus its domain coordinators.
 
     ``parent_of`` / ``process_name_of`` are the process-tree readers the
     foreground inspector and recall-trigger resolution need. The composition root
-    injects them (Linux: ``/proc`` readers; Windows: no-ops, since its launch
-    model doesn't expose a parent chain) — keeping this shared builder free of any
-    platform-specific process introspection.
+    injects them (Linux: ``/proc`` readers; Windows: psutil readers) — keeping
+    this shared builder free of any platform-specific process introspection.
+
+    ``is_game_pid`` optionally overrides how the foreground inspector decides a
+    pid is a game (Windows wires the RTSS signal); when absent the inspector falls
+    back to the launcher-ancestry walk over ``parent_of`` / ``process_name_of``.
     """
     parent_of = parent_of or (lambda _pid: None)
     process_name_of = process_name_of or (lambda _pid: None)
@@ -163,6 +167,7 @@ def build_desktop(
         app_manager=process_manager,
         parent_of=parent_of,
         process_name_of=process_name_of,
+        is_game_pid=is_game_pid,
     )
     lifecycle = AppLifecycle(
         view=widget,
