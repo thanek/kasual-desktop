@@ -1,4 +1,4 @@
-"""Tests for infrastructure.kde.proc — game detection functions.
+"""Tests for infrastructure.linux.proc — game detection functions.
 
 These tests are pure: descends_from_launcher receives injected callables
 instead of real /proc reads; uses_graphics_api has open() mocked out.
@@ -6,7 +6,7 @@ instead of real /proc reads; uses_graphics_api has open() mocked out.
 
 from unittest.mock import mock_open, patch
 
-from infrastructure.kde.proc import descends_from_launcher, uses_graphics_api
+from infrastructure.linux.proc import descends_from_launcher, uses_graphics_api
 
 
 class TestDescendsFromLauncher:

@@ -1,4 +1,4 @@
-"""Pin an open window as a permanent Kasual app tile — the KDE/freedesktop adapter.
+"""Pin an open window as a permanent Kasual app tile — the freedesktop adapter.
 
 The *Pin to menu* action turns a dynamic open-window tile into a configured app:
 it resolves the window's source freedesktop ``.desktop`` entry (the same lookup

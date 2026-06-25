@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 
 class AppManager(BaseAppManager):
-    """KDE/Linux app manager — launches apps as fresh process groups.
+    """Linux app manager — launches apps as fresh process groups.
 
     Implements the `ProcessManager` port the app-lifecycle coordinator drives.
     Lifecycle events are exposed as framework-agnostic ``EventEmitter``s (the

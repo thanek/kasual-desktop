@@ -1,4 +1,4 @@
-"""Process introspection for KDE/Linux — /proc readers and game detection.
+"""Process introspection for Linux — /proc readers and game detection.
 
 ``parent_pid`` / ``process_name`` are injected into domain collaborators
 (``TileBar``, ``ForegroundInspector``) that need process-tree information

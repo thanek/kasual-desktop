@@ -17,7 +17,7 @@ from application import Application
 from version import get_version
 from infrastructure.common.audio.feedback import SoundFeedback
 from infrastructure.common.single_instance import SingleInstanceGuard
-from infrastructure.kde.input.gamepad_watcher import GamepadWatcher
+from infrastructure.linux.input.gamepad_watcher import GamepadWatcher
 from infrastructure.common.qt.desktop import build_desktop
 from infrastructure.kde.qt.desktop.deferred_hide import DeferredHide
 from infrastructure.kde.qt.desktop.surface import LayerShellSurface
@@ -30,21 +30,21 @@ from infrastructure.common.catalog.app_config import (
     DesktopAppProvisioning, DesktopTileColorStore, DesktopTileOrderStore,
     load_apps,
 )
-from infrastructure.kde.catalog.app_discovery import WhichAppDiscovery
-from infrastructure.kde.catalog.app_pinning import DesktopAppPinning
+from infrastructure.linux.catalog.app_discovery import WhichAppDiscovery
+from infrastructure.linux.catalog.app_pinning import DesktopAppPinning
 from domain.provisioning.provisioning import Provisioning, needs_provisioning
-from infrastructure.kde.catalog.app_manager import AppManager
-from infrastructure.kde.proc import parent_pid, is_game_pid
-from infrastructure.kde.log.log_viewer_launcher import LogViewerLauncher
-from infrastructure.kde.power.power import SystemdPowerControl
-from infrastructure.kde.audio.volume import PactlVolumeControl
-from infrastructure.kde.display.brightness import select_brightness_control
+from infrastructure.linux.catalog.app_manager import AppManager
+from infrastructure.linux.proc import parent_pid, is_game_pid
+from infrastructure.linux.log.log_viewer_launcher import LogViewerLauncher
+from infrastructure.linux.power.power import SystemdPowerControl
+from infrastructure.linux.audio.volume import PactlVolumeControl
+from infrastructure.linux.display.brightness import select_brightness_control
 from infrastructure.common.qt.scheduler import QtScheduler
-from infrastructure.kde.hud.mangohud import MangoHudControl
+from infrastructure.linux.hud.mangohud import MangoHudControl
 from domain.shared.feedback import Cue
 from infrastructure.kde.display.wallpaper import KdeSystemWallpaper
-from infrastructure.kde.notifications.notifications import KdeNotificationMonitor
-from infrastructure.kde.network.network_manager import NMNetworkControl, NMNetworkMonitor
+from infrastructure.linux.notifications.notifications import KdeNotificationMonitor
+from infrastructure.linux.network.network_manager import NMNetworkControl, NMNetworkMonitor
 from domain.notifications.center import NotificationCenter
 from domain.system.actions import ActionDeps
 from infrastructure.kde.wm.window_manager import KWinWindowManager

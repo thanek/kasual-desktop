@@ -1,8 +1,9 @@
-"""KDE/freedesktop notification source — observes `Notify` calls on the bus.
+"""freedesktop notification source — observes `Notify` calls on the bus.
 
-Implements the domain `NotificationSource` port for KDE Plasma. The freedesktop
-notification protocol delivers a notification as a `Notify` *method call* to
-`org.freedesktop.Notifications` (the service Plasma's daemon owns); there is no
+Implements the domain `NotificationSource` port over the freedesktop notification
+protocol, so it works under any DE running a notification daemon (Plasma, GNOME,
+…). A notification arrives as a `Notify` *method call* to
+`org.freedesktop.Notifications` (the service the active daemon owns); there is no
 "new notification" signal to connect to, and a second process cannot own that
 service. So to observe them passively we monitor the session bus.
 

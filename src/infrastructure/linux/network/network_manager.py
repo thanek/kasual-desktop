@@ -1,4 +1,4 @@
-"""NetworkManager-backed `NetworkMonitor` (KDE's default network stack).
+"""NetworkManager-backed `NetworkMonitor` (the common Linux network stack).
 
 Implements the domain `NetworkMonitor` port over NetworkManager's D-Bus API on
 the SYSTEM bus. Event-driven: it subscribes to NM change signals and re-resolves

@@ -1,10 +1,10 @@
-"""Tests for the pure dbus-monitor parser behind the KDE notification adapter.
+"""Tests for the pure dbus-monitor parser behind the freedesktop notification adapter.
 
 The brittle text parsing is isolated from the QProcess plumbing precisely so it
 can be exercised without a live bus.
 """
 
-from infrastructure.kde.notifications.notifications import (
+from infrastructure.linux.notifications.notifications import (
     parse_notify_blocks, _parse_notify_args,
 )
 

@@ -38,7 +38,7 @@ def mock_gamepad(qapp):
     so the evdev loop never starts — tests are fully isolated
     from hardware and UInput permissions.
     """
-    with patch("infrastructure.kde.input.gamepad_watcher.threading.Thread"):
-        from infrastructure.kde.input.gamepad_watcher import GamepadWatcher
+    with patch("infrastructure.linux.input.gamepad_watcher.threading.Thread"):
+        from infrastructure.linux.input.gamepad_watcher import GamepadWatcher
         gw = GamepadWatcher()
     return gw
