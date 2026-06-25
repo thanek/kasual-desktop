@@ -86,7 +86,7 @@ def _steam_game_app(appid="292030", trigger=Trigger.CLICK):
                args=(f"steam://rungameid/{appid}",), recall_menu_trigger=trigger)
 
 
-def _make(apps=None, visible=False, parent_of=None, process_name_of=None, is_game_pid=None):
+def _make(apps=None, visible=False, is_game_pid=None):
     view = FakeView(visible=visible)
     gamepad = MagicMock()
     gamepad.top_handler.return_value = None
@@ -109,9 +109,7 @@ def _make(apps=None, visible=False, parent_of=None, process_name_of=None, is_gam
         window_manager=wm,
         apps=apps,
         app_manager=app_manager,
-        parent_of=parent_of if parent_of is not None else (lambda _p: None),
-        process_name_of=process_name_of if process_name_of is not None else (lambda _p: None),
-        is_game_pid=is_game_pid,
+        is_game_pid=is_game_pid if is_game_pid is not None else (lambda _: False),
     )
     lc = AppLifecycle(
         view=view,
@@ -565,12 +563,10 @@ class TestForegroundIsGame:
         assert c.lc.foreground_is_game() is False
 
     def test_steam_spawned_game_window_qualifies(self):
-        # Steam tile in front, game running in its own unmanaged window whose
-        # process descends from a launcher (signal B).
+        # Steam tile in front, game running in its own unmanaged window.
         c = _make(
             apps=[_app(command="steam")],
-            process_name_of={500: "reaper"}.get,
-            parent_of={500: 1}.get,
+            is_game_pid={500: True}.get,
         )
         c.fg.set(AppTarget(index=0, name="Steam"))
         c.wm.cached_windows.return_value = [
@@ -580,11 +576,7 @@ class TestForegroundIsGame:
 
     def test_steam_ui_without_game_does_not_qualify(self):
         # Steam's own window active (no spawned game) → launcher UI, not a game.
-        c = _make(
-            apps=[_app(command="steam")],
-            process_name_of={100: "steam"}.get,
-            parent_of={100: 1}.get,
-        )
+        c = _make(apps=[_app(command="steam")])
         c.fg.set(AppTarget(index=0, name="Steam"))
         c.wm.cached_windows.return_value = [
             Window(id="s1", title="Steam", pid=100, active=True, resource_class="steam"),
@@ -593,21 +585,18 @@ class TestForegroundIsGame:
 
     def test_external_window_target_under_launcher_qualifies(self):
         # A directly-activated external game-window tile, classified by its pid.
-        c = _make(process_name_of={500: "steam"}.get, parent_of={500: 1}.get)
+        c = _make(is_game_pid={500: True}.get)
         c.fg.set(WindowTarget(window_id="g1", name="KCD", pid=500))
         assert c.lc.foreground_is_game() is True
 
     def test_external_window_target_not_a_game(self):
-        c = _make(process_name_of={500: "firefox"}.get, parent_of={500: 1}.get)
+        c = _make(is_game_pid=lambda _: False)
         c.fg.set(WindowTarget(window_id="w1", name="Firefox", pid=500))
         assert c.lc.foreground_is_game() is False
 
-    def test_is_game_pid_override_used_for_spawned_window(self):
-        # With an injected predicate (Windows RTSS signal), the launcher-ancestry
-        # walk is bypassed: the spawned window's pid is classified by it alone.
+    def test_is_game_pid_used_for_spawned_window(self):
         c = _make(
             apps=[_app(command="steam")],
-            parent_of={500: 1}.get,  # no launcher ancestry at all
             is_game_pid={777: True}.get,
         )
         c.fg.set(AppTarget(index=0, name="Steam"))
@@ -616,7 +605,7 @@ class TestForegroundIsGame:
         ]
         assert c.lc.foreground_is_game() is True
 
-    def test_is_game_pid_override_rejects_non_game_window(self):
+    def test_is_game_pid_rejects_non_game_window(self):
         c = _make(
             apps=[_app(command="steam")],
             is_game_pid=lambda _pid: False,
@@ -627,7 +616,7 @@ class TestForegroundIsGame:
         ]
         assert c.lc.foreground_is_game() is False
 
-    def test_is_game_pid_override_used_for_window_target(self):
+    def test_is_game_pid_used_for_window_target(self):
         c = _make(is_game_pid={500: True}.get)
         c.fg.set(WindowTarget(window_id="g1", name="Witcher 3", pid=500))
         assert c.lc.foreground_is_game() is True

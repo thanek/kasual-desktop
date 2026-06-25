@@ -326,10 +326,18 @@ turn it on or off. The backend differs per platform:
 Only over a **game** — never on the bare desktop or over ordinary apps. How a
 foreground is recognised as a game differs per platform:
 
-- **Linux** — its process descends from a known launcher/runtime (e.g. **Steam,
-  Heroic, Lutris, Gamescope, Wine/Proton, Bottles**), so games launched through
-  them are detected automatically; or its tile declares **`Categories=Game`**
-  (use this for standalone game tiles not started through a launcher).
+- **Linux** — two complementary signals are combined (either is sufficient):
+  1. **Graphics API detection** — the process has mapped a 3D graphics library
+     (`libvulkan`, `libGL`, DXVK, VKD3D-Proton, Wine Vulkan). This catches
+     native games and Proton/Wine titles regardless of which launcher started them.
+  2. **Launcher ancestry** — the process descends from a known launcher/runtime
+     (**Steam, Heroic, Lutris, Gamescope, Wine/Proton, Bottles**). Covers games
+     whose libraries aren't yet mapped (early startup) or statically linked titles.
+
+  As a fallback, a tile that declares **`Categories=Game`** in its `.desktop`
+  file also qualifies — use this for standalone game tiles not started through a
+  launcher that don't trigger either automatic signal.
+
 - **Windows** — **RTSS itself is the authority**: the toggle appears when RTSS is
   actively rendering its OSD into the foreground process (i.e. a hooked 3D app).
   No launcher list or `Categories=Game` is needed — if RTSS is drawing on the

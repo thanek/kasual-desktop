@@ -7,7 +7,7 @@ from domain.catalog.app import App
 from domain.catalog.target import AppTarget, WindowTarget, target_at_index
 from domain.catalog.window import Window
 from domain.catalog.window_rules import (
-    active_unmanaged_window, app_window_present, descends_from_launcher,
+    active_unmanaged_window, app_window_present,
     external_windows, is_app_running, resolve_recall_trigger,
 )
 from domain.input.vocabulary import Trigger
@@ -252,38 +252,3 @@ class TestResolveRecallTrigger:
         # Walking up to init (pid 1) without an owner → CLICK, no infinite loop.
         parent = {10: 1}.get
         assert resolve_recall_trigger(10, {}, parent) == Trigger.CLICK
-
-
-class TestDescendsFromLauncher:
-    def test_direct_launcher_process(self):
-        names = {1000: "steam"}.get
-        assert descends_from_launcher(1000, names, lambda p: None) is True
-
-    def test_game_under_steam_reaper(self):
-        # KCD.exe → wine → pressure-vessel → reaper → steam; matched at reaper.
-        names = {500: "KCD.exe", 400: "wine64-preloade", 300: "reaper", 200: "steam"}.get
-        parent = {500: 400, 400: 300, 300: 200, 200: 1}.get
-        assert descends_from_launcher(500, names, parent) is True
-
-    def test_wine_prefix_matches(self):
-        names = {700: "wineserver"}.get
-        assert descends_from_launcher(700, names, lambda p: None) is True
-
-    def test_heroic_launched_game(self):
-        names = {800: "Game", 600: "heroic"}.get
-        parent = {800: 600, 600: 1}.get
-        assert descends_from_launcher(800, names, parent) is True
-
-    def test_plain_app_is_not_a_game(self):
-        # A browser under the shell — no launcher in the chain.
-        names = {900: "firefox", 100: "plasmashell"}.get
-        parent = {900: 100, 100: 1}.get
-        assert descends_from_launcher(900, names, parent) is False
-
-    def test_unknown_name_defaults_false(self):
-        assert descends_from_launcher(123, lambda p: None, lambda p: None) is False
-
-    def test_stops_on_cycle(self):
-        names = lambda p: "x"
-        parent = {5: 6, 6: 5}.get
-        assert descends_from_launcher(5, names, parent) is False

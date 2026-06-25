@@ -31,8 +31,8 @@ class WindowTarget:
 
     Carries the recall trigger inherited from the owning app (e.g. a game
     launched by Steam inherits Steam's BTN_MODE_HOLD_1S) and the owning OS pid,
-    used to classify the window as a game by process ancestry (see
-    :func:`domain.catalog.window_rules.descends_from_launcher`).
+    passed to the platform ``is_game_pid`` predicate to decide whether the HUD
+    toggle should be offered (see :func:`domain.lifecycle.foreground_inspector`).
     """
 
     window_id: str

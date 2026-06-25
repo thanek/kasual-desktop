@@ -34,7 +34,7 @@ from infrastructure.kde.catalog.app_discovery import WhichAppDiscovery
 from infrastructure.kde.catalog.app_pinning import DesktopAppPinning
 from domain.provisioning.provisioning import Provisioning, needs_provisioning
 from infrastructure.kde.catalog.app_manager import AppManager
-from infrastructure.kde.proc import parent_pid, process_name
+from infrastructure.kde.proc import parent_pid, is_game_pid
 from infrastructure.kde.log.log_viewer_launcher import LogViewerLauncher
 from infrastructure.kde.power.power import SystemdPowerControl
 from infrastructure.kde.audio.volume import PactlVolumeControl
@@ -141,7 +141,7 @@ def main() -> None:
             app_pinning=DesktopAppPinning(),
             surface=LayerShellSurface(),
             parent_of=parent_pid,
-            process_name_of=process_name,
+            is_game_pid=is_game_pid,
             deferred_hide_factory=lambda wm_, pm_, apps_, on_hide:
                 DeferredHide(wm_, pm_, apps_, on_hide=on_hide),
         )

@@ -107,23 +107,6 @@ def active_unmanaged_window(
     return active
 
 
-# Process names (``/proc/<pid>/comm``) that mark a game launcher / runtime in a
-# foreground process's ancestry. Steam wraps every launch in ``reaper`` and runs
-# games through ``pressure-vessel``; native and Proton/Wine titles carry a
-# ``wine*`` process; the other launchers speak for themselves. Any ``wine``-
-# prefixed name also counts (comm is truncated to 15 chars, so
-# ``wine64-preloader`` arrives as ``wine64-preloade``).
-#
-# This drives the *default* (Linux) game detection. Windows instead injects an
-# RTSS-backed ``is_game_pid`` predicate (see ``ForegroundInspector`` /
-# ``infrastructure.windows.hud.rtss_shmem``), so this set is not consulted there.
-GAME_LAUNCHERS = frozenset({
-    "steam", "steamwebhelper", "reaper", "pressure-vessel", "pv-bwrap",
-    "gamescope", "lutris", "heroic", "legendary", "gogdl", "nile",
-    "bottles", "bottles-cli",
-})
-
-
 def walk_parent_chain(
     pid:       int,
     parent_of: Callable[[int], int | None],
@@ -143,26 +126,6 @@ def walk_parent_chain(
         if parent is None:
             break
         current = parent
-
-
-def descends_from_launcher(
-    pid:       int,
-    name_of:   Callable[[int], str | None],
-    parent_of: Callable[[int], int | None],
-    launchers: frozenset[str] = GAME_LAUNCHERS,
-) -> bool:
-    """True if *pid* or any ancestor is a known game launcher / runtime.
-
-    Walks the process-parent chain (``name_of``/``parent_of`` injected — the
-    /proc reads are infrastructure) matching each process name against
-    *launchers* (plus any ``wine``-prefixed name). This is how the Home Overlay
-    recognises a Steam/Heroic/Lutris-launched game without a per-title list, so
-    the HUD toggle appears for games but not for ordinary apps."""
-    for current in walk_parent_chain(pid, parent_of):
-        name = (name_of(current) or "").lower()
-        if name in launchers or name.startswith("wine"):
-            return True
-    return False
 
 
 def resolve_recall_trigger(

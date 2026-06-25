@@ -87,22 +87,18 @@ def build_desktop(
     surface: DesktopSurface | None = None,
     deferred_hide_factory: 'Callable[[WindowManager, ProcessManager, LiveCatalog, Callable[[], None]], LaunchHide] | None' = None,
     parent_of: Callable[[int], int | None] | None = None,
-    process_name_of: Callable[[int], str | None] | None = None,
-    is_game_pid: Callable[[int], bool] | None = None,
+    is_game_pid: Callable[[int], bool] = lambda _: False,
 ) -> Desktop:
     """Build a fully wired Desktop: the view widget plus its domain coordinators.
 
-    ``parent_of`` / ``process_name_of`` are the process-tree readers the
-    foreground inspector and recall-trigger resolution need. The composition root
-    injects them (Linux: ``/proc`` readers; Windows: psutil readers) — keeping
-    this shared builder free of any platform-specific process introspection.
+    ``parent_of`` is the /proc parent-PID reader injected for recall-trigger
+    inheritance (a game window inherits its launcher tile's BTN_MODE trigger).
 
-    ``is_game_pid`` optionally overrides how the foreground inspector decides a
-    pid is a game (Windows wires the RTSS signal); when absent the inspector falls
-    back to the launcher-ancestry walk over ``parent_of`` / ``process_name_of``.
+    ``is_game_pid`` is the platform predicate that decides whether a foreground
+    pid is a game (gates the in-game HUD toggle). KDE wires ``kde.proc.is_game_pid``
+    (graphics-API maps check + launcher ancestry); Windows wires the RTSS signal.
     """
     parent_of = parent_of or (lambda _pid: None)
-    process_name_of = process_name_of or (lambda _pid: None)
     # The open-overlay group is shared: the widget feeds it (register/forget) and
     # the coordinator pauses/resumes it as the surface hides and returns.
     overlays = OpenOverlays()
@@ -165,8 +161,6 @@ def build_desktop(
         window_manager=window_manager,
         apps=live_apps,
         app_manager=process_manager,
-        parent_of=parent_of,
-        process_name_of=process_name_of,
         is_game_pid=is_game_pid,
     )
     lifecycle = AppLifecycle(
