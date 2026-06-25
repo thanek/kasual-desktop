@@ -2,22 +2,14 @@ import logging
 import select
 import threading
 import time
-from typing import Callable
 
-from PyQt6.QtCore import pyqtSignal, QObject, QTimer
+from PyQt6.QtCore import QObject
 from evdev import InputDevice, InputEvent, UInput, ecodes, list_devices
 
-from domain.shared.event_emitter import EventEmitter, Unsubscribe
 from domain.input.direction_repeat import DirectionRepeat
-from domain.input.focus_stack import InputFocusStack
-from domain.input.gamepad_events import (
-    BtnModePressed, GamepadConnected, GamepadDisconnected,
-)
-from domain.input.gamepad_signals import GamepadSignals
 from domain.input.recall import RecallTrigger
 from domain.input.vocabulary import Event, Trigger
-from domain.input.pad_control import PadControl
-from infrastructure.common.qt._meta import ProtocolQtMeta
+from infrastructure.common.input.gamepad_watcher_base import BaseGamepadWatcher
 
 logger = logging.getLogger(__name__)
 
@@ -26,133 +18,33 @@ STICK_RESET     = 6000    # hysteresis — below this value the axis is "centere
 
 VIRTUAL_DEVICE_NAME   = "kasual-vpad"
 
-class GamepadWatcher(QObject, PadControl, GamepadSignals, metaclass=ProtocolQtMeta):
+
+class GamepadWatcher(BaseGamepadWatcher):
+    """Reads events from a physical gamepad (evdev) in a background thread.
+
+    The shared `PadControl` / `GamepadSignals` plumbing lives in
+    :class:`BaseGamepadWatcher`; this adapter adds the Linux device handling.
+
+    The gamepad is always grabbed exclusively. All events except BTN_MODE are
+    forwarded to a virtual gamepad (UInput, name: VIRTUAL_DEVICE_NAME), which
+    external applications (e.g. Steam) consume. Navigation events are translated
+    and surfaced via the base's GUI-thread hops; BTN_MODE is observed separately
+    (not forwarded to the stack or virtual gamepad).
     """
-    Reads events from a physical gamepad in a background thread.
-
-    Implements two domain ports: `PadControl` (the LIFO handler stack the
-    app-lifecycle coordinator drives) and `GamepadSignals` (framework-agnostic
-    pub/sub for BTN_MODE and connect/disconnect events).
-
-    The gamepad is always grabbed exclusively. All events except BTN_MODE
-    are forwarded to a virtual gamepad (UInput, name: VIRTUAL_DEVICE_NAME),
-    which external applications (e.g. Steam) use.
-
-    Navigation events (up/down/left/right/select/cancel/close) are translated
-    and dispatched through a LIFO handler stack — only the top handler reacts.
-    BTN_MODE is observed separately (not forwarded to the stack or virtual gamepad).
-
-    Threading: the read loop runs on a background thread, but all observers run
-    on the GUI thread. The private `_*_hop` pyqtSignals are the marshalling
-    bridge — the loop emits them, Qt delivers them queued onto the GUI thread,
-    and only then do the domain `EventEmitter`s fan out to subscribers.
-
-    Stack interface:
-        push_handler(fn)  — adds handler to the top (moves it if already present)
-        pop_handler(fn)   — removes handler
-        inject(event)     — injects a navigation event bypassing the gamepad (e.g. from keyboard)
-    """
-
-    # Private thread-marshalling bridge (background loop → GUI thread). These
-    # are an implementation detail; the public contract is the GamepadSignals
-    # port. Qt delivers them via a queued connection because this QObject lives
-    # on the GUI thread.
-    _nav_hop          = pyqtSignal(str)
-    _btn_mode_hop     = pyqtSignal()
-    _connected_hop    = pyqtSignal()
-    _disconnected_hop = pyqtSignal()
 
     def __init__(self, parent: QObject | None = None):
         super().__init__(parent)
-        self._stack = InputFocusStack()   # who receives navigation events (LIFO)
-        self._recall = RecallTrigger(on_recall=self._btn_mode_hop.emit)
+        self._recall = RecallTrigger(on_recall=self._hop_btn_mode)
         self._repeat = DirectionRepeat()  # auto-fire for a held direction
 
         self._lock = threading.Lock()
         self._app_btn_mode_trigger: str               = Trigger.CLICK
         self._device: InputDevice | None              = None
         self._refresh_requested: bool                 = False
-        # Last connection state seen on the GUI thread. Tracked so a subscriber
-        # that registers *after* the one-shot connected hop already fired (the
-        # device is grabbed within milliseconds of construction, before the
-        # controller wires up) still learns the current state — see on_connected.
-        self._connected: bool                         = False
-
-        # Framework-agnostic observer hub (driven on the GUI thread by the hops).
-        self._btn_mode_emitter     = EventEmitter[BtnModePressed]()
-        self._connected_emitter    = EventEmitter[GamepadConnected]()
-        self._disconnected_emitter = EventEmitter[GamepadDisconnected]()
-
-        self._nav_hop.connect(self._dispatch)
-        self._btn_mode_hop.connect(
-            lambda: self._btn_mode_emitter.emit(BtnModePressed()))
-        # Bound-method slots (not lambdas) so they carry this QObject as context:
-        # they latch the state on the GUI thread before fanning out.
-        self._connected_hop.connect(self._on_connected_hop)
-        self._disconnected_hop.connect(self._on_disconnected_hop)
 
         threading.Thread(target=self._loop, daemon=True, name="gamepad-watcher").start()
 
-    def _on_connected_hop(self) -> None:
-        self._connected = True
-        self._connected_emitter.emit(GamepadConnected())
-
-    def _on_disconnected_hop(self) -> None:
-        self._connected = False
-        self._disconnected_emitter.emit(GamepadDisconnected())
-
-    # ── GamepadSignals port ──────────────────────────────────────────────────
-
-    def on_btn_mode(self, handler: Callable[[], None]) -> Unsubscribe:
-        return self._btn_mode_emitter.subscribe(lambda _evt: handler())
-
-    def on_connected(
-        self, handler: Callable[[GamepadConnected], None]
-    ) -> Unsubscribe:
-        unsubscribe = self._connected_emitter.subscribe(handler)
-        # Replay the current state to a late subscriber: if the pad was already
-        # grabbed before this subscription, the one-shot hop fired with no
-        # listener, so deliver it now (deferred to the event loop, off __init__).
-        if self._connected:
-            QTimer.singleShot(0, lambda: handler(GamepadConnected()))
-        return unsubscribe
-
-    def on_disconnected(
-        self, handler: Callable[[GamepadDisconnected], None]
-    ) -> Unsubscribe:
-        return self._disconnected_emitter.subscribe(handler)
-
-    # ── PadControl port ──────────────────────────────────────────────────────
-
-    def push_handler(self, handler: Callable[[str], None]) -> None:
-        self._stack.push(handler)
-
-    def pop_handler(self, handler: Callable[[str], None]) -> None:
-        self._stack.pop(handler)
-
-    def inject(self, event: str) -> None:
-        """Inject a navigation event (e.g. from keyboard) into the active handler."""
-        self._stack.dispatch(event)
-
-    def top_handler(self) -> Callable[[str], None] | None:
-        """Return the handler currently receiving events, or None if the stack is empty."""
-        return self._stack.top()
-
-    def trigger_btn_mode(self) -> None:
-        """Request BTN_MODE from outside the gamepad (e.g. a keyboard shortcut).
-
-        Routed through the same GUI-thread hop as a real press, so observers
-        run on the GUI thread regardless of the caller.
-        """
-        self._btn_mode_hop.emit()
-
-    def trigger_home(self) -> None:
-        """Open the Home overlay (keyboard shortcut equivalent of BTN_MODE).
-
-        Delegates to ``trigger_btn_mode`` which routes through the same
-        GUI-thread hop and observer chain as a real gamepad press.
-        """
-        self.trigger_btn_mode()
+    # ── PadControl extras (Linux-specific) ─────────────────────────────────────
 
     def set_app_btn_mode_trigger(self, trigger: str) -> None:
         """Set the BTN_MODE recall trigger for the currently active app.
@@ -176,11 +68,7 @@ class GamepadWatcher(QObject, PadControl, GamepadSignals, metaclass=ProtocolQtMe
             if self._device is not None:
                 self._refresh_requested = True
 
-
     # ── Internal ───────────────────────────────────────────────────────────
-
-    def _dispatch(self, event: str) -> None:
-        self._stack.dispatch(event)
 
     def _emit_due_repeats(self) -> None:
         """Re-emit a held direction when its next auto-repeat is due.
@@ -192,7 +80,7 @@ class GamepadWatcher(QObject, PadControl, GamepadSignals, metaclass=ProtocolQtMe
             return
         direction = self._repeat.due()
         if direction is not None:
-            self._nav_hop.emit(direction)
+            self._hop_nav(direction)
 
     def _repeat_timeout(self, default: float) -> float:
         """Shorten the blocking read so a pending auto-repeat fires on time."""
@@ -253,7 +141,7 @@ class GamepadWatcher(QObject, PadControl, GamepadSignals, metaclass=ProtocolQtMe
                         )
                         if not was_connected:
                             was_connected = True
-                            self._connected_hop.emit()
+                            self._hop_connected()
                         refresh_started_at = None
                         break
                     except Exception as exc:
@@ -266,7 +154,7 @@ class GamepadWatcher(QObject, PadControl, GamepadSignals, metaclass=ProtocolQtMe
                         logger.info("Gamepad refresh — no device after %.1fs, signalling disconnect",
                                     REFRESH_GRACE_SECONDS)
                         was_connected = False
-                        self._disconnected_hop.emit()
+                        self._hop_disconnected()
                         refresh_started_at = None
 
             # ── Read events ───────────────────────────────────────────────
@@ -311,7 +199,7 @@ class GamepadWatcher(QObject, PadControl, GamepadSignals, metaclass=ProtocolQtMe
                                 for nav in pending:
                                     if nav not in seen:
                                         seen.add(nav)
-                                        self._nav_hop.emit(nav)
+                                        self._hop_nav(nav)
                                 pending.clear()
                                 if uinput:
                                     uinput.syn()
@@ -358,7 +246,7 @@ class GamepadWatcher(QObject, PadControl, GamepadSignals, metaclass=ProtocolQtMe
                         self._refresh_requested = False
                     was_connected = False
                     refresh_started_at = None
-                    self._disconnected_hop.emit()
+                    self._hop_disconnected()
             else:
                 time.sleep(1)
 
@@ -372,18 +260,18 @@ class GamepadWatcher(QObject, PadControl, GamepadSignals, metaclass=ProtocolQtMe
         if ev.value == 1:
             held.add(ev.code)
             if ev.code == ecodes.BTN_SOUTH:
-                self._nav_hop.emit(Event.SELECT)
+                self._hop_nav(Event.SELECT)
             elif ev.code == ecodes.BTN_EAST:
-                self._nav_hop.emit(Event.CANCEL)
+                self._hop_nav(Event.CANCEL)
             elif ev.code == ecodes.BTN_WEST:
-                self._nav_hop.emit(Event.CLOSE)
+                self._hop_nav(Event.CLOSE)
             elif ev.code == ecodes.BTN_START:
                 # Start+Select is the home-recall chord; Start alone opens the
                 # tile management popover (Select must be held first for the chord).
                 if ecodes.BTN_SELECT in held:
-                    self._btn_mode_hop.emit()
+                    self._hop_btn_mode()
                 else:
-                    self._nav_hop.emit(Event.MANAGE)
+                    self._hop_nav(Event.MANAGE)
         elif ev.value == 0:
             held.discard(ev.code)
 

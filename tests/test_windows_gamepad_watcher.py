@@ -49,10 +49,9 @@ def mock_watcher(qapp):
 
     Yields the watcher and cleans up on teardown: cancels any armed
     RecallTrigger hold timer and clears DirectionRepeat state, so a HOLD_1S
-    press left running by a test can't fire ``_bridge.btn.emit`` after the
-    fixture's Qt objects are gone (a late fire would raise
-    ``AttributeError: '_Bridge' does not have a signal with the signature btn()``
-    from a garbage-collected C++ QObject)."""
+    press left running by a test can't fire the base's btn-mode hop after the
+    fixture's Qt objects are gone (a late fire would raise an AttributeError
+    about a missing signal from a garbage-collected C++ QObject)."""
     with patch("infrastructure.windows.input.gamepad_watcher.threading.Thread"), \
          patch("infrastructure.windows.input.gamepad_watcher.pygame.init"), \
          patch("infrastructure.windows.input.gamepad_watcher.pygame.joystick.init"), \
@@ -386,7 +385,7 @@ class TestConnectionState:
     def test_on_connected_delivers_event(self, mock_watcher, qapp):
         got = []
         mock_watcher.on_connected(lambda evt: got.append(evt))
-        mock_watcher._on_connected_main()
+        mock_watcher._on_connected_hop()
         assert len(got) == 1
 
     def test_on_connected_replays_to_late_subscriber(self, mock_watcher, qapp):
@@ -411,13 +410,13 @@ class TestConnectionState:
     def test_on_disconnected_delivers_event(self, mock_watcher, qapp):
         got = []
         mock_watcher.on_disconnected(lambda evt: got.append(evt))
-        mock_watcher._on_disconnected_main()
+        mock_watcher._on_disconnected_hop()
         assert len(got) == 1
 
     def test_on_btn_mode_delivers_event(self, mock_watcher, qapp):
         got = []
         mock_watcher.on_btn_mode(lambda: got.append(True))
-        mock_watcher._on_btn_mode_main()
+        mock_watcher._on_btn_mode_hop()
         assert got == [True]
 
 

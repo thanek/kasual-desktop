@@ -100,7 +100,3 @@ class AppManager(BaseAppManager):
             pass
         except Exception as e:
             logger.error("killpg(%s) failed: %s", sig.name, e)
-
-    # Re-declare for type checkers that resolve the index from process identity
-    # via the base — kept identical so the override is explicit.
-    # (No-op: inherited from BaseAppManager.)
