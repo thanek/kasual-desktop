@@ -13,7 +13,7 @@ global OSD on/off — is read and flipped directly:
   - **enable**  → ``SetFlags(~OSD_VISIBLE, OSD_VISIBLE)`` (clear then set the bit);
   - **disable** → ``SetFlags(~OSD_VISIBLE, 0)`` (clear the bit).
 
-This is the Windows analogue of :class:`infrastructure.kde.mangohud.MangoHudControl`:
+This is the Windows analogue of :class:`infrastructure.kde.hud.mangohud.MangoHudControl`:
 it needs no elevation and writes no files, and — unlike the persistent ``EnableOSD``
 profile property whose only writable copy lives under RTSS's ``Program Files``
 folder — it reflects the live state, so the toggle's label is always accurate. The

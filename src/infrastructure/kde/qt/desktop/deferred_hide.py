@@ -11,7 +11,7 @@ from domain.lifecycle.process_manager import ProcessManager
 from domain.lifecycle.window_manager import WindowManager
 from domain.shared.event_emitter import Unsubscribe
 from infrastructure.common.qt._meta import ProtocolQtMeta
-from infrastructure.kde.window_manager import expand_pid_tree
+from infrastructure.kde.wm.window_manager import expand_pid_tree
 from domain.lifecycle.launch_hide import LaunchHide
 
 _POLL_INTERVAL_MS = 150

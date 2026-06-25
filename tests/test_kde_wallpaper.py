@@ -7,8 +7,8 @@ monkeypatch; the image files are real temp files (the resolver checks isfile).
 import pytest
 
 from domain.shell.wallpaper import Wallpaper
-import infrastructure.kde.wallpaper as kw
-from infrastructure.kde.wallpaper import KdeSystemWallpaper
+import infrastructure.kde.display.wallpaper as kw
+from infrastructure.kde.display.wallpaper import KdeSystemWallpaper
 
 
 @pytest.fixture

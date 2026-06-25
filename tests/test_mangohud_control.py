@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from infrastructure.kde.mangohud import MangoHudControl
+from infrastructure.kde.hud.mangohud import MangoHudControl
 
 
 def _control(tmp_path: Path, contents: str | None) -> tuple[MangoHudControl, Path]:

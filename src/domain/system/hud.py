@@ -4,7 +4,7 @@ This owns only the "WHAT": whether the HUD feature is offered at all, how the
 toggle reads given the current state, and which way a press flips it. The "HOW"
 — where the on/off state lives and how it is changed (a MangoHud config file) —
 sits behind the :class:`HudControl` port, implemented in
-``infrastructure.kde.mangohud``. Keeping the file mechanics out is what lets this
+``infrastructure.kde.hud.mangohud``. Keeping the file mechanics out is what lets this
 stay a pure, Qt-free, filesystem-free domain citizen.
 
 The toggle is offered only over a running app (the Home Overlay's "game mode"

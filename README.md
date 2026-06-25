@@ -333,7 +333,7 @@ foreground is recognised as a game differs per platform:
 - **Windows** — **RTSS itself is the authority**: the toggle appears when RTSS is
   actively rendering its OSD into the foreground process (i.e. a hooked 3D app).
   No launcher list or `Categories=Game` is needed — if RTSS is drawing on the
-  game, Kasual offers the toggle.
+  game, Kasual Desktop offers the toggle.
 
 ### Linux — MangoHud
 
@@ -343,7 +343,7 @@ foreground is recognised as a game differs per platform:
   apt package is often too old; building from source may be necessary.
 - **A MangoHud config file at `~/.config/MangoHud/MangoHud.conf`.** Its presence
   gates the whole feature — with no file, the toggle never appears (an empty
-  file is enough). This is the file Kasual edits to show/hide the HUD.
+  file is enough). This is the file Kasual Desktop edits to show/hide the HUD.
 - **MangoHud actually injected into your games**, via any of:
   - a global `MANGOHUD=1` in your environment (covers Vulkan games),
   - `mangohud %command%` in a game's **Steam** launch options,
@@ -374,7 +374,7 @@ and reloads it on every change, so the HUD appears or disappears **immediately**
   Afterburner/RTSS (monitoring graphs in the On-Screen Display).
 - **No administrator rights required.**
 
-**How toggling works** — Kasual calls the `SetFlags` export of RTSS's
+**How toggling works** — Kasual Desktop calls the `SetFlags` export of RTSS's
 `RTSSHooks64.dll` to read and flip the runtime *OSD-visible* flag — the exact
 mechanism RTSS's own "Show On-Screen Display On/Off" hotkeys use. The change is
 applied live to running games, needs no elevation, and writes no files. It

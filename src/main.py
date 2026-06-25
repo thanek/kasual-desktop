@@ -17,7 +17,7 @@ from application import Application
 from version import get_version
 from infrastructure.common.audio.feedback import SoundFeedback
 from infrastructure.common.single_instance import SingleInstanceGuard
-from infrastructure.kde.gamepad_watcher import GamepadWatcher
+from infrastructure.kde.input.gamepad_watcher import GamepadWatcher
 from infrastructure.common.qt.desktop import build_desktop
 from infrastructure.kde.qt.desktop.deferred_hide import DeferredHide
 from infrastructure.kde.qt.desktop.surface import LayerShellSurface
@@ -30,24 +30,24 @@ from infrastructure.common.catalog.app_config import (
     DesktopAppProvisioning, DesktopTileColorStore, DesktopTileOrderStore,
     load_apps,
 )
-from infrastructure.kde.app_discovery import WhichAppDiscovery
-from infrastructure.kde.app_pinning import DesktopAppPinning
+from infrastructure.kde.catalog.app_discovery import WhichAppDiscovery
+from infrastructure.kde.catalog.app_pinning import DesktopAppPinning
 from domain.provisioning.provisioning import Provisioning, needs_provisioning
-from infrastructure.kde.app_manager import AppManager
+from infrastructure.kde.catalog.app_manager import AppManager
 from infrastructure.kde.proc import parent_pid, process_name
-from infrastructure.kde.log_viewer_launcher import LogViewerLauncher
-from infrastructure.kde.power import SystemdPowerControl
-from infrastructure.kde.volume import PactlVolumeControl
-from infrastructure.kde.brightness import select_brightness_control
+from infrastructure.kde.log.log_viewer_launcher import LogViewerLauncher
+from infrastructure.kde.power.power import SystemdPowerControl
+from infrastructure.kde.audio.volume import PactlVolumeControl
+from infrastructure.kde.display.brightness import select_brightness_control
 from infrastructure.common.qt.scheduler import QtScheduler
-from infrastructure.kde.mangohud import MangoHudControl
+from infrastructure.kde.hud.mangohud import MangoHudControl
 from domain.shared.feedback import Cue
-from infrastructure.kde.wallpaper import KdeSystemWallpaper
-from infrastructure.kde.notifications import KdeNotificationMonitor
-from infrastructure.kde.network_manager import NMNetworkControl, NMNetworkMonitor
+from infrastructure.kde.display.wallpaper import KdeSystemWallpaper
+from infrastructure.kde.notifications.notifications import KdeNotificationMonitor
+from infrastructure.kde.network.network_manager import NMNetworkControl, NMNetworkMonitor
 from domain.notifications.center import NotificationCenter
 from domain.system.actions import ActionDeps
-from infrastructure.kde.window_manager import KWinWindowManager
+from infrastructure.kde.wm.window_manager import KWinWindowManager
 from infrastructure.common.qt.i18n import install_translations
 
 logger = logging.getLogger(__name__)
