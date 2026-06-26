@@ -4,34 +4,34 @@
 <context>
     <name>AboutOverlay</name>
     <message>
-        <location filename="../src/infrastructure/qt/overlays/about_overlay.py" line="53" />
+        <location filename="../src/infrastructure/common/qt/overlays/about_overlay.py" line="53" />
         <source>Version {0}</source>
         <translation>Wersja {0}</translation>
     </message>
     <message>
-        <location filename="../src/infrastructure/qt/overlays/about_overlay.py" line="60" />
+        <location filename="../src/infrastructure/common/qt/overlays/about_overlay.py" line="60" />
         <source>Author</source>
         <translation>Autor</translation>
     </message>
     <message>
-        <location filename="../src/infrastructure/qt/overlays/about_overlay.py" line="62" />
+        <location filename="../src/infrastructure/common/qt/overlays/about_overlay.py" line="62" />
         <source>License</source>
         <translation>Licencja</translation>
     </message>
     <message>
-        <location filename="../src/infrastructure/qt/overlays/about_overlay.py" line="75" />
+        <location filename="../src/infrastructure/common/qt/overlays/about_overlay.py" line="75" />
         <source>Close</source>
         <translation>Zamknij</translation>
     </message>
 </context><context>
     <name>ConfirmDialog</name>
     <message>
-        <location filename="../src/infrastructure/qt/overlays/confirm_dialog.py" line="61" />
+        <location filename="../src/infrastructure/common/qt/overlays/confirm_dialog.py" line="61" />
         <source>Yes</source>
         <translation>Tak</translation>
     </message>
     <message>
-        <location filename="../src/infrastructure/qt/overlays/confirm_dialog.py" line="62" />
+        <location filename="../src/infrastructure/common/qt/overlays/confirm_dialog.py" line="62" />
         <source>No</source>
         <translation>Nie</translation>
     </message>
@@ -71,7 +71,7 @@
         <translation>Przesuń</translation>
     </message>
     <message>
-        <location filename="../src/infrastructure/qt/overlays/tile_color_picker.py" line="65" />
+        <location filename="../src/infrastructure/common/qt/overlays/tile_color_picker.py" line="65" />
         <location filename="../src/domain/menu/tile.py" line="61" />
         <source>Change color</source>
         <translation>Zmień kolor</translation>
@@ -87,23 +87,76 @@
         <translation>Przypnij do menu</translation>
     </message>
     <message>
-        <location filename="../src/infrastructure/qt/desktop/desktop.py" line="462" />
+        <location filename="../src/infrastructure/common/qt/desktop/desktop.py" line="513" />
         <source>Are you sure you want to unpin
 "{0}"?</source>
         <translation>Czy na pewno chcesz odpiąć
 "{0}"?</translation>
     </message>
 </context><context>
+    <name>HintBar</name>
+    <message>
+        <location filename="../src/domain/navigation/hints.py" line="69" />
+        <source>Navigate</source>
+        <translation>Nawigacja</translation>
+    </message>
+    <message>
+        <location filename="../src/domain/navigation/hints.py" line="70" />
+        <source>Adjust</source>
+        <translation>Zmień</translation>
+    </message>
+    <message>
+        <location filename="../src/domain/navigation/hints.py" line="76" />
+        <source>Show/Hide menu</source>
+        <translation>Pokaż/ukryj menu</translation>
+    </message>
+    <message>
+        <location filename="../src/domain/navigation/hints.py" line="108" />
+        <location filename="../src/domain/navigation/hints.py" line="96" />
+        <location filename="../src/domain/navigation/hints.py" line="84" />
+        <source>Select</source>
+        <translation>Wybierz</translation>
+    </message>
+    <message>
+        <location filename="../src/domain/navigation/hints.py" line="85" />
+        <source>Actions</source>
+        <translation>Czynności</translation>
+    </message>
+    <message>
+        <location filename="../src/domain/navigation/hints.py" line="86" />
+        <source>Manage</source>
+        <translation>Zarządzaj</translation>
+    </message>
+    <message>
+        <location filename="../src/domain/navigation/hints.py" line="109" />
+        <source>Back</source>
+        <translation>Wstecz</translation>
+    </message>
+    <message>
+        <location filename="../src/domain/navigation/hints.py" line="120" />
+        <source>Confirm</source>
+        <translation>Zatwierdź</translation>
+    </message>
+    <message>
+        <location filename="../src/domain/navigation/hints.py" line="121" />
+        <source>Close</source>
+        <translation>Zamknij</translation>
+    </message>
+    <message>
+        <source>Menu</source>
+        <translation type="vanished">Menu</translation>
+    </message>
+</context><context>
     <name>HomeOverlay</name>
     <message>
-        <location filename="../src/infrastructure/qt/overlays/home_overlay.py" line="98" />
+        <location filename="../src/infrastructure/common/qt/overlays/home_overlay.py" line="97" />
         <source>Kasual Desktop</source>
         <translation>Kasual Desktop</translation>
     </message>
 </context><context>
     <name>InfoDialog</name>
     <message>
-        <location filename="../src/infrastructure/qt/overlays/info_dialog.py" line="47" />
+        <location filename="../src/infrastructure/common/qt/overlays/info_dialog.py" line="47" />
         <source>OK</source>
         <translation>OK</translation>
     </message>
@@ -252,61 +305,61 @@
         <translation>Włącz HUD</translation>
     </message>
     <message>
-        <location filename="../src/infrastructure/qt/overlays/notifications_overlay.py" line="172" />
+        <location filename="../src/infrastructure/common/qt/overlays/notifications_overlay.py" line="148" />
         <source>Recent notifications</source>
         <translation>Ostatnie powiadomienia</translation>
     </message>
     <message>
-        <location filename="../src/infrastructure/qt/overlays/notifications_overlay.py" line="181" />
+        <location filename="../src/infrastructure/common/qt/overlays/notifications_overlay.py" line="157" />
         <source>▲ ▼ – scroll    B/Esc – close</source>
         <translation>▲ ▼ – przewiń    B/Esc – zamknij</translation>
     </message>
     <message>
-        <location filename="../src/infrastructure/qt/overlays/notifications_overlay.py" line="196" />
+        <location filename="../src/infrastructure/common/qt/overlays/notifications_overlay.py" line="172" />
         <source>No notifications</source>
         <translation>Brak powiadomień</translation>
     </message>
     <message>
-        <location filename="../src/infrastructure/qt/ui/tray.py" line="27" />
+        <location filename="../src/infrastructure/common/qt/ui/tray.py" line="27" />
         <source>Show Desktop</source>
         <translation>Pokaż pulpit</translation>
     </message>
     <message>
-        <location filename="../src/infrastructure/qt/ui/tray.py" line="29" />
+        <location filename="../src/infrastructure/common/qt/ui/tray.py" line="29" />
         <source>Logs</source>
         <translation>Logi</translation>
     </message>
     <message>
-        <location filename="../src/infrastructure/qt/ui/tray.py" line="31" />
+        <location filename="../src/infrastructure/common/qt/ui/tray.py" line="31" />
         <source>About…</source>
         <translation>O programie…</translation>
     </message>
     <message>
-        <location filename="../src/infrastructure/qt/ui/tray.py" line="34" />
+        <location filename="../src/infrastructure/common/qt/ui/tray.py" line="34" />
         <source>Quit</source>
         <translation>Zamknij</translation>
     </message>
 </context><context>
     <name>LogViewer</name>
     <message>
-        <location filename="../src/infrastructure/qt/ui/log_viewer.py" line="49" />
+        <location filename="../src/infrastructure/common/qt/ui/log_viewer.py" line="49" />
         <source>Kasual Desktop – Logs</source>
         <translation>Kasual Desktop – Logi</translation>
     </message>
     <message>
-        <location filename="../src/infrastructure/qt/ui/log_viewer.py" line="88" />
+        <location filename="../src/infrastructure/common/qt/ui/log_viewer.py" line="88" />
         <source>Clear</source>
         <translation>Wyczyść</translation>
     </message>
 </context><context>
     <name>OnboardingOverlay</name>
     <message>
-        <location filename="../src/infrastructure/qt/overlays/onboarding_overlay.py" line="107" />
+        <location filename="../src/infrastructure/common/qt/overlays/onboarding_overlay.py" line="107" />
         <source>Welcome — pick your apps</source>
         <translation>Witaj - wybierz aplikacje, z którymi wystartujesz</translation>
     </message>
     <message>
-        <location filename="../src/infrastructure/qt/overlays/onboarding_overlay.py" line="161" />
+        <location filename="../src/infrastructure/common/qt/overlays/onboarding_overlay.py" line="137" />
         <source>Confirm</source>
         <translation>Potwierdź</translation>
     </message>

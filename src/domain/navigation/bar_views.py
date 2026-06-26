@@ -6,6 +6,8 @@ role-interfaces than the lifecycle's TileBarView (ISP): TileBar satisfies both.
 
 from typing import Protocol
 
+from domain.navigation.hints import Hints
+
 
 class TileFocusView(Protocol):
     """The tile bar as focus navigation drives it (TileBar)."""
@@ -35,3 +37,12 @@ class TopBarView(Protocol):
     def count(self) -> int: ...
     def set_selected(self, index: int | None) -> None: ...
     def trigger(self, index: int) -> None: ...
+
+
+class HintBarView(Protocol):
+    """The bottom hint bar as focus navigation drives it (HintBar).
+
+    The navigator pushes the :class:`Hints` for the current screen whenever the
+    focus mode changes; the adapter renders the glyphs/labels."""
+
+    def show_hints(self, hints: Hints) -> None: ...

@@ -4,34 +4,34 @@
 <context>
     <name>AboutOverlay</name>
     <message>
-        <location filename="../src/infrastructure/qt/overlays/about_overlay.py" line="53" />
+        <location filename="../src/infrastructure/common/qt/overlays/about_overlay.py" line="53" />
         <source>Version {0}</source>
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/infrastructure/qt/overlays/about_overlay.py" line="60" />
+        <location filename="../src/infrastructure/common/qt/overlays/about_overlay.py" line="60" />
         <source>Author</source>
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/infrastructure/qt/overlays/about_overlay.py" line="62" />
+        <location filename="../src/infrastructure/common/qt/overlays/about_overlay.py" line="62" />
         <source>License</source>
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/infrastructure/qt/overlays/about_overlay.py" line="75" />
+        <location filename="../src/infrastructure/common/qt/overlays/about_overlay.py" line="75" />
         <source>Close</source>
         <translation type="unfinished" />
     </message>
 </context><context>
     <name>ConfirmDialog</name>
     <message>
-        <location filename="../src/infrastructure/qt/overlays/confirm_dialog.py" line="61" />
+        <location filename="../src/infrastructure/common/qt/overlays/confirm_dialog.py" line="61" />
         <source>Yes</source>
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/infrastructure/qt/overlays/confirm_dialog.py" line="62" />
+        <location filename="../src/infrastructure/common/qt/overlays/confirm_dialog.py" line="62" />
         <source>No</source>
         <translation type="unfinished" />
     </message>
@@ -70,7 +70,7 @@
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/infrastructure/qt/overlays/tile_color_picker.py" line="65" />
+        <location filename="../src/infrastructure/common/qt/overlays/tile_color_picker.py" line="65" />
         <location filename="../src/domain/menu/tile.py" line="61" />
         <source>Change color</source>
         <translation type="unfinished" />
@@ -86,22 +86,56 @@
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/infrastructure/qt/desktop/desktop.py" line="462" />
+        <location filename="../src/infrastructure/common/qt/desktop/desktop.py" line="483" />
         <source>Are you sure you want to unpin
 "{0}"?</source>
         <translation type="unfinished" />
     </message>
 </context><context>
+    <name>HintBar</name>
+    <message>
+        <location filename="../src/domain/navigation/hints.py" line="68" />
+        <source>Show/Hide menu</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/domain/navigation/hints.py" line="100" />
+        <location filename="../src/domain/navigation/hints.py" line="88" />
+        <location filename="../src/domain/navigation/hints.py" line="76" />
+        <source>Select</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/domain/navigation/hints.py" line="77" />
+        <source>Actions</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/domain/navigation/hints.py" line="78" />
+        <source>Manage</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/domain/navigation/hints.py" line="101" />
+        <source>Back</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/infrastructure/common/qt/desktop/hint_bar.py" line="119" />
+        <source>Navigate</source>
+        <translation type="unfinished" />
+    </message>
+</context><context>
     <name>HomeOverlay</name>
     <message>
-        <location filename="../src/infrastructure/qt/overlays/home_overlay.py" line="98" />
+        <location filename="../src/infrastructure/common/qt/overlays/home_overlay.py" line="99" />
         <source>Kasual Desktop</source>
         <translation type="unfinished" />
     </message>
 </context><context>
     <name>InfoDialog</name>
     <message>
-        <location filename="../src/infrastructure/qt/overlays/info_dialog.py" line="47" />
+        <location filename="../src/infrastructure/common/qt/overlays/info_dialog.py" line="47" />
         <source>OK</source>
         <translation type="unfinished" />
     </message>
@@ -250,61 +284,61 @@
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/infrastructure/qt/overlays/notifications_overlay.py" line="172" />
+        <location filename="../src/infrastructure/common/qt/overlays/notifications_overlay.py" line="148" />
         <source>Recent notifications</source>
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/infrastructure/qt/overlays/notifications_overlay.py" line="181" />
+        <location filename="../src/infrastructure/common/qt/overlays/notifications_overlay.py" line="157" />
         <source>▲ ▼ – scroll    B/Esc – close</source>
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/infrastructure/qt/overlays/notifications_overlay.py" line="196" />
+        <location filename="../src/infrastructure/common/qt/overlays/notifications_overlay.py" line="172" />
         <source>No notifications</source>
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/infrastructure/qt/ui/tray.py" line="27" />
+        <location filename="../src/infrastructure/common/qt/ui/tray.py" line="27" />
         <source>Show Desktop</source>
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/infrastructure/qt/ui/tray.py" line="29" />
+        <location filename="../src/infrastructure/common/qt/ui/tray.py" line="29" />
         <source>Logs</source>
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/infrastructure/qt/ui/tray.py" line="31" />
+        <location filename="../src/infrastructure/common/qt/ui/tray.py" line="31" />
         <source>About…</source>
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/infrastructure/qt/ui/tray.py" line="34" />
+        <location filename="../src/infrastructure/common/qt/ui/tray.py" line="34" />
         <source>Quit</source>
         <translation type="unfinished" />
     </message>
 </context><context>
     <name>LogViewer</name>
     <message>
-        <location filename="../src/infrastructure/qt/ui/log_viewer.py" line="49" />
+        <location filename="../src/infrastructure/common/qt/ui/log_viewer.py" line="49" />
         <source>Kasual Desktop – Logs</source>
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/infrastructure/qt/ui/log_viewer.py" line="88" />
+        <location filename="../src/infrastructure/common/qt/ui/log_viewer.py" line="88" />
         <source>Clear</source>
         <translation type="unfinished" />
     </message>
 </context><context>
     <name>OnboardingOverlay</name>
     <message>
-        <location filename="../src/infrastructure/qt/overlays/onboarding_overlay.py" line="107" />
+        <location filename="../src/infrastructure/common/qt/overlays/onboarding_overlay.py" line="107" />
         <source>Welcome — pick your apps</source>
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/infrastructure/qt/overlays/onboarding_overlay.py" line="161" />
+        <location filename="../src/infrastructure/common/qt/overlays/onboarding_overlay.py" line="137" />
         <source>Confirm</source>
         <translation type="unfinished" />
     </message>

@@ -9,6 +9,7 @@ from domain.catalog.live_catalog import LiveCatalog
 from domain.shell.desktop_state import DesktopState
 from domain.input.vocabulary import Event
 from domain.input.pad_control import PadControl
+from domain.navigation import hints as home_hints
 from infrastructure.common.qt.overlays.base_overlay import BaseOverlay
 from infrastructure.common.qt.overlays.confirm_dialog import ConfirmDialog
 from infrastructure.common.qt.overlays.info_dialog import InfoDialog
@@ -50,6 +51,7 @@ from domain.shell.open_overlays import OpenOverlays
 from domain.system.desktop_shell import DesktopShell
 from domain.shell.wallpaper import SystemWallpaper
 from infrastructure.common.qt._meta import ProtocolQtMeta
+from .hint_bar import HintBar
 from .tile_bar import TileBar
 from .topbar import TopBar
 
@@ -150,6 +152,18 @@ class Desktop(QWidget, DesktopView, DesktopShell, DesktopControl, metaclass=Prot
         main.addWidget(self._tilebar)
         main.addStretch(1)
 
+        # The gamepad-hint bar is its own bottom-edge surface (not a child of this
+        # window), so the animated Home Overlay never fades it in/out — it stays
+        # put and only swaps content. The Desktop owns the single instance and
+        # drives its visibility: shown while the Desktop is up or the Home Overlay
+        # is showing (see _sync_hint_visibility / begin_overlay_hints). Populated
+        # by the FocusNavigator (build_desktop) once attached.
+        self._hintbar = HintBar()
+        self._hintbar.install_surface()
+        # True while the Home Overlay owns the hints (BTN_MODE menu), so the bar
+        # stays visible over a running app and shows the overlay's own controls.
+        self._overlay_hints = False
+
         # Domain coordinators are assembled by the package builder (build_desktop)
         # and injected via attach(); the widget itself stays a pure view. The pad
         # handler identity stays owned here so push/pop on the gamepad stack
@@ -240,6 +254,33 @@ class Desktop(QWidget, DesktopView, DesktopShell, DesktopControl, metaclass=Prot
         """Restore the Desktop after reconnecting the gamepad — without resetting state."""
         self._desktop.resume()
 
+    # ── Hint bar (its own bottom surface; driven by the Application) ─────────
+
+    def begin_overlay_hints(self) -> None:
+        """The Home Overlay opened: show the overlay-menu controls on the hint
+        bar and keep it on screen (even over a running app, where the Desktop is
+        hidden). The bar is its own surface, so this only swaps content/visibility
+        — it does not move, so no fade animation when the overlay appears."""
+        self._overlay_hints = True
+        self._hintbar.show_hints(home_hints.OVERLAY_MENU)
+        self._sync_hint_visibility()
+
+    def end_overlay_hints(self) -> None:
+        """The Home Overlay closed: restore the current screen's hints if the
+        Desktop is up, otherwise let the bar go (back to a bare app)."""
+        self._overlay_hints = False
+        if self._surface.is_visible() and self._nav is not None:
+            self._nav.render()
+        self._sync_hint_visibility()
+
+    def _sync_hint_visibility(self) -> None:
+        """Show the hint-bar surface while the Desktop or the Home Overlay is on
+        screen; hide it otherwise (minimized to tray / a bare foreground app)."""
+        if self._overlay_hints or self._surface.is_visible():
+            self._hintbar.show()
+        else:
+            self._hintbar.hide()
+
     # ── DesktopView port (driven by AppLifecycle) ───────────────────────────
 
     def is_visible(self) -> bool:
@@ -247,12 +288,14 @@ class Desktop(QWidget, DesktopView, DesktopShell, DesktopControl, metaclass=Prot
 
     def show_fullscreen(self) -> None:
         self._surface.show_fullscreen()
+        self._sync_hint_visibility()
 
     def activate(self) -> None:
         self._surface.activate()
 
     def hide_view(self) -> None:
         self._surface.hide()
+        self._sync_hint_visibility()
 
     def take_input(self) -> None:
         self._gamepad.push_handler(self._handle_pad)
@@ -571,9 +614,11 @@ class Desktop(QWidget, DesktopView, DesktopShell, DesktopControl, metaclass=Prot
 
     def open_volume_overlay(self) -> None:
         self._present(VolumeOverlay(self._gamepad, self._volume_control, self._feedback, parent=self))
+        self._hintbar.show_hints(home_hints.SLIDER)
 
     def open_brightness_overlay(self) -> None:
         self._present(BrightnessOverlay(self._gamepad, self._brightness_control, self._feedback, parent=self))
+        self._hintbar.show_hints(home_hints.SLIDER)
 
     def refresh_notification_badge(self) -> None:
         """Sync the notifications button badge to the unread count in memory."""

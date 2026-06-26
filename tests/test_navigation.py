@@ -6,10 +6,11 @@ port; no Qt. Events are passed as plain strings (StrEnum-compatible).
 
 from unittest.mock import MagicMock
 
+from domain.navigation import hints
 from domain.navigation.focus_navigator import FocusNavigator
 
 
-def _make(topbar_count=3):
+def _make(topbar_count=3, hint_bar=None):
     tilebar = MagicMock()
     tilebar.move.return_value = True
     topbar = MagicMock()
@@ -20,7 +21,7 @@ def _make(topbar_count=3):
     gamepad = MagicMock()
     nav = FocusNavigator(
         tilebar, topbar, on_tile_menu=on_tile_menu, feedback=feedback,
-        on_tile_manage=on_tile_manage, gamepad=gamepad,
+        on_tile_manage=on_tile_manage, gamepad=gamepad, hint_bar=hint_bar,
     )
     nav._test_on_tile_manage = on_tile_manage
     return nav, tilebar, topbar, on_tile_menu, gamepad
@@ -137,6 +138,39 @@ class TestRenderAndHover:
         nav.focus_topbar()
         assert nav.in_tiles is False
         tilebar.set_focused.assert_called_with(False)
+
+
+class TestHintBar:
+    def test_render_shows_tiles_hints(self):
+        hint_bar = MagicMock()
+        nav, *_ = _make(hint_bar=hint_bar)
+        nav.render()
+        hint_bar.show_hints.assert_called_with(hints.TILES)
+
+    def test_moving_to_topbar_switches_hints(self):
+        hint_bar = MagicMock()
+        nav, *_ = _make(hint_bar=hint_bar)
+        nav.handle_pad("up")
+        hint_bar.show_hints.assert_called_with(hints.TOPBAR)
+
+    def test_returning_to_tiles_switches_hints_back(self):
+        hint_bar = MagicMock()
+        nav, *_ = _make(hint_bar=hint_bar)
+        nav.handle_pad("up")
+        nav.handle_pad("down")
+        hint_bar.show_hints.assert_called_with(hints.TILES)
+
+    def test_hover_tiles_syncs_hints(self):
+        hint_bar = MagicMock()
+        nav, *_ = _make(hint_bar=hint_bar)
+        nav.handle_pad("up")          # into topbar
+        hint_bar.reset_mock()
+        nav.hover_tiles()
+        hint_bar.show_hints.assert_called_once_with(hints.TILES)
+
+    def test_no_hint_bar_is_a_noop(self):
+        nav, *_ = _make(hint_bar=None)
+        nav.render()                  # must not raise
 
 
 class TestEscapeHome:

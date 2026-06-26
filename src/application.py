@@ -107,6 +107,10 @@ class Application:
         self._overlay.show_overlay(
             items=menu.items, on_select=self._dispatch_home, on_cancel=on_cancel
         )
+        # Swap the standalone hint bar to the overlay-menu controls (and keep it
+        # on screen even over a running app). The bar is its own surface, so it
+        # doesn't fade with the overlay — it just changes content.
+        self._desktop.begin_overlay_hints()
 
     def _dispatch_home(self, item: MenuItem) -> None:
         """Perform the behaviour for an activated Home Overlay item."""
@@ -154,8 +158,10 @@ class Application:
         self._session.gamepad_connected_changed(False, self._overlay)
 
     def _on_overlay_closed(self) -> None:
-        """Drop the overlay reference once it's dismissed."""
+        """Drop the overlay reference once it's dismissed and restore the screen
+        hints on the standalone hint bar (or let it go if the Desktop is down)."""
         self._close_overlay()
+        self._desktop.end_overlay_hints()
 
     def shutdown(self) -> None:
         """Detach from the gamepad and drop any open overlay (app teardown)."""

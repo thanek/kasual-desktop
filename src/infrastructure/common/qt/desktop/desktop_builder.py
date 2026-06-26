@@ -131,7 +131,11 @@ def build_desktop(
         on_tile_menu=widget._show_tile_popover, feedback=feedback,
         on_tile_manage=widget._show_tile_management_popover,
         gamepad=gamepad,
+        hint_bar=widget._hintbar,
     )
+    # Paint the initial hints (tiles screen) before the Desktop is ever shown,
+    # so the bar is never blank on first appearance.
+    nav.render()
 
     # Move mode: slides a focused app tile past its neighbours, persisting the order.
     tile_mover = TileMover(

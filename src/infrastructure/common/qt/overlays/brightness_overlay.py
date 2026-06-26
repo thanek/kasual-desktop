@@ -18,7 +18,7 @@ class BrightnessOverlay(BaseOverlay):
     closed = pyqtSignal()
 
     def __init__(self, gamepad: PadControl, brightness: BrightnessControl, feedback: Feedback, parent: QWidget | None = None):
-        super().__init__(gamepad, self._handle_pad, feedback, parent)
+        super().__init__(gamepad, self._handle_pad, feedback, parent, dim=False)
         self._control = brightness
         self._brightness: Brightness = self._control.get()
 
@@ -67,11 +67,6 @@ class BrightnessOverlay(BaseOverlay):
         self._value_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._value_lbl.setStyleSheet("font-size: 32px; color: white; background: transparent;")
         layout.addWidget(self._value_lbl)
-
-        hint = QLabel("◄ ► – zmień   A/Enter – zatwierdź   B/Esc – zamknij")
-        hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        hint.setStyleSheet("font-size: 14px; color: #888; background: transparent;")
-        layout.addWidget(hint)
 
         outer.addWidget(card)
 

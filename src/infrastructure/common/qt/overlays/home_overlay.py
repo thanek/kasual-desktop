@@ -257,7 +257,9 @@ class HomeOverlayFactory:
     """Builds Home Overlays bound to the gamepad and feedback (OverlayFactory port).
 
     Holds the `PadControl` and `Feedback` so the controller can create a fresh
-    overlay per BTN_MODE press without knowing the widget or its wiring.
+    overlay per BTN_MODE press without knowing the widget or its wiring. The
+    gamepad-hint bar is a separate bottom surface owned by the Desktop, so the
+    overlay no longer carries one.
     """
 
     def __init__(self, gamepad: PadControl, feedback: Feedback) -> None:

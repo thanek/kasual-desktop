@@ -16,7 +16,8 @@ from enum import StrEnum
 
 from domain.input.pad_control import PadControl
 from domain.input.vocabulary import Event
-from domain.navigation.bar_views import TileFocusView, TopBarView
+from domain.navigation import hints
+from domain.navigation.bar_views import HintBarView, TileFocusView, TopBarView
 from domain.shared.feedback import Cue, Feedback
 
 
@@ -34,6 +35,7 @@ class FocusNavigator:
         feedback: Feedback,
         on_tile_manage: Callable[[], None] | None = None,
         gamepad: PadControl | None = None,
+        hint_bar: HintBarView | None = None,
     ) -> None:
         self._tilebar      = tilebar
         self._topbar       = topbar
@@ -41,6 +43,7 @@ class FocusNavigator:
         self._on_tile_manage = on_tile_manage  # Event.MANAGE in tiles → management popover
         self._feedback     = feedback
         self._gamepad      = gamepad
+        self._hint_bar     = hint_bar
         self._mode         = _Mode.TILES
         self._topbar_index = 0
 
@@ -87,10 +90,20 @@ class FocusNavigator:
                 self._topbar.trigger(self._topbar_index)
 
     def render(self) -> None:
-        """Repaint the focus highlight across the tile bar and top bar."""
+        """Repaint the focus highlight across the tile bar and top bar, and sync
+        the bottom hint bar to the current screen."""
         in_tiles = self._mode == _Mode.TILES
         self._tilebar.set_focused(in_tiles)
         self._topbar.set_selected(self._topbar_index if not in_tiles else None)
+        self._sync_hints()
+
+    def _sync_hints(self) -> None:
+        """Push the hint set for the current screen to the hint bar (if wired)."""
+        if self._hint_bar is None:
+            return
+        self._hint_bar.show_hints(
+            hints.TILES if self._mode == _Mode.TILES else hints.TOPBAR
+        )
 
     def _moved(self) -> None:
         self.render()
@@ -104,6 +117,7 @@ class FocusNavigator:
             self._mode = _Mode.TILES
             self._topbar.set_selected(None)
             self._tilebar.set_focused(True, scroll=False)
+            self._sync_hints()
         self._feedback.play(Cue.CURSOR)
 
     def hover_topbar(self, idx: int) -> None:

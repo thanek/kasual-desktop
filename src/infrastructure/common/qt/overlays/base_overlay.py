@@ -41,6 +41,7 @@ class BaseOverlay(QWidget):
         parent: QWidget | None = None,   # accepted for API compat; always top-level
         *,
         keyboard: Keyboard = Keyboard.NONE,
+        dim: bool = True,
     ) -> None:
         super().__init__()
         self._gamepad = gamepad
@@ -55,7 +56,12 @@ class BaseOverlay(QWidget):
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.setWindowTitle("Kasual Overlay")
-        self.setStyleSheet("background-color: rgba(0, 0, 0, 150);")
+        # The dim backdrop is opt-out: dialogs whose hints live on the standalone
+        # hint bar (volume/brightness) pass dim=False so the card simply floats
+        # over the live screen, with nothing darkening it or the hint bar.
+        self.setStyleSheet(
+            "background-color: rgba(0, 0, 0, 150);" if dim else "background: transparent;"
+        )
         # Standalone surface above everything (incl. fullscreen games): layer-shell
         # on Wayland, WS_EX_TOPMOST on Windows, ordinary window elsewhere — see
         # promote_overlay_surface. keyboard defaults to NONE — taking keyboard

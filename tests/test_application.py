@@ -60,7 +60,13 @@ class FakeOverlay:
         self._showing = True
 
     def hide_overlay(self):
+        # Mirror the real HomeOverlay: hiding emits `closed` (no-op if already
+        # hidden), which the controller listens to via on_closed().
+        if not self._showing:
+            return
         self._showing = False
+        if self.closed_handler is not None:
+            self.closed_handler()
 
     def is_showing(self):
         return self._showing
@@ -97,6 +103,7 @@ class FakeDesktop:
         self.volume_opened = 0
         self.brightness_opened = 0
         self.dismiss_overlays_calls = 0
+        self.overlay_hints: list = []   # True on begin, False on end
 
     # DesktopControl
     def current_app(self):
@@ -113,6 +120,12 @@ class FakeDesktop:
 
     def dismiss_overlays(self):
         self.dismiss_overlays_calls += 1
+
+    def begin_overlay_hints(self):
+        self.overlay_hints.append(True)
+
+    def end_overlay_hints(self):
+        self.overlay_hints.append(False)
 
     def foreground_pid(self):
         return self._foreground
@@ -258,6 +271,19 @@ class TestBtnModeOverlay:
         gamepad.fire_btn_mode()   # show (dismiss #1)
         gamepad.fire_btn_mode()   # toggle off
         assert desktop.dismiss_overlays_calls == 1
+
+    def test_opening_overlay_switches_hint_bar_to_overlay_menu(self):
+        # The standalone hint bar swaps to the overlay-menu controls on open.
+        _, desktop, gamepad, _, _, _ = make_app()
+        gamepad.fire_btn_mode()
+        assert desktop.overlay_hints[-1] is True
+
+    def test_closing_overlay_restores_screen_hints(self):
+        # Closing the overlay tells the Desktop to restore its own screen hints.
+        _, desktop, gamepad, _, _, _ = make_app()
+        gamepad.fire_btn_mode()   # open  → overlay hints
+        gamepad.fire_btn_mode()   # close → screen hints
+        assert desktop.overlay_hints[-1] is False
 
 
 # ── _dispatch_home routing ───────────────────────────────────────────────────
