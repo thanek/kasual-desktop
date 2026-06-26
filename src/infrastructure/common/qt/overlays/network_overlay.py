@@ -37,8 +37,9 @@ class NetworkOverlay(BaseOverlay):
         control: NetworkControl,
         feedback: Feedback,
         parent: QWidget | None = None,
+        dim: bool = True,
     ) -> None:
-        super().__init__(gamepad, self._handle_pad, feedback, parent)
+        super().__init__(gamepad, self._handle_pad, feedback, parent, dim=dim)
         self._control = control
         # The domain decides which action the button performs and whether it can.
         self._button = view.connect_button(status, control.can_reconnect())
@@ -88,11 +89,6 @@ class NetworkOverlay(BaseOverlay):
         )
         self._btn.clicked.connect(self._activate)
         layout.addWidget(self._btn)
-
-        hint = QLabel("A / B / Esc")
-        hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        hint.setStyleSheet("font-size: 14px; color: #888; background: transparent;")
-        layout.addWidget(hint)
 
         outer.addWidget(card)
 

@@ -28,8 +28,9 @@ class ConfirmDialog(BaseOverlay):
         gamepad: PadControl,
         feedback: Feedback,
         parent: QWidget | None = None,
+        dim: bool = True,
     ):
-        super().__init__(gamepad, self._handle_pad, feedback, parent)
+        super().__init__(gamepad, self._handle_pad, feedback, parent, dim=dim)
         self._on_confirmed = on_confirmed
         self._on_cancelled = on_cancelled
         self._cursor = MenuCursor(

@@ -560,9 +560,16 @@ class Desktop(QWidget, DesktopView, DesktopShell, DesktopControl, metaclass=Prot
             self._forget_confirm()
 
     def _forget_confirm(self) -> None:
-        """Drop the confirm dialog from the registry and clear its slot."""
+        """Drop the confirm dialog from the registry and clear its slot.
+
+        Restore the screen hints that were replaced when the dialog opened, so
+        the hint bar doesn't show stale confirm controls after it closes.
+        """
         self._overlays.forget(self._confirm_dialog)
         self._confirm_dialog = None
+        if self._surface.is_visible() and self._nav is not None:
+            self._nav.render()
+        self._sync_hint_visibility()
 
     # ── Confirmation dialogs ───────────────────────────────────────────────
 
@@ -594,8 +601,11 @@ class Desktop(QWidget, DesktopView, DesktopShell, DesktopControl, metaclass=Prot
             gamepad=self._gamepad,
             feedback=self._feedback,
             parent=self,
+            dim=False,
         )
         self._overlays.register(self._confirm_dialog)
+        self._hintbar.show_hints(home_hints.CONFIRM)
+        self._hintbar.show()
 
     # ── Top bar actions ────────────────────────────────────────────────────
 
@@ -631,15 +641,20 @@ class Desktop(QWidget, DesktopView, DesktopShell, DesktopControl, metaclass=Prot
         self._topbar.set_action_icon(NETWORK, network_view.icon_for(status.kind))
 
     def open_network_overlay(self) -> None:
-        self._present(NetworkOverlay(
+        overlay = NetworkOverlay(
             self._gamepad, self._network_status, self._network_control,
-            self._feedback, parent=self,
-        ))
+            self._feedback, parent=self, dim=False,
+        )
+        self._present(overlay)
+        self._hintbar.show_hints(home_hints.NETWORK)
 
     def open_notifications_overlay(self) -> None:
         # The overlay reads the unread tally (to highlight new rows) as it builds;
         # only then do we clear it and drop the badge — the user has now seen them.
-        overlay = NotificationsOverlay(self._gamepad, self._notifications, self._feedback, parent=self)
+        overlay = NotificationsOverlay(
+            self._gamepad, self._notifications, self._feedback, parent=self, dim=False,
+        )
         self._notifications.mark_all_read()
         self.refresh_notification_badge()
         self._present(overlay)
+        self._hintbar.show_hints(home_hints.NOTIFICATIONS)

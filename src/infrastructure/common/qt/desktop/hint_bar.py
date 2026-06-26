@@ -26,11 +26,11 @@ from infrastructure.common.qt._meta import ProtocolQtMeta
 from infrastructure.common.qt.ui.layer_shell import Anchor, Keyboard, Layer
 from infrastructure.common.qt.ui.top_surface import promote_overlay_surface
 
-GLYPH_SIZE = 26   # diameter of a button glyph / height of a direction arrow
-ICON_PX    = 15   # inner icon size for icon-based glyphs (home / start / arrows)
-BAR_HEIGHT = 56   # the rounded bar itself
-BOTTOM_GAP = 10   # gap between the bar and the screen edge
-SURFACE_H  = BAR_HEIGHT + BOTTOM_GAP   # total height of the bottom strip surface
+GLYPH_SIZE = 26      # diameter of a button glyph / height of a direction arrow
+ICON_PX    = 15      # inner icon size for icon-based glyphs (home / start / arrows)
+BAR_HEIGHT = 56      # the rounded bar itself
+BOTTOM_MARGIN = 10   # gap from the bar bottom to the screen edge (matches TopBar top margin)
+SURFACE_H  = BAR_HEIGHT + BOTTOM_MARGIN   # total height of the bottom strip surface
 
 # Direction → Font Awesome arrow glyph.
 _ARROWS = {
@@ -59,6 +59,7 @@ class HintBar(QWidget, HintBarView, metaclass=ProtocolQtMeta):
 
     def __init__(self) -> None:
         super().__init__()
+        self._current_hints: Hints | None = None
         # Own top-level window: frameless, translucent (only the rounded bar is
         # opaque, the surrounding strip is transparent), and click-through.
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint)
@@ -68,7 +69,7 @@ class HintBar(QWidget, HintBarView, metaclass=ProtocolQtMeta):
         self.setFixedHeight(SURFACE_H)
 
         outer = QVBoxLayout(self)
-        outer.setContentsMargins(16, 0, 16, BOTTOM_GAP)
+        outer.setContentsMargins(16, 0, 16, 0)
         outer.setSpacing(0)
 
         bar = QWidget()
@@ -82,6 +83,7 @@ class HintBar(QWidget, HintBarView, metaclass=ProtocolQtMeta):
             "}"
         )
         outer.addWidget(bar)
+        outer.addStretch(1)   # transparent gap below the bar → BOTTOM_MARGIN px above screen edge
 
         # Cleared and rebuilt on every show_hints — the screens differ in which
         # actions they offer, so re-laying out is simpler than diffing.
@@ -128,9 +130,13 @@ class HintBar(QWidget, HintBarView, metaclass=ProtocolQtMeta):
     # ── HintBarView port ─────────────────────────────────────────────────────
 
     def show_hints(self, hints: Hints) -> None:
+        if hints is self._current_hints:
+            return
+        self._current_hints = hints
         self._clear()
-        self._row.addWidget(self._directions(hints.directions, hints.nav_label))
-        self._row.addSpacing(20)
+        if hints.directions:
+            self._row.addWidget(self._directions(hints.directions, hints.nav_label))
+            self._row.addSpacing(20)
         self._row.addWidget(self._hint(self._button_glyph(hints.overlay.button),
                                        hints.overlay.label))
         self._row.addStretch(1)

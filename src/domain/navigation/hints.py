@@ -122,3 +122,35 @@ SLIDER = Hints(
     ),
     nav_label=_ADJUST,
 )
+
+# A confirmation dialog (unpin, close app, etc.): left/right switches between
+# Yes/No, A confirms the focused option, B cancels the whole dialog.
+CONFIRM = Hints(
+    directions=(Direction.LEFT, Direction.RIGHT),
+    overlay=_HOME_MENU,
+    actions=(
+        ButtonHint(Button.A, translate("HintBar", "Select")),
+        ButtonHint(Button.B, translate("HintBar", "Cancel")),
+    ),
+)
+
+# The notifications panel: up/down scrolls through the list, A selects the
+# focused notification, B / Esc dismisses the panel.
+NOTIFICATIONS = Hints(
+    directions=(Direction.UP, Direction.DOWN),
+    overlay=_HOME_MENU,
+    actions=(
+        ButtonHint(Button.A, translate("HintBar", "Select")),
+        ButtonHint(Button.B, translate("HintBar", "Close")),
+    ),
+)
+
+# The network info popup: A activates the connect/disconnect toggle, B closes.
+NETWORK = Hints(
+    directions=(),
+    overlay=_HOME_MENU,
+    actions=(
+        ButtonHint(Button.A, translate("HintBar", "Select")),
+        ButtonHint(Button.B, translate("HintBar", "Close")),
+    ),
+)

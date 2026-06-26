@@ -110,8 +110,9 @@ class NotificationsOverlay(BaseOverlay):
         center: NotificationCenter,
         feedback: Feedback,
         parent: QWidget | None = None,
+        dim: bool = True,
     ) -> None:
-        super().__init__(gamepad, self._handle_pad, feedback, parent)
+        super().__init__(gamepad, self._handle_pad, feedback, parent, dim=dim)
         self._items = center.recent(_MAX_ROWS)
         # The first `unread` rows are the new ones (newest-first ordering). Read
         # before the desktop clears the tally so the highlight survives the reset.
@@ -153,11 +154,6 @@ class NotificationsOverlay(BaseOverlay):
         layout.addLayout(title_row)
 
         layout.addWidget(self._build_list())
-
-        hint = QLabel(translate("Kasual Desktop", "▲ ▼ – scroll    B/Esc – close"))
-        hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        hint.setStyleSheet("font-size: 14px; color: #888; background: transparent;")
-        layout.addWidget(hint)
 
         outer.addWidget(card)
 

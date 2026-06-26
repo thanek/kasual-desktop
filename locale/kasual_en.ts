@@ -26,12 +26,12 @@
 </context><context>
     <name>ConfirmDialog</name>
     <message>
-        <location filename="../src/infrastructure/common/qt/overlays/confirm_dialog.py" line="61" />
+        <location filename="../src/infrastructure/common/qt/overlays/confirm_dialog.py" line="62" />
         <source>Yes</source>
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/infrastructure/common/qt/overlays/confirm_dialog.py" line="62" />
+        <location filename="../src/infrastructure/common/qt/overlays/confirm_dialog.py" line="63" />
         <source>No</source>
         <translation type="unfinished" />
     </message>
@@ -86,7 +86,7 @@
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/infrastructure/common/qt/desktop/desktop.py" line="483" />
+        <location filename="../src/infrastructure/common/qt/desktop/desktop.py" line="513" />
         <source>Are you sure you want to unpin
 "{0}"?</source>
         <translation type="unfinished" />
@@ -94,41 +94,66 @@
 </context><context>
     <name>HintBar</name>
     <message>
-        <location filename="../src/domain/navigation/hints.py" line="68" />
+        <location filename="../src/domain/navigation/hints.py" line="69" />
+        <source>Navigate</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/domain/navigation/hints.py" line="70" />
+        <source>Adjust</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/domain/navigation/hints.py" line="76" />
         <source>Show/Hide menu</source>
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/domain/navigation/hints.py" line="100" />
-        <location filename="../src/domain/navigation/hints.py" line="88" />
-        <location filename="../src/domain/navigation/hints.py" line="76" />
+        <location filename="../src/domain/navigation/hints.py" line="153" />
+        <location filename="../src/domain/navigation/hints.py" line="143" />
+        <location filename="../src/domain/navigation/hints.py" line="132" />
+        <location filename="../src/domain/navigation/hints.py" line="108" />
+        <location filename="../src/domain/navigation/hints.py" line="96" />
+        <location filename="../src/domain/navigation/hints.py" line="84" />
         <source>Select</source>
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/domain/navigation/hints.py" line="77" />
+        <location filename="../src/domain/navigation/hints.py" line="85" />
         <source>Actions</source>
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/domain/navigation/hints.py" line="78" />
+        <location filename="../src/domain/navigation/hints.py" line="86" />
         <source>Manage</source>
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/domain/navigation/hints.py" line="101" />
+        <location filename="../src/domain/navigation/hints.py" line="109" />
         <source>Back</source>
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/infrastructure/common/qt/desktop/hint_bar.py" line="119" />
-        <source>Navigate</source>
+        <location filename="../src/domain/navigation/hints.py" line="120" />
+        <source>Confirm</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/domain/navigation/hints.py" line="154" />
+        <location filename="../src/domain/navigation/hints.py" line="144" />
+        <location filename="../src/domain/navigation/hints.py" line="121" />
+        <source>Close</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/domain/navigation/hints.py" line="133" />
+        <source>Cancel</source>
         <translation type="unfinished" />
     </message>
 </context><context>
     <name>HomeOverlay</name>
     <message>
-        <location filename="../src/infrastructure/common/qt/overlays/home_overlay.py" line="99" />
+        <location filename="../src/infrastructure/common/qt/overlays/home_overlay.py" line="97" />
         <source>Kasual Desktop</source>
         <translation type="unfinished" />
     </message>
@@ -284,17 +309,12 @@
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/infrastructure/common/qt/overlays/notifications_overlay.py" line="148" />
+        <location filename="../src/infrastructure/common/qt/overlays/notifications_overlay.py" line="149" />
         <source>Recent notifications</source>
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/infrastructure/common/qt/overlays/notifications_overlay.py" line="157" />
-        <source>▲ ▼ – scroll    B/Esc – close</source>
-        <translation type="unfinished" />
-    </message>
-    <message>
-        <location filename="../src/infrastructure/common/qt/overlays/notifications_overlay.py" line="172" />
+        <location filename="../src/infrastructure/common/qt/overlays/notifications_overlay.py" line="168" />
         <source>No notifications</source>
         <translation type="unfinished" />
     </message>

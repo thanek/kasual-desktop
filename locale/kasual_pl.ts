@@ -26,12 +26,12 @@
 </context><context>
     <name>ConfirmDialog</name>
     <message>
-        <location filename="../src/infrastructure/common/qt/overlays/confirm_dialog.py" line="61" />
+        <location filename="../src/infrastructure/common/qt/overlays/confirm_dialog.py" line="62" />
         <source>Yes</source>
         <translation>Tak</translation>
     </message>
     <message>
-        <location filename="../src/infrastructure/common/qt/overlays/confirm_dialog.py" line="62" />
+        <location filename="../src/infrastructure/common/qt/overlays/confirm_dialog.py" line="63" />
         <source>No</source>
         <translation>Nie</translation>
     </message>
@@ -111,6 +111,9 @@
         <translation>Pokaż/ukryj menu</translation>
     </message>
     <message>
+        <location filename="../src/domain/navigation/hints.py" line="153" />
+        <location filename="../src/domain/navigation/hints.py" line="143" />
+        <location filename="../src/domain/navigation/hints.py" line="132" />
         <location filename="../src/domain/navigation/hints.py" line="108" />
         <location filename="../src/domain/navigation/hints.py" line="96" />
         <location filename="../src/domain/navigation/hints.py" line="84" />
@@ -138,13 +141,16 @@
         <translation>Zatwierdź</translation>
     </message>
     <message>
+        <location filename="../src/domain/navigation/hints.py" line="154" />
+        <location filename="../src/domain/navigation/hints.py" line="144" />
         <location filename="../src/domain/navigation/hints.py" line="121" />
         <source>Close</source>
         <translation>Zamknij</translation>
     </message>
     <message>
-        <source>Menu</source>
-        <translation type="vanished">Menu</translation>
+        <location filename="../src/domain/navigation/hints.py" line="133" />
+        <source>Cancel</source>
+        <translation>Anuluj</translation>
     </message>
 </context><context>
     <name>HomeOverlay</name>
@@ -305,17 +311,12 @@
         <translation>Włącz HUD</translation>
     </message>
     <message>
-        <location filename="../src/infrastructure/common/qt/overlays/notifications_overlay.py" line="148" />
+        <location filename="../src/infrastructure/common/qt/overlays/notifications_overlay.py" line="149" />
         <source>Recent notifications</source>
         <translation>Ostatnie powiadomienia</translation>
     </message>
     <message>
-        <location filename="../src/infrastructure/common/qt/overlays/notifications_overlay.py" line="157" />
-        <source>▲ ▼ – scroll    B/Esc – close</source>
-        <translation>▲ ▼ – przewiń    B/Esc – zamknij</translation>
-    </message>
-    <message>
-        <location filename="../src/infrastructure/common/qt/overlays/notifications_overlay.py" line="172" />
+        <location filename="../src/infrastructure/common/qt/overlays/notifications_overlay.py" line="168" />
         <source>No notifications</source>
         <translation>Brak powiadomień</translation>
     </message>
