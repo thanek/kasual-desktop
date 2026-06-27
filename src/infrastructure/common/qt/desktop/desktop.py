@@ -277,7 +277,9 @@ class Desktop(QWidget, DesktopView, DesktopShell, DesktopControl, metaclass=Prot
         """Show the hint-bar surface while the Desktop or the Home Overlay is on
         screen; hide it otherwise (minimized to tray / a bare foreground app)."""
         if self._overlay_hints or self._surface.is_visible():
+            self._hintbar.position_at_bottom()
             self._hintbar.show()
+            self._hintbar.raise_()
         else:
             self._hintbar.hide()
 
@@ -292,6 +294,7 @@ class Desktop(QWidget, DesktopView, DesktopShell, DesktopControl, metaclass=Prot
 
     def activate(self) -> None:
         self._surface.activate()
+        self._sync_hint_visibility()
 
     def hide_view(self) -> None:
         self._surface.hide()

@@ -118,14 +118,25 @@ class HintBar(QWidget, HintBarView, metaclass=ProtocolQtMeta):
 
     def showEvent(self, event) -> None:
         super().showEvent(event)
-        # Layer-shell positions/sizes the surface from its anchors; elsewhere
-        # (Windows topmost window, X11) anchor it to the bottom strip by hand.
-        if QGuiApplication.platformName() != "wayland":
-            screen = QGuiApplication.primaryScreen()
-            if screen is not None:
-                area = screen.availableGeometry()
-                self.setGeometry(area.x(), area.bottom() - SURFACE_H + 1,
-                                 area.width(), SURFACE_H)
+
+    # ── Positioning ──────────────────────────────────────────────────────────
+
+    def position_at_bottom(self) -> None:
+        """Move the bar to the bottom strip of the primary screen.
+
+        Called by the Desktop *before* show() on platforms that do not support
+        layer-shell positioning (Windows / X11).  On Wayland the compositor
+        places the surface via its layer-shell anchors, so this is a no-op
+        there — those anchors were already set in :meth:`install_surface`."""
+        if QGuiApplication.platformName() == "wayland":
+            return
+        screen = QGuiApplication.primaryScreen()
+        if screen is not None:
+            g = screen.geometry()
+            self.setGeometry(
+                g.x(), g.bottom() - SURFACE_H + 1,
+                g.width(), SURFACE_H,
+            )
 
     # ── HintBarView port ─────────────────────────────────────────────────────
 
