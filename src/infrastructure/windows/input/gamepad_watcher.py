@@ -32,6 +32,14 @@ logger = logging.getLogger(__name__)
 STICK_THRESHOLD = 0.5
 STICK_RESET = 0.1
 
+# Triggers (LT/RT) are analog. SDL/XInput reports them on axes 4/5; resting value
+# differs by backend (−1.0 or 0.0), so RESET sits just above 0.0 to relax under
+# either convention, and one VOLUME event fires per pull past THRESHOLD.
+TRIGGER_THRESHOLD = 0.5
+TRIGGER_RESET = 0.1
+AXIS_LT = 4
+AXIS_RT = 5
+
 # Standard XInput/SDL button indices (verified on an 8BitDo Ultimate in X-input
 # mode). The previous values had Start/Select on the bumpers and X/Y swapped.
 BTN_SOUTH = 0    # A
@@ -80,6 +88,7 @@ class WindowsGamepadWatcher(BaseGamepadWatcher):
         self._held = set()
         self._stick = {"x": None, "y": None}
         self._hat_state = {"x": None, "y": None}
+        self._trigger = {"lt": None, "rt": None}   # latched analog-trigger state
         # Auto-fire: a held direction re-emits like a keyboard key-repeat. Pure
         # timing policy lives in the domain; the loop polls due() each tick (the
         # 60 fps tick is well under the repeat interval, so none are missed).
@@ -127,6 +136,7 @@ class WindowsGamepadWatcher(BaseGamepadWatcher):
                         self._recall.cancel()
                         self._stick = {"x": None, "y": None}
                         self._hat_state = {"x": None, "y": None}
+                        self._trigger = {"lt": None, "rt": None}
                         self._hop_disconnected()
 
                 elif event.type == pygame.JOYBUTTONDOWN:
@@ -158,8 +168,12 @@ class WindowsGamepadWatcher(BaseGamepadWatcher):
             self._hop_nav(Event.SELECT)
         elif button == BTN_EAST:
             self._hop_nav(Event.CANCEL)
-        elif button == BTN_NORTH:
+        elif button == BTN_WEST:
             self._hop_nav(Event.CLOSE)
+        elif button == BTN_TL:
+            self._hop_nav(Event.SECTION_PREV)
+        elif button == BTN_TR:
+            self._hop_nav(Event.SECTION_NEXT)
         elif button == BTN_START:
             if BTN_SELECT in self._held:
                 self._hop_btn_mode()
@@ -181,10 +195,10 @@ class WindowsGamepadWatcher(BaseGamepadWatcher):
             self._handle_stick_axis("x", value, Event.LEFT, Event.RIGHT)
         elif axis == 1:
             self._handle_stick_axis("y", value, Event.UP, Event.DOWN)
-        elif axis == 2:
-            pass
-        elif axis == 3:
-            pass
+        elif axis == AXIS_LT:
+            self._handle_trigger_axis("lt", value, Event.VOLUME_DOWN)
+        elif axis == AXIS_RT:
+            self._handle_trigger_axis("rt", value, Event.VOLUME_UP)
 
     def _handle_stick_axis(self, axis: str, value: float, neg_event: str, pos_event: str):
         """Handle stick axis with threshold and hysteresis."""
@@ -200,6 +214,18 @@ class WindowsGamepadWatcher(BaseGamepadWatcher):
             if self._stick[axis] is not None:
                 self._repeat.release(self._stick[axis])
             self._stick[axis] = None
+
+    def _handle_trigger_axis(self, key: str, value: float, event: str):
+        """Fire one volume event per trigger pull past THRESHOLD (no auto-repeat).
+
+        ``self._trigger[key]`` latches so a held trigger emits once and only
+        re-fires after relaxing below TRIGGER_RESET — mirrors the stick's
+        hysteresis but for a discrete "nudge volume" gesture."""
+        if value > TRIGGER_THRESHOLD and self._trigger[key] != event:
+            self._trigger[key] = event
+            self._hop_nav(event)
+        elif value < TRIGGER_RESET:
+            self._trigger[key] = None
 
     def _handle_hat(self, hat: int, value: tuple[int, int]):
         """Handle D-pad (hat) movement."""

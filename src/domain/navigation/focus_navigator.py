@@ -33,14 +33,12 @@ class FocusNavigator:
         topbar: TopBarView,
         on_tile_menu: Callable[[], None],
         feedback: Feedback,
-        on_tile_manage: Callable[[], None] | None = None,
         gamepad: PadControl | None = None,
         hint_bar: HintBarView | None = None,
     ) -> None:
         self._tilebar      = tilebar
         self._topbar       = topbar
-        self._on_tile_menu = on_tile_menu   # Event.CLOSE in tiles → context popover
-        self._on_tile_manage = on_tile_manage  # Event.MANAGE in tiles → management popover
+        self._on_tile_menu = on_tile_menu   # Event.ACTIONS (Y) in tiles → tile popover
         self._feedback     = feedback
         self._gamepad      = gamepad
         self._hint_bar     = hint_bar
@@ -71,8 +69,6 @@ class FocusNavigator:
                 self._tilebar.select_current()
             elif event == Event.CLOSE:
                 self._on_tile_menu()
-            elif event == Event.MANAGE and self._on_tile_manage is not None:
-                self._on_tile_manage()
             elif event == Event.ESCAPE_HOME and self._gamepad is not None:
                 self._gamepad.trigger_home()
 

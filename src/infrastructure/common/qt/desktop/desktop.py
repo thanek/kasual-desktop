@@ -41,7 +41,7 @@ from domain.menu.entry import CHANGE_COLOR, MOVE, PIN, UNPIN
 from domain.menu.item import MenuItem
 from domain.menu.palette import TILE_COLORS
 from domain.menu.ports import AppPinning, TileColorStore
-from domain.menu.tile import tile_management_menu, tile_menu_for
+from domain.menu.tile import tile_menu_v2_for
 from domain.shared.feedback import Cue, Feedback
 from domain.shared.i18n import translate
 from domain.shared.text import truncate
@@ -70,6 +70,10 @@ _KEY_MAP = {
     Qt.Key.Key_Escape: Event.CANCEL,
     Qt.Key.Key_Q:      Event.CLOSE,
     Qt.Key.Key_F2:     Event.MANAGE,
+    Qt.Key.Key_BracketLeft:  Event.SECTION_PREV,   # LB
+    Qt.Key.Key_BracketRight: Event.SECTION_NEXT,   # RB
+    Qt.Key.Key_Minus:        Event.VOLUME_DOWN,    # LT
+    Qt.Key.Key_Equal:        Event.VOLUME_UP,      # RT
 }
 
 
@@ -432,19 +436,19 @@ class Desktop(QWidget, DesktopView, DesktopShell, DesktopControl, metaclass=Prot
     # ── Closing an application ─────────────────────────────────────────────
 
     def _show_tile_popover(self) -> None:
-        """Show a context popover above the focused tile.
+        """Show the single, state-dependent tile popover above the focused tile (§7.3).
 
-        The menu (which items, their running-state rule) and the behaviour of the
-        chosen item are the domain's: `tile_menu_for` composes it and the lifecycle
-        coordinator's `dispatch_tile_action` performs it. Here we only render and
-        position the popover and report activation.
+        The menu (which items appear, by running state and tile kind) is the
+        domain's — `tile_menu_v2_for` composes the merged lifecycle + management
+        list. Activation is routed here: lifecycle items go to the lifecycle
+        coordinator, management items to the tile-management handlers.
         """
         ctx = self._tilebar.current_context()
         if ctx is None:
             return
         popover = TilePopoverMenu(
-            items=tile_menu_for(ctx, lambda idx: self._tilebar.is_tile_running(idx, self._tilebar.last_windows)),
-            on_select=self._lifecycle.dispatch_tile_action,
+            items=tile_menu_v2_for(ctx, lambda idx: self._tilebar.is_tile_running(idx, self._tilebar.last_windows)),
+            on_select=self._on_tile_select,
             gamepad=self._gamepad,
             feedback=self._feedback,
             parent=self,
@@ -452,35 +456,27 @@ class Desktop(QWidget, DesktopView, DesktopShell, DesktopControl, metaclass=Prot
         self._tile_popover = popover
         self._overlays.register(popover)
         popover.closed.connect(self._on_tile_popover_closed)
+        # Swap the hint bar to the popover's own controls (incl. Y to close the
+        # menu it opened — §7.3 toggle); restored to the tiles screen on close.
+        self._hintbar.show_hints(home_hints.TILE_POPOVER)
         popover.show_above(self._tilebar.current_tile())
 
     def _on_tile_popover_closed(self) -> None:
         self._overlays.forget(self._tile_popover)
         self._tile_popover = None
+        self._nav.render()   # restore the tiles-screen hints
 
-    # ── Tile Management Popover (Start button) ─────────────────────────────
+    # ── Tile popover activation ────────────────────────────────────────────
 
-    def _show_tile_management_popover(self) -> None:
-        """Show the Start-button management popover above the focused tile.
+    _MANAGEMENT_ACTIONS = frozenset({MOVE, CHANGE_COLOR, PIN, UNPIN})
 
-        The menu differs by tile kind (`tile_management_menu`): a configured app
-        tile offers move/recolour, an open-window tile offers *Pin to menu*. Reuses
-        the generic popover widget; the chosen item's behaviour is the domain's
-        (`TileMover`) or the pin adapter's."""
-        ctx = self._tilebar.current_context()
-        if ctx is None:
-            return
-        popover = TilePopoverMenu(
-            items=tile_management_menu(ctx),
-            on_select=self._on_manage_select,
-            gamepad=self._gamepad,
-            feedback=self._feedback,
-            parent=self,
-        )
-        self._tile_popover = popover
-        self._overlays.register(popover)
-        popover.closed.connect(self._on_tile_popover_closed)
-        popover.show_above(self._tilebar.current_tile())
+    def _on_tile_select(self, item: MenuItem) -> None:
+        """Route a chosen tile-menu item: management actions to their handlers,
+        everything else (Launch / Restore / Close) to the lifecycle coordinator."""
+        if item.action in self._MANAGEMENT_ACTIONS:
+            self._on_manage_select(item)
+        else:
+            self._lifecycle.dispatch_tile_action(item)
 
     def _on_manage_select(self, item: MenuItem) -> None:
         if item.action == MOVE:

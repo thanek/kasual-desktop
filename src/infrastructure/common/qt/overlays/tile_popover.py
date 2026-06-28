@@ -4,11 +4,12 @@ import logging
 from collections.abc import Callable
 
 from PyQt6.QtCore import Qt, QEvent, QPoint, QRect, pyqtSignal
-from PyQt6.QtWidgets import QWidget, QVBoxLayout, QPushButton, QApplication
+from PyQt6.QtWidgets import QFrame, QWidget, QVBoxLayout, QPushButton, QApplication
 
 from domain.input.pad_control import PadControl
 from domain.input.vocabulary import Event
 from domain.menu.cursor import MenuCursor
+from domain.menu.entry import SEPARATOR
 from domain.menu.item import MenuItem
 from domain.shared.feedback import Cue, Feedback
 from infrastructure.common.qt.ui import styles
@@ -44,6 +45,7 @@ class TilePopoverMenu(QWidget):
             on_dismiss=self._dismiss,
             feedback=feedback,
             wrap=False,
+            is_selectable=lambda i: self._items[i].action != SEPARATOR,
         )
 
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground)
@@ -63,7 +65,10 @@ class TilePopoverMenu(QWidget):
         card_layout.setSpacing(4)
         layout.addWidget(self._card)
 
-        self._buttons: list[QPushButton] = []
+        # One widget per item, parallel to `items` so a row index maps straight to
+        # an item index. Separators are non-interactive dividers; the cursor skips
+        # them, so they never carry the selection highlight.
+        self._rows: list[QWidget] = []
 
         def _bind_hover(btn: QPushButton, idx: int) -> None:
             def _enter(event) -> None:
@@ -72,13 +77,16 @@ class TilePopoverMenu(QWidget):
             btn.enterEvent = _enter
 
         for i, item in enumerate(items):
-            btn = QPushButton(item.label)
-            btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-            btn.setMinimumWidth(220)
-            btn.clicked.connect(lambda checked=False, idx=i: self._on_btn_clicked(idx))
-            _bind_hover(btn, i)
-            card_layout.addWidget(btn)
-            self._buttons.append(btn)
+            if item.action == SEPARATOR:
+                row = self._make_separator()
+            else:
+                row = QPushButton(item.label)
+                row.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+                row.setMinimumWidth(220)
+                row.clicked.connect(lambda checked=False, idx=i: self._on_btn_clicked(idx))
+                _bind_hover(row, i)
+            card_layout.addWidget(row)
+            self._rows.append(row)
 
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self._cursor.reset(0)
@@ -103,6 +111,10 @@ class TilePopoverMenu(QWidget):
     # ── Gamepad handler ────────────────────────────────────────────────────
 
     def _handle_pad(self, event: str) -> None:
+        # X (CLOSE) opened this menu, so pressing it again closes it — a toggle.
+        if event == Event.CLOSE:
+            self._dismiss()
+            return
         self._cursor.handle_pad(event)
 
     # ── Internal ───────────────────────────────────────────────────────────
@@ -130,7 +142,7 @@ class TilePopoverMenu(QWidget):
     def keyPressEvent(self, event) -> None:
         mapped = self._KEY_MAP.get(event.key())
         if mapped is not None:
-            self._cursor.handle_pad(mapped)
+            self._handle_pad(mapped)   # same path as the pad (ACTIONS toggles closed)
 
     def eventFilter(self, obj, event) -> bool:
         if (event.type() == QEvent.Type.MouseButtonPress
@@ -165,9 +177,18 @@ class TilePopoverMenu(QWidget):
             self.hide()
             self.deleteLater()
 
+    def _make_separator(self) -> QFrame:
+        line = QFrame()
+        line.setFrameShape(QFrame.Shape.HLine)
+        line.setFixedHeight(1)
+        line.setStyleSheet("background-color: rgba(255,255,255,28); border: none;")
+        return line
+
     def _render_selection(self, index: int) -> None:
-        for i, btn in enumerate(self._buttons):
-            if i == index:
-                btn.setStyleSheet(styles.home_menu_item_selected())
-            else:
-                btn.setStyleSheet(styles.home_menu_item_normal())
+        for i, row in enumerate(self._rows):
+            if not isinstance(row, QPushButton):
+                continue   # separators never highlight
+            row.setStyleSheet(
+                styles.home_menu_item_selected() if i == index
+                else styles.home_menu_item_normal()
+            )

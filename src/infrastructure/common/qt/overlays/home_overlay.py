@@ -218,6 +218,13 @@ class HomeOverlay(QWidget, HomeMenuOverlay, metaclass=ProtocolQtMeta):
         Qt.Key.Key_Enter:  Event.SELECT,
         Qt.Key.Key_Escape: Event.CANCEL,
         Qt.Key.Key_F1:     Event.CANCEL,
+        # UX v2 (§7.10) — zoned overlay fallbacks; no-ops until the v2 widget
+        # consumes them (the cursor ignores unknown events today).
+        Qt.Key.Key_BracketLeft:  Event.SECTION_PREV,   # LB
+        Qt.Key.Key_BracketRight: Event.SECTION_NEXT,   # RB
+        Qt.Key.Key_Minus:        Event.VOLUME_DOWN,    # LT
+        Qt.Key.Key_Equal:        Event.VOLUME_UP,      # RT
+        Qt.Key.Key_F:            Event.ACTIONS,        # Y — Power dropdown
     }
 
     def keyPressEvent(self, event: QKeyEvent) -> None:

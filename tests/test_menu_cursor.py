@@ -37,6 +37,54 @@ class TestBasics:
         render.assert_called_with(2)
 
 
+class TestSkipNonSelectable:
+    """A non-selectable row (e.g. a SEPARATOR in the unified tile menu, §7.3) is
+    stepped over and never lands the selection."""
+
+    def _make_with_sep(self, sep_index, n=5, wrap=False):
+        cur = MenuCursor(
+            count=lambda: n,
+            render=MagicMock(),
+            on_activate=MagicMock(),
+            on_dismiss=MagicMock(),
+            feedback=MagicMock(),
+            wrap=wrap,
+            is_selectable=lambda i: i != sep_index,
+        )
+        return cur
+
+    def test_down_steps_over_separator(self):
+        # items: 0(sel) 1(sep) 2(sel) ...  — down from 0 skips 1, lands on 2.
+        cur = self._make_with_sep(sep_index=1)
+        cur.handle_pad("down")
+        assert cur.index == 2
+
+    def test_up_steps_over_separator(self):
+        cur = self._make_with_sep(sep_index=1)
+        cur.reset(2)
+        cur.handle_pad("up")
+        assert cur.index == 0
+
+    def test_clamp_stays_when_only_separators_below(self):
+        # items: 0(sel) 1(sel) 2(sep) 3(sep) 4(sep) — down from 1 finds nothing → stay.
+        cur = MenuCursor(
+            count=lambda: 5,
+            render=MagicMock(), on_activate=MagicMock(), on_dismiss=MagicMock(),
+            feedback=MagicMock(), wrap=False,
+            is_selectable=lambda i: i < 2,
+        )
+        cur.reset(1)
+        cur.handle_pad("down")
+        assert cur.index == 1
+
+    def test_wrap_skips_separator_around_the_end(self):
+        # wrap mode: 0(sel) 1(sel) 2(sep) — down from 1 wraps over 2 to 0.
+        cur = self._make_with_sep(sep_index=2, n=3, wrap=True)
+        cur.reset(1)
+        cur.handle_pad("down")
+        assert cur.index == 0
+
+
 class TestClampMode:
     def test_down_moves(self):
         cur, render, _, _, fb = _make(n=3)

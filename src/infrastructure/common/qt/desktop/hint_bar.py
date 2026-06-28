@@ -69,7 +69,12 @@ class HintBar(QWidget, HintBarView, metaclass=ProtocolQtMeta):
         self.setFixedHeight(SURFACE_H)
 
         outer = QVBoxLayout(self)
-        outer.setContentsMargins(16, 0, 16, 0)
+        # Pin the bar to the BOTTOM of the surface with a fixed BOTTOM_MARGIN gap.
+        # The stretch sits *above* the bar, so if the compositor hands the surface
+        # more height than SURFACE_H (seen on some layer-shell setups), the extra
+        # space opens above the bar and the gap below it stays exactly
+        # BOTTOM_MARGIN — symmetric with the TopBar's top margin.
+        outer.setContentsMargins(16, 0, 16, BOTTOM_MARGIN)
         outer.setSpacing(0)
 
         bar = QWidget()
@@ -82,8 +87,8 @@ class HintBar(QWidget, HintBarView, metaclass=ProtocolQtMeta):
             "  border-radius: 12px;"
             "}"
         )
+        outer.addStretch(1)   # absorbs any surplus surface height above the bar
         outer.addWidget(bar)
-        outer.addStretch(1)   # transparent gap below the bar → BOTTOM_MARGIN px above screen edge
 
         # Cleared and rebuilt on every show_hints — the screens differ in which
         # actions they offer, so re-laying out is simpler than diffing.

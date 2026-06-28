@@ -25,6 +25,15 @@ class Event(StrEnum):
     MANAGE     = "manage"
     ESCAPE_HOME = "escape_home"
 
+    # UX v2 (Home Overlay v2, §7.10). Produced by the gamepad adapters now so the
+    # zoned overlay can consume them later; until then they fall on an empty
+    # handler stack and are no-ops.
+    SECTION_PREV = "section_prev"  # LB (BTN_TL) — previous overlay section
+    SECTION_NEXT = "section_next"  # RB (BTN_TR) — next overlay section
+    VOLUME_DOWN  = "volume_down"   # LT (BTN_TL2 / ABS_Z)  — global volume −
+    VOLUME_UP    = "volume_up"     # RT (BTN_TR2 / ABS_RZ) — global volume +
+    ACTIONS      = "actions"       # Y (BTN_NORTH) — expand a tile / power dropdown
+
 
 class Trigger(StrEnum):
     """How BTN_MODE recalls the Home menu once an app is in the foreground."""

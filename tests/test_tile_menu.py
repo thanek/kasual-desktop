@@ -1,7 +1,11 @@
 """Tests for the tile Popover composition rules (pure, no Qt)."""
 
-from domain.menu.entry import CHANGE_COLOR, CLOSE, LAUNCH, MOVE, PIN, RESTORE, UNPIN
-from domain.menu.tile import compose_tile_menu, tile_management_menu, tile_menu_for
+from domain.menu.entry import (
+    CHANGE_COLOR, CLOSE, LAUNCH, MOVE, PIN, RESTORE, SEPARATOR, UNPIN,
+)
+from domain.menu.tile import (
+    compose_tile_menu, compose_tile_menu_v2, tile_management_menu, tile_menu_v2_for,
+)
 from domain.catalog.target import AppTarget, WindowTarget
 
 
@@ -25,8 +29,31 @@ class TestCompose:
         assert all(i.target == target for i in items)
 
 
-class TestTileMenuFor:
-    """tile_menu_for resolves the running-state rule (the bit that used to live
+class TestComposeV2:
+    """The single, state-dependent v2 menu (§7.3): lifecycle on top, then —
+    unless the app is running — a separator and the management group."""
+
+    def test_idle_app_has_launch_separator_then_management(self):
+        items = compose_tile_menu_v2(AppTarget(0, "Steam"), is_running=False)
+        assert [i.action for i in items] == [LAUNCH, SEPARATOR, MOVE, CHANGE_COLOR, UNPIN]
+
+    def test_running_app_hides_management(self):
+        items = compose_tile_menu_v2(AppTarget(0, "Steam"), is_running=True)
+        assert [i.action for i in items] == [RESTORE, CLOSE]
+        assert SEPARATOR not in [i.action for i in items]
+
+    def test_window_offers_restore_close_separator_pin(self):
+        items = compose_tile_menu_v2(WindowTarget("w1", "Firefox"), is_running=True)
+        assert [i.action for i in items] == [RESTORE, CLOSE, SEPARATOR, PIN]
+
+    def test_separator_is_not_selectable_payload(self):
+        items = compose_tile_menu_v2(AppTarget(0, "Steam"), is_running=False)
+        sep = next(i for i in items if i.action == SEPARATOR)
+        assert sep.target is None and sep.label == ""
+
+
+class TestTileMenuV2For:
+    """tile_menu_v2_for resolves the running-state rule (the bit that used to live
     in the Qt widget): query only for an AppTarget; a window is always running."""
 
     def test_app_queries_is_running_by_index(self):
@@ -34,12 +61,12 @@ class TestTileMenuFor:
         def is_running(idx):
             calls.append(idx)
             return False
-        items = tile_menu_for(AppTarget(3, "Steam"), is_running)
+        items = tile_menu_v2_for(AppTarget(3, "Steam"), is_running)
         assert calls == [3]
-        assert [i.action for i in items] == [LAUNCH]
+        assert [i.action for i in items] == [LAUNCH, SEPARATOR, MOVE, CHANGE_COLOR, UNPIN]
 
-    def test_app_running_offers_restore_and_close(self):
-        items = tile_menu_for(AppTarget(0, "Steam"), lambda idx: True)
+    def test_app_running_offers_restore_and_close_only(self):
+        items = tile_menu_v2_for(AppTarget(0, "Steam"), lambda idx: True)
         assert [i.action for i in items] == [RESTORE, CLOSE]
 
     def test_window_never_queries_and_is_running(self):
@@ -48,9 +75,9 @@ class TestTileMenuFor:
             nonlocal called
             called = True
             return False
-        items = tile_menu_for(WindowTarget("w1", "Firefox"), is_running)
+        items = tile_menu_v2_for(WindowTarget("w1", "Firefox"), is_running)
         assert called is False
-        assert [i.action for i in items] == [RESTORE, CLOSE]
+        assert [i.action for i in items] == [RESTORE, CLOSE, SEPARATOR, PIN]
 
 
 class TestTileManagementMenu:

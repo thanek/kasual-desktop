@@ -16,6 +16,13 @@ logger = logging.getLogger(__name__)
 STICK_THRESHOLD = 10000   # analog axis range: -32768..32767
 STICK_RESET     = 6000    # hysteresis — below this value the axis is "centered"
 
+# Triggers (ABS_Z / ABS_RZ) are analog and rest at 0 (typical range 0..255), so
+# they need the same threshold + hysteresis as the stick to fire once per pull
+# instead of streaming a value every frame. A single VOLUME_DOWN/UP is emitted on
+# the crossing; the axis must fall back below TRIGGER_RESET before it can re-fire.
+TRIGGER_THRESHOLD = 150
+TRIGGER_RESET     = 50
+
 VIRTUAL_DEVICE_NAME   = "kasual-vpad"
 
 
@@ -93,7 +100,9 @@ class GamepadWatcher(BaseGamepadWatcher):
         uinput: UInput | None      = None
         was_connected = False
         held: set[int] = set()
-        stick = {"x": None, "y": None}
+        # x/y track the d-pad & left stick directions; z/rz track the analog
+        # triggers (volume) — sharing one dict keeps the _translate signature flat.
+        stick = {"x": None, "y": None, "z": None, "rz": None}
         # Set when a refresh is in progress; if no new device is found
         # within REFRESH_GRACE_SECONDS we fall back to a real disconnect.
         refresh_started_at: float | None = None
@@ -105,7 +114,7 @@ class GamepadWatcher(BaseGamepadWatcher):
             # ── Search for gamepad ────────────────────────────────────────
             if device is None:
                 held.clear()
-                stick["x"] = stick["y"] = None
+                stick["x"] = stick["y"] = stick["z"] = stick["rz"] = None
                 self._repeat.clear()
 
                 if uinput is not None:
@@ -265,6 +274,10 @@ class GamepadWatcher(BaseGamepadWatcher):
                 self._hop_nav(Event.CANCEL)
             elif ev.code == ecodes.BTN_WEST:
                 self._hop_nav(Event.CLOSE)
+            elif ev.code == ecodes.BTN_TL:
+                self._hop_nav(Event.SECTION_PREV)
+            elif ev.code == ecodes.BTN_TR:
+                self._hop_nav(Event.SECTION_NEXT)
             elif ev.code == ecodes.BTN_START:
                 # Start+Select is the home-recall chord; Start alone opens the
                 # tile management popover (Select must be held first for the chord).
@@ -297,6 +310,10 @@ class GamepadWatcher(BaseGamepadWatcher):
             self._handle_stick_axis(ev.value, "x", Event.LEFT, Event.RIGHT, stick, pending)
         elif ev.code == ecodes.ABS_Y:
             self._handle_stick_axis(ev.value, "y", Event.UP, Event.DOWN, stick, pending)
+        elif ev.code == ecodes.ABS_Z:
+            self._handle_trigger_axis(ev.value, "z", Event.VOLUME_DOWN, stick)
+        elif ev.code == ecodes.ABS_RZ:
+            self._handle_trigger_axis(ev.value, "rz", Event.VOLUME_UP, stick)
 
     def _handle_stick_axis(
         self,
@@ -313,6 +330,19 @@ class GamepadWatcher(BaseGamepadWatcher):
             self._press_direction(stick, axis, pos_event, pending)
         elif abs(value) < STICK_RESET:
             self._release_direction(stick, axis)
+
+    def _handle_trigger_axis(self, value: int, key: str, event: str, stick: dict) -> None:
+        """Fire one volume event when a trigger is pulled past TRIGGER_THRESHOLD.
+
+        Unlike the stick this carries no auto-repeat — it's a discrete "nudge
+        volume" gesture. The state in ``stick[key]`` latches so a held trigger
+        emits once; it must relax below TRIGGER_RESET before it can fire again.
+        """
+        if value > TRIGGER_THRESHOLD and stick.get(key) != event:
+            stick[key] = event
+            self._hop_nav(event)
+        elif value < TRIGGER_RESET:
+            stick[key] = None
 
     def _press_direction(self, stick: dict, axis: str, direction: str, pending: list) -> None:
         """A direction became active: queue it, track it, and arm auto-repeat."""

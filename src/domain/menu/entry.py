@@ -23,3 +23,6 @@ MOVE         = "move"
 CHANGE_COLOR = "change_color"
 PIN          = "pin"      # turn an open-window tile into a persistent app tile
 UNPIN        = "unpin"    # remove a persistent app tile from the menu
+
+# ── Structural (non-action) ──────────────────────────────────────────────────
+SEPARATOR    = "separator"  # a non-selectable divider between menu groups (§7.3)

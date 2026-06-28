@@ -39,6 +39,10 @@ class Button(StrEnum):
     Y     = "y"      # the context popover ("actions")
     START = "start"  # the management popover ("manage")
     HOME  = "home"   # BTN_MODE — the home overlay menu
+    LB    = "lb"     # BTN_TL — previous overlay section
+    RB    = "rb"     # BTN_TR — next overlay section
+    LT    = "lt"     # BTN_TL2 / ABS_Z  — global volume −
+    RT    = "rt"     # BTN_TR2 / ABS_RZ — global volume +
 
 
 @dataclass(frozen=True)
@@ -62,12 +66,24 @@ class Hints:
     overlay:    ButtonHint
     actions:    tuple[ButtonHint, ...]
     nav_label:  str = "Navigate"
+    # UX v2: the Home Overlay switches sections with the bumpers (LB/RB) and
+    # offers global volume on the triggers (LT/RT). Empty on the classic screens.
+    bumpers:    tuple[ButtonHint, ...] = ()
+    triggers:   tuple[ButtonHint, ...] = ()
 
 
 # Source strings for the directional-cluster label (harvested by pylupdate6;
 # re-translated at render). "Navigate" is also the default in Hints above.
 _NAVIGATE = translate("HintBar", "Navigate")
 _ADJUST   = translate("HintBar", "Adjust")
+
+# The bumpers step between Home Overlay sections (Quick adjust ⇄ Actions ⇄ HUD);
+# the triggers nudge global volume regardless of focus. Both clusters carry one
+# shared label — the adapter renders the LB/RB and LT/RT glyphs as a pair.
+_SECTION = ButtonHint(Button.LB, translate("HintBar", "Section")), \
+           ButtonHint(Button.RB, translate("HintBar", "Section"))
+_VOLUME  = ButtonHint(Button.LT, translate("HintBar", "Volume")), \
+           ButtonHint(Button.RT, translate("HintBar", "Volume"))
 
 
 # The home (BTN_MODE) button toggles the overlay menu, so its label reads the
@@ -76,14 +92,13 @@ _ADJUST   = translate("HintBar", "Adjust")
 _HOME_MENU = ButtonHint(Button.HOME, translate("HintBar", "Show/Hide menu"))
 
 # The main screen: navigate the tiles, open the home overlay, launch the focused
-# app, or open its context / management popover.
+# app, or open its single state-dependent menu with Y (§7.3 — Start is freed).
 TILES = Hints(
     directions=(Direction.LEFT, Direction.RIGHT, Direction.UP),
     overlay=_HOME_MENU,
     actions=(
-        ButtonHint(Button.A,     translate("HintBar", "Select")),
-        ButtonHint(Button.Y,     translate("HintBar", "Actions")),
-        ButtonHint(Button.START, translate("HintBar", "Manage")),
+        ButtonHint(Button.A, translate("HintBar", "Select")),
+        ButtonHint(Button.Y, translate("HintBar", "Actions")),
     ),
 )
 
@@ -106,6 +121,19 @@ OVERLAY_MENU = Hints(
     overlay=_HOME_MENU,
     actions=(
         ButtonHint(Button.A, translate("HintBar", "Select")),
+        ButtonHint(Button.B, translate("HintBar", "Back")),
+    ),
+)
+
+# The tile popover (the single state-dependent menu, §7.3): step through it with
+# up/down, activate with A, and dismiss with B *or* Y — Y both opens and closes
+# it (a toggle), so the bar advertises that BTN_NORTH closes the menu it opened.
+TILE_POPOVER = Hints(
+    directions=(Direction.UP, Direction.DOWN),
+    overlay=_HOME_MENU,
+    actions=(
+        ButtonHint(Button.A, translate("HintBar", "Select")),
+        ButtonHint(Button.Y, translate("HintBar", "Close menu")),
         ButtonHint(Button.B, translate("HintBar", "Back")),
     ),
 )
@@ -153,4 +181,37 @@ NETWORK = Hints(
         ButtonHint(Button.A, translate("HintBar", "Select")),
         ButtonHint(Button.B, translate("HintBar", "Close")),
     ),
+)
+
+# ── Home Overlay v2 — zoned hint bars (§7.10) ───────────────────────────────────
+# The overlay has more than one kind of control, so the bumpers (LB/RB) own the
+# section jump and the D-pad stays inside a section. The hint bar swaps between
+# these two as focus moves between zones (FocusNavigator drives the swap — same
+# mechanism as TILES/TOPBAR).
+
+# Quick adjust: up/down picks a slider, left/right adjusts it live; the triggers
+# duplicate volume as an always-at-hand shortcut. No A here — sliders commit live.
+OVERLAY_QUICK = Hints(
+    directions=(Direction.UP, Direction.DOWN, Direction.LEFT, Direction.RIGHT),
+    overlay=_HOME_MENU,
+    actions=(
+        ButtonHint(Button.B, translate("HintBar", "Close")),
+    ),
+    nav_label=_ADJUST,
+    bumpers=_SECTION,
+    triggers=_VOLUME,
+)
+
+# Actions grid: 2D navigation across the action cards; A activates the focused
+# card, Y expands a dropdown (the Power split-button), B closes the overlay.
+OVERLAY_ACTIONS = Hints(
+    directions=(Direction.UP, Direction.DOWN, Direction.LEFT, Direction.RIGHT),
+    overlay=_HOME_MENU,
+    actions=(
+        ButtonHint(Button.A, translate("HintBar", "Select")),
+        ButtonHint(Button.Y, translate("HintBar", "Options")),
+        ButtonHint(Button.B, translate("HintBar", "Close")),
+    ),
+    bumpers=_SECTION,
+    triggers=_VOLUME,
 )

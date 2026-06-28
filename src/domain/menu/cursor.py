@@ -15,6 +15,10 @@ in :class:`domain.menu.cursor_base.Cursor`; this adds only the 1-D up/down move.
 
 `wrap`: True  → up/down wrap around the ends (home menu);
         False → movement clamps at the ends (tile popover).
+
+`is_selectable`: a predicate skipped over when moving (e.g. a SEPARATOR row in
+the unified tile menu, §7.3). Defaults to "every row selectable", so menus
+without dividers behave exactly as before.
 """
 
 from __future__ import annotations
@@ -36,9 +40,11 @@ class MenuCursor(Cursor):
         feedback: Feedback,
         *,
         wrap: bool = False,
+        is_selectable: Callable[[int], bool] | None = None,
     ) -> None:
         super().__init__(count, render, on_activate, on_dismiss, feedback)
         self._wrap = wrap
+        self._is_selectable = is_selectable or (lambda _i: True)
 
     def _destination(self, event: str) -> int | None:
         if event == Event.UP:
@@ -48,11 +54,21 @@ class MenuCursor(Cursor):
         return None
 
     def _shifted(self, delta: int) -> int:
-        """The index *delta* steps away, wrapping or clamping at the ends. A
-        no-op (current index) when the list is empty."""
+        """The next selectable index *delta*-wards, wrapping or clamping at the
+        ends and stepping over non-selectable rows. A no-op (current index) when
+        the list is empty or nothing selectable lies that way."""
         n = self._count()
         if n == 0:
             return self._index
-        if self._wrap:
-            return (self._index + delta) % n
-        return max(0, min(self._index + delta, n - 1))
+        idx = self._index
+        for _ in range(n):
+            if self._wrap:
+                idx = (idx + delta) % n
+            else:
+                nxt = idx + delta
+                if nxt < 0 or nxt >= n:
+                    return self._index  # clamped at an end → stay put
+                idx = nxt
+            if self._is_selectable(idx):
+                return idx
+        return self._index

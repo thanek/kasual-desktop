@@ -32,8 +32,11 @@ if sys.platform != "win32":
     pytest.skip("Windows-only test; needs pygame/ctypes.windll", allow_module_level=True)
 
 from infrastructure.windows.input.gamepad_watcher import (
-    BTN_EAST, BTN_MODE, BTN_NORTH, BTN_SELECT, BTN_SOUTH, BTN_START, BTN_WEST,
+    AXIS_LT, AXIS_RT,
+    BTN_EAST, BTN_MODE, BTN_NORTH, BTN_SELECT, BTN_SOUTH, BTN_START,
+    BTN_TL, BTN_TR, BTN_WEST,
     STICK_RESET, STICK_THRESHOLD,
+    TRIGGER_RESET, TRIGGER_THRESHOLD,
     WindowsGamepadWatcher,
 )
 from domain.input.vocabulary import Event, Trigger
@@ -162,11 +165,23 @@ class TestButtonMapping:
         self._press(mock_watcher, BTN_EAST, qapp)
         assert received == [Event.CANCEL]
 
-    def test_north_emits_close(self, mock_watcher, qapp):
+    def test_west_emits_close(self, mock_watcher, qapp):
         received = []
         mock_watcher.push_handler(lambda e: received.append(e))
-        self._press(mock_watcher, BTN_NORTH, qapp)
+        self._press(mock_watcher, BTN_WEST, qapp)
         assert received == [Event.CLOSE]
+
+    def test_tl_emits_section_prev(self, mock_watcher, qapp):
+        received = []
+        mock_watcher.push_handler(lambda e: received.append(e))
+        self._press(mock_watcher, BTN_TL, qapp)
+        assert received == [Event.SECTION_PREV]
+
+    def test_tr_emits_section_next(self, mock_watcher, qapp):
+        received = []
+        mock_watcher.push_handler(lambda e: received.append(e))
+        self._press(mock_watcher, BTN_TR, qapp)
+        assert received == [Event.SECTION_NEXT]
 
     def test_start_alone_emits_manage(self, mock_watcher, qapp):
         received = []
@@ -263,6 +278,56 @@ class TestStickAxis:
         mock_watcher._handle_axis(3, 0.9)
         qapp.processEvents()
         assert received == []
+
+
+# ── Triggery analogowe (LT/RT → głośność) ─────────────────────────────────────
+
+class TestTriggerAxis:
+    """One VOLUME_* per pull past TRIGGER_THRESHOLD; latched in _trigger, no
+    auto-repeat. Mirrors the Linux ABS_Z/ABS_RZ trigger handling."""
+
+    def test_lt_over_threshold_emits_volume_down(self, mock_watcher, qapp):
+        received = []
+        mock_watcher.push_handler(lambda e: received.append(e))
+        mock_watcher._handle_axis(AXIS_LT, 0.9)
+        qapp.processEvents()
+        assert received == [Event.VOLUME_DOWN]
+        assert mock_watcher._trigger["lt"] == Event.VOLUME_DOWN
+
+    def test_rt_over_threshold_emits_volume_up(self, mock_watcher, qapp):
+        received = []
+        mock_watcher.push_handler(lambda e: received.append(e))
+        mock_watcher._handle_axis(AXIS_RT, 0.9)
+        qapp.processEvents()
+        assert received == [Event.VOLUME_UP]
+
+    def test_held_trigger_does_not_refire(self, mock_watcher, qapp):
+        mock_watcher._handle_axis(AXIS_LT, 0.9)
+        qapp.processEvents()
+        received = []
+        mock_watcher.push_handler(lambda e: received.append(e))
+        mock_watcher._handle_axis(AXIS_LT, 0.95)   # still pulled
+        qapp.processEvents()
+        assert received == []
+
+    def test_release_then_pull_refires(self, mock_watcher, qapp):
+        mock_watcher._handle_axis(AXIS_LT, 0.9)
+        qapp.processEvents()
+        mock_watcher._handle_axis(AXIS_LT, 0.0)    # below TRIGGER_RESET
+        qapp.processEvents()
+        received = []
+        mock_watcher.push_handler(lambda e: received.append(e))
+        mock_watcher._handle_axis(AXIS_LT, 0.9)
+        qapp.processEvents()
+        assert received == [Event.VOLUME_DOWN]
+
+    def test_dead_zone_emits_nothing(self, mock_watcher, qapp):
+        received = []
+        mock_watcher.push_handler(lambda e: received.append(e))
+        mock_watcher._handle_axis(AXIS_LT, 0.3)   # > RESET, < THRESHOLD
+        qapp.processEvents()
+        assert received == []
+        assert mock_watcher._trigger["lt"] is None
 
 
 # ── D-pad (hat) ───────────────────────────────────────────────────────────────

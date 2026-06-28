@@ -160,6 +160,20 @@ class TestTranslateKeys:
         )
         assert fired == []
 
+    # ── UX v2 buttons (§7.10) ──────────────────────────────────────────────
+
+    def test_btn_tl_emits_section_prev(self, mock_gamepad):
+        result = self._translate_with_handler(
+            mock_gamepad, ev(ecodes.EV_KEY, ecodes.BTN_TL, 1)
+        )
+        assert result == ["section_prev"]
+
+    def test_btn_tr_emits_section_next(self, mock_gamepad):
+        result = self._translate_with_handler(
+            mock_gamepad, ev(ecodes.EV_KEY, ecodes.BTN_TR, 1)
+        )
+        assert result == ["section_next"]
+
 
 # ── _translate — DPAD (EV_ABS HAT) ───────────────────────────────────────────
 
@@ -197,6 +211,59 @@ class TestTranslateDpad:
         stick = {"x": None, "y": "up"}
         mock_gamepad._translate(ev(ecodes.EV_ABS, ecodes.ABS_HAT0Y, 0), set(), stick, [])
         assert stick["y"] is None
+
+
+# ── Triggery analogowe (ABS_Z / ABS_RZ → głośność) ────────────────────────────
+
+class TestTriggerAxis:
+    """Analogowe triggery: jeden VOLUME_* na pociągnięcie (próg + histereza),
+    bez auto-repeatu. Stan zatrzaskuje się w stick['z'/'rz']."""
+
+    from infrastructure.linux.input.gamepad_watcher import TRIGGER_THRESHOLD, TRIGGER_RESET
+
+    OVER  = 200   # > TRIGGER_THRESHOLD (150)
+    UNDER = 20    # < TRIGGER_RESET (50)
+    MID   = 100   # między RESET a THRESHOLD — strefa martwa
+
+    def _received(self, mock_gamepad, stick, ev_obj):
+        received = []
+        mock_gamepad.push_handler(lambda e: received.append(e))
+        mock_gamepad._translate(ev_obj, set(), stick, [])
+        return received
+
+    def test_left_trigger_over_threshold_emits_volume_down(self, mock_gamepad):
+        stick = {"x": None, "y": None, "z": None, "rz": None}
+        result = self._received(mock_gamepad, stick, ev(ecodes.EV_ABS, ecodes.ABS_Z, self.OVER))
+        assert result == ["volume_down"]
+        assert stick["z"] == "volume_down"
+
+    def test_right_trigger_over_threshold_emits_volume_up(self, mock_gamepad):
+        stick = {"x": None, "y": None, "z": None, "rz": None}
+        result = self._received(mock_gamepad, stick, ev(ecodes.EV_ABS, ecodes.ABS_RZ, self.OVER))
+        assert result == ["volume_up"]
+        assert stick["rz"] == "volume_up"
+
+    def test_held_trigger_does_not_refire(self, mock_gamepad):
+        stick = {"x": None, "y": None, "z": "volume_down", "rz": None}
+        result = self._received(mock_gamepad, stick, ev(ecodes.EV_ABS, ecodes.ABS_Z, self.OVER))
+        assert result == []   # już zatrzaśnięty — brak ponownej emisji
+
+    def test_release_below_reset_clears_latch(self, mock_gamepad):
+        stick = {"x": None, "y": None, "z": "volume_down", "rz": None}
+        self._received(mock_gamepad, stick, ev(ecodes.EV_ABS, ecodes.ABS_Z, self.UNDER))
+        assert stick["z"] is None
+
+    def test_release_then_pull_refires(self, mock_gamepad):
+        stick = {"x": None, "y": None, "z": "volume_down", "rz": None}
+        self._received(mock_gamepad, stick, ev(ecodes.EV_ABS, ecodes.ABS_Z, self.UNDER))
+        result = self._received(mock_gamepad, stick, ev(ecodes.EV_ABS, ecodes.ABS_Z, self.OVER))
+        assert result == ["volume_down"]
+
+    def test_dead_zone_emits_nothing(self, mock_gamepad):
+        stick = {"x": None, "y": None, "z": None, "rz": None}
+        result = self._received(mock_gamepad, stick, ev(ecodes.EV_ABS, ecodes.ABS_Z, self.MID))
+        assert result == []
+        assert stick["z"] is None
 
 
 # ── _handle_stick_axis ────────────────────────────────────────────────────────
