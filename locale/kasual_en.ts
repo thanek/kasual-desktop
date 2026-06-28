@@ -50,43 +50,48 @@
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/domain/menu/tile.py" line="42" />
+        <location filename="../src/domain/menu/tile.py" line="69" />
         <source>Launch</source>
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/domain/menu/tile.py" line="44" />
+        <location filename="../src/domain/menu/tile.py" line="71" />
         <source>Restore</source>
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/domain/menu/tile.py" line="45" />
+        <location filename="../src/domain/menu/tile.py" line="72" />
         <source>Close</source>
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/domain/menu/tile.py" line="60" />
+        <location filename="../src/domain/menu/tile.py" line="88" />
         <source>Move</source>
         <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/infrastructure/common/qt/overlays/tile_color_picker.py" line="65" />
-        <location filename="../src/domain/menu/tile.py" line="61" />
+        <location filename="../src/domain/menu/tile.py" line="89" />
         <source>Change color</source>
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/domain/menu/tile.py" line="62" />
+        <location filename="../src/domain/menu/tile.py" line="90" />
         <source>Unpin</source>
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/domain/menu/tile.py" line="64" />
+        <location filename="../src/domain/menu/tile.py" line="92" />
         <source>Pin to menu</source>
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/infrastructure/common/qt/desktop/desktop.py" line="513" />
+        <location filename="../src/infrastructure/common/qt/desktop/desktop.py" line="467" />
+        <source>Add app</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/infrastructure/common/qt/desktop/desktop.py" line="566" />
         <source>Are you sure you want to unpin
 "{0}"?</source>
         <translation type="unfinished" />
@@ -94,60 +99,83 @@
 </context><context>
     <name>HintBar</name>
     <message>
-        <location filename="../src/domain/navigation/hints.py" line="69" />
+        <location filename="../src/domain/navigation/hints.py" line="77" />
         <source>Navigate</source>
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/domain/navigation/hints.py" line="70" />
+        <location filename="../src/domain/navigation/hints.py" line="78" />
         <source>Adjust</source>
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/domain/navigation/hints.py" line="76" />
-        <source>Show/Hide menu</source>
-        <translation type="unfinished" />
-    </message>
-    <message>
-        <location filename="../src/domain/navigation/hints.py" line="153" />
-        <location filename="../src/domain/navigation/hints.py" line="143" />
-        <location filename="../src/domain/navigation/hints.py" line="132" />
-        <location filename="../src/domain/navigation/hints.py" line="108" />
-        <location filename="../src/domain/navigation/hints.py" line="96" />
         <location filename="../src/domain/navigation/hints.py" line="84" />
-        <source>Select</source>
-        <translation type="unfinished" />
-    </message>
-    <message>
-        <location filename="../src/domain/navigation/hints.py" line="85" />
-        <source>Actions</source>
+        <location filename="../src/domain/navigation/hints.py" line="83" />
+        <source>Section</source>
         <translation type="unfinished" />
     </message>
     <message>
         <location filename="../src/domain/navigation/hints.py" line="86" />
-        <source>Manage</source>
+        <location filename="../src/domain/navigation/hints.py" line="85" />
+        <source>Volume</source>
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/domain/navigation/hints.py" line="109" />
+        <location filename="../src/domain/navigation/hints.py" line="92" />
+        <source>Show/Hide menu</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/domain/navigation/hints.py" line="221" />
+        <location filename="../src/domain/navigation/hints.py" line="191" />
+        <location filename="../src/domain/navigation/hints.py" line="181" />
+        <location filename="../src/domain/navigation/hints.py" line="170" />
+        <location filename="../src/domain/navigation/hints.py" line="145" />
+        <location filename="../src/domain/navigation/hints.py" line="133" />
+        <location filename="../src/domain/navigation/hints.py" line="121" />
+        <location filename="../src/domain/navigation/hints.py" line="111" />
+        <location filename="../src/domain/navigation/hints.py" line="100" />
+        <source>Select</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/domain/navigation/hints.py" line="101" />
+        <source>Actions</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/domain/navigation/hints.py" line="147" />
+        <location filename="../src/domain/navigation/hints.py" line="134" />
         <source>Back</source>
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/domain/navigation/hints.py" line="120" />
+        <location filename="../src/domain/navigation/hints.py" line="146" />
+        <source>Close menu</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/domain/navigation/hints.py" line="158" />
         <source>Confirm</source>
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/domain/navigation/hints.py" line="154" />
-        <location filename="../src/domain/navigation/hints.py" line="144" />
-        <location filename="../src/domain/navigation/hints.py" line="121" />
+        <location filename="../src/domain/navigation/hints.py" line="223" />
+        <location filename="../src/domain/navigation/hints.py" line="208" />
+        <location filename="../src/domain/navigation/hints.py" line="192" />
+        <location filename="../src/domain/navigation/hints.py" line="182" />
+        <location filename="../src/domain/navigation/hints.py" line="159" />
         <source>Close</source>
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/domain/navigation/hints.py" line="133" />
+        <location filename="../src/domain/navigation/hints.py" line="171" />
         <source>Cancel</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../src/domain/navigation/hints.py" line="222" />
+        <source>Options</source>
         <translation type="unfinished" />
     </message>
 </context><context>
@@ -353,12 +381,12 @@
 </context><context>
     <name>OnboardingOverlay</name>
     <message>
-        <location filename="../src/infrastructure/common/qt/overlays/onboarding_overlay.py" line="107" />
+        <location filename="../src/infrastructure/common/qt/overlays/onboarding_overlay.py" line="108" />
         <source>Welcome — pick your apps</source>
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../src/infrastructure/common/qt/overlays/onboarding_overlay.py" line="137" />
+        <location filename="../src/infrastructure/common/qt/overlays/onboarding_overlay.py" line="138" />
         <source>Confirm</source>
         <translation type="unfinished" />
     </message>

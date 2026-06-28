@@ -135,6 +135,54 @@ class TestConfirmOnly:
         assert confirmed == []
 
 
+class TestCancellableReuse:
+    """When reused as the [＋] add-app picker, present() takes an on_cancel and a
+    custom title: B / Escape then dismiss without applying any selection."""
+
+    def _present_cancellable(self, mock_gamepad, on_cancel):
+        overlay = OnboardingOverlay(gamepad=mock_gamepad, feedback=MagicMock())
+        overlay.present(
+            _candidates(),
+            on_confirm=lambda chosen: None,
+            on_cancel=on_cancel,
+            title="Add app",
+        )
+        return overlay
+
+    def test_custom_title_applied(self, mock_gamepad):
+        overlay = self._present_cancellable(mock_gamepad, on_cancel=lambda: None)
+        assert overlay._title.text() == "Add app"
+
+    def test_cancel_dismisses_and_reports(self, mock_gamepad):
+        cancelled = []
+        overlay = self._present_cancellable(
+            mock_gamepad, on_cancel=lambda: cancelled.append(1))
+        overlay._handle_pad("cancel")
+        assert cancelled == [1]
+        assert overlay._closed is True
+        assert overlay._handle_pad not in mock_gamepad._stack
+
+    def test_escape_dismisses(self, mock_gamepad):
+        cancelled = []
+        overlay = self._present_cancellable(
+            mock_gamepad, on_cancel=lambda: cancelled.append(1))
+        overlay.keyPressEvent(_key(Qt.Key.Key_Escape))
+        assert cancelled == [1]
+        assert overlay._closed is True
+
+    def test_cancel_does_not_confirm(self, mock_gamepad):
+        confirmed = []
+        overlay = OnboardingOverlay(gamepad=mock_gamepad, feedback=MagicMock())
+        overlay.present(
+            _candidates(),
+            on_confirm=lambda chosen: confirmed.append(chosen),
+            on_cancel=lambda: None,
+            title="Add app",
+        )
+        overlay._handle_pad("cancel")
+        assert confirmed == []
+
+
 class TestKeyboard:
     def test_arrows_navigate(self, mock_gamepad):
         overlay = _present(mock_gamepad)

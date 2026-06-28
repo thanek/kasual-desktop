@@ -29,6 +29,7 @@ from domain.navigation.focus_navigator import FocusNavigator
 from domain.navigation.tile_mover import TileMover
 from domain.network.control import NetworkControl
 from domain.notifications.center import NotificationCenter
+from domain.provisioning.add_apps import AppAdder
 from domain.shared.feedback import Feedback
 from domain.shared.scheduler import Scheduler
 from domain.shell.desktop import Desktop as DesktopCoordinator
@@ -88,6 +89,7 @@ def build_desktop(
     deferred_hide_factory: 'Callable[[WindowManager, ProcessManager, LiveCatalog, Callable[[], None]], LaunchHide] | None' = None,
     parent_of: Callable[[int], int | None] | None = None,
     is_game_pid: Callable[[int], bool] = lambda _: False,
+    app_adder: AppAdder | None = None,
 ) -> Desktop:
     """Build a fully wired Desktop: the view widget plus its domain coordinators.
 
@@ -124,6 +126,7 @@ def build_desktop(
         app_pinning=app_pinning,
         surface=surface,
         parent_of=parent_of,
+        app_adder=app_adder,
     )
 
     nav = FocusNavigator(

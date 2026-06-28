@@ -275,3 +275,86 @@ class AppTile(QWidget):
         anim.setEndValue(QPoint(x1, 0))
         anim.setDuration(dur)
         return anim
+
+
+class AddTile(QWidget):
+    """The synthetic ``[＋]`` "Add app" tile that ends the pinned section.
+
+    A deliberately app-unlike tile: a transparent, dashed outline with a single
+    circle-plus glyph and no title, status bar or marquee. It mirrors
+    :class:`AppTile`'s fixed slot and grow-on-select animation so it sits flush
+    in the row and highlights with the same couch-UI feel, but carries none of an
+    app's state (it never runs, recolours or opens a management menu)."""
+
+    clicked = pyqtSignal()
+    hovered = pyqtSignal()
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._btn = QToolButton(self)
+        self._btn.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
+        self._btn.setStyleSheet(styles.add_tile(selected=False))
+        self._btn.clicked.connect(self.clicked)
+
+        self._is_selected = False
+        self._scale_t     = 0.0
+        self._scale_anim: QVariantAnimation | None = None
+        self._pos_at_leave: QPoint | None = None
+
+        self.setFixedSize(TILE_SEL_W, TILE_SEL_H)
+        self._refit(TILE_W, TILE_H, ICON_SIZE)
+        self._apply_icon(selected=False)
+
+    def enterEvent(self, event) -> None:
+        super().enterEvent(event)
+        pos = event.globalPosition().toPoint()
+        synthetic = pos == self._pos_at_leave
+        self._pos_at_leave = None
+        if not synthetic:
+            self.hovered.emit()
+
+    def leaveEvent(self, event) -> None:
+        super().leaveEvent(event)
+        self._pos_at_leave = QCursor.pos()
+
+    def click(self) -> None:
+        self._btn.click()
+
+    def set_selected(self, selected: bool) -> None:
+        if selected == self._is_selected:
+            return
+        self._is_selected = selected
+        self._btn.setStyleSheet(styles.add_tile(selected=selected))
+        self._apply_icon(selected=selected)
+        self._animate_scale(to_selected=selected)
+
+    def _apply_icon(self, selected: bool) -> None:
+        color = styles.COLOR_ACCENT if selected else "#6b7280"
+        self._btn.setIcon(qta.icon("fa5s.plus-circle", color=color))
+
+    def _refit(self, w: int, h: int, icon: int) -> None:
+        ox = (TILE_SEL_W - w) // 2
+        oy = (TILE_SEL_H - h) // 2
+        self._btn.move(ox, oy)
+        self._btn.setFixedSize(w, h)
+        self._btn.setIconSize(QSize(icon, icon))
+
+    def _animate_scale(self, to_selected: bool) -> None:
+        target = 1.0 if to_selected else 0.0
+        if self._scale_anim is not None:
+            self._scale_anim.stop()
+        anim = QVariantAnimation(self)
+        anim.setStartValue(self._scale_t)
+        anim.setEndValue(target)
+        anim.setDuration(SCALE_ANIM_MS)
+        anim.setEasingCurve(QEasingCurve.Type.OutCubic)
+        anim.valueChanged.connect(self._apply_scale)
+        anim.start()
+        self._scale_anim = anim
+
+    def _apply_scale(self, t) -> None:
+        self._scale_t = float(t)
+        w    = round(TILE_W    + (TILE_SEL_W    - TILE_W)    * self._scale_t)
+        h    = round(TILE_H    + (TILE_SEL_H    - TILE_H)    * self._scale_t)
+        icon = round(ICON_SIZE + (ICON_SIZE_SEL - ICON_SIZE) * self._scale_t)
+        self._refit(w, h, icon)

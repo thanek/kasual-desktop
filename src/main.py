@@ -32,7 +32,9 @@ from infrastructure.common.catalog.app_config import (
 )
 from infrastructure.linux.catalog.app_discovery import WhichAppDiscovery
 from infrastructure.linux.catalog.app_pinning import DesktopAppPinning
+from infrastructure.linux.catalog.installed_apps import XdgInstalledApps
 from domain.provisioning.provisioning import Provisioning, needs_provisioning
+from domain.provisioning.add_apps import AppAdder
 from infrastructure.linux.catalog.app_manager import AppManager
 from infrastructure.linux.proc import parent_pid, is_game_pid
 from infrastructure.linux.log.log_viewer_launcher import LogViewerLauncher
@@ -110,6 +112,10 @@ def main() -> None:
         provisioning, WhichAppDiscovery(),
         bundled_base=str(Path(__file__).parent.parent),
     )
+    # The [＋] add-app tile reopens provisioning after first run: it offers every
+    # installed app (XDG .desktop scan), minus the apps already pinned, and
+    # persists the chosen ones through the same store as onboarding.
+    app_adder = AppAdder(XdgInstalledApps(), provisioning)
 
     def start_session() -> None:
         """Bring up the Desktop and controller from the (now-provisioned) apps.
@@ -142,6 +148,7 @@ def main() -> None:
             surface=LayerShellSurface(),
             parent_of=parent_pid,
             is_game_pid=is_game_pid,
+            app_adder=app_adder,
             deferred_hide_factory=lambda wm_, pm_, apps_, on_hide:
                 DeferredHide(wm_, pm_, apps_, on_hide=on_hide),
         )

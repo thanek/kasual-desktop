@@ -19,6 +19,7 @@ from infrastructure.common.qt.overlays.volume_overlay import VolumeOverlay
 from infrastructure.common.qt.overlays.brightness_overlay import BrightnessOverlay
 from infrastructure.common.qt.overlays.notifications_overlay import NotificationsOverlay
 from infrastructure.common.qt.overlays.network_overlay import NetworkOverlay
+from infrastructure.common.qt.overlays.onboarding_overlay import OnboardingOverlay
 from domain.notifications.center import NotificationCenter
 from domain.network import view as network_view
 from domain.network.control import NetworkControl
@@ -42,6 +43,7 @@ from domain.menu.item import MenuItem
 from domain.menu.palette import TILE_COLORS
 from domain.menu.ports import AppPinning, TileColorStore
 from domain.menu.tile import tile_menu_v2_for
+from domain.provisioning.add_apps import AppAdder
 from domain.shared.feedback import Cue, Feedback
 from domain.shared.i18n import translate
 from domain.shared.text import truncate
@@ -99,6 +101,7 @@ class Desktop(QWidget, DesktopView, DesktopShell, DesktopControl, metaclass=Prot
         app_pinning: AppPinning,
         surface: DesktopSurface | None = None,
         parent_of: 'Callable[[int], int | None] | None' = None,
+        app_adder: AppAdder | None = None,
     ):
         super().__init__()
         self._apps        = apps
@@ -120,6 +123,10 @@ class Desktop(QWidget, DesktopView, DesktopShell, DesktopControl, metaclass=Prot
         self._overlays       = overlays
         self._color_store    = color_store
         self._app_pinning    = app_pinning
+        # The add-app use-case behind the [＋] tile (offers the not-yet-pinned
+        # starter candidates and persists the chosen ones). Optional so offscreen
+        # test builds can omit it — the [＋] tile then simply does nothing.
+        self._app_adder      = app_adder
         # How this widget becomes a fullscreen, stay-on-top surface — the one
         # OS-specific seam, injected by the composition root: Linux passes the
         # KDE LayerShellSurface, Windows the WS_EX_TOPMOST WindowsDesktopSurface.
@@ -128,6 +135,7 @@ class Desktop(QWidget, DesktopView, DesktopShell, DesktopControl, metaclass=Prot
         self._confirm_dialog = None
         self._tile_popover   = None
         self._color_picker   = None
+        self._add_picker     = None
 
         # Desktop visibility + paused + what the BTN_MODE menu targets (foreground).
         # The foreground is shared by reference with the AppLifecycle coordinator.
@@ -153,6 +161,7 @@ class Desktop(QWidget, DesktopView, DesktopShell, DesktopControl, metaclass=Prot
         self._tilebar = TileBar(self._apps, self._app_manager, parent_of=parent_of)
         self._tilebar.tile_hovered.connect(self._on_tile_hovered)
         self._tilebar.tile_context_menu.connect(self._on_tile_context_menu)
+        self._tilebar.add_requested.connect(self._show_add_apps)
         main.addWidget(self._tilebar)
         main.addStretch(1)
 
@@ -251,6 +260,7 @@ class Desktop(QWidget, DesktopView, DesktopShell, DesktopControl, metaclass=Prot
         self._overlays.cancel()
         self._confirm_dialog = None
         self._color_picker = None
+        self._add_picker = None
         if self._tile_mover is not None:
             self._tile_mover.cancel()
 
@@ -433,6 +443,44 @@ class Desktop(QWidget, DesktopView, DesktopShell, DesktopControl, metaclass=Prot
         self._nav.focus_tiles()
         self._show_tile_popover()
 
+    # ── Adding apps (the [＋] tile) ──────────────────────────────────────────
+
+    def _show_add_apps(self) -> None:
+        """Open the add-app picker for the [＋] tile (§7.4).
+
+        Reuses the onboarding overlay with the starter list filtered to the
+        not-yet-pinned apps. With nothing left to add (or no adder wired) it just
+        plays a back cue rather than opening an empty picker."""
+        if self._app_adder is None or self._add_picker is not None:
+            return
+        candidates = self._app_adder.available(self._apps)
+        if not candidates:
+            self._feedback.play(Cue.EXIT)
+            return
+        picker = OnboardingOverlay(self._gamepad, self._feedback)
+        self._add_picker = picker
+        self._overlays.register(picker)
+        picker.present(
+            candidates,
+            on_confirm=self._on_apps_added,
+            on_cancel=self._forget_add_picker,
+            title=translate("Desktop", "Add app"),
+        )
+
+    def _on_apps_added(self, chosen) -> None:
+        """Persist the chosen candidates and add their tiles live (before the [＋])."""
+        self._forget_add_picker()
+        if not chosen:
+            return
+        self._app_adder.add(chosen)
+        for candidate in chosen:
+            self._tilebar.add_app(candidate.app)
+        self._feedback.play(Cue.SELECT)
+
+    def _forget_add_picker(self) -> None:
+        self._overlays.forget(self._add_picker)
+        self._add_picker = None
+
     # ── Closing an application ─────────────────────────────────────────────
 
     def _show_tile_popover(self) -> None:
@@ -446,8 +494,14 @@ class Desktop(QWidget, DesktopView, DesktopShell, DesktopControl, metaclass=Prot
         ctx = self._tilebar.current_context()
         if ctx is None:
             return
+        items = tile_menu_v2_for(
+            ctx, lambda idx: self._tilebar.is_tile_running(idx, self._tilebar.last_windows))
+        # The [＋] add tile (and any future menu-less target) has no popover —
+        # don't open an empty one.
+        if not items:
+            return
         popover = TilePopoverMenu(
-            items=tile_menu_v2_for(ctx, lambda idx: self._tilebar.is_tile_running(idx, self._tilebar.last_windows)),
+            items=items,
             on_select=self._on_tile_select,
             gamepad=self._gamepad,
             feedback=self._feedback,

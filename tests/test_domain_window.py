@@ -4,7 +4,7 @@ Pure rules, no Qt/KWin/proc — the process-parent lookup is injected.
 """
 
 from domain.catalog.app import App
-from domain.catalog.target import AppTarget, WindowTarget, target_at_index
+from domain.catalog.target import AddTileTarget, AppTarget, WindowTarget, target_at_index
 from domain.catalog.window import Window
 from domain.catalog.window_rules import (
     active_unmanaged_window, app_window_present,
@@ -193,7 +193,8 @@ class TestAppWindowPresent:
 
 
 class TestTargetAtIndex:
-    """Foreground Target at a tile position: static apps first, then windows."""
+    """Foreground Target at a tile position: static apps, then the synthetic
+    add-app tile that ends the pinned section, then the open windows."""
 
     APPS = [App(name="Steam", command="steam"), App(name="Firefox", command="firefox")]
     WINS = [Window(id="w1", title="Doc", pid=1000),
@@ -206,22 +207,29 @@ class TestTargetAtIndex:
         assert target_at_index(1, self.APPS, self.WINS, self._no_trigger) == \
             AppTarget(index=1, name="Firefox")
 
+    def test_position_after_apps_is_the_add_tile(self):
+        # index 2 == right after the 2 static apps → the [＋] add-app tile.
+        assert target_at_index(2, self.APPS, self.WINS, self._no_trigger) == AddTileTarget()
+
     def test_dynamic_index_yields_window_target(self):
-        # index 2 == first window (after 2 static apps)
-        assert target_at_index(2, self.APPS, self.WINS, self._no_trigger) == \
+        # index 3 == first window (after 2 apps + the add tile).
+        assert target_at_index(3, self.APPS, self.WINS, self._no_trigger) == \
             WindowTarget(window_id="w1", name="Doc", trigger=Trigger.CLICK, pid=1000)
 
     def test_window_target_carries_resolved_trigger(self):
         trigger_for = lambda pid: Trigger.HOLD_1S if pid == 2000 else Trigger.CLICK
-        target = target_at_index(3, self.APPS, self.WINS, trigger_for)  # w2, pid 2000
+        target = target_at_index(4, self.APPS, self.WINS, trigger_for)  # w2, pid 2000
         assert target == WindowTarget(
             window_id="w2", name="Video", trigger=Trigger.HOLD_1S, pid=2000)
 
     def test_out_of_range_yields_none(self):
-        assert target_at_index(4, self.APPS, self.WINS, self._no_trigger) is None
+        assert target_at_index(5, self.APPS, self.WINS, self._no_trigger) is None
 
-    def test_empty_yields_none(self):
-        assert target_at_index(0, [], [], self._no_trigger) is None
+    def test_add_tile_is_the_sole_position_when_empty(self):
+        # An empty catalog still has the add tile at position 0 (the start point
+        # after provisioning); only beyond it is out of range.
+        assert target_at_index(0, [], [], self._no_trigger) == AddTileTarget()
+        assert target_at_index(1, [], [], self._no_trigger) is None
 
 
 class TestResolveRecallTrigger:

@@ -102,6 +102,16 @@ TILES = Hints(
     ),
 )
 
+# The [＋] add-app tile: it has no per-tile menu, so the bar drops the "Actions"
+# hint and advertises only A (which opens the add-app picker) plus navigation.
+TILES_ADD = Hints(
+    directions=(Direction.LEFT, Direction.RIGHT, Direction.UP),
+    overlay=_HOME_MENU,
+    actions=(
+        ButtonHint(Button.A, translate("HintBar", "Select")),
+    ),
+)
+
 # The top bar: move along the system-action buttons, drop back to the tiles, or
 # trigger the focused button.
 TOPBAR = Hints(

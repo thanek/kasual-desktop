@@ -94,6 +94,22 @@ def tile_moving(color: str) -> str:
     """
 
 
+def add_tile(selected: bool) -> str:
+    """The synthetic ``[＋]`` add-app tile: a transparent, dashed-outline
+    affordance (the same dashed cue as move mode) so it never reads as a real
+    app. Its border brightens to the accent colour when focused."""
+    border = COLOR_ACCENT if selected else "#6b7280"
+    return f"""
+        QToolButton {{
+            color: {border};
+            background-color: transparent;
+            border: 3px dashed {border};
+            border-radius: 32px;
+            padding: 12px 8px 16px 8px;
+        }}
+    """
+
+
 def topbar_normal(color: str) -> str:
     return f"""
         QPushButton {{

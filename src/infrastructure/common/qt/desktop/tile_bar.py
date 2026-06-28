@@ -9,7 +9,7 @@ from PyQt6.QtGui import QCursor, QIcon
 from PyQt6.QtWidgets import QWidget, QHBoxLayout, QScrollArea, QApplication
 
 from domain.catalog.live_catalog import LiveCatalog
-from domain.catalog.target import AppTarget, Target, target_at_index
+from domain.catalog.target import AddTileTarget, AppTarget, Target, target_at_index
 from domain.catalog.window import Window
 from domain.catalog.window_rules import external_windows, is_app_running, resolve_recall_trigger
 from domain.lifecycle.process_manager import ProcessManager
@@ -17,7 +17,7 @@ from infrastructure.common.qt._meta import ProtocolQtMeta
 from infrastructure.common.qt.ui import styles
 from domain.lifecycle.tile_bar_view import TileBarView
 from domain.navigation.bar_views import TileFocusView, TileReorderView
-from .app_tile import AppTile, TILE_H, TILE_SEL_H
+from .app_tile import AddTile, AppTile, TILE_H, TILE_SEL_H
 from .window_icons import WindowIconResolver
 
 logger = logging.getLogger(__name__)
@@ -41,6 +41,7 @@ class TileBar(QScrollArea, TileBarView, TileFocusView, TileReorderView, metaclas
     """
 
     activated        = pyqtSignal(object)   # Target (AppTarget | WindowTarget)
+    add_requested    = pyqtSignal()         # the [＋] add-app tile was activated
     windows_changed  = pyqtSignal()
     tile_hovered     = pyqtSignal(int)
     tile_context_menu = pyqtSignal()
@@ -117,6 +118,15 @@ class TileBar(QScrollArea, TileBarView, TileFocusView, TileReorderView, metaclas
             self._tile_layout.addWidget(tile)
             self._tiles.append(tile)
 
+        # The synthetic [＋] "Add app" tile always ends the pinned section (even
+        # when the catalog is empty — then it is the row's only, natural start
+        # point after provisioning). It resolves its own position on demand, since
+        # adding/unpinning apps shifts it (it always sits at len(self._tiles)).
+        self._add_tile = AddTile()
+        self._add_tile.clicked.connect(lambda: self._activate_index(len(self._tiles)))
+        self._add_tile.hovered.connect(lambda: self._on_tile_hovered(len(self._tiles)))
+        self._tile_layout.addWidget(self._add_tile)
+
         self.setWidget(container)
         self._render_tiles()
 
@@ -189,13 +199,17 @@ class TileBar(QScrollArea, TileBarView, TileFocusView, TileReorderView, metaclas
         """Foreground Target for the focused tile, or None if out of range."""
         return self._context_for_index(self._tile_index)
 
-    def current_tile(self) -> AppTile | None:
+    def current_tile(self) -> QWidget | None:
         tiles = self._all_tiles()
         return tiles[self._tile_index] if 0 <= self._tile_index < len(tiles) else None
 
     def current_is_app(self) -> bool:
         """True if the focused tile is a static app tile (not a dynamic window)."""
         return isinstance(self.current_context(), AppTarget)
+
+    def current_is_add(self) -> bool:
+        """True if the focused tile is the synthetic [＋] add-app tile."""
+        return isinstance(self.current_context(), AddTileTarget)
 
     # ── Move mode (TileReorderView) ──────────────────────────────────────────
 
@@ -273,6 +287,22 @@ class TileBar(QScrollArea, TileBarView, TileFocusView, TileReorderView, metaclas
         # Rebuild the dynamic section so the pinned window drops out of it.
         self._dyn_signature = None
         self.update_windows(self._last_windows)
+        self._tile_index = len(self._tiles) - 1
+        self._render_tiles()
+
+    def add_app(self, app) -> None:
+        """Append a newly added catalog app as a static tile (the [＋] flow).
+
+        Like :meth:`pin_window` but for an idle app chosen from the add-app picker
+        rather than a live window: the tile lands just before the [＋] (the end of
+        the pinned section), the shared catalog grows so the lifecycle sees it, and
+        focus moves to the new tile. Existing indices are unchanged (appended at
+        the end), so the AppManager's index-keyed tracking stays valid."""
+        self._apps.append(app)
+        tile = self._make_static_tile(app)
+        # Insert before the [＋] tile (which sits at layout position len(self._tiles)).
+        self._tile_layout.insertWidget(len(self._tiles), tile)
+        self._tiles.append(tile)
         self._tile_index = len(self._tiles) - 1
         self._render_tiles()
 
@@ -441,7 +471,7 @@ class TileBar(QScrollArea, TileBarView, TileFocusView, TileReorderView, metaclas
             )
             tile.set_running(True)   # window exists → application is running
             win_id = w.id
-            abs_idx = len(self._tiles) + len(self._dynamic_tiles)
+            abs_idx = len(self._tiles) + 1 + len(self._dynamic_tiles)   # +1: [＋] tile
             tile.clicked.connect(lambda wid=win_id: self._on_dynamic_clicked(wid))
             tile.hovered.connect(lambda i=abs_idx: self._on_tile_hovered(i))
             tile.right_clicked.connect(lambda i=abs_idx: self._on_tile_right_clicked(i))
@@ -457,11 +487,13 @@ class TileBar(QScrollArea, TileBarView, TileFocusView, TileReorderView, metaclas
     # ── Private helpers ─────────────────────────────────────────────────────
 
     def _total(self) -> int:
-        return len(self._tiles) + len(self._dynamic_tiles)
+        return len(self._tiles) + 1 + len(self._dynamic_tiles)   # +1: the [＋] tile
 
-    def _all_tiles(self) -> list[AppTile]:
-        """Static tiles followed by dynamic (open-window) tiles, in display order."""
-        return self._tiles + [t for _, _, t in self._dynamic_tiles]
+    def _all_tiles(self) -> list[QWidget]:
+        """Static app tiles, the [＋] add tile, then dynamic (open-window) tiles —
+        in display order. The add tile sits between the two sections (it ends the
+        pinned section), mirroring :func:`target_at_index`'s position rule."""
+        return [*self._tiles, self._add_tile, *(t for _, _, t in self._dynamic_tiles)]
 
     def _clamp_index(self) -> None:
         total = self._total()
@@ -474,8 +506,9 @@ class TileBar(QScrollArea, TileBarView, TileFocusView, TileReorderView, metaclas
         n_static = len(self._tiles)
         for i, tile in enumerate(self._tiles):
             tile.set_selected(self._focused and i == self._tile_index)
+        self._add_tile.set_selected(self._focused and n_static == self._tile_index)
         for i, (_, _, tile) in enumerate(self._dynamic_tiles):
-            tile.set_selected(self._focused and (n_static + i) == self._tile_index)
+            tile.set_selected(self._focused and (n_static + 1 + i) == self._tile_index)
         if self._focused and scroll:
             QTimer.singleShot(0, self.center_current)
 
@@ -492,7 +525,11 @@ class TileBar(QScrollArea, TileBarView, TileFocusView, TileReorderView, metaclas
 
     def _activate_index(self, idx: int) -> None:
         ctx = self._context_for_index(idx)
-        if ctx is not None:
+        if ctx is None:
+            return
+        if isinstance(ctx, AddTileTarget):
+            self.add_requested.emit()
+        else:
             self.activated.emit(ctx)
 
     def _on_tile_hovered(self, idx: int) -> None:
@@ -531,7 +568,7 @@ class TileBar(QScrollArea, TileBarView, TileFocusView, TileReorderView, metaclas
         n_static = len(self._tiles)
         for j, (wid, _, _) in enumerate(self._dynamic_tiles):
             if wid == win_id:
-                self._activate_index(n_static + j)
+                self._activate_index(n_static + 1 + j)   # +1: the [＋] tile
                 return
 
     def _context_for_index(self, idx: int) -> Target | None:

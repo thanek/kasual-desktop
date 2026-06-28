@@ -1,6 +1,11 @@
 """Tests for the pure provisioning domain: catalog, selection, use-case."""
 
-from domain.provisioning.catalog import starter_candidates
+from domain.catalog.app import App
+from domain.provisioning.add_apps import AppAdder
+from domain.provisioning.candidate import CandidateApp
+from domain.provisioning.catalog import (
+    order_for_adding, starter_candidates, unpinned_candidates,
+)
 from domain.provisioning.selection import AppSelection
 from domain.provisioning.provisioning import Provisioning, needs_provisioning
 
@@ -147,3 +152,116 @@ class TestProvisioningUseCase:
         uc.complete(chosen)
         assert fake.received == chosen
         assert fake.is_provisioned() is True
+
+
+# ── unpinned_candidates (the add-app picker filter) ─────────────────────────────
+
+class TestUnpinnedCandidates:
+    def _candidates(self):
+        return starter_candidates(FakeDiscovery({"steam", "heroic"}), "/opt/kd")
+
+    def test_drops_already_pinned_by_launch_command(self):
+        cands = self._candidates()
+        # An existing Steam tile (same command/args) filters the Steam candidate out.
+        existing = [App(name="Steam", command="steam",
+                        args=("steam://open/bigpicture",))]
+        keys = {c.key for c in unpinned_candidates(cands, existing)}
+        assert "steam" not in keys
+        assert {"files", "youtube", "heroic"} <= keys
+
+    def test_keeps_all_when_catalog_empty(self):
+        cands = self._candidates()
+        assert unpinned_candidates(cands, []) == cands
+
+    def test_matches_bundled_apps_by_absolute_command_path(self):
+        cands = self._candidates()
+        existing = [App(name="File Browser",
+                        command="/opt/kd/apps/file_browser/file_browser.sh")]
+        keys = {c.key for c in unpinned_candidates(cands, existing)}
+        assert "files" not in keys
+
+    def test_same_command_different_args_is_not_a_match(self):
+        cands = self._candidates()
+        # A bare `steam` tile must not mask the bigpicture Steam candidate.
+        existing = [App(name="Steam", command="steam")]
+        keys = {c.key for c in unpinned_candidates(cands, existing)}
+        assert "steam" in keys
+
+
+# ── order_for_adding (well-known launchers first) ───────────────────────────────
+
+class TestOrderForAdding:
+    def _cand(self, key, name, command=None):
+        return CandidateApp(key, App(name=name, command=command or key),
+                            order=0, default_selected=False)
+
+    def test_well_known_lead_in_listed_order(self):
+        out = order_for_adding([
+            self._cand("gimp", "GIMP"),
+            self._cand("heroic", "Heroic"),
+            self._cand("steam", "Steam"),
+        ])
+        # Steam precedes Heroic (its _WELL_KNOWN order), both before plain apps.
+        assert [c.key for c in out] == ["steam", "heroic", "gimp"]
+
+    def test_rest_sorted_alphabetically_after(self):
+        out = order_for_adding([
+            self._cand("zed", "Zed"),
+            self._cand("ark", "Ark"),
+            self._cand("steam", "Steam"),
+        ])
+        assert [c.key for c in out] == ["steam", "ark", "zed"]
+
+    def test_matches_well_known_by_flatpak_id(self):
+        out = order_for_adding([
+            self._cand("aaa", "Aaa"),
+            self._cand("com.valvesoftware.Steam", "Steam", command="/usr/bin/flatpak"),
+        ])
+        assert out[0].key == "com.valvesoftware.Steam"
+
+    def test_no_well_known_is_plain_alphabetical(self):
+        out = order_for_adding([self._cand("b", "Beta"), self._cand("a", "Alpha")])
+        assert [c.app.name for c in out] == ["Alpha", "Beta"]
+
+
+# ── AppAdder (add apps after first run) ─────────────────────────────────────────
+
+class FakeInstalledApps:
+    """An InstalledApps returning a fixed candidate list."""
+
+    def __init__(self, candidates):
+        self._candidates = list(candidates)
+
+    def scan(self):
+        return list(self._candidates)
+
+
+class TestAppAdder:
+    def _candidates(self):
+        return starter_candidates(FakeDiscovery({"steam", "heroic"}), "/opt/kd")
+
+    def test_available_excludes_already_pinned(self):
+        adder = AppAdder(FakeInstalledApps(self._candidates()), FakeProvisioning(True))
+        existing = [App(name="Steam", command="steam",
+                        args=("steam://open/bigpicture",))]
+        keys = {c.key for c in adder.available(existing)}
+        assert "steam" not in keys and "heroic" in keys
+
+    def test_available_is_everything_when_nothing_pinned(self):
+        cands = self._candidates()
+        adder = AppAdder(FakeInstalledApps(cands), FakeProvisioning(True))
+        # Same set (nothing filtered), though re-ordered well-known-first.
+        assert {c.key for c in adder.available([])} == {c.key for c in cands}
+
+    def test_available_orders_well_known_first(self):
+        cands = self._candidates()   # includes steam + heroic
+        adder = AppAdder(FakeInstalledApps(cands), FakeProvisioning(True))
+        keys = [c.key for c in adder.available([])]
+        assert keys[:2] == ["steam", "heroic"]
+
+    def test_add_persists_chosen(self):
+        fake = FakeProvisioning(provisioned=True)
+        cands = self._candidates()
+        adder = AppAdder(FakeInstalledApps(cands), fake)
+        adder.add(cands[:2])
+        assert fake.received == cands[:2]

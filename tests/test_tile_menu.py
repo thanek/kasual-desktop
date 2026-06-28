@@ -6,7 +6,7 @@ from domain.menu.entry import (
 from domain.menu.tile import (
     compose_tile_menu, compose_tile_menu_v2, tile_management_menu, tile_menu_v2_for,
 )
-from domain.catalog.target import AppTarget, WindowTarget
+from domain.catalog.target import AddTileTarget, AppTarget, WindowTarget
 
 
 class TestCompose:
@@ -78,6 +78,16 @@ class TestTileMenuV2For:
         items = tile_menu_v2_for(WindowTarget("w1", "Firefox"), is_running)
         assert called is False
         assert [i.action for i in items] == [RESTORE, CLOSE, SEPARATOR, PIN]
+
+    def test_add_tile_has_no_menu(self):
+        # The synthetic [＋] tile opens the add-app picker on A; it has no popover.
+        called = False
+        def is_running(idx):
+            nonlocal called
+            called = True
+            return False
+        assert tile_menu_v2_for(AddTileTarget(), is_running) == []
+        assert called is False
 
 
 class TestTileManagementMenu:

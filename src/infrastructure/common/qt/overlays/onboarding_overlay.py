@@ -78,13 +78,14 @@ class OnboardingOverlay(BaseOverlay, ProvisioningView, metaclass=ProtocolQtMeta)
         self._candidates: list[CandidateApp] = []
         self._selection: AppSelection | None = None
         self._on_confirm: Callable[[list[CandidateApp]], None] | None = None
+        self._on_cancel: Callable[[], None] | None = None
         self._rows:    list[_ToggleRow] = []
         self._confirm: QPushButton | None = None
         self._return_row: int = 0   # row to return to when Left leaves Confirm
 
         # Navigation spans the toggle rows plus the trailing Confirm action;
-        # clamped (wrap=False) like the tile popover — a fixed-length form.
-        # on_dismiss is a no-op: this overlay is confirm-only (see module docs).
+        # clamped (wrap=False) like the tile popover. on_dismiss is a no-op:
+        # dismissal goes through B/Escape only when a cancel path is given.
         self._cursor = MenuCursor(
             count=lambda: len(self._rows) + 1,
             render=self._render,
@@ -104,13 +105,13 @@ class OnboardingOverlay(BaseOverlay, ProvisioningView, metaclass=ProtocolQtMeta)
         layout.setSpacing(8)
         layout.setAlignment(Qt.AlignmentFlag.AlignTop)
 
-        title = QLabel(self.tr("Welcome — pick your apps"))
-        title.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        title.setStyleSheet(
+        self._title = QLabel(self.tr("Welcome — pick your apps"))
+        self._title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._title.setStyleSheet(
             "font-size: 28px; color: #88c0d0; font-weight: bold;"
             " background: transparent; padding-bottom: 8px;"
         )
-        layout.addWidget(title)
+        layout.addWidget(self._title)
 
         self._rows_container = QWidget()
         self._rows_container.setStyleSheet("background: transparent;")
@@ -149,12 +150,18 @@ class OnboardingOverlay(BaseOverlay, ProvisioningView, metaclass=ProtocolQtMeta)
         candidates: list[CandidateApp],
         on_confirm: Callable[[list[CandidateApp]], None],
         on_cancel: Callable[[], None] | None = None,
+        title: str | None = None,
     ) -> None:
-        # on_cancel is part of the reusable port but unused here — this overlay
-        # is confirm-only, so there is no dismissal path to report.
+        # First-run onboarding passes no on_cancel — it is confirm-only (no way
+        # out but Confirm). Reuses such as the [＋] add-app picker pass one, which
+        # turns B / Escape into a dismissal. The title is overridable so the same
+        # component reads "Add app" there rather than the first-run welcome.
         self._candidates = list(candidates)
         self._selection = AppSelection(self._candidates)
         self._on_confirm = on_confirm
+        self._on_cancel = on_cancel
+        if title is not None:
+            self._title.setText(title)
         self._build_rows()
         self._fit_scroll_height()
         self._cursor.reset(0)
@@ -223,6 +230,11 @@ class OnboardingOverlay(BaseOverlay, ProvisioningView, metaclass=ProtocolQtMeta)
     # ── Navigation (delegated to the domain cursor) ──────────────────────────
 
     def _handle_pad(self, event: str) -> None:
+        # B / Back dismisses the picker when a cancel path was supplied (the
+        # add-app reuse); first-run onboarding passes none and so ignores it.
+        if event == Event.CANCEL and self._on_cancel is not None:
+            self._cancel()
+            return
         # Left/Right jump between the list and the always-visible Confirm button:
         # Right from any row → Confirm; Left from Confirm → the row last left.
         if event == Event.RIGHT and self._rows and self._cursor.index < len(self._rows):
@@ -246,6 +258,8 @@ class OnboardingOverlay(BaseOverlay, ProvisioningView, metaclass=ProtocolQtMeta)
             self._handle_pad(Event.RIGHT)
         elif key in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
             self._cursor.handle_pad(Event.SELECT)
+        elif key == Qt.Key.Key_Escape and self._on_cancel is not None:
+            self._cancel()
         elif key == Qt.Key.Key_Space:
             # Space toggles the highlighted row's checkbox; a no-op on Confirm.
             index = self._cursor.index
@@ -280,6 +294,11 @@ class OnboardingOverlay(BaseOverlay, ProvisioningView, metaclass=ProtocolQtMeta)
         chosen = self._selection.chosen()
         if self._dismiss(sound=Cue.SELECT) and self._on_confirm is not None:
             self._on_confirm(chosen)
+
+    def _cancel(self) -> None:
+        """Dismiss without applying any selection (the add-app reuse's B / Escape)."""
+        if self._dismiss(sound=Cue.EXIT) and self._on_cancel is not None:
+            self._on_cancel()
 
     # ── Rendering ────────────────────────────────────────────────────────────
 

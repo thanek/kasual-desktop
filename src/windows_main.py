@@ -122,6 +122,7 @@ def main():
     # only config_root() differs — %APPDATA% on Windows). The catalog, tile order
     # and colours persist across restarts. (Path is imported at module scope.)
     from domain.provisioning.provisioning import Provisioning as ProvisioningUseCase
+    from domain.provisioning.add_apps import AppAdder
     from infrastructure.common.catalog.app_config import (
         load_apps, DesktopAppProvisioning,
         DesktopTileOrderStore, DesktopTileColorStore,
@@ -134,6 +135,11 @@ def main():
         WindowsAppDiscovery(),
         bundled_base=str(Path(__file__).parent.parent),
     )
+    # The [＋] add-app tile reopens provisioning after first run: it offers every
+    # installed app (Start Menu scan), minus the apps already pinned, persisting
+    # the chosen ones through the same store as onboarding.
+    from infrastructure.windows.catalog.installed_apps import WindowsInstalledApps
+    app_adder = AppAdder(WindowsInstalledApps(), provisioning)
 
     # ── Session (deferred behind onboarding on first run) ────────────────────
     _refs: dict = {}  # keep tray/controller/overlay alive past their scope
@@ -178,6 +184,7 @@ def main():
             parent_of=parent_pid,
             # Game detection: ask RTSS which process it is rendering an OSD into.
             is_game_pid=RtssAppProbe().is_3d_app,
+            app_adder=app_adder,
             # Protocol apps (ms-settings) have no detectable window to wait on, so
             # hide on a short timer and let the surface's foreground monitor bring
             # the Desktop back; the builder's wm/pm/apps/on_hide args don't apply.

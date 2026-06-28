@@ -12,9 +12,11 @@ from unittest.mock import MagicMock, patch
 from PyQt6.QtCore import QPoint
 
 from infrastructure.common.qt.desktop.tile_bar import TileBar
+from infrastructure.common.qt.desktop.app_tile import AddTile, AppTile
 from domain.catalog.app import App
 from domain.catalog.catalog import AppCatalog
 from domain.catalog.live_catalog import LiveCatalog
+from domain.catalog.target import AddTileTarget, AppTarget, WindowTarget
 from domain.catalog.window import Window
 
 
@@ -342,3 +344,67 @@ class TestUnpinApp:
         bar.pin_window(App(name="Foo", command="foo"), window_id="100")
         bar.unpin_app(len(bar._tiles) - 1)
         assert "100" not in bar._pinned_window_ids
+
+
+# ── The [＋] add-app tile (§7.4) ────────────────────────────────────────────────
+
+class TestAddTile:
+    """The synthetic [＋] tile ends the pinned section: it is always present, the
+    add-app picker opens on activation, and added apps land just before it."""
+
+    def test_add_tile_always_present_and_last_in_pinned(self, bar_with_tiles):
+        bar = bar_with_tiles
+        # 3 app tiles + the [＋] tile = total 4 navigable positions, no windows.
+        assert bar._total() == len(bar._tiles) + 1
+        all_tiles = bar._all_tiles()
+        assert isinstance(all_tiles[len(bar._tiles)], AddTile)
+
+    def test_add_tile_present_even_when_catalog_empty(self, bar):
+        # Empty catalog → the [＋] is the row's sole position (the start point).
+        assert bar._total() == 1
+        assert isinstance(bar._all_tiles()[0], AddTile)
+        assert bar.current_context() == AddTileTarget()
+
+    def test_navigation_reaches_add_tile_then_windows(self, bar_with_tiles):
+        bar = bar_with_tiles
+        bar.update_windows([_win("100", "Foo")])
+        n = len(bar._tiles)
+        bar._tile_index = n
+        assert bar.current_context() == AddTileTarget()
+        bar._tile_index = n + 1                       # past the [＋] → the window
+        assert isinstance(bar.current_context(), WindowTarget)
+
+    def test_activating_add_tile_emits_add_requested(self, bar_with_tiles):
+        bar = bar_with_tiles
+        requested = []
+        activated = []
+        bar.add_requested.connect(lambda: requested.append(1))
+        bar.activated.connect(lambda ctx: activated.append(ctx))
+        bar._tile_index = len(bar._tiles)             # focus the [＋]
+        bar.select_current()
+        assert requested == [1]
+        assert activated == []                        # not a launch/restore
+
+    def test_activating_app_tile_still_emits_activated(self, bar_with_tiles):
+        bar = bar_with_tiles
+        activated = []
+        bar.activated.connect(lambda ctx: activated.append(ctx))
+        bar._tile_index = 0
+        bar.select_current()
+        assert len(activated) == 1 and isinstance(activated[0], AppTarget)
+
+    def test_add_app_appends_before_add_tile_and_focuses_it(self, bar_with_tiles):
+        bar = bar_with_tiles
+        before = len(bar._tiles)
+        bar.add_app(App(name="New", command="new"))
+        assert len(bar._tiles) == before + 1
+        assert bar._apps[-1].name == "New"
+        assert bar.current_app_index() == len(bar._tiles) - 1
+        # The [＋] is still the last position, after the new tile.
+        assert isinstance(bar._all_tiles()[-1], AddTile)
+
+    def test_add_tile_has_no_management_context(self, bar_with_tiles):
+        bar = bar_with_tiles
+        bar._tile_index = len(bar._tiles)             # focus the [＋]
+        assert bar.current_is_app() is False
+        assert bar.current_app_color() is None

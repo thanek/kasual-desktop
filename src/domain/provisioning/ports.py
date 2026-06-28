@@ -62,6 +62,20 @@ class AppDiscovery(Protocol):
         ...
 
 
+class InstalledApps(Protocol):
+    """Enumerates the apps installed on the system as add-app candidates.
+
+    The source behind the ``[＋]`` tile (post-first-run provisioning, §7.4).
+    Unlike :class:`AppDiscovery`, which only answers availability of a handful of
+    known commands, this returns the *whole* installed set — freedesktop
+    ``.desktop`` files on Linux, Start Menu shortcuts on Windows — as
+    :class:`CandidateApp`\\ s (never pre-selected: the user picks). The add-app
+    use-case filters the already-pinned ones out before showing the picker."""
+
+    def scan(self) -> list[CandidateApp]:
+        ...
+
+
 class ProvisioningView(Protocol):
     """The UI surface the controller drives to let the user pick starter apps."""
 

@@ -13,7 +13,7 @@ translation context so the existing locale entries keep resolving.
 
 from collections.abc import Callable
 
-from domain.catalog.target import AppTarget, Target
+from domain.catalog.target import AddTileTarget, AppTarget, Target
 from domain.menu.entry import (
     CHANGE_COLOR, CLOSE, LAUNCH, MOVE, PIN, RESTORE, SEPARATOR, UNPIN,
 )
@@ -31,8 +31,11 @@ def tile_menu_v2_for(
 
     The running check is only meaningful for an :class:`AppTarget` (queried via
     *is_running* by index); an open :class:`WindowTarget` is by definition already
-    running. Keeps that rule in the domain rather than in the Qt widget.
+    running. The synthetic :class:`AddTileTarget` has no menu at all. Keeps that
+    rule in the domain rather than in the Qt widget.
     """
+    if isinstance(target, AddTileTarget):
+        return []
     running = is_running(target.index) if isinstance(target, AppTarget) else True
     return compose_tile_menu_v2(target, running)
 

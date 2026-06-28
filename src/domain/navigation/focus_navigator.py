@@ -58,9 +58,11 @@ class FocusNavigator:
             if event == Event.LEFT:
                 if self._tilebar.move(-1):
                     self._feedback.play(Cue.CURSOR)
+                self._sync_hints()   # the [＋] tile has its own hint set
             elif event == Event.RIGHT:
                 if self._tilebar.move(+1):
                     self._feedback.play(Cue.CURSOR)
+                self._sync_hints()
             elif event == Event.UP and self._topbar.count:
                 self._mode = _Mode.TOPBAR
                 self._topbar_index = 0
@@ -94,12 +96,17 @@ class FocusNavigator:
         self._sync_hints()
 
     def _sync_hints(self) -> None:
-        """Push the hint set for the current screen to the hint bar (if wired)."""
+        """Push the hint set for the current screen to the hint bar (if wired).
+
+        Within the tiles row the [＋] add tile gets its own set (no "Actions"),
+        so the bar reflects which kind of tile is focused, not just the mode."""
         if self._hint_bar is None:
             return
-        self._hint_bar.show_hints(
-            hints.TILES if self._mode == _Mode.TILES else hints.TOPBAR
-        )
+        if self._mode == _Mode.TILES:
+            tiles = hints.TILES_ADD if self._tilebar.current_is_add() else hints.TILES
+            self._hint_bar.show_hints(tiles)
+        else:
+            self._hint_bar.show_hints(hints.TOPBAR)
 
     def _moved(self) -> None:
         self.render()
@@ -113,7 +120,9 @@ class FocusNavigator:
             self._mode = _Mode.TILES
             self._topbar.set_selected(None)
             self._tilebar.set_focused(True, scroll=False)
-            self._sync_hints()
+        # Always re-sync: hovering between tiles (e.g. onto the [＋]) changes the
+        # hint set even when the mode was already TILES.
+        self._sync_hints()
         self._feedback.play(Cue.CURSOR)
 
     def hover_topbar(self, idx: int) -> None:

@@ -13,6 +13,7 @@ from domain.navigation.focus_navigator import FocusNavigator
 def _make(topbar_count=3, hint_bar=None):
     tilebar = MagicMock()
     tilebar.move.return_value = True
+    tilebar.current_is_add.return_value = False   # the [＋] tile is not focused
     topbar = MagicMock()
     topbar.count = topbar_count
     on_tile_menu = MagicMock()
@@ -160,6 +161,23 @@ class TestHintBar:
         hint_bar.reset_mock()
         nav.hover_tiles()
         hint_bar.show_hints.assert_called_once_with(hints.TILES)
+
+    def test_add_tile_shows_its_own_hints_without_actions(self):
+        hint_bar = MagicMock()
+        nav, tilebar, *_ = _make(hint_bar=hint_bar)
+        tilebar.current_is_add.return_value = True   # focus landed on the [＋]
+        nav.handle_pad("right")
+        hint_bar.show_hints.assert_called_with(hints.TILES_ADD)
+
+    def test_moving_off_add_tile_restores_tiles_hints(self):
+        hint_bar = MagicMock()
+        nav, tilebar, *_ = _make(hint_bar=hint_bar)
+        tilebar.current_is_add.return_value = True
+        nav.handle_pad("right")
+        hint_bar.show_hints.assert_called_with(hints.TILES_ADD)
+        tilebar.current_is_add.return_value = False   # moved back onto an app tile
+        nav.handle_pad("left")
+        hint_bar.show_hints.assert_called_with(hints.TILES)
 
     def test_no_hint_bar_is_a_noop(self):
         nav, *_ = _make(hint_bar=None)
