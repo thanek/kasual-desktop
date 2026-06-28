@@ -168,7 +168,7 @@
     <name>Kasual Desktop</name>
     <message>
         <location filename="../src/domain/menu/home.py" line="35" />
-        <source>Return to Desktop</source>
+        <source>Return to Home screen</source>
         <translation type="unfinished" />
     </message>
     <message>
@@ -295,7 +295,7 @@
     </message>
     <message>
         <location filename="../src/domain/system/actions.py" line="111" />
-        <source>Minimize Desktop</source>
+        <source>Minimize Kasual Desktop</source>
         <translation type="unfinished" />
     </message>
     <message>

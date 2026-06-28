@@ -108,6 +108,6 @@ ACTIONS: dict[str, SystemAction] = {
     ),
     HIDE_DESKTOP: SystemAction(
         lambda d: d.desktop.pause(),
-        translate("Kasual Desktop", "Minimize Desktop"), "fa5s.window-minimize", "#d580ff",
+        translate("Kasual Desktop", "Minimize Kasual Desktop"), "fa5s.window-minimize", "#d580ff",
     ),
 }

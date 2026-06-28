@@ -111,8 +111,8 @@ class TilePopoverMenu(QWidget):
     # ── Gamepad handler ────────────────────────────────────────────────────
 
     def _handle_pad(self, event: str) -> None:
-        # X (CLOSE) opened this menu, so pressing it again closes it — a toggle.
-        if event == Event.CLOSE:
+        # X (CLOSE) opened this menu; Y (ACTIONS) also toggles it closed.
+        if event in (Event.CLOSE, Event.ACTIONS):
             self._dismiss()
             return
         self._cursor.handle_pad(event)

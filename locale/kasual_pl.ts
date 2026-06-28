@@ -170,8 +170,8 @@
     <name>Kasual Desktop</name>
     <message>
         <location filename="../src/domain/menu/home.py" line="35" />
-        <source>Return to Desktop</source>
-        <translation>Powrót do Pulpitu</translation>
+        <source>Return to Home screen</source>
+        <translation>Wróć do ekranu głównego</translation>
     </message>
     <message>
         <location filename="../src/domain/menu/home.py" line="58" />
@@ -297,8 +297,8 @@
     </message>
     <message>
         <location filename="../src/domain/system/actions.py" line="111" />
-        <source>Minimize Desktop</source>
-        <translation>Minimalizuj Pulpit</translation>
+        <source>Minimize Kasual Desktop</source>
+        <translation>Minimalizuj Kasual Desktop</translation>
     </message>
     <message>
         <location filename="../src/domain/system/hud.py" line="51" />

@@ -32,7 +32,7 @@ class HomeMenu:
 
 
 def _return_to_desktop_item() -> MenuItem:
-    return MenuItem(translate("Kasual Desktop", "Return to Desktop"), RETURN_TO_DESKTOP, "fa5s.home")
+    return MenuItem(translate("Kasual Desktop", "Return to Home screen"), RETURN_TO_DESKTOP, "fa5s.home")
 
 
 def compose_home_menu(
