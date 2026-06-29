@@ -7,14 +7,13 @@ factory, the session collaborators) — no `infrastructure.*` imports.
 import logging
 
 from domain.menu.entry import CLOSE_APP, RETURN_TO_APP, RETURN_TO_DESKTOP, TOGGLE_HUD
-from domain.menu.home import compose_home_menu
 from domain.menu.item import MenuItem
 from domain.shared.event_emitter import Unsubscribe
 from domain.input.gamepad_signals import GamepadSignals
 from domain.lifecycle.app_control import AppControl
 from domain.lifecycle.window_manager import WindowManager
 from domain.shell.desktop_control import DesktopControl
-from domain.shell.overlay import HomeMenuOverlay, OverlayFactory
+from domain.shell.overlay import SectionedHomeOverlay, SectionedOverlayFactory
 from domain.shell.session import SessionPolicy
 from domain.shell.session_collaborators import ConnectionIndicator
 from domain.system.actions import ActionDeps
@@ -40,7 +39,7 @@ class Application:
         action_deps:     ActionDeps,
         tray:            ConnectionIndicator,
         wm:              WindowManager,
-        overlay_factory: OverlayFactory,
+        overlay_factory: SectionedOverlayFactory,
         hud:             HudControl,
     ) -> None:
         self._desktop         = desktop
@@ -49,7 +48,10 @@ class Application:
         self._wm              = wm
         self._overlay_factory = overlay_factory
         self._hud             = hud
-        self._overlay: HomeMenuOverlay | None = None
+        # BTN_MODE opens the sectioned Home Overlay (§7.10): the factory yields a
+        # SectionedHomeOverlay that composes its own zones; the controller hands it
+        # only the foreground context plus the dispatch/cancel/hint callbacks.
+        self._overlay: SectionedHomeOverlay | None = None
         self._session         = SessionPolicy(view=desktop, indicator=tray)
         # System actions (sleep/shutdown/…) run through the domain ActionRunner,
         # gating the confirmable ones on the Desktop's tracked confirm dialog.
@@ -89,23 +91,29 @@ class Application:
         # other overlays so they aren't merely covered.
         self._desktop.dismiss_overlays()
 
-        menu = compose_home_menu(
-            self._app_control.current_app(),
-            self._hud,
-            self._app_control.foreground_is_game(),
+        current = self._app_control.current_app()
+        # cancel (B button) returns to the running app when one is foreground;
+        # on the bare Desktop it just closes the overlay (None).
+        on_cancel = (
+            (lambda t=current: self._app_control.restore_app(t))
+            if current is not None else None
         )
 
         self._overlay = self._overlay_factory.create_home_overlay()
         self._overlay.on_closed(self._on_overlay_closed)
 
-        # cancel (B button) returns to the running app when one is foreground;
-        # on the bare Desktop it just closes the overlay (None).
-        on_cancel = (
-            (lambda t=menu.cancel_restores: self._app_control.restore_app(t))
-            if menu.cancel_restores is not None else None
-        )
-        self._overlay.show_overlay(
-            items=menu.items, on_select=self._dispatch_home, on_cancel=on_cancel
+        # The overlay composes its own sections (it holds the controls and the
+        # power menu); hand it the context plus the dispatch/cancel/hint callbacks.
+        # The zoned hint bar is driven via set_overlay_hints; desktop_minimized
+        # lets it pre-focus "Minimize" vs "Return to Home screen" (§7.10).
+        self._overlay.show_for_context(
+            current,
+            self._app_control.foreground_is_game(),
+            self._hud,
+            on_action=self._dispatch_home,
+            on_cancel=on_cancel,
+            set_hints=self._desktop.set_overlay_hints,
+            desktop_minimized=not self._desktop.is_visible(),
         )
         # Swap the standalone hint bar to the overlay-menu controls (and keep it
         # on screen even over a running app). The bar is its own surface, so it

@@ -24,7 +24,7 @@ from domain.shared.i18n import translate
 _SEPARATOR = MenuItem("", SEPARATOR)
 
 
-def tile_menu_v2_for(
+def tile_menu_for(
     target: Target, is_running: Callable[[int], bool]
 ) -> list[MenuItem]:
     """Compose the unified tile Popover for *target*, resolving its running state.
@@ -37,29 +37,28 @@ def tile_menu_v2_for(
     if isinstance(target, AddTileTarget):
         return []
     running = is_running(target.index) if isinstance(target, AppTarget) else True
-    return compose_tile_menu_v2(target, running)
+    return compose_tile_menu(target, running)
 
 
-def compose_tile_menu_v2(target: Target, is_running: bool) -> list[MenuItem]:
-    """The single, state-dependent tile menu of UX v2 (§7.3).
+def compose_tile_menu(target: Target, is_running: bool) -> list[MenuItem]:
+    """The single, state-dependent tile menu (§7.3).
 
-    Merges the two former popovers (the ``Y`` lifecycle menu and the ``Start``
-    management menu) into one: the lifecycle action(s) on top, then — *unless the
-    app is running* — a separator and the management group. A running catalog app
-    is no moment to move / recolour / unpin it, so that group is dropped; an open
-    window still offers the one durable action, *Pin to menu*.
+    The lifecycle action(s) on top, then — *unless the app is running* — a
+    separator and the management group. A running catalog app is no moment to
+    move / recolour / unpin it, so that group is dropped; an open window still
+    offers the one durable action, *Pin to menu*.
 
       - catalog app · idle    → Launch · ─ · Move · Change color · Unpin
       - catalog app · running → Restore · Close          (management hidden)
       - ephemeral window      → Restore · Close · ─ · Pin to menu
     """
-    lifecycle = compose_tile_menu(target, is_running)
+    lifecycle = lifecycle_menu(target, is_running)
     if isinstance(target, AppTarget) and is_running:
         return lifecycle
     return [*lifecycle, _SEPARATOR, *tile_management_menu(target)]
 
 
-def compose_tile_menu(target: Target, is_running: bool) -> list[MenuItem]:
+def lifecycle_menu(target: Target, is_running: bool) -> list[MenuItem]:
     """Compose the tile Popover for *target*.
 
     `is_running` is only consulted for an :class:`AppTarget` (a configured app
@@ -76,7 +75,7 @@ def compose_tile_menu(target: Target, is_running: bool) -> list[MenuItem]:
 def tile_management_menu(target: Target) -> list[MenuItem]:
     """Compose the management group of the tile menu for *target*.
 
-    The building block :func:`compose_tile_menu_v2` appends below the separator:
+    The building block :func:`compose_tile_menu` appends below the separator:
     rather than launch/restore/close, it offers actions that manage the tile
     itself. A configured app tile can be moved, recoloured and unpinned (removed
     from the menu); an open-window tile is not part of the persistent catalog, so

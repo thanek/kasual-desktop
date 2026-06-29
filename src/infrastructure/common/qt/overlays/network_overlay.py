@@ -3,9 +3,9 @@
 Renders the domain-composed `view.info_lines(status)` as a label grid, plus a
 single connect/disconnect toggle whose label, action and enabled-state are all
 decided by `view.connect_button` (the domain — this only lays it out and relays
-the press onto the injected `NetworkControl`). Mirrors `VolumeOverlay`: a
-`BaseOverlay` managing its own layer-shell surface and pad lifetime. Dismissed
-with B/Esc; A activates the toggle when it is enabled.
+the press onto the injected `NetworkControl`). A `BaseOverlay` managing its own
+layer-shell surface and pad lifetime. Dismissed with B/Esc; A activates the toggle
+when it is enabled.
 """
 
 import qtawesome as qta

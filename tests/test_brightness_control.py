@@ -38,6 +38,27 @@ class TestBrightnessctlSet:
             BrightnessctlBrightnessControl().set(Brightness(50))  # must not raise
 
 
+class TestBrightnessctlIsControllable:
+    def test_true_when_backlight_device_present(self):
+        out = "intel_backlight,backlight,512,40%,1000\n"
+        with patch("infrastructure.linux.display.brightness.subprocess.check_output", return_value=out):
+            assert BrightnessctlBrightnessControl().is_controllable() is True
+
+    def test_false_when_only_non_backlight_devices(self):
+        # brightnessctl falls back to LED devices on a host with no panel backlight.
+        out = "input3::numlock,leds,0,0%,1\n"
+        with patch("infrastructure.linux.display.brightness.subprocess.check_output", return_value=out):
+            assert BrightnessctlBrightnessControl().is_controllable() is False
+
+    def test_false_on_empty_list(self):
+        with patch("infrastructure.linux.display.brightness.subprocess.check_output", return_value="\n"):
+            assert BrightnessctlBrightnessControl().is_controllable() is False
+
+    def test_false_on_error(self):
+        with patch("infrastructure.linux.display.brightness.subprocess.check_output", side_effect=FileNotFoundError):
+            assert BrightnessctlBrightnessControl().is_controllable() is False
+
+
 class TestKdeBrightnessControl:
     def test_get_scales_absolute_to_percent(self):
         with patch.object(KdeBrightnessControl, "_call", side_effect=["400", "1000"]):
@@ -59,6 +80,18 @@ class TestKdeBrightnessControl:
             KdeBrightnessControl("qdbus6").set(Brightness(40))
         assert popen.call_args[0][0][0] == "qdbus6"
 
+    def test_is_controllable_true_when_max_positive(self):
+        with patch.object(KdeBrightnessControl, "_call", return_value="1000"):
+            assert KdeBrightnessControl().is_controllable() is True
+
+    def test_is_controllable_false_when_max_zero(self):
+        with patch.object(KdeBrightnessControl, "_call", return_value="0"):
+            assert KdeBrightnessControl().is_controllable() is False
+
+    def test_is_controllable_false_on_error(self):
+        with patch.object(KdeBrightnessControl, "_call", side_effect=OSError):
+            assert KdeBrightnessControl().is_controllable() is False
+
 
 class TestNullBrightnessControl:
     def test_get_returns_default(self):
@@ -66,6 +99,9 @@ class TestNullBrightnessControl:
 
     def test_set_is_noop(self):
         NullBrightnessControl().set(Brightness(20))  # must not raise
+
+    def test_is_not_controllable(self):
+        assert NullBrightnessControl().is_controllable() is False
 
 
 class TestSelector:

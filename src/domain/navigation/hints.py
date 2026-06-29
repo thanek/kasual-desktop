@@ -66,10 +66,16 @@ class Hints:
     overlay:    ButtonHint
     actions:    tuple[ButtonHint, ...]
     nav_label:  str = "Navigate"
-    # UX v2: the Home Overlay switches sections with the bumpers (LB/RB) and
+    # The Home Overlay switches sections with the bumpers (LB/RB) and
     # offers global volume on the triggers (LT/RT). Empty on the classic screens.
     bumpers:    tuple[ButtonHint, ...] = ()
     triggers:   tuple[ButtonHint, ...] = ()
+    # A *second* directional cluster with its own label, rendered after the first
+    # (e.g. Quick adjust: ↕ moves between sliders, ◄► changes the value). When the
+    # two axes mean different things, one shared "Navigate" label would mislead —
+    # so the slider screen splits them. Empty on screens with a single meaning.
+    adjust:       tuple[Direction, ...] = ()
+    adjust_label: str = "Adjust"
 
 
 # Source strings for the directional-cluster label (harvested by pylupdate6;
@@ -122,6 +128,17 @@ TOPBAR = Hints(
     ),
 )
 
+# The top bar with the Power split-button focused: A runs the default, Y expands
+# the Sleep/Restart/Shut Down chooser (§7.10).
+TOPBAR_POWER = Hints(
+    directions=(Direction.LEFT, Direction.RIGHT, Direction.DOWN),
+    overlay=_HOME_MENU,
+    actions=(
+        ButtonHint(Button.A, translate("HintBar", "Select")),
+        ButtonHint(Button.Y, translate("HintBar", "Options")),
+    ),
+)
+
 # A menu overlay (the Home Overlay, whether over the Desktop or over a running
 # app): step through the vertical menu, toggle it with the home button, confirm
 # with A, or hide it with B. The home button stays labelled "Menu" — pressing
@@ -146,19 +163,6 @@ TILE_POPOVER = Hints(
         ButtonHint(Button.Y, translate("HintBar", "Close menu")),
         ButtonHint(Button.B, translate("HintBar", "Back")),
     ),
-)
-
-# A slider dialog (volume / brightness): left/right adjusts the value, A confirms
-# and closes, B closes without... well, the same — both just close. The home
-# button still summons the menu (dismissing the dialog).
-SLIDER = Hints(
-    directions=(Direction.LEFT, Direction.RIGHT),
-    overlay=_HOME_MENU,
-    actions=(
-        ButtonHint(Button.A, translate("HintBar", "Confirm")),
-        ButtonHint(Button.B, translate("HintBar", "Close")),
-    ),
-    nav_label=_ADJUST,
 )
 
 # A confirmation dialog (unpin, close app, etc.): left/right switches between
@@ -193,21 +197,25 @@ NETWORK = Hints(
     ),
 )
 
-# ── Home Overlay v2 — zoned hint bars (§7.10) ───────────────────────────────────
+# ── Home Overlay — zoned hint bars (§7.10) ───────────────────────────────────
 # The overlay has more than one kind of control, so the bumpers (LB/RB) own the
 # section jump and the D-pad stays inside a section. The hint bar swaps between
 # these two as focus moves between zones (FocusNavigator drives the swap — same
 # mechanism as TILES/TOPBAR).
 
-# Quick adjust: up/down picks a slider, left/right adjusts it live; the triggers
-# duplicate volume as an always-at-hand shortcut. No A here — sliders commit live.
+# Quick adjust: up/down picks a slider (and crosses into the neighbouring section
+# at the edges), left/right adjusts it live; the triggers duplicate volume as an
+# always-at-hand shortcut. Two labelled clusters so the bar reads the axes apart:
+# ↕ Navigate, ◄► Adjust. No A here — sliders commit live.
 OVERLAY_QUICK = Hints(
-    directions=(Direction.UP, Direction.DOWN, Direction.LEFT, Direction.RIGHT),
+    directions=(Direction.UP, Direction.DOWN),
     overlay=_HOME_MENU,
     actions=(
         ButtonHint(Button.B, translate("HintBar", "Close")),
     ),
-    nav_label=_ADJUST,
+    nav_label=_NAVIGATE,
+    adjust=(Direction.LEFT, Direction.RIGHT),
+    adjust_label=_ADJUST,
     bumpers=_SECTION,
     triggers=_VOLUME,
 )

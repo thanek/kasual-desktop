@@ -49,6 +49,9 @@ from infrastructure.linux.notifications.notifications import KdeNotificationMoni
 from infrastructure.linux.network.network_manager import NMNetworkControl, NMNetworkMonitor
 from domain.notifications.center import NotificationCenter
 from domain.system.actions import ActionDeps
+from domain.system.action_view import make_action_confirm
+from domain.system.power_menu import PowerMenu
+from infrastructure.common.catalog.preferences import DesktopPowerPreference
 from infrastructure.kde.wm.window_manager import KWinWindowManager
 from infrastructure.common.qt.i18n import install_translations
 
@@ -129,16 +132,23 @@ def main() -> None:
         # One PowerControl shared by the Desktop's action runner and the Application.
         power = SystemdPowerControl()
 
+        # One persisted power-default preference is the single source of truth
+        # shared by the Home Overlay's Power split-button and the top bar's single
+        # Power button (§7.10).
+        power_preference = DesktopPowerPreference()
+
         # Recent-notifications feature: the KDE monitor (source port) feeds the
         # platform-agnostic NotificationCenter, which the Desktop's overlay reads.
         notification_center = NotificationCenter()
         notification_monitor = KdeNotificationMonitor()
         notification_monitor.on_notification(notification_center.record)
 
+        volume = PactlVolumeControl()
+        brightness = select_brightness_control()
         desktop = build_desktop(
             apps=apps, gamepad=gamepad, window_manager=wm,
             wallpaper=KdeSystemWallpaper(), feedback=feedback,
-            volume=PactlVolumeControl(), brightness=select_brightness_control(),
+            volume=volume, brightness=brightness,
             power=power, scheduler=QtScheduler(),
             process_manager=AppManager(), notifications=notification_center,
             network_control=NMNetworkControl(),
@@ -149,6 +159,7 @@ def main() -> None:
             parent_of=parent_pid,
             is_game_pid=is_game_pid,
             app_adder=app_adder,
+            power_preference=power_preference,
             deferred_hide_factory=lambda wm_, pm_, apps_, on_hide:
                 DeferredHide(wm_, pm_, apps_, on_hide=on_hide),
         )
@@ -179,6 +190,18 @@ def main() -> None:
             on_quit=app.quit,
         )
 
+        # The sectioned factory needs the volume/brightness controls and a power
+        # menu (sticky-default dropdown) backed by the same preference the top bar
+        # reads. The top bar's Power dropdown (Y) runs + persists through it too.
+        power_menu = PowerMenu(
+            ActionDeps(desktop=desktop, power=power),
+            power_preference,
+            make_action_confirm(desktop.show_confirm),
+        )
+        desktop.set_power_menu(power_menu)
+        overlay_factory = HomeOverlayFactory(
+            gamepad, feedback, volume, brightness, power_menu)
+
         controller = Application(
             gamepad=gamepad,
             desktop=desktop,
@@ -186,7 +209,7 @@ def main() -> None:
             action_deps=ActionDeps(desktop=desktop, power=power),
             tray=tray,
             wm=wm,
-            overlay_factory=HomeOverlayFactory(gamepad, feedback),
+            overlay_factory=overlay_factory,
             hud=MangoHudControl(),
         )
         wm.start_periodic_refresh(3000)

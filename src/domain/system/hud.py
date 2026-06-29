@@ -11,7 +11,7 @@ The toggle is offered only over a running app (the Home Overlay's "game mode"
 branch), only where a HUD is actually configured, and only where the foreground
 is a *game* — ``foreground_is_game`` decided upstream (process descends from a
 known launcher, or a ``Categories=Game`` tile); see
-:func:`domain.menu.home.compose_home_menu` and
+:func:`domain.menu.home.compose_home_sections` and
 :meth:`domain.lifecycle.app_lifecycle.AppLifecycle.foreground_is_game`.
 """
 

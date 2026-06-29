@@ -1,14 +1,14 @@
-"""Domain coverage for the UX v2 input foundation (Faza 0).
+"""Domain coverage for the UX input foundation.
 
 Pure domain — no Qt, no device backend. Verifies the new abstract events exist
 with stable string values (they flow through the StrEnum/pyqtSignal transport as
 plain strings) and that the Home Overlay's zoned hint bars (§7.10) are wired with
-the bumper/trigger glyphs the v2 widget will render.
+the bumper/trigger glyphs the widget will render.
 """
 
 from domain.input.vocabulary import Event
 from domain.navigation import hints
-from domain.navigation.hints import Button, ButtonHint
+from domain.navigation.hints import Button, ButtonHint, Direction
 
 
 # ── Vocabulary ──────────────────────────────────────────────────────────────
@@ -37,6 +37,10 @@ def _buttons(hints_set, attr):
     return [h.button for h in getattr(hints_set, attr)]
 
 
+def _directions(hints_set, attr):
+    return list(getattr(hints_set, attr))
+
+
 class TestOverlayQuickHints:
     def test_bumpers_switch_sections(self):
         assert _buttons(hints.OVERLAY_QUICK, "bumpers") == [Button.LB, Button.RB]
@@ -44,9 +48,12 @@ class TestOverlayQuickHints:
     def test_triggers_are_volume(self):
         assert _buttons(hints.OVERLAY_QUICK, "triggers") == [Button.LT, Button.RT]
 
-    def test_label_reads_adjust(self):
-        # Sliders commit live on left/right — the cluster reads "Adjust", not "Navigate".
-        assert hints.OVERLAY_QUICK.nav_label == "Adjust"
+    def test_two_clusters_read_axes_apart(self):
+        # ↕ moves between sliders/sections ("Navigate"); ◄► commits live ("Adjust").
+        assert hints.OVERLAY_QUICK.nav_label == "Navigate"
+        assert hints.OVERLAY_QUICK.adjust_label == "Adjust"
+        assert _directions(hints.OVERLAY_QUICK, "directions") == [Direction.UP, Direction.DOWN]
+        assert _directions(hints.OVERLAY_QUICK, "adjust") == [Direction.LEFT, Direction.RIGHT]
 
     def test_no_select_action(self):
         # Quick adjust has no A — there is nothing to confirm, only B to leave.

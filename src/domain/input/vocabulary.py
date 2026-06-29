@@ -25,7 +25,7 @@ class Event(StrEnum):
     MANAGE     = "manage"
     ESCAPE_HOME = "escape_home"
 
-    # UX v2 (Home Overlay v2, §7.10). Produced by the gamepad adapters now so the
+    # UX (Home Overlay, §7.10). Produced by the gamepad adapters now so the
     # zoned overlay can consume them later; until then they fall on an empty
     # handler stack and are no-ops.
     SECTION_PREV = "section_prev"  # LB (BTN_TL) — previous overlay section

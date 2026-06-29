@@ -6,7 +6,9 @@ import qtawesome as qta
 from PyQt6.QtCore import Qt, QLocale, QTimer, QSize, pyqtSignal
 from PyQt6.QtWidgets import QWidget, QPushButton, QHBoxLayout, QVBoxLayout, QLabel
 
-from domain.system.actions import ACTIONS
+from domain.menu.entry import POWER
+from domain.system.action_view import TopBarItem, topbar_items
+from domain.system.actions import SLEEP
 from infrastructure.common.qt._meta import ProtocolQtMeta
 from infrastructure.common.qt.ui import styles
 from domain.navigation.bar_views import TopBarView
@@ -29,8 +31,12 @@ class TopBar(QWidget, TopBarView, metaclass=ProtocolQtMeta):
     action_triggered = pyqtSignal(str)   # emits the action_type of the clicked button
     button_hovered   = pyqtSignal(int)   # emits the index of the hovered button
 
-    def __init__(self, parent: QWidget | None = None) -> None:
+    def __init__(self, items: list[TopBarItem] | None = None,
+                 parent: QWidget | None = None) -> None:
         super().__init__(parent)
+        # The Desktop passes the real set (Power glyph = persisted default); the
+        # Sleep-defaulted fallback is just for bare construction (tests).
+        items = items if items is not None else topbar_items(SLEEP)
         self.setStyleSheet("background: transparent;")
         outer = QVBoxLayout(self)
         outer.setContentsMargins(16, 10, 16, 0)
@@ -52,7 +58,7 @@ class TopBar(QWidget, TopBarView, metaclass=ProtocolQtMeta):
         layout.setContentsMargins(24, 0, 24, 0)
         layout.setSpacing(0)
 
-        btns_total = len(ACTIONS) * BTN_SIZE + (len(ACTIONS) - 1) * BTN_SPACING
+        btns_total = len(items) * BTN_SIZE + (len(items) - 1) * BTN_SPACING
 
         spacer = QWidget()
         spacer.setFixedWidth(btns_total)
@@ -63,8 +69,8 @@ class TopBar(QWidget, TopBarView, metaclass=ProtocolQtMeta):
         self._build_clock(layout)
         layout.addStretch(1)
 
-        self._colors = [action.color for action in ACTIONS.values()]
-        self._action_keys = list(ACTIONS)
+        self._colors = [item.color for item in items]
+        self._action_keys = [item.action for item in items]
         self._buttons: list[QPushButton] = []
         self._badges: dict[str, QLabel] = {}   # per-action count badge (lazy)
         btn_area = QWidget()
@@ -80,8 +86,8 @@ class TopBar(QWidget, TopBarView, metaclass=ProtocolQtMeta):
                 self.button_hovered.emit(idx)
             btn.enterEvent = _enter
 
-        for i, action_type in enumerate(ACTIONS):
-            view = ACTIONS[action_type]
+        for i, item in enumerate(items):
+            action_type = item.action
             btn = QPushButton()
             btn.setFixedSize(BTN_SIZE, BTN_SIZE)
             # Navigation is gamepad/highlight-driven, so the buttons must not take
@@ -90,9 +96,9 @@ class TopBar(QWidget, TopBarView, metaclass=ProtocolQtMeta):
             # frame — a sharp rectangle ignoring border-radius, so it looks like a
             # square button with an extra border among the rounded ones.
             btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-            btn.setIcon(qta.icon(view.icon, color="white"))
+            btn.setIcon(qta.icon(item.icon, color="white"))
             btn.setIconSize(QSize(24, 24))
-            btn.setStyleSheet(styles.topbar_normal(view.color))
+            btn.setStyleSheet(styles.topbar_normal(item.color))
             btn.clicked.connect(lambda _, t=action_type: self.action_triggered.emit(t))
             _bind_hover(btn, i)
             btn_layout.addWidget(btn)
@@ -121,6 +127,36 @@ class TopBar(QWidget, TopBarView, metaclass=ProtocolQtMeta):
     def trigger(self, index: int) -> None:
         """Activate the button at *index* (as if clicked)."""
         self._buttons[index].click()
+
+    def action_key_at(self, index: int) -> str | None:
+        """The action key of the button at *index* (e.g. POWER), or None if out of
+        range — lets the Desktop tell whether the focused button is the Power
+        split-button before opening its dropdown."""
+        if 0 <= index < len(self._action_keys):
+            return self._action_keys[index]
+        return None
+
+    def has_menu_at(self, index: int) -> bool:
+        """Whether the button at *index* opens a dropdown on Y — only the Power
+        split-button does (the navigator advertises "Options" there)."""
+        return self.action_key_at(index) == POWER
+
+    def button_at(self, index: int) -> QPushButton | None:
+        """The button widget at *index* (a dropdown anchors to it)."""
+        if 0 <= index < len(self._buttons):
+            return self._buttons[index]
+        return None
+
+    def set_power_default(self, icon: str, color: str) -> None:
+        """Mirror the persisted default on the Power button (glyph + tint), so
+        it matches what the Home Overlay shows. No-op when there is no Power
+        button."""
+        if POWER not in self._action_keys:
+            return
+        i = self._action_keys.index(POWER)
+        self._colors[i] = color
+        self._buttons[i].setIcon(qta.icon(icon, color="white"))
+        self._buttons[i].setStyleSheet(styles.topbar_normal(color))
 
     def set_action_icon(self, action_key: str, glyph: str) -> None:
         """Swap an action button's icon (e.g. the live network-state glyph)."""

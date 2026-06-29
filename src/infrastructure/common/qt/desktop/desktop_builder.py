@@ -38,6 +38,7 @@ from domain.shell.wallpaper import SystemWallpaper
 from domain.system.action_view import make_action_confirm
 from domain.system.actions import ActionDeps
 from domain.system.power_control import PowerControl
+from domain.system.power_preference import PowerPreference
 from domain.system.runner import ActionRunner
 from domain.system.volume import VolumeControl
 from domain.system.brightness import BrightnessControl
@@ -90,6 +91,7 @@ def build_desktop(
     parent_of: Callable[[int], int | None] | None = None,
     is_game_pid: Callable[[int], bool] = lambda _: False,
     app_adder: AppAdder | None = None,
+    power_preference: PowerPreference | None = None,
 ) -> Desktop:
     """Build a fully wired Desktop: the view widget plus its domain coordinators.
 
@@ -127,6 +129,7 @@ def build_desktop(
         surface=surface,
         parent_of=parent_of,
         app_adder=app_adder,
+        power_preference=power_preference,
     )
 
     nav = FocusNavigator(
@@ -134,6 +137,7 @@ def build_desktop(
         on_tile_menu=widget._show_tile_popover, feedback=feedback,
         gamepad=gamepad,
         hint_bar=widget._hintbar,
+        on_topbar_menu=widget._show_topbar_power_menu,
     )
     # Paint the initial hints (tiles screen) before the Desktop is ever shown,
     # so the bar is never blank on first appearance.

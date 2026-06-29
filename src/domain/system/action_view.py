@@ -12,10 +12,40 @@ hands it to the actual confirm-dialog opener.
 """
 
 from collections.abc import Callable
+from dataclasses import dataclass
 
+from domain.menu.entry import POWER
 from domain.menu.item import MenuItem
-from domain.system.actions import ACTIONS
+from domain.system.actions import ACTIONS, HIDE_DESKTOP, NETWORK, NOTIFICATIONS
 from domain.shared.i18n import translate
+
+
+@dataclass(frozen=True)
+class TopBarItem:
+    """One top-bar button: the key it dispatches on plus its glyph and colour.
+
+    ``action`` is a system-action key the controller runs, or the abstract
+    ``POWER`` for the split-button (which the controller routes to the persisted
+    default action)."""
+
+    action: str
+    icon:   str
+    color:  str
+
+
+def topbar_items(power_default: str) -> list[TopBarItem]:
+    """The top-bar buttons, in order: a single **Power** button (glyph mirrors the
+    persisted *power_default*) plus Network, Notifications, Minimize.
+
+    Volume/Brightness and the Sleep/Restart/Shut Down trio are deliberately absent
+    — volume/brightness live in the Home Overlay's Quick adjust, and the trio
+    collapses into the one Power split-button (§7.10)."""
+    default = ACTIONS[power_default]
+    keep = (NETWORK, NOTIFICATIONS, HIDE_DESKTOP)
+    return [
+        TopBarItem(POWER, default.icon, default.color),
+        *(TopBarItem(key, ACTIONS[key].icon, ACTIONS[key].color) for key in keep),
+    ]
 
 
 def system_action_items() -> list[MenuItem]:

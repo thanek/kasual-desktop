@@ -1,6 +1,6 @@
 """Tests for the top-bar action badge (used for the notification count)."""
 
-from domain.system.actions import NOTIFICATIONS, VOLUME
+from domain.system.actions import NOTIFICATIONS
 
 
 def _topbar(qapp):

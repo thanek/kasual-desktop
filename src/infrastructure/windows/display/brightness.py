@@ -57,6 +57,10 @@ class _SbcBrightnessControl(BrightnessControl):
         except Exception as exc:
             logger.warning("Brightness set failed (sbc): %s", exc)
 
+    def is_controllable(self) -> bool:
+        # Selected only when sbc actually read a real backlight at probe time.
+        return True
+
 
 # ── Gamma-ramp fallback ──────────────────────────────────────────────────────
 
@@ -202,6 +206,11 @@ class _GammaRampBrightnessControl(BrightnessControl):
         except Exception as exc:
             logger.warning("Gamma-ramp brightness set failed: %s", exc)
 
+    def is_controllable(self) -> bool:
+        # The gamma-ramp LUT dims every display (it's a visual dim, not a true
+        # backlight), so the slider is never dead on Windows — offer it.
+        return True
+
 
 def _probe_sbc() -> BrightnessControl | None:
     """Return an sbc-backed control if sbc works on this display, else None."""
@@ -230,3 +239,6 @@ class WindowsBrightnessControl(BrightnessControl):
 
     def set(self, brightness: Brightness) -> None:
         self._backend.set(brightness)
+
+    def is_controllable(self) -> bool:
+        return self._backend.is_controllable()

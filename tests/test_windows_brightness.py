@@ -126,6 +126,18 @@ class TestBackendSelection:
         ctrl.set(Brightness(60))
         sbc_ctrl.set.assert_called_once_with(Brightness(60))
 
+    def test_is_controllable_delegates_to_backend(self):
+        sbc_ctrl = MagicMock()
+        sbc_ctrl.is_controllable.return_value = True
+        with patch("infrastructure.windows.display.brightness._probe_sbc",
+                   return_value=sbc_ctrl):
+            ctrl = WindowsBrightnessControl()
+        assert ctrl.is_controllable() is True
+
+    def test_gamma_ramp_is_always_controllable(self):
+        # The gamma-ramp LUT dims every display, so the slider is never dead.
+        assert _GammaRampBrightnessControl().is_controllable() is True
+
 
 # ── _SbcBrightnessControl ─────────────────────────────────────────────────────
 

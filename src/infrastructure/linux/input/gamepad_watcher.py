@@ -274,6 +274,8 @@ class GamepadWatcher(BaseGamepadWatcher):
                 self._hop_nav(Event.CANCEL)
             elif ev.code == ecodes.BTN_WEST:
                 self._hop_nav(Event.CLOSE)
+            elif ev.code == ecodes.BTN_NORTH:
+                self._hop_nav(Event.ACTIONS)
             elif ev.code == ecodes.BTN_TL:
                 self._hop_nav(Event.SECTION_PREV)
             elif ev.code == ecodes.BTN_TR:

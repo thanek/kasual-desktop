@@ -3,6 +3,7 @@
 from collections.abc import Callable
 from typing import Protocol
 
+from domain.navigation.hints import Hints
 from domain.shell.session_collaborators import SessionView
 
 
@@ -18,9 +19,17 @@ class DesktopControl(SessionView, Protocol):
     directly, through the `AppControl` port."""
 
     def show_desktop(self) -> None: ...
+    def is_visible(self) -> bool:
+        """Whether the Desktop surface is on screen (vs. minimized to tray). Lets
+        the controller tell the Home Overlay which foreground-less context it is
+        in (Home screen shown vs. Kasual minimized)."""
+        ...
     def dismiss_overlays(self) -> None: ...
     def begin_overlay_hints(self) -> None: ...
     def end_overlay_hints(self) -> None: ...
+    def set_overlay_hints(self, hints: Hints) -> None:
+        """Swap the hint bar to *hints* while the overlay is up."""
+        ...
     def show_confirm(
         self,
         question: str,

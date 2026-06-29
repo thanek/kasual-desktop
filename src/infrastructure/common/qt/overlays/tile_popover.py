@@ -96,13 +96,21 @@ class TilePopoverMenu(QWidget):
 
     def show_above(self, tile: QWidget) -> None:
         """Position and display the popover above *tile*."""
+        self._show_anchored(tile, below=False)
+
+    def show_below(self, anchor: QWidget) -> None:
+        """Position and display the popover below *anchor* (e.g. a top-bar button,
+        which has no room above it)."""
+        self._show_anchored(anchor, below=True)
+
+    def _show_anchored(self, anchor: QWidget, *, below: bool) -> None:
         self.adjustSize()
-        tile_global = tile.mapToGlobal(QPoint(0, 0))
+        anchor_global = anchor.mapToGlobal(QPoint(0, 0))
         parent_global = self.parent().mapToGlobal(QPoint(0, 0))
-        tile_x = tile_global.x() - parent_global.x()
-        tile_y = tile_global.y() - parent_global.y()
-        x = tile_x + (tile.width() - self.width()) // 2
-        y = tile_y - self.height() - 12
+        ax = anchor_global.x() - parent_global.x()
+        ay = anchor_global.y() - parent_global.y()
+        x = ax + (anchor.width() - self.width()) // 2
+        y = ay + anchor.height() + 12 if below else ay - self.height() - 12
         self.move(x, max(0, y))
         self.show()
         self.raise_()

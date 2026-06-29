@@ -183,6 +183,12 @@ class TestButtonMapping:
         self._press(mock_watcher, BTN_TR, qapp)
         assert received == [Event.SECTION_NEXT]
 
+    def test_north_emits_actions(self, mock_watcher, qapp):
+        received = []
+        mock_watcher.push_handler(lambda e: received.append(e))
+        self._press(mock_watcher, BTN_NORTH, qapp)
+        assert received == [Event.ACTIONS]
+
     def test_start_alone_emits_manage(self, mock_watcher, qapp):
         received = []
         mock_watcher.push_handler(lambda e: received.append(e))

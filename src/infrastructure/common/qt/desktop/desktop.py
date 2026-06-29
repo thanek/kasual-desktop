@@ -1,5 +1,6 @@
 import logging
 from collections.abc import Callable
+from dataclasses import replace
 
 from PyQt6.QtCore import Qt, QTimer, QEvent
 from PyQt6.QtGui import QPainter, QColor
@@ -15,8 +16,6 @@ from infrastructure.common.qt.overlays.confirm_dialog import ConfirmDialog
 from infrastructure.common.qt.overlays.info_dialog import InfoDialog
 from infrastructure.common.qt.overlays.tile_popover import TilePopoverMenu
 from infrastructure.common.qt.overlays.tile_color_picker import TileColorPicker
-from infrastructure.common.qt.overlays.volume_overlay import VolumeOverlay
-from infrastructure.common.qt.overlays.brightness_overlay import BrightnessOverlay
 from infrastructure.common.qt.overlays.notifications_overlay import NotificationsOverlay
 from infrastructure.common.qt.overlays.network_overlay import NetworkOverlay
 from infrastructure.common.qt.overlays.onboarding_overlay import OnboardingOverlay
@@ -24,10 +23,14 @@ from domain.notifications.center import NotificationCenter
 from domain.network import view as network_view
 from domain.network.control import NetworkControl
 from domain.network.status import NetworkStatus
-from domain.system.actions import NETWORK, NOTIFICATIONS
+from domain.system.actions import ACTIONS, NETWORK, NOTIFICATIONS, SLEEP
+from domain.system.action_view import topbar_items
 from domain.system.volume import VolumeControl
 from domain.system.brightness import BrightnessControl
 from domain.system.power_control import PowerControl
+from domain.system.power_preference import PowerPreference
+from domain.system.power_menu import PowerMenu
+from domain.menu.home import power_dropdown_items
 from domain.shared.scheduler import Scheduler
 from domain.lifecycle.app_control import AppControl
 from domain.lifecycle.process_manager import ProcessManager
@@ -38,11 +41,11 @@ from domain.lifecycle.app_lifecycle import AppLifecycle
 from domain.navigation.focus_navigator import FocusNavigator
 from domain.navigation.tile_mover import TileMover
 from domain.system.runner import ActionRunner
-from domain.menu.entry import CHANGE_COLOR, MOVE, PIN, UNPIN
+from domain.menu.entry import CHANGE_COLOR, MOVE, PIN, POWER, UNPIN
 from domain.menu.item import MenuItem
 from domain.menu.palette import TILE_COLORS
 from domain.menu.ports import AppPinning, TileColorStore
-from domain.menu.tile import tile_menu_v2_for
+from domain.menu.tile import tile_menu_for
 from domain.provisioning.add_apps import AppAdder
 from domain.shared.feedback import Cue, Feedback
 from domain.shared.i18n import translate
@@ -102,6 +105,7 @@ class Desktop(QWidget, DesktopView, DesktopShell, DesktopControl, metaclass=Prot
         surface: DesktopSurface | None = None,
         parent_of: 'Callable[[int], int | None] | None' = None,
         app_adder: AppAdder | None = None,
+        power_preference: PowerPreference | None = None,
     ):
         super().__init__()
         self._apps        = apps
@@ -127,6 +131,14 @@ class Desktop(QWidget, DesktopView, DesktopShell, DesktopControl, metaclass=Prot
         # starter candidates and persists the chosen ones). Optional so offscreen
         # test builds can omit it — the [＋] tile then simply does nothing.
         self._app_adder      = app_adder
+        # The single top-bar Power button mirrors this persisted default (and runs
+        # it on click). Optional so bare/offscreen test builds can omit it.
+        self._power_preference = power_preference
+        # Injected after construction (it needs this Desktop's confirm dialog):
+        # backs the top-bar Power dropdown (Y), so a pick runs + persists the new
+        # default like the Home Overlay's Power card.
+        self._power_menu: PowerMenu | None = None
+        self._topbar_power_popover = None
         # How this widget becomes a fullscreen, stay-on-top surface — the one
         # OS-specific seam, injected by the composition root: Linux passes the
         # KDE LayerShellSurface, Windows the WS_EX_TOPMOST WindowsDesktopSurface.
@@ -153,7 +165,8 @@ class Desktop(QWidget, DesktopView, DesktopShell, DesktopControl, metaclass=Prot
         main = QVBoxLayout(self)
         main.setContentsMargins(0, 0, 0, 0)
         main.setSpacing(0)
-        self._topbar = TopBar()
+        power_default = power_preference.default() if power_preference else SLEEP
+        self._topbar = TopBar(items=topbar_items(power_default))
         self._topbar.action_triggered.connect(self._topbar_action)
         self._topbar.button_hovered.connect(self._on_topbar_hovered)
         main.addWidget(self._topbar)
@@ -246,6 +259,7 @@ class Desktop(QWidget, DesktopView, DesktopShell, DesktopControl, metaclass=Prot
 
     def show_desktop(self) -> None:
         """Show the desktop without interrupting the running application."""
+        self._refresh_power_default()
         self._desktop.show_desktop()
 
     def pause(self) -> None:
@@ -266,6 +280,7 @@ class Desktop(QWidget, DesktopView, DesktopShell, DesktopControl, metaclass=Prot
 
     def resume(self) -> None:
         """Restore the Desktop after reconnecting the gamepad — without resetting state."""
+        self._refresh_power_default()
         self._desktop.resume()
 
     # ── Hint bar (its own bottom surface; driven by the Application) ─────────
@@ -278,6 +293,15 @@ class Desktop(QWidget, DesktopView, DesktopShell, DesktopControl, metaclass=Prot
         self._overlay_hints = True
         self._hintbar.show_hints(home_hints.OVERLAY_MENU)
         self._sync_hint_visibility()
+
+    def set_overlay_hints(self, hints) -> None:
+        """Swap the hint bar to *hints* while the Home Overlay owns it.
+
+        The overlay calls this as focus moves between its zones (Quick ⇄ Actions);
+        the bar is already visible from begin_overlay_hints, so this only swaps
+        content."""
+        if self._overlay_hints:
+            self._hintbar.show_hints(hints)
 
     def end_overlay_hints(self) -> None:
         """The Home Overlay closed: restore the current screen's hints if the
@@ -487,14 +511,14 @@ class Desktop(QWidget, DesktopView, DesktopShell, DesktopControl, metaclass=Prot
         """Show the single, state-dependent tile popover above the focused tile (§7.3).
 
         The menu (which items appear, by running state and tile kind) is the
-        domain's — `tile_menu_v2_for` composes the merged lifecycle + management
+        domain's — `tile_menu_for` composes the merged lifecycle + management
         list. Activation is routed here: lifecycle items go to the lifecycle
         coordinator, management items to the tile-management handlers.
         """
         ctx = self._tilebar.current_context()
         if ctx is None:
             return
-        items = tile_menu_v2_for(
+        items = tile_menu_for(
             ctx, lambda idx: self._tilebar.is_tile_running(idx, self._tilebar.last_windows))
         # The [＋] add tile (and any future menu-less target) has no popover —
         # don't open an empty one.
@@ -663,7 +687,62 @@ class Desktop(QWidget, DesktopView, DesktopShell, DesktopControl, metaclass=Prot
     # ── Top bar actions ────────────────────────────────────────────────────
 
     def _topbar_action(self, action_type: str) -> None:
+        # The Power button carries the abstract POWER action; run whatever the
+        # persisted default currently is (the same source of truth the Home Overlay
+        # uses). Every other button dispatches on its own key.
+        if action_type == POWER:
+            if self._power_preference is not None:
+                self._action_runner.run(self._power_preference.default())
+            return
         self._action_runner.run(action_type)
+
+    def _refresh_power_default(self) -> None:
+        """Re-read the persisted default and update the Power button's glyph/tint.
+        Cheap, event-driven (on show/resume): the default only changes by executing
+        a power action, and Sleep is the one that returns to this session."""
+        if self._power_preference is None:
+            return
+        action = ACTIONS[self._power_preference.default()]
+        self._topbar.set_power_default(action.icon, action.color)
+
+    def set_power_menu(self, power_menu: PowerMenu) -> None:
+        """Inject the Power menu (built after this Desktop, since it needs the
+        confirm dialog) so the top-bar Power dropdown can run + persist a pick."""
+        self._power_menu = power_menu
+
+    def _show_topbar_power_menu(self, index: int) -> None:
+        """Y on the top-bar Power button: open the Sleep/Restart/Shut Down chooser
+        below it — the same pick-runs-and-persists flow as the Home Overlay's Power
+        card. Y on any other button does nothing (only Power has a dropdown)."""
+        if self._power_menu is None:
+            return
+        if self._topbar.action_key_at(index) != POWER:
+            return
+        button = self._topbar.button_at(index)
+        if button is None:
+            return
+        default = self._power_menu.default_key()
+        items = [
+            replace(item, label="●  " + item.label) if item.action == default else item
+            for item in power_dropdown_items()
+        ]
+        popover = TilePopoverMenu(
+            items=items,
+            on_select=lambda item: self._power_menu.select(item.action),
+            gamepad=self._gamepad,
+            feedback=self._feedback,
+            parent=self,
+        )
+        self._topbar_power_popover = popover
+        self._overlays.register(popover)
+        popover.closed.connect(self._on_topbar_power_closed)
+        self._hintbar.show_hints(home_hints.TILE_POPOVER)
+        popover.show_below(button)
+
+    def _on_topbar_power_closed(self) -> None:
+        self._overlays.forget(self._topbar_power_popover)
+        self._topbar_power_popover = None
+        self._nav.render()   # restore the top-bar screen hints
 
     def _present(self, overlay: BaseOverlay) -> None:
         """Track a freshly opened top-bar overlay; return focus to the bar when
@@ -674,14 +753,6 @@ class Desktop(QWidget, DesktopView, DesktopShell, DesktopControl, metaclass=Prot
     def _on_overlay_closed(self, overlay: BaseOverlay) -> None:
         self._overlays.forget(overlay)
         self._nav.focus_topbar()
-
-    def open_volume_overlay(self) -> None:
-        self._present(VolumeOverlay(self._gamepad, self._volume_control, self._feedback, parent=self))
-        self._hintbar.show_hints(home_hints.SLIDER)
-
-    def open_brightness_overlay(self) -> None:
-        self._present(BrightnessOverlay(self._gamepad, self._brightness_control, self._feedback, parent=self))
-        self._hintbar.show_hints(home_hints.SLIDER)
 
     def refresh_notification_badge(self) -> None:
         """Sync the notifications button badge to the unread count in memory."""

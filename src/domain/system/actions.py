@@ -4,12 +4,10 @@ The single source of truth for *which* actions exist, *in what order*, *which
 require a confirmation*, *what each one does* (a call onto an injected port), and
 *how each one looks/reads* (icon, colour, localized label, confirmation wording).
 
-Identity, effect and presentation used to live in two parallel dicts keyed by the
-same action keys — adding an action meant editing both, with nothing keeping them
-in sync. They are one :class:`SystemAction` per key now. Executing an action (the
-confirm-gating) lives next door in :mod:`domain.system.runner`; turning these into
-render-ready menu items / a confirm callback lives in
-:mod:`domain.system.action_view`.
+Identity, effect and presentation are one :class:`SystemAction` per key, so adding
+an action edits a single place. Executing an action (the confirm-gating) lives next
+door in :mod:`domain.system.runner`; turning these into render-ready menu items / a
+confirm callback lives in :mod:`domain.system.action_view`.
 
 It is pure application logic — free of Qt and of any concrete adapter. Its only
 outward need is translation, which it gets through the `domain.shared.i18n` port.
@@ -33,6 +31,11 @@ SLEEP         = "sleep"
 RESTART       = "restart"
 SHUTDOWN      = "shutdown"
 HIDE_DESKTOP  = "hide_desktop"
+
+# The power actions, in dropdown order — the choices behind the Home Overlay's
+# Power split-button and the single value the power-default preference persists
+# (§7.10). The first is the out-of-the-box default (Sleep).
+POWER_ACTIONS = (SLEEP, RESTART, SHUTDOWN)
 
 
 @dataclass
@@ -73,11 +76,15 @@ class SystemAction:
 # Insertion order defines the top-bar button order and the home-menu order.
 ACTIONS: dict[str, SystemAction] = {
     VOLUME: SystemAction(
-        lambda d: d.desktop.open_volume_overlay(),
+        # Presentation-only: adjusted live inline in the Home Overlay's Quick
+        # adjust (and the LT/RT triggers), never dispatched through the runner.
+        lambda d: None,
         translate("Kasual Desktop", "Volume"), "fa5s.volume-up", "#3b4252",
     ),
     BRIGHTNESS: SystemAction(
-        lambda d: d.desktop.open_brightness_overlay(),
+        # Presentation-only (Quick adjust); shown only where the backlight is
+        # controllable.
+        lambda d: None,
         translate("Kasual Desktop", "Brightness"), "fa5s.sun", "#434c5e",
     ),
     SLEEP: SystemAction(

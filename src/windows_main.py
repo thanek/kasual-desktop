@@ -116,6 +116,12 @@ def main():
     from domain.notifications.center import NotificationCenter
 
     power = WindowsPowerControl()
+    # Shared instances: the Home Overlay's Quick-adjust sliders and the top bar
+    # read the same volume/brightness controls and power-default preference.
+    volume = WindowsVolumeControl()
+    brightness = WindowsBrightnessControl()
+    from infrastructure.common.catalog.preferences import DesktopPowerPreference
+    power_preference = DesktopPowerPreference()
 
     # ── Catalog ─────────────────────────────────────────────────────────────
     # The same freedesktop .desktop store as Linux (app_config is pure Python;
@@ -151,6 +157,8 @@ def main():
         from infrastructure.common.qt.ui.tray import SystemTray
         from infrastructure.common.qt.overlays.about_overlay import AboutOverlay
         from infrastructure.common.qt.overlays.home_overlay import HomeOverlayFactory
+        from domain.system.power_menu import PowerMenu
+        from domain.system.action_view import make_action_confirm
         from infrastructure.windows.qt.log_window import LogWindow
         from infrastructure.windows.notifications.listener import WindowsNotificationSource
         from application import Application
@@ -168,8 +176,8 @@ def main():
             window_manager=wm,
             wallpaper=wallpaper,
             feedback=feedback,
-            volume=WindowsVolumeControl(),
-            brightness=WindowsBrightnessControl(),
+            volume=volume,
+            brightness=brightness,
             power=power,
             scheduler=QtScheduler(),
             process_manager=process_manager,
@@ -190,6 +198,7 @@ def main():
             # the Desktop back; the builder's wm/pm/apps/on_hide args don't apply.
             deferred_hide_factory=lambda _wm, _pm, _apps, _on_hide:
                 TimedLaunchHide(on_hide=surface.hide_for_launch),
+            power_preference=power_preference,
         )
 
         # In-process log viewer (Windows has no layer-shell, so unlike Linux we
@@ -202,6 +211,12 @@ def main():
             on_about=lambda: _refs.__setitem__("about", AboutOverlay(version, gamepad, feedback)),
             on_quit=app.quit,
         )
+        power_menu = PowerMenu(
+            ActionDeps(desktop=desktop, power=power),
+            power_preference,
+            make_action_confirm(desktop.show_confirm),
+        )
+        desktop.set_power_menu(power_menu)
         controller = Application(
             gamepad=gamepad,
             desktop=desktop,
@@ -209,7 +224,8 @@ def main():
             action_deps=ActionDeps(desktop=desktop, power=power),
             tray=tray,
             wm=wm,
-            overlay_factory=HomeOverlayFactory(gamepad, feedback),
+            overlay_factory=HomeOverlayFactory(
+                gamepad, feedback, volume, brightness, power_menu),
             hud=WindowsRtssHudControl(),
         )
         _refs.update(desktop=desktop, tray=tray, controller=controller)

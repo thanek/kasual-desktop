@@ -31,3 +31,13 @@ class BrightnessControl(Protocol):
 
     def get(self) -> Brightness: ...
     def set(self, brightness: Brightness) -> None: ...
+
+    def is_controllable(self) -> bool:
+        """Whether this host actually has a backlight this adapter can drive.
+
+        The gating signal for the Home Overlay's Quick-adjust slider (§7.10/§7.3a):
+        a desktop wired to an external monitor with no controllable backlight hides
+        the slider rather than showing a dead one. Answers only "is there *any*
+        controllable output?" — selecting between several outputs is a separate,
+        future concern, deliberately not folded in here."""
+        ...

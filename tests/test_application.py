@@ -1,8 +1,8 @@
 """Tests for the Application controller — wiring over domain ports only.
 
 The controller is pure wiring (no Qt): it subscribes to the gamepad through the
-`GamepadSignals` port, creates overlays through the `OverlayFactory` port, and
-routes activated menu items. Here we drive it entirely over fakes.
+`GamepadSignals` port, creates overlays through the `SectionedOverlayFactory`
+port, and routes activated menu items. Here we drive it entirely over fakes.
 """
 
 from application import Application
@@ -12,7 +12,7 @@ from domain.input.gamepad_events import (
 )
 from domain.menu.entry import CLOSE_APP, RETURN_TO_APP, RETURN_TO_DESKTOP, TOGGLE_HUD
 from domain.menu.item import MenuItem
-from domain.system.actions import ActionDeps, VOLUME
+from domain.system.actions import ActionDeps, HIDE_DESKTOP
 from domain.catalog.app import App
 
 
@@ -47,7 +47,7 @@ class FakeGamepad:
 
 
 class FakeOverlay:
-    """HomeMenuOverlay port — records the lifecycle the controller drives."""
+    """SectionedHomeOverlay port — records the lifecycle the controller drives."""
 
     def __init__(self):
         self.shown_with = None
@@ -55,8 +55,11 @@ class FakeOverlay:
         self.closed_handler = None
         self.disposed = False
 
-    def show_overlay(self, items, on_select=None, on_cancel=None):
-        self.shown_with = (items, on_select, on_cancel)
+    def show_for_context(self, foreground, foreground_is_game, hud,
+                         on_action, on_cancel, set_hints, desktop_minimized=False):
+        self.shown_with = (foreground, on_action, on_cancel)
+        self.on_action = on_action
+        self.on_cancel = on_cancel
         self._showing = True
 
     def hide_overlay(self):
@@ -100,8 +103,7 @@ class FakeDesktop:
         self.show_desktop_calls = 0
         self.resumed = 0
         self.hidden = 0
-        self.volume_opened = 0
-        self.brightness_opened = 0
+        self.paused = 0
         self.dismiss_overlays_calls = 0
         self.overlay_hints: list = []   # True on begin, False on end
 
@@ -118,6 +120,9 @@ class FakeDesktop:
     def show_desktop(self):
         self.show_desktop_calls += 1
 
+    def is_visible(self):
+        return getattr(self, "_visible", True)
+
     def dismiss_overlays(self):
         self.dismiss_overlays_calls += 1
 
@@ -126,6 +131,9 @@ class FakeDesktop:
 
     def end_overlay_hints(self):
         self.overlay_hints.append(False)
+
+    def set_overlay_hints(self, hints):
+        self.pushed_hints = hints
 
     def foreground_pid(self):
         return self._foreground
@@ -144,14 +152,8 @@ class FakeDesktop:
         self.hidden += 1
 
     # DesktopShell (system-action effects)
-    def open_volume_overlay(self):
-        self.volume_opened += 1
-
-    def open_brightness_overlay(self):
-        self.brightness_opened += 1
-
     def pause(self):
-        pass
+        self.paused += 1
 
 
 class FakeWM:
@@ -317,8 +319,8 @@ class TestDispatchHome:
 
     def test_system_action_runs_effect(self):
         controller, desktop, *_ = make_app()
-        controller._dispatch_home(MenuItem("Vol", VOLUME))
-        assert desktop.volume_opened == 1
+        controller._dispatch_home(MenuItem("Minimize", HIDE_DESKTOP))
+        assert desktop.paused == 1
 
     def test_toggle_hud_flips_state(self):
         hud = FakeHud(available=True, enabled=True)

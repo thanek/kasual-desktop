@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 class BaseOverlay(QWidget):
     """
-    Base class for modal overlays (ConfirmDialog, VolumeOverlay, InfoDialog).
+    Base class for modal overlays (ConfirmDialog, NotificationsOverlay, InfoDialog).
 
     Each is a standalone wlr-layer-shell surface in the `overlay` layer, so it
     sits above the KD Desktop, normal windows, and fullscreen games. The

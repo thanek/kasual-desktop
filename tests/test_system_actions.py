@@ -19,16 +19,6 @@ def _auto_confirm(action_key, callback):
 
 
 class TestDispatch:
-    def test_volume_opens_overlay(self, qapp):
-        deps = _deps()
-        ActionRunner(deps, _auto_confirm).run("volume")
-        deps.desktop.open_volume_overlay.assert_called_once()
-
-    def test_brightness_opens_overlay(self, qapp):
-        deps = _deps()
-        ActionRunner(deps, _auto_confirm).run("brightness")
-        deps.desktop.open_brightness_overlay.assert_called_once()
-
     def test_hide_desktop_pauses(self, qapp):
         deps = _deps()
         ActionRunner(deps, _auto_confirm).run("hide_desktop")
@@ -62,9 +52,9 @@ class TestConfirmationGating:
     def test_immediate_action_skips_confirmation(self, qapp):
         deps = _deps()
         asked = []
-        ActionRunner(deps, lambda q, cb: asked.append(q)).run("volume")
-        assert asked == []                 # no confirmation for volume
-        deps.desktop.open_volume_overlay.assert_called_once()
+        ActionRunner(deps, lambda q, cb: asked.append(q)).run("hide_desktop")
+        assert asked == []                 # no confirmation for an immediate action
+        deps.desktop.pause.assert_called_once()
 
 
 class TestActionDeps:

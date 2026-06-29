@@ -170,6 +170,8 @@ class WindowsGamepadWatcher(BaseGamepadWatcher):
             self._hop_nav(Event.CANCEL)
         elif button == BTN_WEST:
             self._hop_nav(Event.CLOSE)
+        elif button == BTN_NORTH:
+            self._hop_nav(Event.ACTIONS)
         elif button == BTN_TL:
             self._hop_nav(Event.SECTION_PREV)
         elif button == BTN_TR:

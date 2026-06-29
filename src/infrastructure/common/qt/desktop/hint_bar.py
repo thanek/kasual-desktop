@@ -53,6 +53,14 @@ _ICON_BUTTONS = {
     Button.HOME:  "fa5s.home",
 }
 
+# Shoulder buttons (bumpers / triggers) drawn as a short label in a rounded pill.
+_SHOULDER_BUTTONS = {
+    Button.LB: "LB",
+    Button.RB: "RB",
+    Button.LT: "LT",
+    Button.RT: "RT",
+}
+
 
 class HintBar(QWidget, HintBarView, metaclass=ProtocolQtMeta):
     """Standalone bottom bar rendering the per-screen gamepad hints."""
@@ -153,6 +161,16 @@ class HintBar(QWidget, HintBarView, metaclass=ProtocolQtMeta):
         if hints.directions:
             self._row.addWidget(self._directions(hints.directions, hints.nav_label))
             self._row.addSpacing(20)
+        # A second directional cluster (e.g. ◄► Adjust on the slider screen),
+        # rendered right after the first so the two axes read apart.
+        if hints.adjust:
+            self._row.addWidget(self._directions(hints.adjust, hints.adjust_label))
+            self._row.addSpacing(20)
+        # Bumpers (LB/RB) switch overlay sections — rendered as a glyph pair with a
+        # single shared label, right after the directional cluster.
+        if hints.bumpers:
+            self._row.addWidget(self._pair(hints.bumpers))
+            self._row.addSpacing(20)
         self._row.addWidget(self._hint(self._button_glyph(hints.overlay.button),
                                        hints.overlay.label))
         self._row.addStretch(1)
@@ -217,11 +235,39 @@ class HintBar(QWidget, HintBarView, metaclass=ProtocolQtMeta):
                       .pixmap(QSize(ICON_PX + 3, ICON_PX + 3)))
         return lbl
 
+    def _pair(self, pair: tuple, ) -> QWidget:
+        """Two shoulder-button glyphs sharing one label (e.g. ``LB RB  Section``)."""
+        row = QHBoxLayout()
+        row.setContentsMargins(0, 0, 0, 0)
+        row.setSpacing(4)
+        for hint in pair:
+            row.addWidget(self._button_glyph(hint.button))
+        row.addSpacing(4)
+        row.addWidget(self._label(translate("HintBar", pair[0].label)))
+        holder = QWidget()
+        holder.setStyleSheet("background: transparent;")
+        holder.setLayout(row)
+        return holder
+
     def _button_glyph(self, button: Button) -> QLabel:
         if button in _LETTER_BUTTONS:
             letter, bg, fg = _LETTER_BUTTONS[button]
             return self._disc_letter(letter, bg, fg)
+        if button in _SHOULDER_BUTTONS:
+            return self._pill(_SHOULDER_BUTTONS[button])
         return self._disc_icon(_ICON_BUTTONS[button])
+
+    def _pill(self, text: str) -> QLabel:
+        """A short label (LB/RB/LT/RT) in a rounded pill, wider than a disc."""
+        lbl = QLabel(text)
+        lbl.setFixedSize(GLYPH_SIZE + 12, GLYPH_SIZE)
+        lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        lbl.setStyleSheet(
+            f"background-color: #3b4252; color: white;"
+            f" border-radius: {GLYPH_SIZE // 2}px;"
+            "  font-weight: bold; font-size: 12px;"
+        )
+        return lbl
 
     def _disc_letter(self, letter: str, bg: str, fg: str) -> QLabel:
         lbl = QLabel(letter)

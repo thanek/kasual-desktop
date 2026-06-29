@@ -1,7 +1,7 @@
 """Executable specification of Kasual in its own language — the DSL of section I.
 
 These read like sentences about what Kasual does, wired purely from the domain /
-application vocabulary (compose_tile_menu, MenuCursor, Feedback, DesktopState,
+application vocabulary (lifecycle_menu, MenuCursor, Feedback, DesktopState,
 the Desktop coordinator) with no Qt anywhere. They are living documentation: if
 the application layer still tells the story, they pass.
 """
@@ -11,7 +11,7 @@ from unittest.mock import MagicMock
 from domain.shell.desktop import Desktop
 from domain.menu.entry import CLOSE, LAUNCH, RESTORE
 from domain.menu.cursor import MenuCursor
-from domain.menu.tile import compose_tile_menu
+from domain.menu.tile import lifecycle_menu
 from domain.shell.desktop_state import DesktopState
 from domain.input.vocabulary import Event
 from domain.catalog.target import AppTarget
@@ -19,7 +19,7 @@ from domain.catalog.target import AppTarget
 
 def _popover(target, is_running, *, on_close, on_launch, on_restore, feedback):
     """A tile Popover: its entries composed by the rule, navigated by the cursor."""
-    menu = compose_tile_menu(target, is_running)
+    menu = lifecycle_menu(target, is_running)
     effects = {LAUNCH: on_launch, RESTORE: on_restore, CLOSE: on_close}
     cursor = MenuCursor(
         count=lambda: len(menu),

@@ -35,10 +35,14 @@ class FocusNavigator:
         feedback: Feedback,
         gamepad: PadControl | None = None,
         hint_bar: HintBarView | None = None,
+        on_topbar_menu: Callable[[int], None] | None = None,
     ) -> None:
         self._tilebar      = tilebar
         self._topbar       = topbar
         self._on_tile_menu = on_tile_menu   # Event.ACTIONS (Y) in tiles → tile popover
+        # Event.ACTIONS (Y) on a top-bar button → its dropdown, if any (the Power
+        # split-button). Passed the focused index; the Desktop decides if it opens.
+        self._on_topbar_menu = on_topbar_menu
         self._feedback     = feedback
         self._gamepad      = gamepad
         self._hint_bar     = hint_bar
@@ -86,6 +90,8 @@ class FocusNavigator:
                 self._moved()
             elif event == Event.SELECT:
                 self._topbar.trigger(self._topbar_index)
+            elif event == Event.ACTIONS and self._on_topbar_menu is not None:
+                self._on_topbar_menu(self._topbar_index)
 
     def render(self) -> None:
         """Repaint the focus highlight across the tile bar and top bar, and sync
@@ -105,6 +111,8 @@ class FocusNavigator:
         if self._mode == _Mode.TILES:
             tiles = hints.TILES_ADD if self._tilebar.current_is_add() else hints.TILES
             self._hint_bar.show_hints(tiles)
+        elif self._topbar.has_menu_at(self._topbar_index):
+            self._hint_bar.show_hints(hints.TOPBAR_POWER)   # focused button has a Y dropdown
         else:
             self._hint_bar.show_hints(hints.TOPBAR)
 

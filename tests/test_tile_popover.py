@@ -1,5 +1,5 @@
 """Unit tests for TilePopoverMenu (presentation): the Y-toggle close and the
-separator handling of the unified v2 menu (§7.3).
+separator handling of the unified menu (§7.3).
 
 The popover pushes a handler on the gamepad stack and installs an app event
 filter; both are torn down on dismiss. Offscreen Qt (conftest) means no real
@@ -18,7 +18,7 @@ from infrastructure.common.qt.overlays.tile_popover import TilePopoverMenu
 
 
 def _items():
-    # Mirrors compose_tile_menu_v2 for an idle app: Launch · ─ · Move.
+    # Mirrors compose_tile_menu for an idle app: Launch · ─ · Move.
     return [
         MenuItem("Launch", LAUNCH),
         MenuItem("", SEPARATOR),

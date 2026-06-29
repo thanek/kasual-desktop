@@ -55,6 +55,25 @@ class BrightnessctlBrightnessControl(BrightnessControl):
         except Exception as exc:
             logger.error("Error during brightness setting: %s", exc)
 
+    def is_controllable(self) -> bool:
+        """True only if a *backlight*-class device exists.
+
+        ``brightnessctl`` is present on plenty of desktops that have no panel
+        backlight (it then falls back to LED devices), so the binary's presence
+        isn't enough — we query the backlight class explicitly and treat an empty
+        list as 'no controllable backlight'."""
+        try:
+            out = subprocess.check_output(
+                ["brightnessctl", "-lm", "-c", "backlight"],
+                text=True, stderr=subprocess.DEVNULL,
+            )
+        except Exception:
+            return False
+        return any(
+            line.split(",")[1:2] == ["backlight"]
+            for line in out.splitlines() if line.strip()
+        )
+
 
 class KdeBrightnessControl(BrightnessControl):
     """Adapter over KDE Plasma's PowerManagement D-Bus service via ``qdbus``.
@@ -91,6 +110,17 @@ class KdeBrightnessControl(BrightnessControl):
         except Exception as exc:
             logger.error("Error during brightness setting: %s", exc)
 
+    def is_controllable(self) -> bool:
+        """True if PowerManagement reports a positive maximum brightness.
+
+        A Plasma session driving only an external monitor with no controllable
+        backlight reports a zero (or unavailable) maximum — treated as 'no
+        controllable backlight'."""
+        try:
+            return int(self._call("brightnessMax")) > 0
+        except Exception:
+            return False
+
     def _call(self, method: str) -> str:
         return subprocess.check_output(
             [self._qdbus, self._SERVICE, self._PATH, f"{self._IFACE}.{method}"],
@@ -108,6 +138,9 @@ class NullBrightnessControl(BrightnessControl):
 
     def set(self, brightness: Brightness) -> None:
         pass
+
+    def is_controllable(self) -> bool:
+        return False
 
 
 def select_brightness_control() -> BrightnessControl:

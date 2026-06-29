@@ -160,7 +160,7 @@ class TestTranslateKeys:
         )
         assert fired == []
 
-    # ── UX v2 buttons (§7.10) ──────────────────────────────────────────────
+    # ── UX buttons (§7.10) ──────────────────────────────────────────────
 
     def test_btn_tl_emits_section_prev(self, mock_gamepad):
         result = self._translate_with_handler(
@@ -173,6 +173,13 @@ class TestTranslateKeys:
             mock_gamepad, ev(ecodes.EV_KEY, ecodes.BTN_TR, 1)
         )
         assert result == ["section_next"]
+
+    def test_btn_north_emits_actions(self, mock_gamepad):
+        """Y (BTN_NORTH) → ACTIONS: expands the Power dropdown / a tile's options."""
+        result = self._translate_with_handler(
+            mock_gamepad, ev(ecodes.EV_KEY, ecodes.BTN_NORTH, 1)
+        )
+        assert result == ["actions"]
 
 
 # ── _translate — DPAD (EV_ABS HAT) ───────────────────────────────────────────

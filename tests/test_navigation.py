@@ -10,18 +10,19 @@ from domain.navigation import hints
 from domain.navigation.focus_navigator import FocusNavigator
 
 
-def _make(topbar_count=3, hint_bar=None):
+def _make(topbar_count=3, hint_bar=None, on_topbar_menu=None):
     tilebar = MagicMock()
     tilebar.move.return_value = True
     tilebar.current_is_add.return_value = False   # the [＋] tile is not focused
     topbar = MagicMock()
     topbar.count = topbar_count
+    topbar.has_menu_at.return_value = False   # no Power split-button by default
     on_tile_menu = MagicMock()
     feedback = MagicMock()
     gamepad = MagicMock()
     nav = FocusNavigator(
         tilebar, topbar, on_tile_menu=on_tile_menu, feedback=feedback,
-        gamepad=gamepad, hint_bar=hint_bar,
+        gamepad=gamepad, hint_bar=hint_bar, on_topbar_menu=on_topbar_menu,
     )
     return nav, tilebar, topbar, on_tile_menu, gamepad
 
@@ -146,6 +147,27 @@ class TestHintBar:
         nav, *_ = _make(hint_bar=hint_bar)
         nav.handle_pad("up")
         hint_bar.show_hints.assert_called_with(hints.TOPBAR)
+
+    def test_power_button_advertises_options_hint(self):
+        hint_bar = MagicMock()
+        nav, _, topbar, *_ = _make(hint_bar=hint_bar)
+        topbar.has_menu_at.return_value = True   # focused button is the Power split-button
+        nav.handle_pad("up")
+        hint_bar.show_hints.assert_called_with(hints.TOPBAR_POWER)
+
+    def test_actions_on_topbar_opens_menu(self):
+        on_topbar_menu = MagicMock()
+        nav, _, topbar, *_ = _make(on_topbar_menu=on_topbar_menu)
+        nav.handle_pad("up")            # into the top bar (index 0)
+        nav.handle_pad("right")         # focus index 1
+        nav.handle_pad("actions")       # Y → open the focused button's dropdown
+        on_topbar_menu.assert_called_once_with(1)
+
+    def test_actions_on_tiles_does_not_open_topbar_menu(self):
+        on_topbar_menu = MagicMock()
+        nav, *_ = _make(on_topbar_menu=on_topbar_menu)
+        nav.handle_pad("actions")       # still in tiles
+        on_topbar_menu.assert_not_called()
 
     def test_returning_to_tiles_switches_hints_back(self):
         hint_bar = MagicMock()

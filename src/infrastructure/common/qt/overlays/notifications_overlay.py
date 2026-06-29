@@ -1,10 +1,10 @@
 """Full-screen overlay listing the most recent system notifications.
 
 Read-only (MVP): renders `NotificationCenter.recent(...)` as a scrollable list,
-navigable by gamepad/keyboard, dismissed with B/Esc (or A). Mirrors
-`VolumeOverlay` — a `BaseOverlay` managing its own layer-shell surface and pad
-lifetime — and reuses the domain `MenuCursor` for selection, exactly like the
-Home Overlay, so navigation semantics live in the domain, not here.
+navigable by gamepad/keyboard, dismissed with B/Esc (or A). A `BaseOverlay`
+managing its own layer-shell surface and pad lifetime, it reuses the domain
+`MenuCursor` for selection, exactly like the Home Overlay, so navigation semantics
+live in the domain, not here.
 """
 
 import os
