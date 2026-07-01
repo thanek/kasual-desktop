@@ -25,6 +25,7 @@ from domain.shared.i18n import translate
 from infrastructure.common.qt._meta import ProtocolQtMeta
 from infrastructure.common.qt.ui.layer_shell import Anchor, Keyboard, Layer
 from infrastructure.common.qt.ui.top_surface import promote_overlay_surface
+from infrastructure.common.qt.overlays.home_menu_content import CARD_WIDTH
 
 GLYPH_SIZE = 26      # diameter of a button glyph / height of a direction arrow
 ICON_PX    = 15      # inner icon size for icon-based glyphs (home / start / arrows)
@@ -88,15 +89,15 @@ class HintBar(QWidget, HintBarView, metaclass=ProtocolQtMeta):
         bar = QWidget()
         bar.setObjectName("hintbar")
         bar.setFixedHeight(BAR_HEIGHT)
+        bar.setFixedWidth(CARD_WIDTH)
         bar.setStyleSheet(
             "#hintbar {"
-            "  background-color: rgba(136, 192, 208, 60);"
-            "  border: 2px solid #88c0d0;"
+            "  background-color: #2e3440;"
             "  border-radius: 30px;"
             "}"
         )
         outer.addStretch(1)   # absorbs any surplus surface height above the bar
-        outer.addWidget(bar)
+        outer.addWidget(bar, alignment=Qt.AlignmentFlag.AlignHCenter)
 
         # Cleared and rebuilt on every show_hints — the screens differ in which
         # actions they offer, so re-laying out is simpler than diffing.

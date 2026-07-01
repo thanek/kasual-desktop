@@ -69,8 +69,7 @@ class HomeHeader(QWidget):
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.setStyleSheet(
             "#homeheader {"
-            f"  background-color: {_FOCUS_FILL};"
-            f"  border: 2px solid {_FOCUS_BORDER};"
+            "  background-color: #2e3440;"
             "  border-radius: 40px;"
             "}"
         )

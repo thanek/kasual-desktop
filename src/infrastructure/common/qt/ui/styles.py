@@ -6,7 +6,10 @@ COLOR_TEXT     = "white"
 COLOR_TOPBAR   = "rgba(15, 17, 25, 210)"
 COLOR_RUNNING  = "#a3be8c"
 COLOR_CARD_BG  = "#2e3440"
-CARD_RADIUS_PX = 12
+CARD_RADIUS_PX = 40
+_TOPBAR_RADIUS = 30
+_DIALOG_RADIUS = 25
+_MENU_RADIUS   = 30
 
 
 def apply_card_shadow(
@@ -116,7 +119,7 @@ def topbar_normal(color: str) -> str:
             background-color: {color};
             color: white;
             border: none;
-            border-radius: 13px;
+            border-radius: {_TOPBAR_RADIUS}px;
         }}
     """
 
@@ -127,21 +130,21 @@ def topbar_selected() -> str:
             background-color: {COLOR_ACCENT};
             color: black;
             border: 3px solid white;
-            border-radius: 13px;
+            border-radius: {_TOPBAR_RADIUS}px;
         }}
     """
 
 
 def dialog_idle() -> str:
-    return """
-        QPushButton {
+    return f"""
+        QPushButton {{
             font-size: 22px;
             padding: 14px 24px;
             background-color: #4c566a;
             color: white;
-            border-radius: 6px;
+            border-radius: {_DIALOG_RADIUS}px;
             border: 2px solid transparent;
-        }
+        }}
     """
 
 
@@ -152,22 +155,23 @@ def dialog_focused() -> str:
             padding: 14px 24px;
             background-color: {COLOR_ACCENT};
             color: black;
-            border-radius: 6px;
+            border-radius: {_DIALOG_RADIUS}px;
             border: 2px solid white;
         }}
     """
 
 
 def home_menu_item_normal() -> str:
-    return """
-        QPushButton {
+    return f"""
+        QPushButton {{
             font-size: 24px;
             padding: 18px 32px;
             background-color: #2e3440;
             color: white;
             border: 2px solid transparent;
+            border-radius: {_MENU_RADIUS}px;
             text-align: left;
-        }
+        }}
     """
 
 
@@ -179,6 +183,7 @@ def home_menu_item_selected() -> str:
             background-color: {COLOR_ACCENT};
             color: black;
             border: 2px solid white;
+            border-radius: {_MENU_RADIUS}px;
             text-align: left;
         }}
     """

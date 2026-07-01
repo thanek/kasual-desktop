@@ -47,8 +47,7 @@ class TopBar(QWidget, TopBarView, metaclass=ProtocolQtMeta):
         bar.setFixedHeight(80)
         bar.setStyleSheet(
             "#topbar {"
-            "  background-color: rgba(15, 17, 25, 210);"
-            "  border: 1px solid black;"
+            "  background-color: #2e3440;"
             "  border-radius: 40px;"
             "}"
         )

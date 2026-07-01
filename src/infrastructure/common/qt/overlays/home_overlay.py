@@ -64,7 +64,9 @@ class HomeOverlay(QWidget, SectionedHomeOverlay, metaclass=ProtocolQtMeta):
 
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, False)
+        self.setStyleSheet("background-color: rgba(0, 0, 0, 150);")
         # Overlay layer over everything, keyboard=NONE (gamepad-driven; grabbing
         # focus would uncover KWin panels).
         promote_overlay_surface(

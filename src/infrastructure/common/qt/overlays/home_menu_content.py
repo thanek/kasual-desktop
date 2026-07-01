@@ -22,6 +22,7 @@ from collections.abc import Callable
 
 import qtawesome as qta
 from PyQt6.QtCore import Qt, QSize, QPoint
+from PyQt6.QtGui import QPainterPath, QRegion
 from PyQt6.QtWidgets import (
     QWidget, QPushButton, QFrame, QVBoxLayout, QHBoxLayout, QGridLayout,
     QLabel, QSlider,
@@ -54,9 +55,25 @@ CARD_WIDTH  = 832
 _LIST_WIDTH = round(CARD_WIDTH * 2 / 3)
 _QUICK_WIDTH = _LIST_WIDTH
 
+_QUICK_RADIUS = 20
+
+
+class _RoundedFrame(QFrame):
+    """QFrame that clips its children to a rounded rectangle via setMask.
+    Mirrors the border-radius from _quick_row_style."""
+
+    def resizeEvent(self, event) -> None:
+        super().resizeEvent(event)
+        path = QPainterPath()
+        path.addRoundedRect(0, 0, self.width(), self.height(), _QUICK_RADIUS, _QUICK_RADIUS)
+        self.setMask(QRegion(path.toFillPolygon().toPolygon()))
+
+
 _SLIDER_QSS = """
-    QSlider::groove:horizontal { height: 8px; background: #4c566a; border-radius: 4px; }
+    QSlider { background: transparent; }
+    QSlider::groove:horizontal { height: 8px; border-radius: 4px; }
     QSlider::sub-page:horizontal { background: #88c0d0; border-radius: 4px; }
+    QSlider::add-page:horizontal  { background: #4c566a; border-radius: 4px; }
     QSlider::handle:horizontal {
         width: 22px; height: 22px; margin: -7px 0; background: white; border-radius: 11px;
     }
@@ -65,8 +82,8 @@ _SLIDER_QSS = """
 
 def _quick_row_style(selected: bool) -> str:
     if selected:
-        return "background-color: rgba(136,192,208,40); border-radius: 12px;"
-    return "background: transparent; border-radius: 12px;"
+        return f"background-color: rgba(136,192,208,40); border: 2px solid transparent; border-radius: {_QUICK_RADIUS}px;"
+    return f"background-color: transparent; border: 2px solid transparent; border-radius: {_QUICK_RADIUS}px;"
 
 
 class _Zone:
@@ -209,7 +226,8 @@ class HomeMenuContent(QWidget):
         for item in section.items:
             control = self._control_for(item.action)
             value = control.get()
-            row = QFrame()
+            row = _RoundedFrame()
+            row.setFrameShape(QFrame.Shape.NoFrame)
             row.setStyleSheet(_quick_row_style(False))
             rl = QHBoxLayout(row)
             rl.setContentsMargins(12, 8, 12, 8)
@@ -498,7 +516,7 @@ class HomeMenuContent(QWidget):
 
         frame = QFrame(self)
         frame.setStyleSheet(
-            "background-color: #2e3440; border: 1px solid #4c566a; border-radius: 12px;"
+            "background-color: #2e3440; border: 1px solid #4c566a; border-radius: 30px;"
         )
         col = QVBoxLayout(frame)
         col.setContentsMargins(8, 8, 8, 8)

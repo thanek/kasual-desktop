@@ -138,7 +138,7 @@ _DISABLED_BUTTON = """
         padding: 14px 24px;
         background-color: #3b4252;
         color: #6b7280;
-        border-radius: 6px;
+        border-radius: 25px;
         border: 2px solid transparent;
     }
 """
