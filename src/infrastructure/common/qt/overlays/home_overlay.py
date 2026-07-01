@@ -77,6 +77,7 @@ class HomeOverlay(QWidget, SectionedHomeOverlay, metaclass=ProtocolQtMeta):
         outer = QVBoxLayout(self)
         outer.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._card = styles.make_card(CARD_WIDTH)
+        self._card.setGraphicsEffect(None)  # QGraphicsDropShadowEffect breaks child border-radius rendering
         self._card.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Maximum)
         card_layout = QVBoxLayout(self._card)
         card_layout.setContentsMargins(28, 28, 28, 28)

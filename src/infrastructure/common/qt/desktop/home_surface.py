@@ -48,7 +48,7 @@ from infrastructure.common.qt.overlays.home_menu_content import CARD_WIDTH, Home
 logger = logging.getLogger(__name__)
 
 TOP_MARGIN  = 10    # gap from the screen top to the header (mirrors the hint bar)
-CONTENT_H   = 380   # expanded panel's content area (the §7.10 menu sits within)
+CONTENT_H   = 480   # expanded panel's content area (the §7.10 menu sits within)
 MORPH_MS    = 180   # collapse↔expand animation duration
 # The surface is ALWAYS this tall (sized for the expanded state) and anchored to
 # the top: collapse/expand only morphs the inner content, never the surface — so
