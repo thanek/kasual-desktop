@@ -81,6 +81,14 @@ class Application:
         floats above the live app/game without minimizing it or touching the
         Desktop. Leaving to the Desktop is handled by _return_to_desktop.
         """
+        # Context 1 (Home view, §7.10/§8): when the persistent Home surface is
+        # enabled and the Desktop is on screen, BTN_MODE morphs it open/closed in
+        # place rather than mapping a fresh overlay. It owns that interaction, so
+        # we hand off and return; contexts 2/3 (minimized / over an app) fall
+        # through to the map-on-demand overlay below.
+        if self._desktop.try_toggle_home_surface():
+            return
+
         if self._overlay is not None:
             if self._overlay.is_showing():
                 self._overlay.hide_overlay()

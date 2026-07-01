@@ -220,10 +220,25 @@ OVERLAY_QUICK = Hints(
     triggers=_VOLUME,
 )
 
-# Actions grid: 2D navigation across the action cards; A activates the focused
-# card, Y expands a dropdown (the Power split-button), B closes the overlay.
+# Actions list: up/down through the action items; A activates the focused item,
+# X expands a dropdown (the Power split-button), B closes the overlay.
 OVERLAY_ACTIONS = Hints(
-    directions=(Direction.UP, Direction.DOWN, Direction.LEFT, Direction.RIGHT),
+    directions=(Direction.UP, Direction.DOWN),
+    overlay=_HOME_MENU,
+    actions=(
+        ButtonHint(Button.A, translate("HintBar", "Select")),
+        ButtonHint(Button.Y, translate("HintBar", "Options")),
+        ButtonHint(Button.B, translate("HintBar", "Close")),
+    ),
+    bumpers=_SECTION,
+    triggers=_VOLUME,
+)
+
+# The status header as the menu's top section (§8): left/right steps across the
+# Network / Notifications / Power buttons, down drops into the menu below. A acts
+# on the focused button; on Power, X expands the chooser (Options).
+OVERLAY_HEADER = Hints(
+    directions=(Direction.LEFT, Direction.RIGHT, Direction.DOWN),
     overlay=_HOME_MENU,
     actions=(
         ButtonHint(Button.A, translate("HintBar", "Select")),

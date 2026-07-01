@@ -230,23 +230,22 @@ class TestCrossSectionNav:
         assert o._active == 0
         assert o._zones[0].index == 0
 
-    def test_down_reaches_second_actions_row(self, qapp):
+    def test_down_moves_through_actions_list(self, qapp):
         o = _overlay(qapp)
-        _show_desktop(o)                    # Actions: power(0) network(1) notif(2) / minimize(3) home(4)
+        _show_desktop(o)                    # Actions list: power(0) network(1) notif(2) minimize(3) home(4)
         _focus_actions(o, 0)
-        o._handle_pad(Event.DOWN)           # power → minimize (row 2)
-        assert o._zones[1].index == 3
-        o._handle_pad(Event.RIGHT)          # minimize → return-home
-        assert o._zones[1].index == 4
+        o._handle_pad(Event.DOWN)           # power → network
+        assert o._zones[1].index == 1
+        o._handle_pad(Event.DOWN)           # network → notifications
+        assert o._zones[1].index == 2
 
-    def test_down_from_partial_row_gap_snaps_to_last(self, qapp):
+    def test_down_clamps_at_last_item(self, qapp):
         o = _overlay(qapp)
         _show_desktop(o)
-        _focus_actions(o, 0)
-        o._handle_pad(Event.RIGHT)          # power → network
-        o._handle_pad(Event.RIGHT)          # network → notifications (col 2, nothing below)
-        o._handle_pad(Event.DOWN)           # snaps to the last card of the partial row
-        assert o._zones[1].index == 4       # return-home, not a dead end
+        last = len(o._zones[1].items) - 1
+        _focus_actions(o, last)
+        o._handle_pad(Event.DOWN)           # nothing below the last item
+        assert o._zones[1].index == last
 
 
 class TestActions:
@@ -255,7 +254,7 @@ class TestActions:
         o = _overlay(qapp)
         _show_desktop(o, on_action=lambda i: dispatched.append(i))
         _focus_actions(o, 0)
-        o._handle_pad(Event.RIGHT)          # power(0) → network(1)
+        o._handle_pad(Event.DOWN)           # power(0) → network(1)
         o._handle_pad(Event.SELECT)
         assert [i.action for i in dispatched] == [NETWORK]
         assert o.is_showing() is False
@@ -270,15 +269,17 @@ class TestActions:
         assert dispatched == []             # POWER is handled internally
         assert o.is_showing() is False
 
-    def test_grid_navigation_clamps(self, qapp):
+    def test_list_navigation_ignores_left_right(self, qapp):
         o = _overlay(qapp)
         _show_desktop(o)
         _focus_actions(o, 0)
         zone = o._zones[1]
-        o._handle_pad(Event.LEFT)           # already col 0 → stays
+        o._handle_pad(Event.LEFT)           # a list has no horizontal move
         assert zone.index == 0
-        o._handle_pad(Event.DOWN)           # row 0 → row 1 (index 0 → 3)
-        assert zone.index == 3
+        o._handle_pad(Event.RIGHT)
+        assert zone.index == 0
+        o._handle_pad(Event.DOWN)           # power → network (next in the list)
+        assert zone.index == 1
 
 
 class TestVolumeTriggers:
@@ -303,27 +304,28 @@ class TestPowerDropdown:
     def _focus_power(self, o):
         _focus_actions(o, 0)                # Actions zone, power card at index 0
 
-    def test_y_opens_dropdown_at_current_default(self, qapp):
+    def test_x_opens_dropdown_at_current_default(self, qapp):
         o = _overlay(qapp)
         _show_desktop(o)
         self._focus_power(o)
-        o._handle_pad(Event.ACTIONS)
+        o._handle_pad(Event.CLOSE)          # X — the tile-popover button
         assert o._dropdown is not None
         assert o._dropdown["index"] == 0    # default is SLEEP, first in the list
 
-    def test_y_on_non_power_card_does_nothing(self, qapp):
+    def test_x_on_non_power_card_closes_overlay(self, qapp):
         o = _overlay(qapp)
         _show_desktop(o)
         self._focus_power(o)
-        o._handle_pad(Event.RIGHT)          # power(0) → network(1)
-        o._handle_pad(Event.ACTIONS)
+        o._handle_pad(Event.DOWN)           # power(0) → network(1)
+        o._handle_pad(Event.CLOSE)          # X off Power dismisses like B
         assert o._dropdown is None
+        assert o.is_showing() is False
 
     def test_pick_runs_select_and_closes_overlay(self, qapp):
         o = _overlay(qapp)
         _show_desktop(o)
         self._focus_power(o)
-        o._handle_pad(Event.ACTIONS)
+        o._handle_pad(Event.CLOSE)
         o._handle_pad(Event.DOWN)           # SLEEP → RESTART
         o._handle_pad(Event.SELECT)
         assert o._power.selected == [RESTART]
@@ -334,7 +336,7 @@ class TestPowerDropdown:
         o = _overlay(qapp)
         _show_desktop(o)
         self._focus_power(o)
-        o._handle_pad(Event.ACTIONS)
+        o._handle_pad(Event.CLOSE)
         o._handle_pad(Event.CANCEL)
         assert o._dropdown is None
         assert o.is_showing() is True       # back to the Actions grid, still open
@@ -343,7 +345,7 @@ class TestPowerDropdown:
         o = _overlay(qapp)
         _show_desktop(o)
         self._focus_power(o)
-        o._handle_pad(Event.ACTIONS)
+        o._handle_pad(Event.CLOSE)
         o._handle_pad(Event.VOLUME_UP)
         assert o._volume.sets == [55]
         assert o._dropdown is not None      # volume nudge doesn't dismiss it

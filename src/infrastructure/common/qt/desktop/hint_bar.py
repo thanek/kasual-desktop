@@ -28,7 +28,7 @@ from infrastructure.common.qt.ui.top_surface import promote_overlay_surface
 
 GLYPH_SIZE = 26      # diameter of a button glyph / height of a direction arrow
 ICON_PX    = 15      # inner icon size for icon-based glyphs (home / start / arrows)
-BAR_HEIGHT = 56      # the rounded bar itself
+BAR_HEIGHT = 60      # the rounded bar itself
 BOTTOM_MARGIN = 10   # gap from the bar bottom to the screen edge (matches TopBar top margin)
 SURFACE_H  = BAR_HEIGHT + BOTTOM_MARGIN   # total height of the bottom strip surface
 
@@ -90,9 +90,9 @@ class HintBar(QWidget, HintBarView, metaclass=ProtocolQtMeta):
         bar.setFixedHeight(BAR_HEIGHT)
         bar.setStyleSheet(
             "#hintbar {"
-            "  background-color: rgba(15, 17, 25, 210);"
-            "  border: 1px solid black;"
-            "  border-radius: 12px;"
+            "  background-color: rgba(136, 192, 208, 60);"
+            "  border: 2px solid #88c0d0;"
+            "  border-radius: 30px;"
             "}"
         )
         outer.addStretch(1)   # absorbs any surplus surface height above the bar
@@ -115,7 +115,11 @@ class HintBar(QWidget, HintBarView, metaclass=ProtocolQtMeta):
             self,
             layer=Layer.OVERLAY,
             anchors=Anchor.BOTTOM | Anchor.LEFT | Anchor.RIGHT,
-            exclusive_zone=0,
+            # -1 (not 0): anchor to the *true* bottom edge and don't let the
+            # compositor shove us up to clear another panel's exclusive zone
+            # (e.g. a KDE bottom panel in a dev session lifted the bar by its
+            # whole height). Matches the Desktop surface, which anchors flush.
+            exclusive_zone=-1,
             keyboard=Keyboard.NONE,
         )
 

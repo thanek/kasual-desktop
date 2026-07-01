@@ -39,9 +39,10 @@ class FocusNavigator:
     ) -> None:
         self._tilebar      = tilebar
         self._topbar       = topbar
-        self._on_tile_menu = on_tile_menu   # Event.ACTIONS (Y) in tiles → tile popover
-        # Event.ACTIONS (Y) on a top-bar button → its dropdown, if any (the Power
-        # split-button). Passed the focused index; the Desktop decides if it opens.
+        self._on_tile_menu = on_tile_menu   # Event.CLOSE (X) in tiles → tile popover
+        # Event.CLOSE (X) on a top-bar button → its dropdown, if any (the Power
+        # split-button) — the same button that opens a tile's popover. Passed the
+        # focused index; the Desktop decides if it opens.
         self._on_topbar_menu = on_topbar_menu
         self._feedback     = feedback
         self._gamepad      = gamepad
@@ -90,7 +91,9 @@ class FocusNavigator:
                 self._moved()
             elif event == Event.SELECT:
                 self._topbar.trigger(self._topbar_index)
-            elif event == Event.ACTIONS and self._on_topbar_menu is not None:
+            elif event == Event.CLOSE and self._on_topbar_menu is not None:
+                # X opens the focused button's dropdown (the Power chooser) — the
+                # same button that opens a tile's popover in TILES mode.
                 self._on_topbar_menu(self._topbar_index)
 
     def render(self) -> None:

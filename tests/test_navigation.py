@@ -155,18 +155,18 @@ class TestHintBar:
         nav.handle_pad("up")
         hint_bar.show_hints.assert_called_with(hints.TOPBAR_POWER)
 
-    def test_actions_on_topbar_opens_menu(self):
+    def test_close_on_topbar_opens_menu(self):
         on_topbar_menu = MagicMock()
         nav, _, topbar, *_ = _make(on_topbar_menu=on_topbar_menu)
         nav.handle_pad("up")            # into the top bar (index 0)
         nav.handle_pad("right")         # focus index 1
-        nav.handle_pad("actions")       # Y → open the focused button's dropdown
+        nav.handle_pad("close")         # X → open the focused button's dropdown
         on_topbar_menu.assert_called_once_with(1)
 
-    def test_actions_on_tiles_does_not_open_topbar_menu(self):
+    def test_close_on_tiles_does_not_open_topbar_menu(self):
         on_topbar_menu = MagicMock()
         nav, *_ = _make(on_topbar_menu=on_topbar_menu)
-        nav.handle_pad("actions")       # still in tiles
+        nav.handle_pad("close")         # in tiles → the tile popover, not this
         on_topbar_menu.assert_not_called()
 
     def test_returning_to_tiles_switches_hints_back(self):

@@ -92,6 +92,7 @@ def build_desktop(
     is_game_pid: Callable[[int], bool] = lambda _: False,
     app_adder: AppAdder | None = None,
     power_preference: PowerPreference | None = None,
+    home_surface_enabled: bool = False,
 ) -> Desktop:
     """Build a fully wired Desktop: the view widget plus its domain coordinators.
 
@@ -130,6 +131,7 @@ def build_desktop(
         parent_of=parent_of,
         app_adder=app_adder,
         power_preference=power_preference,
+        home_surface_enabled=home_surface_enabled,
     )
 
     nav = FocusNavigator(

@@ -145,6 +145,7 @@ def main() -> None:
 
         volume = PactlVolumeControl()
         brightness = select_brightness_control()
+        home_surface = bool(os.environ.get("KASUAL_HOME_SURFACE"))
         desktop = build_desktop(
             apps=apps, gamepad=gamepad, window_manager=wm,
             wallpaper=KdeSystemWallpaper(), feedback=feedback,
@@ -160,6 +161,9 @@ def main() -> None:
             is_game_pid=is_game_pid,
             app_adder=app_adder,
             power_preference=power_preference,
+            # §8 / Faza 5 (experimental): collapse the top bar into a persistent
+            # Home-view surface. Off by default; opt in with KASUAL_HOME_SURFACE=1.
+            home_surface_enabled=home_surface,
             deferred_hide_factory=lambda wm_, pm_, apps_, on_hide:
                 DeferredHide(wm_, pm_, apps_, on_hide=on_hide),
         )
@@ -199,8 +203,13 @@ def main() -> None:
             make_action_confirm(desktop.show_confirm),
         )
         desktop.set_power_menu(power_menu)
-        overlay_factory = HomeOverlayFactory(
-            gamepad, feedback, volume, brightness, power_menu)
+        # In persistent-surface mode contexts 2/3 reuse the Desktop's one Home
+        # surface (so the header's live status carries over); otherwise each
+        # BTN_MODE maps a fresh overlay.
+        overlay_factory = (
+            desktop.home_overlay_factory() if home_surface
+            else HomeOverlayFactory(gamepad, feedback, volume, brightness, power_menu)
+        )
 
         controller = Application(
             gamepad=gamepad,

@@ -3,7 +3,8 @@
 import logging
 from collections.abc import Callable
 
-from PyQt6.QtCore import Qt, QEvent, QPoint, QRect, pyqtSignal
+import qtawesome as qta
+from PyQt6.QtCore import Qt, QEvent, QPoint, QRect, QSize, pyqtSignal
 from PyQt6.QtWidgets import QFrame, QWidget, QVBoxLayout, QPushButton, QApplication
 
 from domain.input.pad_control import PadControl
@@ -29,6 +30,8 @@ class TilePopoverMenu(QWidget):
         gamepad: PadControl,
         feedback: Feedback,
         parent: QWidget,
+        *,
+        initial_index: int = 0,
     ) -> None:
         super().__init__(parent)
         self._items = items
@@ -83,13 +86,21 @@ class TilePopoverMenu(QWidget):
                 row = QPushButton(item.label)
                 row.setFocusPolicy(Qt.FocusPolicy.NoFocus)
                 row.setMinimumWidth(220)
+                # Items that carry a glyph (e.g. the power dropdown's
+                # sleep/restart/shut-down) show it beside the label; icon-less
+                # items (the tile menu) are unchanged.
+                if item.icon:
+                    row.setIcon(qta.icon(item.icon, color="white"))
+                    row.setIconSize(QSize(20, 20))
                 row.clicked.connect(lambda checked=False, idx=i: self._on_btn_clicked(idx))
                 _bind_hover(row, i)
             card_layout.addWidget(row)
             self._rows.append(row)
 
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
-        self._cursor.reset(0)
+        # Open focused on *initial_index* (e.g. the current default power action),
+        # so the dropdown lands on it — highlighted — with no separate marker.
+        self._cursor.reset(initial_index)
         self._gamepad.push_handler(self._handle_pad)
         self._feedback.play(Cue.POPUP_OPEN)
         QApplication.instance().installEventFilter(self)
@@ -98,19 +109,19 @@ class TilePopoverMenu(QWidget):
         """Position and display the popover above *tile*."""
         self._show_anchored(tile, below=False)
 
-    def show_below(self, anchor: QWidget) -> None:
+    def show_below(self, anchor: QWidget, *, gap: int = 12) -> None:
         """Position and display the popover below *anchor* (e.g. a top-bar button,
-        which has no room above it)."""
-        self._show_anchored(anchor, below=True)
+        which has no room above it). *gap* is the clearance below the anchor."""
+        self._show_anchored(anchor, below=True, gap=gap)
 
-    def _show_anchored(self, anchor: QWidget, *, below: bool) -> None:
+    def _show_anchored(self, anchor: QWidget, *, below: bool, gap: int = 12) -> None:
         self.adjustSize()
         anchor_global = anchor.mapToGlobal(QPoint(0, 0))
         parent_global = self.parent().mapToGlobal(QPoint(0, 0))
         ax = anchor_global.x() - parent_global.x()
         ay = anchor_global.y() - parent_global.y()
         x = ax + (anchor.width() - self.width()) // 2
-        y = ay + anchor.height() + 12 if below else ay - self.height() - 12
+        y = ay + anchor.height() + gap if below else ay - self.height() - gap
         self.move(x, max(0, y))
         self.show()
         self.raise_()

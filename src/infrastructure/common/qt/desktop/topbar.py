@@ -49,7 +49,7 @@ class TopBar(QWidget, TopBarView, metaclass=ProtocolQtMeta):
             "#topbar {"
             "  background-color: rgba(15, 17, 25, 210);"
             "  border: 1px solid black;"
-            "  border-radius: 12px;"
+            "  border-radius: 40px;"
             "}"
         )
         outer.addWidget(bar)

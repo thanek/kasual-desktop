@@ -38,6 +38,7 @@ def _return_to_desktop_item() -> MenuItem:
 class SectionKind(StrEnum):
     """The Home Overlay zones (LB/RB step between them)."""
 
+    HEADER  = "header"    # the status header's focusable Network / Notifications (§8)
     QUICK   = "quick"     # live sliders: volume, (brightness)
     ACTIONS = "actions"   # cards: power split-button, network, …, or app controls
     HUD     = "hud"       # the conditional in-game HUD toggle
@@ -91,6 +92,7 @@ def compose_home_sections(
     brightness_controllable: bool,
     power_default: str,
     foreground_is_game: bool = False,
+    include_status_actions: bool = True,
 ) -> HomeSections:
     """Compose the sectioned Home Overlay content for the current foreground.
 
@@ -99,7 +101,11 @@ def compose_home_sections(
     Actions section is the global system grid on the bare Desktop — a Power
     split-button (labelled by *power_default*) plus network / notifications /
     minimize — or, over a running app, that app's controls (return / close /
-    home) with the conditional HUD toggle in its own section (§7.10)."""
+    home) with the conditional HUD toggle in its own section (§7.10).
+
+    ``include_status_actions`` drops Power / Network / Notifications from the grid
+    when a navigable status header already carries them (§8 / Faza 5), so they
+    aren't offered twice."""
     quick = [_action_item(VOLUME)]
     if brightness_controllable:
         quick.append(_action_item(BRIGHTNESS))
@@ -109,13 +115,11 @@ def compose_home_sections(
         # is *minimized* it is the only way back (Minimize hides it, this restores
         # it — its dispatch is show_desktop with no foreground app). Harmless when
         # KD is already on screen (just re-raises).
-        actions = [
-            _power_card(power_default),
-            _action_item(NETWORK),
-            _action_item(NOTIFICATIONS),
-            _action_item(HIDE_DESKTOP),
-            _return_to_desktop_item(),
-        ]
+        actions = []
+        if include_status_actions:
+            actions += [_power_card(power_default),
+                        _action_item(NETWORK), _action_item(NOTIFICATIONS)]
+        actions += [_action_item(HIDE_DESKTOP), _return_to_desktop_item()]
         return HomeSections(
             sections=[HomeSection(SectionKind.QUICK, quick),
                       HomeSection(SectionKind.ACTIONS, actions)],

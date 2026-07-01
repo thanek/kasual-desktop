@@ -123,6 +123,11 @@ class FakeDesktop:
     def is_visible(self):
         return getattr(self, "_visible", True)
 
+    def try_toggle_home_surface(self):
+        # No persistent Home surface in these controller tests: BTN_MODE always
+        # falls through to the map-on-demand overlay path.
+        return getattr(self, "_home_surface_handled", False)
+
     def dismiss_overlays(self):
         self.dismiss_overlays_calls += 1
 
