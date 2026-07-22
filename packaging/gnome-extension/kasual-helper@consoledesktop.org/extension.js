@@ -3,6 +3,7 @@ import GLib from 'gi://GLib';
 import Gio from 'gi://Gio';
 import Meta from 'gi://Meta';
 import Shell from 'gi://Shell';
+import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import {Extension} from 'resource:///org/gnome/shell/extensions/extension.js';
 
 const TAG = '[kasual-helper]';
@@ -177,8 +178,7 @@ class Helper {
         this._hideFromAppLists();
         this._windowCreatedId = global.display.connect(
             'window-created', (_d, win) => this._trackWindow(win));
-        this._attentionId = global.display.connect(
-            'window-demands-attention', (_d, win) => this._muteAttention(win));
+        this._suppressReadyBannerForOwnWindows();
         // A ceded Desktop's depth follows the focus (see _focusIsOrdinaryWindow).
         this._focusId = global.display.connect('notify::focus-window', () => {
             this._scheduleSync();
@@ -197,7 +197,7 @@ class Helper {
         this._syncSourceId = 0;
         this._anchorSourceId = 0;
         global.display.disconnect(this._windowCreatedId);
-        global.display.disconnect(this._attentionId);
+        this._restoreReadyBanner();
         global.display.disconnect(this._focusId);
         for (const [win, ids] of this._windowSignals)
             for (const id of ids)
@@ -290,13 +290,48 @@ class Helper {
             this._setUnredirectSuppressed(true);
     }
 
-    // Mutter flags any window that maps without taking focus, and the Shell turns
-    // the flag into a "window is ready" banner. Kasual's surfaces map unfocused by
-    // design; clearing the flag inside the emission tears the notification down
-    // before the message tray gets to show it.
-    _muteAttention(win) {
-        if (this._isOurs(win))
-            win.unset_demands_attention();
+    // The "window is ready" banner. Bound to the Shell handler at its own
+    // construction, so its connections are replaced, not the method overridden.
+    _suppressReadyBannerForOwnWindows() {
+        const banner = Main.windowAttentionHandler;
+        const attentionSignals = [
+            ['_windowDemandsAttentionId', 'window-demands-attention'],
+            ['_windowMarkedUrgentId', 'window-marked-urgent'],
+        ];
+        if (banner && attentionSignals.every(([id]) => banner[id])) {
+            this._bannerFilter = {banner, attentionSignals};
+            for (const [id, signal] of attentionSignals) {
+                global.display.disconnect(banner[id]);
+                banner[id] = global.display.connect(signal, (display, window) => {
+                    if (!(window && this._isOurs(window)))
+                        banner._onWindowDemandsAttention(display, window);
+                });
+            }
+            return;
+        }
+        // Shell internals moved: fall back to clearing the flag post-hoc.
+        this._flagClearId = global.display.connect(
+            'window-demands-attention', (_d, win) => {
+                if (this._isOurs(win))
+                    win.unset_demands_attention();
+            });
+    }
+
+    _restoreReadyBanner() {
+        if (this._flagClearId) {
+            global.display.disconnect(this._flagClearId);
+            this._flagClearId = 0;
+            return;
+        }
+        const filter = this._bannerFilter;
+        if (!filter)
+            return;
+        this._bannerFilter = null;
+        for (const [id, signal] of filter.attentionSignals) {
+            global.display.disconnect(filter.banner[id]);
+            filter.banner[id] = global.display.connect(
+                signal, filter.banner._onWindowDemandsAttention.bind(filter.banner));
+        }
     }
 
     _roleOf(win) {
