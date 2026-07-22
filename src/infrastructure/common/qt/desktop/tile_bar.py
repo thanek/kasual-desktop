@@ -328,6 +328,14 @@ class TileBar(QScrollArea, TileBarView, TileFocusView, TileReorderView, metaclas
         """Current position of a static app *tile* (it shifts during move mode)."""
         return self._tiles.index(tile)
 
+    def sync_screen_metrics(self) -> None:
+        screen_half = QApplication.primaryScreen().size().width() // 2
+        left, top, right, bottom = self._tile_layout.getContentsMargins()
+        if left == screen_half:
+            return
+        self._tile_layout.setContentsMargins(screen_half, top, screen_half, bottom)
+        QTimer.singleShot(0, self.center_current)
+
     def center_current(self) -> None:
         if not self._focused:
             return

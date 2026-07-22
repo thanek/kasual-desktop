@@ -39,6 +39,7 @@ from domain.system.desktop_shell import DesktopShell
 from domain.shell.wallpaper import SystemWallpaper
 from infrastructure.common.qt._meta import ProtocolQtMeta
 from infrastructure.common.qt.ui.nav_key_map import nav_key_map
+from infrastructure.common.qt.ui.screen_watcher import ScreenWatcher
 from .app_add_controller import AppAddController
 from .dialog_host_controller import DialogHostController
 from .hint_bar import HintBar
@@ -174,6 +175,8 @@ class Desktop(QWidget, DesktopView, DesktopShell, DesktopControl, metaclass=Prot
         self._wallpaper_scaled: 'QPixmap | None' = None
 
         self._wm.on_windows_updated(self._tilebar.update_windows)
+
+        self._screen_watcher = ScreenWatcher(self.sync_screen, parent=self)
 
         # Desktop is not shown at startup — build_desktop wires it via attach(),
         # then it is revealed on the connected_changed(True) signal.
@@ -421,6 +424,14 @@ class Desktop(QWidget, DesktopView, DesktopShell, DesktopControl, metaclass=Prot
         self._wallpaper_scaled = None
         if hasattr(self, '_tilebar'):
             QTimer.singleShot(0, self._tilebar.center_current)
+
+    def sync_screen(self) -> None:
+        self._wallpaper_scaled = None
+        self.update()
+        self._tilebar.sync_screen_metrics()
+        if self._home_surface is not None:
+            self._home_surface.position_at_top()
+        self._hintbar.position_at_bottom()
 
     def _load_wallpaper_pixmap(self) -> 'QPixmap | None':
         """Render the domain wallpaper (a path) into a QPixmap for painting.
