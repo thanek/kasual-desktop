@@ -48,6 +48,19 @@ def fitted_icon(icon: QIcon | None, size: int) -> QIcon | None:
     return QIcon(scaled)
 
 
+def resolve_app_icon(app) -> QIcon | None:
+    if app.icon_theme:
+        themed = QIcon.fromTheme(app.icon_theme)
+        if not themed.isNull():
+            return themed
+    if app.icon:
+        try:
+            return qtawesome.icon(app.icon, color="white")
+        except Exception:
+            pass
+    return shell_icon(app.command)
+
+
 def shell_icon(path: str) -> QIcon | None:
     """The operating system's icon for *path* (a Windows ``.lnk`` resolves to its
     target's icon; an exe gives its own), or None when *path* is not an existing

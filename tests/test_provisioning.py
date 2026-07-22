@@ -81,13 +81,13 @@ class TestStarterCandidates:
         assert steam.app.icon == "fa5b.steam"
         assert steam.app.icon_theme is None
 
-    def test_prefers_real_system_icon_over_glyph(self):
+    def test_prefers_real_system_icon_keeping_glyph_fallback(self):
         cands = starter_candidates(
             FakeDiscovery({"steam"}, icons={"steam", "youtube"}), "/x")
         steam = next(c for c in cands if c.key == "steam")
         youtube = next(c for c in cands if c.key == "youtube")
-        assert steam.app.icon_theme == "steam" and steam.app.icon is None
-        assert youtube.app.icon_theme == "youtube" and youtube.app.icon is None
+        assert steam.app.icon_theme == "steam" and steam.app.icon == "fa5b.steam"
+        assert youtube.app.icon_theme == "youtube" and youtube.app.icon == "fa5b.youtube"
 
     def test_heroic_uses_reverse_dns_icon_when_present(self):
         heroic = next(
@@ -95,7 +95,7 @@ class TestStarterCandidates:
                 FakeDiscovery({"heroic"}, icons={"com.heroicgameslauncher.hgl"}), "/x")
             if c.key == "heroic")
         assert heroic.app.icon_theme == "com.heroicgameslauncher.hgl"
-        assert heroic.app.icon is None
+        assert heroic.app.icon == "fa5s.gamepad"
 
 
 # ── AppSelection ──────────────────────────────────────────────────────────────

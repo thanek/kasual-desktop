@@ -31,10 +31,8 @@ def with_bundled_identity(app: App) -> App:
 def starter_candidates(discovery: AppDiscovery, bundled_base: str) -> list[CandidateApp]:
     """Build the ordered starter list, filtering system apps by availability."""
     def with_real_icon(app: App, *icon_names: str) -> App:
-        """Prefer a real installed app icon (e.g. the genuine ``steam`` logo) over
-        the bundled glyph when the system theme provides one."""
         found = discovery.system_icon(icon_names)
-        return replace(app, icon_theme=found, icon=None) if found else app
+        return replace(app, icon_theme=found) if found else app
 
     candidates: list[CandidateApp] = [
         CandidateApp(
