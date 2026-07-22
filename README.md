@@ -253,10 +253,15 @@ Two suites, deliberately separate:
   [tests/behavioral/README.md](tests/behavioral/README.md).
 
   ```bash
-  KD_TEST_API=1 ./kasual.sh                 # one terminal: KD with the test API on
-  python3 tests/behavioral/run.py --list    # another: the scenarios and what they need
-  python3 tests/behavioral/run.py kcd        # run one, or omit the name for all
+  ./tests_behav.sh prepare        # one terminal: seed a throwaway catalog, launch KD
+  ./tests_behav.sh run --list     # another: the scenarios and what each one needs
+  ./tests_behav.sh run kcd        # run one, or omit the name for all
   ```
+
+  `prepare` seeds a throwaway directory with the scenarios' tiles and points KD at
+  it via `KD_CONFIG_DIR`, so the run neither depends on nor writes to your real
+  config; `prepare --empty` instead leaves it unprovisioned, for the onboarding
+  flow. `run` passes its arguments straight through to `run.py`.
 
 ### Building packages
 

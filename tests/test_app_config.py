@@ -17,12 +17,29 @@ pytestmark = pytest.mark.skipif(
 from domain.catalog.app import App
 from domain.provisioning.candidate import CandidateApp
 from infrastructure.common.catalog.app_config import (
-    DesktopAppProvisioning, DesktopTileOrderStore, load_apps, provisioned_marker,
+    DesktopAppProvisioning, DesktopTileOrderStore, config_root, load_apps,
+    provisioned_marker,
 )
 
 
 def _write(directory, filename, content):
     (directory / filename).write_text(content, encoding="utf-8")
+
+
+class TestConfigRoot:
+    def test_kd_config_dir_is_the_root_itself(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("KD_CONFIG_DIR", str(tmp_path))
+        assert config_root() == tmp_path
+
+    def test_kd_config_dir_overrides_xdg(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg"))
+        monkeypatch.setenv("KD_CONFIG_DIR", str(tmp_path / "override"))
+        assert config_root() == tmp_path / "override"
+
+    def test_falls_back_to_xdg_when_unset(self, tmp_path, monkeypatch):
+        monkeypatch.delenv("KD_CONFIG_DIR", raising=False)
+        monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+        assert config_root() == tmp_path / "kasual-desktop"
 
 
 @pytest.fixture

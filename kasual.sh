@@ -8,7 +8,7 @@ cd "$(dirname "$0")"
 # --provisioning: re-trigger first-run onboarding by removing the marker, so the
 # next launch shows the app picker again.
 if [ "$1" = "--provisioning" ]; then
-    rm -f "${XDG_CONFIG_HOME:-$HOME/.config}/kasual-desktop/.provisioned"
+    rm -f "${KD_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/kasual-desktop}/.provisioned"
     echo "Removed provisioning marker — onboarding will run on next launch."
 fi
 

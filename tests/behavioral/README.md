@@ -342,19 +342,28 @@ will want a logged-in session in the YT app, and it will say so in its own
 
 ## Running it (any supported compositor / Wayland)
 
-Start Kasual Desktop with the test API on, and leave it there — with no controller
-connected it holds off the screen, showing nothing:
+`tests_behav.sh` is the one entry point, in two commands. In one terminal, `prepare`
+seeds a throwaway config, points KD at it with `KD_CONFIG_DIR`, and launches KD with
+the test API on — leave it there; with no controller connected it holds off the
+screen, showing nothing:
 
 ```
-KD_TEST_API=1 ./kasual.sh
+./tests_behav.sh prepare           # --seed by default; --empty for the onboarding flow
 ```
 
-Then, in another terminal:
+The seed holds just the tiles the scenarios touch (plus YouTube), so they are
+present whatever the machine's own catalog looks like, and KD's writes land in the
+temp directory instead of your real config — `config_root()` honours `KD_CONFIG_DIR`
+over `XDG_CONFIG_HOME`. (The steps are also runnable by hand:
+`prepare_config.py` prints the `export KD_CONFIG_DIR=…` line, then `KD_TEST_API=1
+./kasual.sh`.)
+
+Then, in another terminal, `run` — its arguments pass straight to `run.py`:
 
 ```
-python3 tests/behavioral/run.py             # all of them, one after another
-python3 tests/behavioral/run.py kcd         # just this one
-python3 tests/behavioral/run.py --list      # what there is and what it needs; runs nothing
+./tests_behav.sh run                # all of them, one after another
+./tests_behav.sh run kcd            # just this one
+./tests_behav.sh run --list         # what there is and what it needs; runs nothing
 ```
 
 The run's virtual pad is what brings KD up: it appears as a controller, KD's device
