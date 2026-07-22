@@ -75,6 +75,42 @@ def not_running(process: str, description: str | None = None,
     )
 
 
+def _physical_gamepads() -> list[str]:
+    """Every pad Kasual Desktop could grab instead of the virtual one — its own
+    re-emitter and the harness's test pad excluded."""
+    from evdev import InputDevice, list_devices
+
+    from infrastructure.linux.input.gamepad_watcher import (
+        VIRTUAL_DEVICE_NAME, GamepadWatcher,
+    )
+    from tests.behavioral.harness.virtual_pad import NAME as TEST_PAD_NAME
+
+    ours = {VIRTUAL_DEVICE_NAME, TEST_PAD_NAME}
+    found = []
+    for path in list_devices():
+        try:
+            device = InputDevice(path)
+        except OSError:
+            continue
+        try:
+            if GamepadWatcher._is_gamepad(device) and device.name not in ours:
+                found.append(device.name)
+        finally:
+            device.close()
+    return found
+
+
+def no_physical_gamepad() -> Requirement:
+    """Kasual Desktop grabs the first matching pad it finds; a connected physical one
+    wins, and the harness's presses then reach nothing."""
+    return Requirement(
+        'no physical gamepad is connected — Kasual Desktop grabs the first pad it '
+        'finds, and it must find the virtual one',
+        lambda _kd: not _physical_gamepads(),
+        remedy='disconnect the physical gamepad(s) and run again',
+    )
+
+
 def kd_running() -> Requirement:
     """Read from the single-instance lock, so this sees the packaged KD too."""
     return Requirement(
@@ -165,8 +201,7 @@ BASE: tuple[Requirement, ...] = (
     compositor_ready(),
     writable('/dev/uinput',
              '/dev/uinput is writable (the `input` group, or a udev rule)'),
-    manual('no physical gamepad is connected — Kasual Desktop grabs the first pad '
-           'it finds, and it must find the virtual one'),
+    no_physical_gamepad(),
 )
 
 
