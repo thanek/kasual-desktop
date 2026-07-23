@@ -30,9 +30,10 @@ from domain.shell.desktop_view import DesktopView
 logger = logging.getLogger(__name__)
 
 # A Steam forwarder exits the instant it hands the game to an already-running Steam;
-# the game's own window follows seconds later. This is how long to wait for that window
-# before calling the launch failed and taking the screen back.
-_FORWARDER_LAUNCH_TIMEOUT_MS = 30_000
+# the game's own window can be a minute or more behind it — Steam's own progress is what
+# belongs on the screen until then, so the Desktop stays ceded this long before taking it
+# back. It keeps expecting the window either way, and cedes again whenever it maps.
+_FORWARDER_CEDE_GRACE_MS = 120_000
 
 
 class AppLifecycle(AppControl):
@@ -75,6 +76,7 @@ class AppLifecycle(AppControl):
         self._inspector     = inspector
         self._is_paused     = is_paused
         self._pending_return: str | None = None
+        self._awaited_launch: str | None = None
 
     def current_app(self) -> Target | None:
         return self._inspector.current_app()
@@ -99,6 +101,8 @@ class AppLifecycle(AppControl):
         # would activate a window that's about to disappear.
         if isinstance(target, AppTarget) and self._tilebar.is_closing(target.index):
             return
+        # Whatever is picked now supersedes a launch still waiting for its window.
+        self._awaited_launch = None
         self._foreground.set(target)
         if not isinstance(target, AppTarget):
             self.restore_app(target)
@@ -236,8 +240,8 @@ class AppLifecycle(AppControl):
             # KD's chrome over the game that maps a moment later.
             logger.info("%s forwarder handed off; awaiting the game's window", app_id)
             self._scheduler.call_later(
-                _FORWARDER_LAUNCH_TIMEOUT_MS,
-                lambda: self._forwarder_launch_timed_out(app_id))
+                _FORWARDER_CEDE_GRACE_MS,
+                lambda: self._forwarder_cede_grace_elapsed(app_id))
             return
 
         logger.info("Application %s finished – returning to desktop", app_id)
@@ -285,20 +289,56 @@ class AppLifecycle(AppControl):
     def _forwarder_launch_in_flight(self, app_id: str) -> bool:
         """A Steam-forwarder tile whose game window has not mapped yet: the forwarder
         handed the launch to a running Steam and exited before the game drew anything,
-        so its exit says nothing about whether the game is still coming."""
+        so its exit says nothing about whether the game is still coming.
+
+        Three things have to hold, and the launch is over the moment any of them stops:
+        the tile is still what is in front, the Desktop is still ceded to it — the return
+        watcher disarms itself once a window of it has been seen and then gone — and it
+        has no window right now. Reading the armed *hide* instead would miss the last
+        two: it disarms itself a few seconds in whether or not a window ever came.
+        """
         app = next((a for a in self._apps if a.id == app_id), None)
-        return (app is not None and app.steam_app_id is not None
-                and self._deferred_hide.is_armed
+        if app is None or app.steam_app_id is None:
+            return False
+        target = self._foreground.current
+        return (isinstance(target, AppTarget) and target.app_id == app_id
+                and self._deferred_show.is_armed
                 and not self._still_windowed(app_id))
 
-    def _forwarder_launch_timed_out(self, app_id: str) -> None:
-        """The forwarder's window never came within the grace — the launch failed, so
-        take the screen back rather than sit ceded behind nothing."""
-        if self._still_windowed(app_id):
+    def _forwarder_cede_grace_elapsed(self, app_id: str) -> None:
+        """The game's window has not come yet — take the screen back rather than sit
+        ceded behind nothing, and keep expecting it.
+
+        The launch is re-checked rather than assumed: the grace outlives what it was
+        armed for, and one belonging to a launch that has since ended would pull the
+        screen out from under whatever is running now.
+        """
+        if not self._forwarder_launch_in_flight(app_id):
             return
-        logger.info("%s window never mapped; returning to desktop", app_id)
+        logger.info("%s window has not mapped; returning to the desktop to wait", app_id)
         self._deferred_hide.cancel()
         self._return_from(app_id)
+        self._awaited_launch = app_id
+
+    def check_awaited_launch(self) -> None:
+        """Cede to a launch whose window outlived its grace — a game that spends minutes
+        on shaders before it draws, over a Desktop that has already come back.
+
+        Only while the Desktop is idle: once the user has put something else in front,
+        the late window is no longer what they asked for.
+        """
+        app_id = self._awaited_launch
+        if app_id is None or not self._foreground.is_idle():
+            return
+        index = next((i for i, a in enumerate(self._apps) if a.id == app_id), None)
+        if index is None or not self._still_windowed(app_id):
+            return
+        logger.info("%s window mapped after its grace – ceding to it", app_id)
+        self._awaited_launch = None
+        app = self._apps[index]
+        target = AppTarget(index=index, app_id=app.id, name=app.name, is_game=app.is_game)
+        self._foreground.set(target)
+        self.restore_app(target)
 
     def check_active_dyn_gone(self) -> None:
         """Show the Desktop if the active dynamic window was closed by its app."""

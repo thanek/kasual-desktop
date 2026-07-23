@@ -11,6 +11,7 @@ that dies halfway still leaves no game on the screen for the next run.
 from __future__ import annotations
 
 import os
+import re
 import signal
 import subprocess
 import time
@@ -193,34 +194,70 @@ class SteamGame:
 
 
 def warm_up_steam() -> None:
-    """Start Steam and wait for its client, so a tile's steam://rungameid runs the game.
+    """Start Steam and wait for it to log in, so a tile's steam://rungameid runs the game.
 
     A cold Steam started by that URL comes up in Big Picture and swallows the request;
     an already-running one runs the game. `-silent` keeps it off the screen, so KD holds
     the Home view while it warms.
+
+    Waiting on the *logon* rather than on a process is what makes the run mean what it
+    says: steamwebhelper is up within a second, while the client is still on its login
+    screen queueing the request for another twenty.
     """
-    if not _steam_gone():
-        report('Steam warmed up in the background', 'PASS', 'already running')
-        return
-    subprocess.Popen(['steam', '-silent'], stdout=subprocess.DEVNULL,
-                     stderr=subprocess.DEVNULL, start_new_session=True)
+    already_running = not _steam_gone()
+    logon = _ConnectionLog(running=already_running)
+    if not already_running:
+        subprocess.Popen(['steam', '-silent'], stdout=subprocess.DEVNULL,
+                         stderr=subprocess.DEVNULL, start_new_session=True)
     deadline = time.monotonic() + timeouts.STEAM_UI
     with progress.waiting('Steam warming up in the background', timeouts.STEAM_UI) as bar:
         while time.monotonic() < deadline:
-            if _steam_client_up():
+            if logon.logged_on():
                 report('Steam warmed up in the background', 'PASS',
-                       'client is up, off the screen')
+                       'logged in, off the screen')
                 return
             bar.tick()
             QCoreApplication.processEvents(QEventLoop.ProcessEventsFlag.AllEvents, 50)
             time.sleep(0.5)
     report('Steam warmed up in the background', 'WARN',
-           'the client never reported up — launching the tile anyway')
+           'the client never logged in — launching the tile anyway')
 
 
-def _steam_client_up() -> bool:
-    return subprocess.run(['pgrep', '-x', 'steamwebhelper'],
-                          stdout=subprocess.DEVNULL).returncode == 0
+class _ConnectionLog:
+    """Steam's own record of the logon — the one readout of "the client is ready" that
+    neither the UI language nor `-silent` can take away.
+
+    A client this run starts is read from what it appends from here on, so a logon left
+    behind by an earlier run cannot pass for this one's.
+    """
+
+    PATH  = os.path.expanduser('~/.steam/steam/logs/connection_log.txt')
+    STATE = re.compile(r'^\[[^]]*\] \[([^,\]]+)')
+    TAIL  = 64 * 1024
+
+    def __init__(self, *, running: bool = False) -> None:
+        size = self._size()
+        self._offset = max(0, size - self.TAIL) if running else size
+
+    def logged_on(self) -> bool:
+        if _steam_gone():
+            return False
+        if self._size() < self._offset:      # Steam truncated the log on start-up
+            self._offset = 0
+        try:
+            with open(self.PATH, 'rb') as log:
+                log.seek(self._offset)
+                appended = log.read().decode('utf-8', 'replace')
+        except OSError:
+            return False
+        states = [self.STATE.match(line) for line in appended.splitlines()]
+        return next((m.group(1) for m in reversed(states) if m), '') == 'Logged On'
+
+    def _size(self) -> int:
+        try:
+            return os.path.getsize(self.PATH)
+        except OSError:
+            return 0
 
 
 def _await_exit(is_gone: Callable[[], bool], timeout_s: float) -> bool:
