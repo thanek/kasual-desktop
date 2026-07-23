@@ -105,6 +105,7 @@ class _MenuCard(QPushButton):
 
 _SLIDER_QSS = """
     QSlider { background: transparent; }
+    QSlider::horizontal { min-height: 24px; }
     QSlider::groove:horizontal { height: 8px; border-radius: 4px; }
     QSlider::sub-page:horizontal { background: #88c0d0; border-radius: 4px; }
     QSlider::add-page:horizontal  { background: #4c566a; border-radius: 4px; }
