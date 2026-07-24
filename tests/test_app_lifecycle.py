@@ -11,7 +11,7 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 from domain.input.vocabulary import Trigger
-from domain.lifecycle.app_lifecycle import AppLifecycle, _FORWARDER_LAUNCH_TIMEOUT_MS
+from domain.lifecycle.app_lifecycle import AppLifecycle, _FORWARDER_CEDE_GRACE_MS
 from domain.lifecycle.foreground_inspector import ForegroundInspector
 from domain.catalog.app import App
 from domain.shell.foreground import ForegroundState
@@ -449,7 +449,6 @@ class TestOnAppFinished:
         draws a window. KD must not bounce back to the Home view — the game maps a
         moment later, and the armed window machinery cedes for it."""
         c = _make(apps=[_steam_game_app(appid="292030", id="witcher3")], visible=False)
-        c.dh.is_armed = True
         c.fg.set(AppTarget(index=0, app_id="witcher3", name="Witcher 3"))
         c.wm.cached_windows.return_value = []       # the game's window is not up yet
         c.lc.on_app_finished("witcher3")
@@ -458,13 +457,35 @@ class TestOnAppFinished:
         c.cd.cancel.assert_not_called()
         assert c.view.shown == 0                    # not bounced to the Home view
         assert c.fg.current == AppTarget(index=0, app_id="witcher3", name="Witcher 3")
-        assert c.scheduler.calls[-1][0] == _FORWARDER_LAUNCH_TIMEOUT_MS
+        assert c.scheduler.calls[-1][0] == _FORWARDER_CEDE_GRACE_MS
 
-    def test_steam_forwarder_returns_when_its_window_never_maps(self):
-        """The failure fallback: the grace elapses with no game window, so take the
-        screen back rather than sit ceded behind nothing."""
+    def test_steam_forwarder_awaited_after_the_deferred_hide_disarmed(self):
+        """DeferredHide gives up on a window that never came within its own few
+        seconds; a forwarder outliving that must still not read as the game ending."""
         c = _make(apps=[_steam_game_app(appid="292030", id="witcher3")], visible=False)
-        c.dh.is_armed = True
+        c.dh.is_armed = False
+        c.fg.set(AppTarget(index=0, app_id="witcher3", name="Witcher 3"))
+        c.wm.cached_windows.return_value = []
+        c.lc.on_app_finished("witcher3")
+        assert c.view.shown == 0
+        assert c.scheduler.calls[-1][0] == _FORWARDER_CEDE_GRACE_MS
+
+    def test_steam_client_quitting_after_the_game_is_not_a_handoff(self):
+        """A cold-started game tile *is* the Steam client, so its process outlives the
+        game and ends when Steam quits. The window watcher has long since returned the
+        Desktop by then — that exit ends the app, and must not read as a launch."""
+        c = _make(apps=[_steam_game_app(appid="292030", id="witcher3")], visible=False)
+        c.ds.is_armed = False                       # the game's window came and went
+        c.fg.set(AppTarget(index=0, app_id="witcher3", name="Witcher 3"))
+        c.wm.cached_windows.return_value = []
+        c.lc.on_app_finished("witcher3")
+        assert c.fg.is_idle()
+        assert c.view.shown == 1
+
+    def test_steam_forwarder_returns_when_its_window_is_late(self):
+        """The grace elapses with no game window, so take the screen back rather than
+        sit ceded behind nothing."""
+        c = _make(apps=[_steam_game_app(appid="292030", id="witcher3")], visible=False)
         c.fg.set(AppTarget(index=0, app_id="witcher3", name="Witcher 3"))
         c.wm.cached_windows.return_value = []
         c.lc.on_app_finished("witcher3")
@@ -473,11 +494,10 @@ class TestOnAppFinished:
         assert c.view.shown == 1
         assert c.fg.is_idle()
 
-    def test_steam_forwarder_timeout_is_noop_once_the_game_is_up(self):
-        """If the game did map within the grace, the timeout must not yank the screen
-        out from under a running game."""
+    def test_steam_forwarder_grace_is_noop_once_the_game_is_up(self):
+        """If the game did map within the grace, it must not yank the screen out from
+        under a running game."""
         c = _make(apps=[_steam_game_app(appid="292030", id="witcher3")], visible=False)
-        c.dh.is_armed = True
         c.fg.set(AppTarget(index=0, app_id="witcher3", name="Witcher 3"))
         c.wm.cached_windows.return_value = []
         c.lc.on_app_finished("witcher3")
@@ -488,6 +508,22 @@ class TestOnAppFinished:
         c.dh.cancel.assert_not_called()
         assert c.view.shown == 0
         assert c.fg.current == AppTarget(index=0, app_id="witcher3", name="Witcher 3")
+
+    def test_steam_forwarder_grace_spares_whatever_took_over(self):
+        """The grace outlives the launch it was armed for. Firing on a launch that has
+        since ended would take the screen from the app running by then — and leave that
+        app in the foreground while the Home view sat over it."""
+        c = _make(apps=[_steam_game_app(appid="292030", id="witcher3"), _app(id="steam")],
+                  visible=False)
+        c.fg.set(AppTarget(index=0, app_id="witcher3", name="Witcher 3"))
+        c.wm.cached_windows.return_value = []
+        c.lc.on_app_finished("witcher3")
+        c.lc.on_tile_activated(AppTarget(index=1, app_id="steam", name="Steam"))
+        c.view.hide_view()                          # ceded to Steam
+
+        c.scheduler.calls[-1][1]()                  # the stale grace fires
+        assert c.view.is_visible() is False
+        assert c.fg.current == AppTarget(index=1, app_id="steam", name="Steam")
 
 
 # ── on_app_launch_failed ────────────────────────────────────────────────────
@@ -787,3 +823,55 @@ class TestDeferredShow:
         c.lc.on_app_finished("app0")
         c.lc.check_pending_return()
         assert not c.fg.is_idle()
+
+
+# ── a launch that arrives after its grace ───────────────────────────────────
+
+class TestAwaitedLaunch:
+    """A Steam game can take minutes to draw: Steam is still starting, then the
+    engine compiles shaders. The Desktop comes back rather than sit behind nothing,
+    but the launch is still expected — otherwise the game maps over a KD that never
+    ceded, with no foreground to name it and no HUD toggle on its menu.
+    """
+
+    def _awaiting(self):
+        c = _make(apps=[_steam_game_app(appid="292030", id="witcher3")], visible=False)
+        c.fg.set(AppTarget(index=0, app_id="witcher3", name="Witcher 3"))
+        c.wm.cached_windows.return_value = []
+        c.lc.on_app_finished("witcher3")
+        c.scheduler.calls[-1][1]()                  # the grace elapses, no window yet
+        return c
+
+    def _game_window(self):
+        return Window(id="g1", title="Witcher 3", pid=999, fullscreen=True,
+                      resource_class="steam_app_292030")
+
+    def test_cedes_when_the_window_finally_maps(self):
+        c = self._awaiting()
+        c.wm.cached_windows.return_value = [self._game_window()]
+        c.lc.check_awaited_launch()
+        assert c.fg.current == AppTarget(index=0, app_id="witcher3", name="Witcher 3")
+        assert c.view.hidden == 1                   # ceded under the fullscreen game
+        c.ds.arm.assert_called_with(c.apps[0])
+        c.cd.arm.assert_called_with(c.apps[0])
+
+    def test_waits_while_no_window_is_there(self):
+        c = self._awaiting()
+        c.lc.check_awaited_launch()
+        assert c.fg.is_idle()
+        assert c.view.hidden == 0
+
+    def test_leaves_alone_what_the_user_launched_meanwhile(self):
+        c = self._awaiting()
+        c.lc.on_tile_activated(AppTarget(index=0, app_id="other", name="Other"))
+        c.wm.cached_windows.return_value = [self._game_window()]
+        c.lc.check_awaited_launch()
+        assert c.fg.current == AppTarget(index=0, app_id="other", name="Other")
+
+    def test_cedes_only_once(self):
+        c = self._awaiting()
+        c.wm.cached_windows.return_value = [self._game_window()]
+        c.lc.check_awaited_launch()
+        c.lc.on_app_windows_gone()                  # the game is closed
+        c.lc.check_awaited_launch()
+        assert c.fg.is_idle()

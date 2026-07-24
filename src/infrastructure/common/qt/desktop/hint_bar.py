@@ -21,6 +21,7 @@ from infrastructure.common.qt._meta import ProtocolQtMeta
 from infrastructure.common.qt.ui.deferred_unmap import DeferredUnmap
 from infrastructure.common.qt.ui.layer_shell import Anchor, Keyboard, Layer
 from infrastructure.common.qt.ui.top_surface import (
+    GNOME_PANEL_CLEARANCE, home_chrome_edge_margin,
     promote_overlay_surface, surface_sized_by_compositor,
 )
 from infrastructure.common.qt.overlays.home_menu_content import CARD_WIDTH
@@ -28,8 +29,7 @@ from infrastructure.common.qt.overlays.home_menu_content import CARD_WIDTH
 GLYPH_SIZE = 26      # diameter of a button glyph / height of a direction arrow
 ICON_PX    = 15      # inner icon size for icon-based glyphs (home / start / arrows)
 BAR_HEIGHT = 60      # the rounded bar itself
-BOTTOM_MARGIN = 10   # gap from the bar bottom to the screen edge (matches TopBar top margin)
-SURFACE_H  = BAR_HEIGHT + BOTTOM_MARGIN   # total height of the bottom strip surface
+SURFACE_H  = BAR_HEIGHT + GNOME_PANEL_CLEARANCE
 
 # Direction → Font Awesome arrow glyph.
 _ARROWS = {
@@ -78,9 +78,7 @@ class HintBar(QWidget, HintBarView, metaclass=ProtocolQtMeta):
         self._deferred_unmap = DeferredUnmap(self)
 
         outer = QVBoxLayout(self)
-        # The stretch below sits above the bar, so any surplus height the
-        # compositor hands the surface opens there and BOTTOM_MARGIN stays exact.
-        outer.setContentsMargins(16, 0, 16, BOTTOM_MARGIN)
+        outer.setContentsMargins(16, 0, 16, home_chrome_edge_margin())
         outer.setSpacing(0)
 
         bar = QWidget()

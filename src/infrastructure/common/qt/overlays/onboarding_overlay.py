@@ -14,7 +14,6 @@ candidate list + callbacks, so it's reusable beyond first-run onboarding.
 import logging
 from collections.abc import Callable
 
-import qtawesome as qta
 from PyQt6.QtCore import Qt, QSize
 from PyQt6.QtGui import QIcon, QKeyEvent
 from PyQt6.QtWidgets import (
@@ -195,18 +194,8 @@ class OnboardingOverlay(BaseOverlay, ProvisioningView, metaclass=ProtocolQtMeta)
 
     @staticmethod
     def _candidate_icon(candidate: CandidateApp) -> QIcon | None:
-        """The row icon for a candidate, mirroring the tile bar's resolution: the
-        Font Awesome glyph or themed ``Icon`` when set, else — for apps whose
-        command is a real file (e.g. a Windows ``.lnk``/exe) — the OS shell icon."""
-        app = candidate.app
-        if app.icon:
-            return qta.icon(app.icon, color="white")
-        if app.icon_theme:
-            themed = QIcon.fromTheme(app.icon_theme)
-            if not themed.isNull():
-                return themed
-        from infrastructure.common.qt.icons import shell_icon
-        return shell_icon(app.command)
+        from infrastructure.common.qt.icons import resolve_app_icon
+        return resolve_app_icon(candidate.app)
 
     def _bind_hover(self, btn: QPushButton, index: int) -> None:
         """Move the cursor onto *index* when the pointer enters *btn* (with the

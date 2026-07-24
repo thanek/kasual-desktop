@@ -41,6 +41,7 @@ from infrastructure.common.qt.ui import styles
 from infrastructure.common.qt.ui.deferred_unmap import DeferredUnmap
 from infrastructure.common.qt.ui.layer_shell import Anchor, Keyboard, Layer
 from infrastructure.common.qt.ui.top_surface import (
+    GNOME_PANEL_CLEARANCE, home_chrome_edge_margin,
     promote_overlay_surface, surface_sized_by_compositor,
 )
 from infrastructure.common.qt.overlays.home_header import HEADER_H, HomeHeader
@@ -48,17 +49,15 @@ from infrastructure.common.qt.overlays.home_menu_content import CARD_WIDTH, Home
 
 logger = logging.getLogger(__name__)
 
-# Clears the tallest DE panel we cannot stack under (GNOME's 29px top bar is
-# painted above every window).
-TOP_MARGIN  = 32
 # Caps the expanded panel; sized for the busiest context (a game with both a
 # brightness slider and the HUD toggle, ~526px) — tighter clips row content.
 CONTENT_H   = 550
 MORPH_MS    = 180   # collapse↔expand animation duration
 # The surface is ALWAYS this tall (sized for the expanded state) and anchored to
 # the top: collapse/expand only morphs the inner content, never the surface — so
-# KWin never sees a resize/remap to animate.
-SURFACE_H   = TOP_MARGIN + HEADER_H + CONTENT_H + TOP_MARGIN
+# KWin never sees a resize/remap to animate. Budgeted with the panel clearance so
+# it never clips whatever the actual top gap turns out to be.
+SURFACE_H   = GNOME_PANEL_CLEARANCE + HEADER_H + CONTENT_H + GNOME_PANEL_CLEARANCE
 
 
 class _NullHud(HudControl):
@@ -116,7 +115,7 @@ class HomeSurface(QWidget):
         self._deferred_unmap = DeferredUnmap(self)
 
         outer = QVBoxLayout(self)
-        outer.setContentsMargins(16, TOP_MARGIN, 16, TOP_MARGIN)
+        outer.setContentsMargins(16, home_chrome_edge_margin(), 16, GNOME_PANEL_CLEARANCE)
         outer.setSpacing(12)
         outer.setAlignment(Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignTop)
 

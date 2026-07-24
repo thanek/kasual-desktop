@@ -13,6 +13,7 @@ is unavailable do we fall back to the static ``pyproject.toml`` value.
 
 from __future__ import annotations
 
+import os
 import subprocess
 from pathlib import Path
 
@@ -22,6 +23,12 @@ _GIT_DIR = Path(__file__).resolve().parent.parent
 def is_packaged() -> bool:
     """True when running from an installed package (has baked _version.txt)."""
     return Path(__file__).with_name("_version.txt").is_file()
+
+
+def test_api_enabled() -> bool:
+    """True when Kasual Desktop and the apps it launches should publish their test
+    APIs: requested explicitly, or implied by running from a source checkout."""
+    return os.environ.get("KD_TEST_API") == "1" or not is_packaged()
 
 
 def _git_describe() -> str | None:

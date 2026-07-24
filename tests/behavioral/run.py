@@ -5,8 +5,11 @@
     python3 tests/behavioral/run.py kcd        run one
     python3 tests/behavioral/run.py --list     what there is, and what each one needs
 
-Kasual Desktop has to be up first, with the test API on:
+Kasual Desktop has to be up first, with the test API on. Point it at a seeded
+throwaway catalog so the tiles the scenarios need are there regardless of the
+machine's own config:
 
+    eval "$(python3 tests/behavioral/prepare_config.py --seed)"
     KD_TEST_API=1 ./kasual.sh
 
 It waits there off screen — with no controller connected it shows nothing — until

@@ -29,9 +29,13 @@ logger = logging.getLogger(__name__)
 def config_root() -> Path:
     """Kasual Desktop's config directory, per OS.
 
-    Windows → ``%APPDATA%\\kasual-desktop``; elsewhere →
+    ``KD_CONFIG_DIR``, when set, *is* the directory (not a parent to append to).
+    Otherwise Windows → ``%APPDATA%\\kasual-desktop``; elsewhere →
     ``$XDG_CONFIG_HOME/kasual-desktop`` (defaulting to ``~/.config``). The
     ``.desktop`` catalog format itself is plain INI and identical on both."""
+    override = os.environ.get("KD_CONFIG_DIR")
+    if override:
+        return Path(override)
     if os.name == "nt":
         base = os.environ.get("APPDATA") or (Path.home() / "AppData" / "Roaming")
     else:

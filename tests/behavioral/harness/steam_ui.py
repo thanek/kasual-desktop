@@ -50,6 +50,19 @@ UI_IS_UP = 20
 # Steam's UI is localised, and the button is read by its name.
 PLAY_LABELS = frozenset({'graj', 'zagraj', 'play'})
 
+# Steam swaps Play for one of these when the game is not ready, and read by name they
+# are the difference between "the pad never reached Play" and "there was no Play to reach".
+NOT_READY_LABELS = {
+    'wstrzymaj': 'the game is downloading or updating',
+    'pause': 'the game is downloading or updating',
+    'wznów': 'the game download is paused',
+    'resume': 'the game download is paused',
+    'zainstaluj': 'the game is not installed',
+    'install': 'the game is not installed',
+    'aktualizuj': 'the game needs an update before it can start',
+    'update': 'the game needs an update before it can start',
+}
+
 # Steam reads this at startup, and only then.
 CEF_FLAG = Path.home() / '.local' / 'share' / 'Steam' / '.cef-enable-remote-debugging'
 
@@ -369,8 +382,15 @@ def open_game_page(steam: SteamUI, pad: VirtualPad, name: str) -> None:
     if focused is not None:
         report(f'{name} page open in Steam', 'PASS', f'{focused!r} has the focus')
         return
+    landed = steam.focus()
+    reason = NOT_READY_LABELS.get(landed.strip().casefold())
+    if reason is not None:
+        report(f'{name} page open in Steam', 'FAIL',
+               f'{reason} — Steam shows {landed!r} where Play would be; let it finish '
+               'and run again')
+        raise ScenarioAborted(f'{name} is not ready to play: {reason}')
     report(f'{name} page open in Steam', 'FAIL',
-           f'Play never took the focus; it sits on {steam.focus()!r}')
+           f'Play never took the focus; it sits on {landed!r}')
     raise ScenarioAborted('the game page did not open with Play focused')
 
 

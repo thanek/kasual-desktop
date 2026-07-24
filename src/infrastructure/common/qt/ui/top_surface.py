@@ -23,6 +23,20 @@ from .layer_shell import Anchor, Keyboard, Layer
 
 logger = logging.getLogger(__name__)
 
+HOME_EDGE_MARGIN      = 10
+GNOME_PANEL_CLEARANCE = 32
+
+
+def home_chrome_edge_margin() -> int:
+    """The gap the Home header (top) and hint bar (bottom) keep from the screen
+    edge — widened on GNOME to clear its unstackable top panel."""
+    if QGuiApplication.platformName() != "wayland":
+        return HOME_EDGE_MARGIN
+    from infrastructure.linux.compositor import Compositor, detect_compositor
+    if detect_compositor() is Compositor.GNOME:
+        return GNOME_PANEL_CLEARANCE
+    return HOME_EDGE_MARGIN
+
 
 def surface_sized_by_compositor() -> bool:
     """Whether the windowing system gives an anchored overlay its geometry.

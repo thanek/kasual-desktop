@@ -5,7 +5,7 @@ import os
 from collections.abc import Callable, Sequence
 
 from PyQt6.QtCore import Qt, QPoint, QTimer, QEasingCurve, QPropertyAnimation, pyqtSignal
-from PyQt6.QtGui import QCursor, QIcon
+from PyQt6.QtGui import QCursor
 from PyQt6.QtWidgets import QWidget, QHBoxLayout, QScrollArea, QApplication
 
 from domain.catalog.live_catalog import LiveCatalog
@@ -120,25 +120,13 @@ class TileBar(QScrollArea, TileBarView, TileFocusView, TileReorderView, metaclas
     def _make_static_tile(self, app) -> AppTile:
         """Build a configured-app tile, wired to resolve its own current position.
 
-        Icon: prefer a qtawesome glyph (X-Kasual-Icon); otherwise fall back to the
-        themed ``Icon`` name via QIcon.fromTheme (AppTile uses the QIcon when given
-        and non-null, else the qtawesome name). Signals bind to the tile, not a
-        fixed index: move mode reorders the static tiles, so each tile resolves its
-        position on demand (``_static_index_of``) and a swap needs no reconnecting.
+        Signals bind to the tile, not a fixed index: move mode reorders the static
+        tiles, so each tile resolves its position on demand (``_static_index_of``)
+        and a swap needs no reconnecting.
         """
-        qta_name = app.icon or "fa5s.desktop"
-        qicon = None
-        if not app.icon and app.icon_theme:
-            themed = QIcon.fromTheme(app.icon_theme)
-            if not themed.isNull():
-                qicon = themed
-        if qicon is None and not app.icon:
-            # No glyph/theme icon (e.g. a Windows .desktop whose command is a
-            # .lnk/exe): fall back to the OS shell icon. No-op on Linux, where the
-            # command is a shell name rather than a file path.
-            from infrastructure.common.qt.icons import shell_icon
-            qicon = shell_icon(app.command)
-        tile = AppTile(name=app.name, icon_name=qta_name, color=app.color, qicon=qicon)
+        from infrastructure.common.qt.icons import resolve_app_icon
+        qicon = resolve_app_icon(app)
+        tile = AppTile(name=app.name, icon_name=app.icon or "fa5s.desktop", color=app.color, qicon=qicon)
         tile.clicked.connect(lambda t=tile: self._activate_index(self._static_index_of(t)))
         tile.hovered.connect(lambda t=tile: self._on_tile_hovered(self._static_index_of(t)))
         tile.right_clicked.connect(lambda t=tile: self._on_tile_right_clicked(self._static_index_of(t)))
@@ -327,6 +315,14 @@ class TileBar(QScrollArea, TileBarView, TileFocusView, TileReorderView, metaclas
     def _static_index_of(self, tile: AppTile) -> int:
         """Current position of a static app *tile* (it shifts during move mode)."""
         return self._tiles.index(tile)
+
+    def sync_screen_metrics(self) -> None:
+        screen_half = QApplication.primaryScreen().size().width() // 2
+        left, top, right, bottom = self._tile_layout.getContentsMargins()
+        if left == screen_half:
+            return
+        self._tile_layout.setContentsMargins(screen_half, top, screen_half, bottom)
+        QTimer.singleShot(0, self.center_current)
 
     def center_current(self) -> None:
         if not self._focused:
