@@ -93,7 +93,7 @@ class TestSwayOps:
     def test_minimize_maps_to_scratchpad_over_expanded_pids(self, qapp):
         wm = SwayWindowManager()
         self._seed(wm, [(5, 1000), (6, 1001), (7, 2000)])
-        with patch("infrastructure.wlroots.wm.base.expand_pid_tree",
+        with patch("infrastructure.linux.wm.base.expand_pid_tree",
                    return_value={1000, 1001}), \
              patch.object(wm, "_run") as run:
             wm.minimize_windows_for_pids({1000})
@@ -103,7 +103,7 @@ class TestSwayOps:
     def test_activate_for_pids_focuses_matches(self, qapp):
         wm = SwayWindowManager()
         self._seed(wm, [(5, 1000), (7, 2000)])
-        with patch("infrastructure.wlroots.wm.base.expand_pid_tree",
+        with patch("infrastructure.linux.wm.base.expand_pid_tree",
                    return_value={1000}), \
              patch.object(wm, "_run") as run:
             wm.activate_windows_for_pids({1000})
@@ -120,12 +120,12 @@ class TestSwayOps:
 
 class TestSwayLauncherFocusFollow:
     def _arm(self, wm, pids):
-        with patch("infrastructure.wlroots.wm.base.expand_pid_tree", return_value=pids), \
+        with patch("infrastructure.linux.wm.base.expand_pid_tree", return_value=pids), \
              patch.object(wm, "_run"):
             wm.activate_windows_for_pids(pids)
 
     def _refresh_with(self, wm, windows):
-        with patch("infrastructure.wlroots.wm.base.expand_pid_tree",
+        with patch("infrastructure.linux.wm.base.expand_pid_tree",
                    return_value={w.pid for w in windows}), \
              patch.object(wm, "_enum_windows", return_value=windows), \
              patch.object(wm, "_run") as run:
@@ -240,7 +240,7 @@ class TestHyprlandOps:
     def test_minimize_maps_to_special_workspace(self, qapp):
         wm = HyprlandWindowManager()
         self._seed(wm, [("0x1", 1000), ("0x2", 2000)])
-        with patch("infrastructure.wlroots.wm.base.expand_pid_tree",
+        with patch("infrastructure.linux.wm.base.expand_pid_tree",
                    return_value={1000}), \
              patch.object(wm, "_run") as run:
             wm.minimize_windows_for_pids({1000})
@@ -268,7 +268,7 @@ class TestBaseMachinery:
     def test_refresh_dedup(self, qapp):
         wm = SwayWindowManager()
         wm._refresh_pending = True
-        with patch("infrastructure.wlroots.wm.base.QTimer") as qtimer:
+        with patch("infrastructure.linux.wm.base.QTimer") as qtimer:
             wm._request_list_refresh()
         qtimer.singleShot.assert_not_called()
 

@@ -140,6 +140,16 @@ def sway() -> Requirement:
     )
 
 
+def cosmic() -> Requirement:
+    """A COSMIC session — the window source speaks cosmic-comp's toplevel protocols
+    over the Wayland display socket, so there is no CLI to look for."""
+    return Requirement(
+        'a COSMIC session (cosmic-comp on the Wayland display socket)',
+        lambda _kd: _running('cosmic') and bool(os.environ.get('WAYLAND_DISPLAY')),
+        remedy='run this on a COSMIC session',
+    )
+
+
 def compositor_ready() -> Requirement:
     """On GNOME, without the Kasual Helper extension a run would not fail — it would
     pass against a Kasual Desktop that has no window manager and no way to stay on

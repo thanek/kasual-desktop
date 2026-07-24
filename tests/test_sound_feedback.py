@@ -1,44 +1,75 @@
-"""Tests for pure helper functions in audio/feedback.py (SoundFeedback backend)."""
+"""Tests for the sound-cue adapter.
 
-import struct
+The shape that matters is resource ownership: one player per cue, built once and
+re-triggered. A player per *playback* opens an audio stream per playback, and the
+cues are seconds long — sweeping the tile bar then stacks dozens of live streams
+until the PulseAudio backend aborts the process.
+"""
 
-from infrastructure.common.audio.feedback import _convert_24_to_16
+from unittest.mock import patch
+
+import pytest
+
+from domain.shared.feedback import Cue
+from infrastructure.common.audio import feedback as feedback_module
+from infrastructure.common.audio.feedback import SoundFeedback
 
 
-def _encode_24(val: int) -> bytes:
-    return val.to_bytes(3, byteorder='little', signed=True)
+@pytest.fixture(autouse=True)
+def silence_sounds():
+    """Overrides conftest's global mute: play() is what these tests are about.
+    Nothing reaches a device anyway — the players here are stubs."""
+    yield
 
 
-def _decode_16(data: bytes) -> int:
-    return struct.unpack_from('<h', data)[0]
+class _StubEffect:
+    def __init__(self) -> None:
+        self.calls: list[str] = []
+
+    def stop(self) -> None:
+        self.calls.append("stop")
+
+    def play(self) -> None:
+        self.calls.append("play")
 
 
-class TestConvert24To16:
-    def test_zero(self):
-        assert _convert_24_to_16(_encode_24(0)) == b'\x00\x00'
+@pytest.fixture
+def feedback(qapp):
+    return SoundFeedback()
 
-    def test_positive_max(self):
-        # 8388607 >> 8 == 32767
-        out = _convert_24_to_16(_encode_24(8_388_607))
-        assert _decode_16(out) == 8_388_607 >> 8
 
-    def test_negative_min(self):
-        # -8388608 >> 8 == -32768
-        out = _convert_24_to_16(_encode_24(-8_388_608))
-        assert _decode_16(out) == -8_388_608 >> 8
+class TestInit:
+    def test_builds_one_player_per_bundled_cue(self, feedback):
+        feedback.init()
+        assert set(feedback._effects) == set(Cue)
 
-    def test_output_is_half_the_length(self):
-        raw = _encode_24(0) * 8   # 8 samples → 24 bytes
-        assert len(_convert_24_to_16(raw)) == 16  # 8 samples → 16 bytes
+    def test_a_missing_file_is_skipped_not_fatal(self, feedback, tmp_path):
+        with patch.object(feedback_module, "_SOUNDS_DIR", tmp_path):
+            feedback.init()
+        assert feedback._effects == {}
 
-    def test_multiple_samples(self):
-        samples = [0, 8_388_607, -8_388_608, 1024 * 256]
-        raw = b"".join(_encode_24(s) for s in samples)
-        out = _convert_24_to_16(raw)
-        assert len(out) == len(samples) * 2
-        for i, s in enumerate(samples):
-            got = _decode_16(out[i * 2:])
-            assert got == s >> 8
 
-    def test_empty_input(self):
-        assert _convert_24_to_16(b"") == b""
+class TestPlay:
+    def test_retriggers_from_the_start(self, feedback):
+        stub = _StubEffect()
+        feedback._effects[Cue.CURSOR] = stub
+        feedback.play(Cue.CURSOR)
+        assert stub.calls == ["stop", "play"]
+
+    def test_repeated_cues_reuse_the_same_player(self, feedback):
+        stub = _StubEffect()
+        feedback._effects[Cue.CURSOR] = stub
+        for _ in range(5):
+            feedback.play(Cue.CURSOR)
+        assert stub.calls == ["stop", "play"] * 5
+        assert feedback._effects[Cue.CURSOR] is stub
+
+    def test_unknown_cue_is_a_no_op(self, feedback):
+        feedback.play(Cue.CURSOR)   # never init()ed — must not raise
+
+    def test_each_cue_uses_its_own_player(self, feedback):
+        cursor, select = _StubEffect(), _StubEffect()
+        feedback._effects[Cue.CURSOR] = cursor
+        feedback._effects[Cue.SELECT] = select
+        feedback.play(Cue.SELECT)
+        assert (cursor.calls, select.calls) == ([], ["stop", "play"])

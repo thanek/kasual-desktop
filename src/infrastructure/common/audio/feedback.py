@@ -1,17 +1,22 @@
-"""The `Feedback` port's sound adapter — short UI cues via QAudioSink + wave.
+"""The `Feedback` port's sound adapter — short UI cues via QSoundEffect.
 
-WAV files decode into memory once at init() (stdlib `wave`, no FFmpeg) and
-play as raw PCM. State lives on the instance, so one shared instance is
-created at the composition root and injected wherever cues are emitted.
+QSoundEffect is Qt's path for exactly this shape of sound: a small PCM WAV played
+over and over, each effect holding one stream for its lifetime. The obvious
+alternative — a QAudioSink per playback — does not survive the workload. The cues
+run for whole seconds, so sweeping the cursor along the tile bar leaves dozens of
+them overlapping, and Qt's PulseAudio backend aborts the process on its own
+assertions; worse, that backend never reports a drained sink as idle, so nothing
+reclaims them and they simply pile up. Reusing one sink per cue fixes the pile-up
+but still crashes on teardown.
+
+One effect per cue is built by init() and re-triggered on play. WAVs must be 8- or
+16-bit PCM — what QSoundEffect decodes, and what the bundled cues are.
 """
 
-import array
 import logging
-import wave
-from pathlib import Path
 
-from PyQt6.QtCore import QByteArray, QBuffer, QIODevice
-from PyQt6.QtMultimedia import QAudio, QAudioFormat, QAudioSink
+from PyQt6.QtCore import QUrl
+from PyQt6.QtMultimedia import QSoundEffect
 
 from domain.shared.feedback import Cue, Feedback
 from infrastructure.common.bundled import bundled_dir
@@ -19,86 +24,33 @@ from infrastructure.common.bundled import bundled_dir
 logger = logging.getLogger(__name__)
 
 _SOUNDS_DIR = bundled_dir("sounds")
-_SOUND_NAMES = tuple(c.value for c in Cue)
-
-
-def _convert_24_to_16(data: bytes) -> bytes:
-    out = array.array('h', [0] * (len(data) // 3))
-    for i in range(len(out)):
-        val24 = int.from_bytes(data[i * 3: i * 3 + 3], 'little', signed=True)
-        out[i] = val24 >> 8
-    return out.tobytes()
-
-
-def _read_wav(path: Path) -> 'tuple[QAudioFormat, bytes] | None':
-    try:
-        with wave.open(str(path)) as wf:
-            n_channels   = wf.getnchannels()
-            sample_rate  = wf.getframerate()
-            sample_width = wf.getsampwidth()
-            data         = wf.readframes(wf.getnframes())
-
-            # QAudioSink does not support 24-bit.
-            if sample_width == 3:
-                data         = _convert_24_to_16(data)
-                sample_width = 2
-
-            fmt = QAudioFormat()
-            fmt.setSampleRate(sample_rate)
-            fmt.setChannelCount(n_channels)
-            if sample_width == 1:
-                fmt.setSampleFormat(QAudioFormat.SampleFormat.UInt8)
-            elif sample_width == 2:
-                fmt.setSampleFormat(QAudioFormat.SampleFormat.Int16)
-            elif sample_width == 4:
-                fmt.setSampleFormat(QAudioFormat.SampleFormat.Int32)
-            else:
-                logger.warning("Unsupported sample format (%d B): %s", sample_width, path)
-                return None
-
-            return fmt, data
-    except Exception:
-        logger.exception("Error reading WAV: %s", path)
-        return None
 
 
 class SoundFeedback(Feedback):
-    """Implements the `Feedback` port over Qt Audio."""
+    """Implements the `Feedback` port over Qt's sound-effect player."""
 
     def __init__(self) -> None:
-        self._loaded: dict[str, tuple[QAudioFormat, bytes]] = {}
-        # Held until playback finishes, or QAudioSink would be GC'd mid-sound.
-        self._active: list[tuple[QAudioSink, QBuffer]] = []
+        self._effects: dict[str, QSoundEffect] = {}
 
     def init(self) -> None:
-        """Decodes WAV files into memory. Call once after QApplication."""
-        for name in _SOUND_NAMES:
-            path = _SOUNDS_DIR / f"{name}.wav"
+        """Builds one player per cue. Call once after QApplication."""
+        for cue in Cue:
+            path = _SOUNDS_DIR / f"{cue.value}.wav"
             if not path.exists():
                 logger.warning("No sound file: %s", path)
                 continue
-            result = _read_wav(path)
-            if result is not None:
-                self._loaded[name] = result
-                logger.debug("Loaded sound: %s", name)
+            effect = QSoundEffect()
+            effect.setSource(QUrl.fromLocalFile(str(path)))
+            self._effects[cue] = effect
+            logger.debug("Loaded sound: %s", cue.value)
 
     def play(self, cue: Cue) -> None:
         """Plays a previously loaded cue (no-op if unknown or not yet init()ed)."""
-        entry = self._loaded.get(cue)
-        if entry is None:
+        effect = self._effects.get(cue)
+        if effect is None:
             logger.warning("Unknown sound or no init(): %s", cue)
             return
-
-        self._active[:] = [
-            (s, b) for s, b in self._active
-            if s.state() == QAudio.State.ActiveState
-        ]
-
-        fmt, data = entry
-        buf = QBuffer()
-        buf.setData(QByteArray(data))
-        buf.open(QIODevice.OpenModeFlag.ReadOnly)
-
-        sink = QAudioSink(fmt)
-        sink.start(buf)
-        self._active.append((sink, buf))
+        # Restart rather than layer a second copy over the first, which is what a
+        # cue should do as the cursor sweeps from tile to tile.
+        effect.stop()
+        effect.play()

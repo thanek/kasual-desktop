@@ -19,6 +19,8 @@ from infrastructure.common.qt.ui.layer_shell import Keyboard
 from .base_overlay import BaseOverlay
 
 _INSTALL_HINT = "gnome-extensions enable kasual-helper@consoledesktop.org"
+_LAYER_SHELL_HINT = "layer-shell-qt — built against Qt 6"
+_CARD_MARGIN = 48
 
 
 class _PreflightDialog(BaseOverlay):
@@ -33,6 +35,7 @@ class _PreflightDialog(BaseOverlay):
         feedback: Feedback,
         *,
         dismissable: bool,
+        card_width: int = 680,
     ) -> None:
         super().__init__(gamepad, self._handle_pad, feedback, keyboard=Keyboard.ON_DEMAND)
         self._on_primary = on_primary
@@ -50,15 +53,22 @@ class _PreflightDialog(BaseOverlay):
         outer = QVBoxLayout(self)
         outer.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
-        card = self.build_card(680)
+        card = self.build_card(card_width)
         layout = QVBoxLayout(card)
-        layout.setContentsMargins(48, 48, 48, 48)
+        layout.setContentsMargins(_CARD_MARGIN, _CARD_MARGIN, _CARD_MARGIN, _CARD_MARGIN)
         layout.setSpacing(36)
 
         label = QLabel(message)
         label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         label.setWordWrap(True)
         label.setStyleSheet("font-size: 24px; color: white; background: transparent;")
+        # A wrapped QLabel's sizeHint is one line tall, so the layout builds the card
+        # too short and clips the message. The card's width is fixed and known here,
+        # so ask for the height the wrapped text actually needs at that width —
+        # after polishing, or the question is answered for the default font rather
+        # than the larger one the style sheet above sets.
+        label.ensurePolished()
+        label.setMinimumHeight(label.heightForWidth(card_width - 2 * _CARD_MARGIN))
         layout.addWidget(label)
 
         btn_row = QHBoxLayout()
@@ -171,6 +181,27 @@ class QtPreflightView(PreflightView):
             on_retry, on_quit, dismissable=False,
         )
 
+    def show_missing_layer_shell(
+        self, on_continue: Callable[[], None], on_quit: Callable[[], None]
+    ) -> None:
+        message = "\n\n".join((
+            translate(
+                "Kasual Desktop",
+                "Kasual Desktop places its interface with wlr-layer-shell, and this "
+                "session has none it can use. Without it the compositor decides "
+                "where every part lands, and the interface comes up scattered.",
+            ),
+            translate("Kasual Desktop", "Install, then start again:"),
+            _LAYER_SHELL_HINT,
+        ))
+        self._present(
+            message,
+            translate("Kasual Desktop", "Continue anyway"),
+            translate("Kasual Desktop", "Quit"),
+            on_continue, on_quit, dismissable=False,
+            card_width=980,
+        )
+
     def _present(
         self,
         message: str,
@@ -180,9 +211,11 @@ class QtPreflightView(PreflightView):
         on_secondary: Callable[[], None],
         *,
         dismissable: bool,
+        card_width: int = 680,
     ) -> None:
         self._current = _PreflightDialog(
             message, primary_label, secondary_label,
             on_primary, on_secondary,
             self._gamepad, self._feedback, dismissable=dismissable,
+            card_width=card_width,
         )

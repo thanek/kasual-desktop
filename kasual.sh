@@ -12,10 +12,16 @@ if [ "$1" = "--provisioning" ]; then
     echo "Removed provisioning marker — onboarding will run on next launch."
 fi
 
-# Force the SYSTEM PyQt6 (Qt 6.9, locked to the layer-shell plugin) by hiding
-# ~/.local — a pip-installed PyQt6 there (newer Qt) ships no layer-shell
-# integration and makes the wayland platform plugin fail to load.
-# The shell integration itself is chosen per compositor by src/main.py.
+# Force the SYSTEM PyQt6, which is the one version-locked to the system's
+# layer-shell plugin. Two things can substitute a pip-installed PyQt6 (a newer Qt
+# that ships no layer-shell integration, leaving Kasual unable to place its own
+# surfaces): ~/.local, hidden by PYTHONNOUSERSITE, and an activated virtualenv,
+# which wins through PATH — so the interpreter is named outright rather than
+# looked up. The shell integration itself is chosen per compositor by src/main.py.
 export PYTHONNOUSERSITE=1
+unset VIRTUAL_ENV VIRTUAL_ENV_PROMPT
 export QT_QPA_PLATFORM=wayland
-exec python3 src/main.py
+
+PYTHON=/usr/bin/python3
+[ -x "$PYTHON" ] || PYTHON=python3
+exec "$PYTHON" src/main.py

@@ -7,8 +7,10 @@ this suite is run by hand against a live session before a release, not in CI. It
 needs a Wayland session, a GPU and real games, and its scenarios may be hardcoded
 to one developer machine's library.
 
-It runs on every compositor Kasual Desktop supports — KDE, GNOME, Hyprland and
-Sway — each proven on a live session, the whole suite green on all four. A scenario
+It runs on every compositor Kasual Desktop supports. KDE, GNOME, Hyprland and Sway
+are each proven on a live session, the whole suite green on all four; the COSMIC
+backend is newer — its window source is verified against a live cosmic-comp, but
+the suite has not yet been run end-to-end there. A scenario
 names the windows it needs and the harness picks the backend for whatever is
 running; see `PORTING.md` for how that was arrived at, down to the last product gap
 it exposed (Sway would not focus a launcher behind a fullscreen window) and closed.

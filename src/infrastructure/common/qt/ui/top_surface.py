@@ -29,11 +29,13 @@ def surface_sized_by_compositor() -> bool:
 
     wlr-layer-shell sizes a surface from its anchors before it is ever mapped.
     Everywhere else the widget must size itself: a compositor-driven resize after
-    the fact leaves the client with a buffer it never repaints."""
+    the fact leaves the client with a buffer it never repaints — and an overlay
+    that is sized by neither side never appears, which is what a Wayland session
+    without a usable LayerShellQt would otherwise produce."""
     if QGuiApplication.platformName() != "wayland":
         return False
-    from infrastructure.linux.compositor import Compositor, detect_compositor
-    return detect_compositor() is not Compositor.GNOME
+    from infrastructure.linux.compositor import layer_shell_available
+    return layer_shell_available()
 
 
 def fullscreen_loses_translucency() -> bool:
@@ -42,11 +44,17 @@ def fullscreen_loses_translucency() -> bool:
     Mutter blends a fullscreen window onto black and drops its alpha channel, so a
     dimming backdrop would hide the screen instead of shading it. A screen-sized
     ordinary window keeps its alpha. Measured: painting rgba(255,0,0,100) fullscreen
-    reads back as rgba(100,0,0,255)."""
+    reads back as rgba(100,0,0,255).
+
+    The risk is not Mutter's alone — it is what an *ordinary top-level* asking for
+    fullscreen invites anywhere, since a compositor is then free to put it straight
+    on the scanout plane with nothing behind it to blend. A layer-shell overlay is
+    sized by its anchors and never asks, so it keeps its alpha; wherever layer-shell
+    is unavailable the screen-sized window is the safe shape."""
     if QGuiApplication.platformName() != "wayland":
         return False
-    from infrastructure.linux.compositor import Compositor, detect_compositor
-    return detect_compositor() is Compositor.GNOME
+    from infrastructure.linux.compositor import layer_shell_available
+    return not layer_shell_available()
 
 
 def promote_overlay_surface(

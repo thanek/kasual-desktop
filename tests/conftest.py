@@ -2,9 +2,12 @@ import os
 import sys
 from unittest.mock import MagicMock, patch
 
-# Offscreen backend — works without a display (CI, Xvfb, etc.)
-# If the variable is already set (e.g. DISPLAY), don't override it.
-os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+# Offscreen backend — works without a display (CI, Xvfb, etc.).
+# Forced rather than defaulted: a COSMIC session exports QT_QPA_PLATFORM itself
+# ("wayland;xcb"), and honouring that makes every widget test flash a real window
+# on the developer's screen. KD_TEST_PLATFORM is the deliberate way to ask for a
+# real platform instead.
+os.environ["QT_QPA_PLATFORM"] = os.environ.get("KD_TEST_PLATFORM", "offscreen")
 
 # Mock evdev on platforms where it's not available (Windows). The Linux gamepad
 # watcher imports evdev at module level; many tests use the mock_gamepad fixture

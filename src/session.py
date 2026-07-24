@@ -8,6 +8,7 @@ rather than duplicated so a fix made for one platform can't silently miss the
 other.
 """
 
+import faulthandler
 import logging
 import os
 from collections.abc import Callable
@@ -22,7 +23,7 @@ from domain.shared.feedback import Cue
 from domain.system.actions import ActionDeps
 from infrastructure.common.qt.overlays.about_overlay import AboutOverlay
 from infrastructure.common.qt.overlays.onboarding_overlay import OnboardingOverlayFactory
-from infrastructure.common.qt.ui.tray import SystemTray
+from infrastructure.common.qt.ui.tray import SystemTray, TrayIconFor, glyph_icon
 
 logger = logging.getLogger(__name__)
 
@@ -45,7 +46,29 @@ def setup_logging(log_dir: Path) -> Path:
 
     level = logging.DEBUG if os.environ.get("KASUAL_DEBUG") else logging.INFO
     logging.basicConfig(level=level, handlers=[stream_handler, file_handler])
+    _record_crashes(log_file)
     return log_file
+
+
+# Kept open for the lifetime of the process: faulthandler writes to this file
+# descriptor from a signal handler, long after Python has stopped running.
+_crash_log = None
+
+
+def _record_crashes(log_file: Path) -> None:
+    """Have a fatal signal leave a Python stack behind in the log.
+
+    A segfault inside Qt or a C extension otherwise leaves nothing at all — the
+    process is gone before any handler runs and the log simply stops mid-sentence,
+    which says only that Kasual died, never where. Every thread is dumped: the
+    notification monitor and the gamepad watcher both live off the GUI thread.
+    """
+    global _crash_log
+    try:
+        _crash_log = open(log_file, "a", encoding="utf-8", buffering=1)
+        faulthandler.enable(file=_crash_log, all_threads=True)
+    except OSError as exc:
+        logger.warning("Could not arm the crash handler: %s", exc)
 
 
 def run_onboarding_or_start(
@@ -83,6 +106,7 @@ def build_tray(
     gamepad,
     quit_fn: Callable[[], None],
     keep_alive: Callable[[object], None] = _no_keep_alive,
+    icon_for: TrayIconFor = glyph_icon,
 ) -> SystemTray:
     def on_about() -> None:
         keep_alive(AboutOverlay(version, gamepad, feedback))
@@ -92,6 +116,7 @@ def build_tray(
         on_logs=log_viewer.open,
         on_about=on_about,
         on_quit=quit_fn,
+        icon_for=icon_for,
     )
 
 

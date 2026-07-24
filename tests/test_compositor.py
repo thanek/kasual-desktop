@@ -72,6 +72,14 @@ class TestDetectCompositor:
         clean_env.setenv("XDG_CURRENT_DESKTOP", "ubuntu:GNOME")
         assert detect_compositor() is Compositor.GNOME
 
+    def test_cosmic_from_current_desktop(self, clean_env):
+        clean_env.setenv("XDG_CURRENT_DESKTOP", "COSMIC")
+        assert detect_compositor() is Compositor.COSMIC
+
+    def test_nested_sway_under_cosmic_is_sway(self, clean_env, live_sway_socket):
+        clean_env.setenv("XDG_CURRENT_DESKTOP", "COSMIC")
+        assert detect_compositor() is Compositor.SWAY
+
     def test_sway(self, live_sway_socket):
         assert detect_compositor() is Compositor.SWAY
 
@@ -165,6 +173,36 @@ class TestFactories:
         with patch("infrastructure.gnome.helper.helper_present", return_value=False):
             assert isinstance(build_window_manager(), NullWindowManager)
 
+    def test_wallpaper_is_cosmic_adapter(self, clean_env):
+        clean_env.setenv("XDG_CURRENT_DESKTOP", "COSMIC")
+        from infrastructure.cosmic.display.wallpaper import CosmicSystemWallpaper
+        assert isinstance(build_system_wallpaper(), CosmicSystemWallpaper)
+
+    def test_window_manager_is_cosmic_adapter(self, clean_env, qapp):
+        clean_env.setenv("XDG_CURRENT_DESKTOP", "COSMIC")
+        from infrastructure.cosmic.wm.window_manager import CosmicWindowManager
+        with patch("infrastructure.cosmic.wm.window_manager.CosmicToplevels"), \
+             patch("infrastructure.cosmic.wm.window_manager.QSocketNotifier"):
+            assert isinstance(build_window_manager(), CosmicWindowManager)
+
+    def test_window_manager_falls_back_to_null_without_the_protocols(self, clean_env):
+        clean_env.setenv("XDG_CURRENT_DESKTOP", "COSMIC")
+        from infrastructure.linux.wayland.client import WaylandError
+        with patch("infrastructure.cosmic.wm.window_manager.CosmicToplevels",
+                   side_effect=WaylandError("no toplevel management")):
+            assert isinstance(build_window_manager(), NullWindowManager)
+
+    def test_window_manager_falls_back_to_null_without_a_compositor(self, clean_env):
+        clean_env.setenv("XDG_CURRENT_DESKTOP", "COSMIC")
+        with patch("infrastructure.cosmic.wm.window_manager.CosmicToplevels",
+                   side_effect=OSError("no such socket")):
+            assert isinstance(build_window_manager(), NullWindowManager)
+
+    def test_desktop_surface_is_layer_shell_on_cosmic(self, clean_env):
+        clean_env.setenv("XDG_CURRENT_DESKTOP", "COSMIC")
+        from infrastructure.linux.wayland.surface import LayerShellSurface
+        assert isinstance(build_desktop_surface(), LayerShellSurface)
+
     def test_desktop_surface_is_gnome_when_helper_present(self, clean_env):
         clean_env.setenv("XDG_CURRENT_DESKTOP", "GNOME")
         from infrastructure.gnome.qt.surface import GnomeSurface
@@ -184,13 +222,15 @@ class TestFactories:
 
 
 class TestSurfaceSizing:
-    """Only wlr-layer-shell sizes an anchored overlay before it maps; everywhere
-    else the widget must, or Mutter's after-the-fact resize blanks its buffer."""
+    """Only a real wlr-layer-shell surface is sized from its anchors before it maps;
+    everywhere else the widget must size itself, or it never appears at all."""
 
-    def _sized_by_compositor(self, platform: str) -> bool:
+    def _sized_by_compositor(self, platform: str, layer_shell: bool = True) -> bool:
         from infrastructure.common.qt.ui import top_surface
         with patch.object(top_surface.QGuiApplication, "platformName",
-                          return_value=platform):
+                          return_value=platform), \
+             patch("infrastructure.linux.wayland.layer_shell.is_available",
+                   return_value=layer_shell):
             return top_surface.surface_sized_by_compositor()
 
     def test_layer_shell_compositor_sizes_the_surface(self, clean_env):
@@ -204,15 +244,29 @@ class TestSurfaceSizing:
     def test_non_wayland_leaves_sizing_to_the_widget(self, clean_env):
         assert self._sized_by_compositor("offscreen") is False
 
+    def test_widget_sizes_itself_without_a_usable_layershellqt(self, clean_env):
+        # Debian/Ubuntu/Pop!_OS ship LayerShellQt for Qt5 only. Waiting for a
+        # compositor that will never size the surface leaves the Home header, the
+        # hint bar and the Home Overlay invisible.
+        clean_env.setenv("XDG_CURRENT_DESKTOP", "COSMIC")
+        assert self._sized_by_compositor("wayland", layer_shell=False) is False
+
+    def test_layer_shell_compositor_sizes_the_surface_on_cosmic(self, clean_env):
+        clean_env.setenv("XDG_CURRENT_DESKTOP", "COSMIC")
+        assert self._sized_by_compositor("wayland") is True
+
 
 class TestFullscreenTranslucency:
-    """Mutter blends a fullscreen surface onto opaque black and drops its alpha, so
-    a dimmed overlay backdrop must stay an ordinary screen-sized window there."""
+    """An ordinary top-level asking for fullscreen may be handed to the scanout
+    plane with nothing behind it, losing the dimmed backdrop's alpha; a layer-shell
+    overlay is sized by its anchors and never asks."""
 
-    def _loses_alpha(self, platform: str) -> bool:
+    def _loses_alpha(self, platform: str, layer_shell: bool = True) -> bool:
         from infrastructure.common.qt.ui import top_surface
         with patch.object(top_surface.QGuiApplication, "platformName",
-                          return_value=platform):
+                          return_value=platform), \
+             patch("infrastructure.linux.wayland.layer_shell.is_available",
+                   return_value=layer_shell):
             return top_surface.fullscreen_loses_translucency()
 
     def test_gnome_flattens_a_fullscreen_surface(self, clean_env):
@@ -225,6 +279,10 @@ class TestFullscreenTranslucency:
 
     def test_non_wayland_keeps_the_alpha(self, clean_env):
         assert self._loses_alpha("offscreen") is False
+
+    def test_ordinary_window_is_used_without_a_usable_layershellqt(self, clean_env):
+        clean_env.setenv("XDG_CURRENT_DESKTOP", "COSMIC")
+        assert self._loses_alpha("wayland", layer_shell=False) is True
 
 
 class TestNullWindowManager:

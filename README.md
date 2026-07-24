@@ -4,10 +4,11 @@ Kasual Desktop is an interactive, graphical "launcher/desktop" interface, design
 
 It runs on two platforms from a single shared core:
 
-- **Linux / Wayland (KDE Plasma 6, Sway, Hyprland, GNOME)** — renders its UI as
-  overlays above applications (including fullscreen games). KDE is the original
-  target; Sway and Hyprland are driven through their native IPC; GNOME is served
-  by a bundled Shell extension. See [Supported compositors](#-supported-compositors).
+- **Linux / Wayland (KDE Plasma 6, Sway, Hyprland, COSMIC, GNOME)** — renders its
+  UI as overlays above applications (including fullscreen games). KDE is the
+  original target; Sway and Hyprland are driven through their native IPC; COSMIC
+  through its Wayland toplevel protocols; GNOME is served by a bundled Shell
+  extension. See [Supported compositors](#-supported-compositors).
 - **Windows 10/11** — a newer port that runs the *same* UI as a desktop surface,
   currently a development build run from source.
 
@@ -24,7 +25,7 @@ in-game HUD, …) live behind platform adapters. See [Architecture](#-architectu
 - **Gamepad-First Interface**: Full controller navigation (Linux via `evdev`, Windows via `pygame`/XInput).
 - **Dynamic Launcher**: Manage applications with simple `.desktop` files in your per-user config directory.
 - **Overlay System**: Advanced support for system overlays (e.g., notifications, menus) that run on top of application windows.
-- **System Integration**: Window management (KWin / Sway / Hyprland / GNOME on Linux, Win32 on Windows), system notifications, network, audio and brightness controls.
+- **System Integration**: Window management (KWin / Sway / Hyprland / COSMIC / GNOME on Linux, Win32 on Windows), system notifications, network, audio and brightness controls.
 - **First-Run Onboarding**: A provisioning picker seeds your catalog from installed apps (curated starter set on Linux; Start-Menu scan on Windows).
 - **In-Game HUD Toggle**: Show or hide the performance overlay for games straight from the controller menu — **[MangoHud](https://github.com/flightlessmango/MangoHud)** on Linux, **[RivaTuner Statistics Server](https://www.guru3d.com/page/rivatuner-rtss-overlay/)** (MSI Afterburner) on Windows. See [In-Game HUD](#-in-game-hud).
 - **Advanced Audio System**: System sounds and audio feedback.
@@ -48,6 +49,8 @@ adapters**:
   wallpaper).
 - `src/infrastructure/wlroots/` — Sway and Hyprland adapters (window management
   and wallpaper via each compositor's native IPC).
+- `src/infrastructure/cosmic/` — COSMIC adapters (window management over the
+  compositor's toplevel Wayland protocols, cosmic-config wallpaper).
 - `src/infrastructure/gnome/` — GNOME adapters (window management and overlay
   stacking over D-Bus to the Kasual Helper Shell extension, gsettings wallpaper).
 - `packaging/gnome-extension/` — the Kasual Helper GNOME Shell extension itself.
@@ -56,7 +59,7 @@ adapters**:
 - `src/main.py` — Linux entry point; `src/windows_main.py` — Windows entry point.
 
 The Windows adapters and the Linux adapters (`linux/`, `kde/`, `wlroots/`,
-`gnome/`) never import from each other; the core never imports any of them.
+`cosmic/`, `gnome/`) never import from each other; the core never imports any of them.
 Within Linux, the compositor-specific packages build on the DE-independent
 `linux/` package, and the backend is chosen at runtime from the session.
 
@@ -64,7 +67,7 @@ Within Linux, the compositor-specific packages build on the DE-independent
 
 - **Python 3.11+** (uses `enum.StrEnum`)
 - **PyQt6** + **qtawesome**, **PyQt6-WebEngine** (bundled YouTube app)
-- **Linux**: `wlr-layer-shell` (LayerShellQt) on KWin / Sway / Hyprland, a GJS Shell extension on GNOME, `evdev`, `python-xlib`
+- **Linux**: `wlr-layer-shell` (LayerShellQt) on KWin / Sway / Hyprland / cosmic-comp, a GJS Shell extension on GNOME, `evdev`, `python-xlib`
 - **Windows**: `pywin32` (Win32 API), `comtypes` (Core Audio), `psutil`, Microsoft `winrt-*` (Action Center notifications), `pygame` (gamepad)
 
 ---
@@ -85,12 +88,15 @@ DE-independent.
 | **KDE Plasma 6 (KWin)** | Full | KWin D-Bus scripts | Plasma config, else Plasma's default wallpaper package | The original target. |
 | **Sway** | Full | `swaymsg` (i3-IPC) | `output … bg` from the Sway config | Minimize is emulated by moving windows to the scratchpad. |
 | **Hyprland** | Full | `hyprctl` | swww, hyprpaper, or HyDE's current-wallpaper file — whichever answers first | Minimize is emulated via a dedicated special workspace. |
+| **COSMIC (cosmic-comp)** | Full | `ext-foreign-toplevel-list` + `cosmic-toplevel-info`/`-management` (Wayland) | cosmic-config `com.system76.CosmicBackground` (slideshow directories understood) | The only backend with a real minimize. No IPC CLI and no client-set fullscreen; PIDs are recovered from XWayland and `/proc`. |
 | **GNOME 45+ (Mutter)** | Full | Kasual Helper extension (D-Bus) | `gsettings` background (dark variant and slideshow XML understood) | Requires the [Kasual Helper extension](#gnome-the-kasual-helper-extension); Mutter has no `wlr-layer-shell`. |
 | Other wlroots (e.g. labwc) | Partial | none (no-op) | `<config>/wallpaper` static file | Starts and renders, but window switching is unavailable. |
 
-The four full backends are exercised end-to-end on live sessions by the
+The backends are exercised end-to-end on live sessions by the
 [behavioral suite](tests/behavioral/README.md) — including launching real games
-and reaching a launcher that maps behind Steam's Big Picture. See [Tests](#tests).
+and reaching a launcher that maps behind Steam's Big Picture. KDE, GNOME, Hyprland
+and Sway have been run through it in full; the newer COSMIC backend has its window
+source verified against a live cosmic-comp, but no full run yet. See [Tests](#tests).
 
 Whenever a compositor's own wallpaper source comes up empty, Kasual Desktop falls
 back to a static image at `<config>/wallpaper` (a file or a symlink into your own
@@ -126,9 +132,9 @@ requires reaching for a keyboard.
 
 ### Prerequisites
 
-- **A supported Wayland compositor**: KDE Plasma 6 / KWin, Sway or Hyprland (via
-  `wlr-layer-shell`), or GNOME 45+ (via the bundled Kasual Helper Shell
-  extension). Kasual Desktop draws its UI as overlays that sit above
+- **A supported Wayland compositor**: KDE Plasma 6 / KWin, Sway, Hyprland or
+  COSMIC (via `wlr-layer-shell`), or GNOME 45+ (via the bundled Kasual Helper
+  Shell extension). Kasual Desktop draws its UI as overlays that sit above
   applications, including fullscreen games. See
   [Supported compositors](#-supported-compositors).
 - **Python 3.11+** (the codebase uses `enum.StrEnum`).
@@ -151,6 +157,21 @@ requires reaching for a keyboard.
 
   On **Fedora** the qtawesome package is spelled `python3-QtAwesome` (and Qt's
   Wayland platform plugin `qt6-qtwayland`).
+
+  > **LayerShellQt must be built against the same Qt as PyQt6.** Debian, Ubuntu and
+  > Pop!_OS package `layer-shell-qt` for Qt 5 only, and Kasual Desktop needs the Qt 6
+  > build — recognised by its shell-integration plugin appearing under Qt 6's own
+  > plugin directory (`…/qt6/plugins/wayland-shell-integration/liblayer-shell.so`).
+  > The library's soname is no guide: it tracks LayerShellQt's own version, so the
+  > 5.27 series installs `libLayerShellQtInterface.so.5` even when built for Qt 6,
+  > while Plasma 6's installs `.so.6`.
+  >
+  > Without it Kasual Desktop cannot place its own surfaces — Wayland lets no client
+  > position its windows — so it stops at a preflight screen rather than coming up
+  > scattered. Build [layer-shell-qt](https://invent.kde.org/plasma/layer-shell-qt)
+  > (the 5.27 series for Qt 6.4, `-DQT_MAJOR_VERSION=6`; 6.x needs Qt 6.6+). This
+  > affects every layer-shell backend (KWin, Sway, Hyprland, COSMIC) on those
+  > distributions, not just one.
 
   Other distros: install the equivalent of `python3-pyqt6` (incl. its
   `QtMultimedia` and `QtWebEngine` modules), `python3-qtawesome`, `python3-evdev`,
@@ -249,7 +270,7 @@ Two suites, deliberately separate:
   and shell state back — without looking at pixels. Deliberately **not** named
   `test_*.py`, so pytest never collects it: it is run by hand against a live
   session before a release, and needs a Wayland compositor, a GPU and real games.
-  It runs on every supported compositor — KDE, GNOME, Hyprland and Sway. See
+  It runs on every supported compositor — KDE, GNOME, Hyprland, Sway and COSMIC. See
   [tests/behavioral/README.md](tests/behavioral/README.md).
 
   ```bash

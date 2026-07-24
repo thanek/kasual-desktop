@@ -24,13 +24,19 @@ class SingleInstanceGuard:
     def try_lock(self) -> bool:
         if self._lock.tryLock():
             return True
-
-        pid, appname, hostname = self._lock.getLockInfo()
-        logger.warning(
-            "Another instance is already running (PID %d, %s@%s) — exiting",
-            pid, appname, hostname,
-        )
+        logger.warning("Another instance is already running (%s) — exiting",
+                       self._holder())
         return False
+
+    def _holder(self) -> str:
+        """Whoever owns the lock, as far as Qt will say.
+
+        ``getLockInfo`` answers ``(ok, pid, hostname, appname)`` — hostname before
+        appname, and a success flag ahead of all three, which it clears when it
+        cannot read the lock file at all.
+        """
+        ok, pid, hostname, appname = self._lock.getLockInfo()
+        return f"PID {pid}, {appname}@{hostname}" if ok else "details unavailable"
 
     def release(self) -> None:
         self._lock.unlock()

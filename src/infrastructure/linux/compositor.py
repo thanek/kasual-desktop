@@ -21,6 +21,7 @@ from domain.shell.wallpaper import SystemWallpaper
 
 if TYPE_CHECKING:
     from infrastructure.common.qt.desktop.surface import DesktopSurface
+    from infrastructure.common.qt.ui.tray import TrayIconFor
     from infrastructure.linux.display.screensaver import ScreenSaverWaker
 
 logger = logging.getLogger(__name__)
@@ -31,6 +32,7 @@ class Compositor(enum.Enum):
     GNOME = "gnome"
     SWAY = "sway"
     HYPRLAND = "hyprland"
+    COSMIC = "cosmic"
     UNKNOWN = "unknown"
 
 
@@ -79,7 +81,25 @@ def detect_compositor() -> Compositor:
         return Compositor.KDE
     if "gnome" in desktop:
         return Compositor.GNOME
+    if "cosmic" in desktop:
+        return Compositor.COSMIC
     return Compositor.UNKNOWN
+
+
+def layer_shell_available() -> bool:
+    """Whether Kasual's surfaces can really become wlr-layer-shell surfaces.
+
+    Two independent things must hold, and both have bitten: the compositor has to
+    implement the protocol (Mutter does not), and the LayerShellQt binding for this
+    Qt has to be installed — Debian, Ubuntu and Pop!_OS still package it for Qt5
+    only. Neither half is safe to assume from "Wayland, and not GNOME": naming the
+    integration when it cannot load leaves every window unmapped, and an anchored
+    overlay that waits for the compositor to size it never appears at all.
+    """
+    if detect_compositor() is Compositor.GNOME:
+        return False
+    from infrastructure.linux.wayland.layer_shell import is_available
+    return is_available()
 
 
 class NullWindowManager(WindowManager):
@@ -155,6 +175,16 @@ def build_window_manager() -> WindowManager:
         logger.warning(
             "GNOME session without the Kasual Helper extension; window switching disabled")
         return NullWindowManager()
+    if compositor is Compositor.COSMIC:
+        from infrastructure.cosmic.wm.window_manager import CosmicWindowManager
+        from infrastructure.linux.wayland.client import WaylandError
+        try:
+            return CosmicWindowManager()
+        except (OSError, WaylandError) as exc:
+            logger.warning(
+                "COSMIC session without the toplevel protocols (%s); "
+                "window switching disabled", exc)
+            return NullWindowManager()
     logger.warning(
         "No window-manager backend for compositor %s; window switching disabled",
         compositor.value,
@@ -177,6 +207,9 @@ def build_system_wallpaper() -> SystemWallpaper:
     if compositor is Compositor.GNOME:
         from infrastructure.gnome.display.wallpaper import GnomeSystemWallpaper
         return GnomeSystemWallpaper()
+    if compositor is Compositor.COSMIC:
+        from infrastructure.cosmic.display.wallpaper import CosmicSystemWallpaper
+        return CosmicSystemWallpaper()
     from infrastructure.linux.display.wallpaper import StaticFileWallpaper
     return StaticFileWallpaper()
 
@@ -196,12 +229,24 @@ def build_screensaver_waker() -> "ScreenSaverWaker":
     return ScreenSaverWaker(simulate_freedesktop_activity)
 
 
+def build_tray_icon_source() -> "TrayIconFor":
+    """Pick how the tray icon is drawn for the detected compositor.
+
+    COSMIC's status area renders a StatusNotifierItem's ``IconName`` and ignores a
+    pixmap-only item, which is what a Font Awesome glyph amounts to — so there the
+    icon comes from the desktop's theme instead, and the connection state moves to
+    the tooltip. Every other host draws the glyph, colour and all.
+    """
+    from infrastructure.common.qt.ui.tray import glyph_icon, themed_icon
+    return themed_icon if detect_compositor() is Compositor.COSMIC else glyph_icon
+
+
 def build_desktop_surface() -> "DesktopSurface":
     """Construct the DesktopSurface adapter for the detected compositor.
 
-    Layer-shell compositors (KWin, Sway, Hyprland) promote the Desktop to a
-    wlr-layer-shell surface; GNOME (no layer-shell) uses a frameless window that
-    the Kasual Helper extension pins above the foreground app.
+    Layer-shell compositors (KWin, Sway, Hyprland, cosmic-comp) promote the Desktop
+    to a wlr-layer-shell surface; GNOME (no layer-shell) uses a frameless window
+    that the Kasual Helper extension pins above the foreground app.
     """
     compositor = detect_compositor()
     if compositor is Compositor.GNOME:

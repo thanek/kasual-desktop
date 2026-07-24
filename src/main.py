@@ -6,18 +6,22 @@ from pathlib import Path
 
 from infrastructure.linux.compositor import (
     Compositor, build_desktop_surface, build_screensaver_waker,
-    build_system_wallpaper, build_window_manager, detect_compositor,
+    build_system_wallpaper, build_tray_icon_source, build_window_manager,
+    detect_compositor, layer_shell_available,
 )
 
 # The platform and the shell integration must be selected before QApplication is
 # created; setdefault lets the environment override (e.g. tests force offscreen).
-# Mutter has no layer-shell, and naming the missing integration makes the wayland
-# plugin itself fail to load — there Kasual is a plain window the extension pins.
+# Naming an integration Qt cannot load is not a soft failure: the Wayland plugin
+# then has none at all and every window stays unmapped, so Kasual runs, logs
+# nothing obviously wrong, and is invisible.
 os.environ.setdefault("QT_QPA_PLATFORM", "wayland")
-if detect_compositor() is not Compositor.GNOME:
+_layer_shell = layer_shell_available()
+if _layer_shell:
     os.environ.setdefault("QT_WAYLAND_SHELL_INTEGRATION", "layer-shell")
 
 from PyQt6.QtCore import QTimer
+from PyQt6.QtGui import QGuiApplication
 from PyQt6.QtWidgets import QApplication
 
 from version import get_version, is_packaged
@@ -64,24 +68,35 @@ logger = logging.getLogger(__name__)
 
 
 def _preflight_gate(app, gamepad, feedback, proceed) -> None:
-    """On GNOME, ensure the helper extension is active before any subsystem starts;
-    everywhere else there is nothing to gate."""
-    if detect_compositor() is not Compositor.GNOME:
-        proceed()
-        return
-    from domain.preflight.extension_gate import ExtensionGate
-    from infrastructure.gnome.extension import (
-        GnomeExtensionActivator, GnomeExtensionProbe,
-    )
+    """Ensure the session can actually put Kasual on screen, before any subsystem
+    starts. On GNOME that is the helper extension; on every other Wayland session it
+    is wlr-layer-shell, without which nothing can place its own surfaces."""
     from infrastructure.common.qt.overlays.preflight_overlay import QtPreflightView
 
-    gate = ExtensionGate(
-        GnomeExtensionProbe(),
-        GnomeExtensionActivator(),
+    if detect_compositor() is Compositor.GNOME:
+        from domain.preflight.extension_gate import ExtensionGate
+        from infrastructure.gnome.extension import (
+            GnomeExtensionActivator, GnomeExtensionProbe,
+        )
+        ExtensionGate(
+            GnomeExtensionProbe(),
+            GnomeExtensionActivator(),
+            QtPreflightView(gamepad, feedback),
+            on_quit=app.quit,
+        ).ensure(proceed)
+        return
+
+    # X11 and the offscreen platform place windows for their clients, so only a
+    # Wayland session has anything to be missing here.
+    if QGuiApplication.platformName() != "wayland":
+        proceed()
+        return
+    from domain.preflight.surface_gate import SurfaceGate
+    SurfaceGate(
+        layer_shell_available,
         QtPreflightView(gamepad, feedback),
         on_quit=app.quit,
-    )
-    gate.ensure(proceed)
+    ).ensure(proceed)
 
 
 def main() -> None:
@@ -94,6 +109,11 @@ def main() -> None:
     version = get_version()
     logger.info("Running Kasual Desktop %s", version)
     logger.info("Detected compositor: %s", detect_compositor().value)
+    if not _layer_shell and detect_compositor() is not Compositor.GNOME:
+        logger.warning(
+            "LayerShellQt for Qt6 is unavailable — the Desktop runs as an ordinary "
+            "window and cannot cover a fullscreen app. Install the Qt6 build of "
+            "layer-shell-qt (Debian/Ubuntu package the Qt5 one only).")
 
     app = QApplication(sys.argv)
     app.setApplicationName("Kasual Desktop")
@@ -213,6 +233,7 @@ def main() -> None:
         tray = build_tray(
             feedback=feedback, desktop=desktop, log_viewer=log_viewer,
             version=version, gamepad=gamepad, quit_fn=app.quit,
+            icon_for=build_tray_icon_source(),
         )
 
         hud = MangoHudControl()
