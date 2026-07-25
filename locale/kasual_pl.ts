@@ -26,12 +26,12 @@
 </context><context>
     <name>ConfirmDialog</name>
     <message>
-        <location filename="../src/infrastructure/common/qt/overlays/confirm_dialog.py" line="62" />
+        <location filename="../src/infrastructure/common/qt/overlays/confirm_dialog.py" line="63" />
         <source>Yes</source>
         <translation>Tak</translation>
     </message>
     <message>
-        <location filename="../src/infrastructure/common/qt/overlays/confirm_dialog.py" line="63" />
+        <location filename="../src/infrastructure/common/qt/overlays/confirm_dialog.py" line="64" />
         <source>No</source>
         <translation>Nie</translation>
     </message>
@@ -396,7 +396,7 @@
         <translation>Brak powiadomień</translation>
     </message>
     <message>
-        <location filename="../src/infrastructure/common/qt/overlays/preflight_overlay.py" line="138" />
+        <location filename="../src/infrastructure/common/qt/overlays/preflight_overlay.py" line="136" />
         <source>Kasual Desktop needs its GNOME Shell helper extension to manage windows.
 
 Enable it now?</source>
@@ -405,38 +405,48 @@ Enable it now?</source>
 Włączyć je teraz?</translation>
     </message>
     <message>
-        <location filename="../src/infrastructure/common/qt/overlays/preflight_overlay.py" line="143" />
+        <location filename="../src/infrastructure/common/qt/overlays/preflight_overlay.py" line="141" />
         <source>Enable</source>
         <translation>Włącz</translation>
     </message>
     <message>
-        <location filename="../src/infrastructure/common/qt/overlays/preflight_overlay.py" line="144" />
+        <location filename="../src/infrastructure/common/qt/overlays/preflight_overlay.py" line="142" />
         <source>Not now</source>
         <translation>Nie teraz</translation>
     </message>
     <message>
-        <location filename="../src/infrastructure/common/qt/overlays/preflight_overlay.py" line="155" />
+        <location filename="../src/infrastructure/common/qt/overlays/preflight_overlay.py" line="154" />
         <source>The Kasual Helper GNOME Shell extension isn't installed. Install the Kasual Desktop package, then enable it with:</source>
         <translation>Rozszerzenie GNOME Shell „Kasual Helper” nie jest zainstalowane. Zainstaluj pakiet Kasual Desktop, a następnie włącz je poleceniem:</translation>
     </message>
     <message>
-        <location filename="../src/infrastructure/common/qt/overlays/preflight_overlay.py" line="161" />
+        <location filename="../src/infrastructure/common/qt/overlays/preflight_overlay.py" line="160" />
+        <source>The Kasual Helper GNOME Shell extension is installed, but this GNOME session started before it and cannot load it. Log out and back in, then enable it with:</source>
+        <translation>Rozszerzenie GNOME Shell „Kasual Helper” jest zainstalowane, ale ta sesja GNOME wystartowała wcześniej i nie może go wczytać. Wyloguj się i zaloguj ponownie, a następnie włącz je poleceniem:</translation>
+    </message>
+    <message>
+        <location filename="../src/infrastructure/common/qt/overlays/preflight_overlay.py" line="167" />
         <source>Kasual Desktop couldn't enable its GNOME Shell helper extension. Enable it manually with:</source>
         <translation>Kasual Desktop nie mógł włączyć swojego rozszerzenia GNOME Shell. Włącz je ręcznie poleceniem:</translation>
     </message>
     <message>
-        <location filename="../src/infrastructure/common/qt/overlays/preflight_overlay.py" line="166" />
+        <location filename="../src/infrastructure/common/qt/overlays/preflight_overlay.py" line="172" />
         <source>then retry.</source>
         <translation>a następnie spróbuj ponownie.</translation>
     </message>
     <message>
-        <location filename="../src/infrastructure/common/qt/overlays/preflight_overlay.py" line="169" />
+        <location filename="../src/infrastructure/common/qt/overlays/preflight_overlay.py" line="175" />
+        <source>Log out</source>
+        <translation>Wyloguj</translation>
+    </message>
+    <message>
+        <location filename="../src/infrastructure/common/qt/overlays/preflight_overlay.py" line="176" />
         <source>Retry</source>
         <translation>Ponów</translation>
     </message>
     <message>
         <location filename="../src/infrastructure/common/qt/ui/tray.py" line="42" />
-        <location filename="../src/infrastructure/common/qt/overlays/preflight_overlay.py" line="170" />
+        <location filename="../src/infrastructure/common/qt/overlays/preflight_overlay.py" line="177" />
         <source>Quit</source>
         <translation>Zamknij</translation>
     </message>
