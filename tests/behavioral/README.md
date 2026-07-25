@@ -7,13 +7,12 @@ this suite is run by hand against a live session before a release, not in CI. It
 needs a Wayland session, a GPU and real games, and its scenarios may be hardcoded
 to one developer machine's library.
 
-It runs on every compositor Kasual Desktop supports. KDE, GNOME, Hyprland and Sway
-are each proven on a live session, the whole suite green on all four; the COSMIC
-backend is newer — its window source is verified against a live cosmic-comp, but
-the suite has not yet been run end-to-end there. A scenario
-names the windows it needs and the harness picks the backend for whatever is
-running; see `PORTING.md` for how that was arrived at, down to the last product gap
-it exposed (Sway would not focus a launcher behind a fullscreen window) and closed.
+It runs on every compositor Kasual Desktop supports. KDE, GNOME, Hyprland, Sway and
+COSMIC are each proven on a live session, the whole suite green on all five. A
+scenario names the windows it needs and the harness picks the backend for whatever
+is running; see `PORTING.md` for how that was arrived at, down to the last product
+gap it exposed (Sway would not focus a launcher behind a fullscreen window, COSMIC
+left a game in a window it had sized to the whole screen) and closed.
 
 ## Why this exists
 
@@ -343,6 +342,36 @@ will want a logged-in session in the YT app, and it will say so in its own
 `requires`, not here.
 
 ## Running it (any supported compositor / Wayland)
+
+Beyond what Kasual Desktop itself needs, the Steam scenarios read Big Picture back
+over the Chrome DevTools Protocol, which takes one extra package:
+
+```
+pip install websocket-client        # NOT "websocket" — see below
+```
+
+Two different PyPI packages install a module called `websocket`. The wanted one is
+**`websocket-client`**; there is also an abandoned stub simply named `websocket`
+that has none of its functions, and whichever was installed last owns the name. The
+import succeeds either way, so `require.steam_devtools_client()` checks for the
+functions rather than the module — otherwise the mistake only surfaces mid-scenario,
+as an `AttributeError` against a Steam that is by then already running. If both are
+installed, drop the stub: `pip uninstall websocket`.
+
+On COSMIC, both KD and this harness reach a game through the XWayland window behind
+it, with python-xlib:
+
+```
+pip install python-xlib             # packaged as python3-xlib; a venv may not see it
+```
+
+It is a packaged dependency of KD, so an installed COSMIC session already has it —
+but a virtualenv built without `--system-site-packages` does not, and everything
+degrades quietly: every game window comes back as pid 0, `game process alive` fails
+against a game that is plainly running, the cleanup has no process to close, and KD
+cannot ask COSMIC to fullscreen a game that never asks for itself (see
+`infrastructure/cosmic/wm/fullscreen.py`). `require.compositor_ready()` says so
+before a run instead.
 
 `tests_behav.sh` is the one entry point, in two commands. In one terminal, `prepare`
 seeds a throwaway config, points KD at it with `KD_CONFIG_DIR`, and launches KD with

@@ -151,6 +151,40 @@ def window_source() -> Requirement:
     )
 
 
+def steam_devtools_client() -> Requirement:
+    """Two PyPI packages install a module called ``websocket`` and only
+    ``websocket-client`` has the functions, so the import alone proves nothing."""
+    def the_real_client_is_installed(_kd: KDClient | None) -> bool:
+        try:
+            import websocket
+        except ImportError:
+            return False
+        return hasattr(websocket, 'create_connection')
+
+    return Requirement(
+        'the websocket-client package is installed (Steam DevTools)',
+        the_real_client_is_installed,
+        remedy='pip install websocket-client — and if the stub is in the way: '
+               'pip uninstall websocket',
+    )
+
+
+def mangohud_configured() -> Requirement:
+    """KD offers the HUD toggle only where a MangoHud config exists, so a scenario
+    asserting the card would otherwise fail against the machine, not against KD."""
+    def the_config_exists(_kd: KDClient | None) -> bool:
+        from infrastructure.linux.hud.mangohud import MangoHudControl
+        return MangoHudControl().is_available()
+
+    return Requirement(
+        'MangoHud is configured (~/.config/MangoHud/MangoHud.conf exists — KD offers '
+        'the HUD toggle only then)',
+        the_config_exists,
+        remedy='install MangoHud and create the config: '
+               'mkdir -p ~/.config/MangoHud && touch ~/.config/MangoHud/MangoHud.conf',
+    )
+
+
 def _running(compositor_name: str) -> bool:
     from infrastructure.linux.compositor import Compositor, detect_compositor
     return detect_compositor() is Compositor(compositor_name)
@@ -187,21 +221,31 @@ def cosmic() -> Requirement:
 
 
 def compositor_ready() -> Requirement:
-    """On GNOME, without the Kasual Helper extension a run would not fail — it would
-    pass against a Kasual Desktop that has no window manager and no way to stay on
-    screen."""
+    """What each compositor needs beyond itself: on GNOME the Kasual Helper
+    extension, without which a run passes against a Kasual Desktop that has no
+    window manager at all; on COSMIC python-xlib, without which no game has a
+    PID."""
     def session_is_equipped(_kd: KDClient | None) -> bool:
         from infrastructure.linux.compositor import Compositor, detect_compositor
-        if detect_compositor() is not Compositor.GNOME:
-            return True
-        from infrastructure.gnome.helper import helper_present
-        return helper_present()
+        compositor = detect_compositor()
+        if compositor is Compositor.GNOME:
+            from infrastructure.gnome.helper import helper_present
+            return helper_present()
+        if compositor is Compositor.COSMIC:
+            try:
+                import Xlib  # noqa: F401
+            except ImportError:
+                return False
+        return True
 
     return Requirement(
-        'the compositor is equipped (on GNOME: the Kasual Helper extension answers)',
+        'the compositor is equipped (GNOME: the Kasual Helper extension answers; '
+        'COSMIC: python-xlib is importable)',
         session_is_equipped,
-        remedy='enable it: gnome-extensions enable kasual-helper@consoledesktop.org '
-               '(a freshly installed extension needs a re-login on Wayland)',
+        remedy='GNOME: gnome-extensions enable kasual-helper@consoledesktop.org (a '
+               'freshly installed extension needs a re-login on Wayland). '
+               'COSMIC: install python-xlib — apt install python3-xlib, or '
+               'pip install python-xlib inside the virtualenv KD runs from',
     )
 
 

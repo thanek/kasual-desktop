@@ -1,22 +1,20 @@
 """The `Feedback` port's sound adapter — short UI cues via QSoundEffect.
 
-QSoundEffect is Qt's path for exactly this shape of sound: a small PCM WAV played
-over and over, each effect holding one stream for its lifetime. The obvious
-alternative — a QAudioSink per playback — does not survive the workload. The cues
-run for whole seconds, so sweeping the cursor along the tile bar leaves dozens of
-them overlapping, and Qt's PulseAudio backend aborts the process on its own
-assertions; worse, that backend never reports a drained sink as idle, so nothing
-reclaims them and they simply pile up. Reusing one sink per cue fixes the pile-up
-but still crashes on teardown.
-
-One effect per cue is built by init() and re-triggered on play. WAVs must be 8- or
-16-bit PCM — what QSoundEffect decodes, and what the bundled cues are.
+One player per sounding, never rewound before its WAV has run out: cutting a player
+short damages it until the cues fall silent altogether, and this backend never
+reports a drained player as idle, so the timing is kept here. A press with every
+player of its cue still sounding goes unheard. See the README for the underlying
+Qt 6.4 bug, which no arrangement here cures.
 """
 
 import logging
+import time
+import wave
+
+from pathlib import Path
 
 from PyQt6.QtCore import QUrl
-from PyQt6.QtMultimedia import QSoundEffect
+from PyQt6.QtMultimedia import QMediaDevices, QSoundEffect
 
 from domain.shared.feedback import Cue, Feedback
 from infrastructure.common.bundled import bundled_dir
@@ -24,33 +22,76 @@ from infrastructure.common.bundled import bundled_dir
 logger = logging.getLogger(__name__)
 
 _SOUNDS_DIR = bundled_dir("sounds")
+_VOICES = 8            # players per cue: how many may be sounding at once
+_UNKNOWN_LENGTH = 3.0  # held for this long when the WAV will not give its length
+_TAIL_S = 0.5          # what the sound takes to leave the audio server after that
 
 
 class SoundFeedback(Feedback):
     """Implements the `Feedback` port over Qt's sound-effect player."""
 
     def __init__(self) -> None:
-        self._effects: dict[str, QSoundEffect] = {}
+        self._voices: dict[str, list[QSoundEffect]] = {}
+        self._free_at: dict[str, list[float]] = {}   # when each player finishes
+        self._length: dict[str, float] = {}
+        self._devices: QMediaDevices | None = None
 
     def init(self) -> None:
-        """Builds one player per cue. Call once after QApplication."""
+        """Builds the players for every cue. Call once after QApplication."""
+        # Kept alive for the signal below, which no instance emits once collected.
+        self._devices = QMediaDevices()
+        self._devices.audioOutputsChanged.connect(self._follow_default_output)
         for cue in Cue:
             path = _SOUNDS_DIR / f"{cue.value}.wav"
             if not path.exists():
                 logger.warning("No sound file: %s", path)
                 continue
-            effect = QSoundEffect()
-            effect.setSource(QUrl.fromLocalFile(str(path)))
-            self._effects[cue] = effect
-            logger.debug("Loaded sound: %s", cue.value)
+            source = QUrl.fromLocalFile(str(path))
+            voices = []
+            for _ in range(_VOICES):
+                effect = QSoundEffect()
+                effect.setSource(source)
+                voices.append(effect)
+            self._voices[cue] = voices
+            self._free_at[cue] = [0.0] * _VOICES
+            self._length[cue] = _length_of(path)
+            logger.debug("Loaded sound: %s (%.2fs)", cue.value, self._length[cue])
+        self._follow_default_output()
+
+    def _follow_default_output(self) -> None:
+        output = QMediaDevices.defaultAudioOutput()
+        if output.isNull():
+            logger.warning("No audio output — cues will play into nothing")
+            return
+        for effect in self._all_effects():
+            effect.setAudioDevice(output)
+        logger.info("Sound cues play on %s", output.description())
+
+    def _all_effects(self) -> list[QSoundEffect]:
+        return [effect for voices in self._voices.values() for effect in voices]
 
     def play(self, cue: Cue) -> None:
         """Plays a previously loaded cue (no-op if unknown or not yet init()ed)."""
-        effect = self._effects.get(cue)
-        if effect is None:
+        voices = self._voices.get(cue)
+        if not voices:
             logger.warning("Unknown sound or no init(): %s", cue)
             return
-        # Restart rather than layer a second copy over the first, which is what a
-        # cue should do as the cursor sweeps from tile to tile.
-        effect.stop()
-        effect.play()
+        now = time.monotonic()
+        free_at = self._free_at[cue]
+        index = min(range(len(voices)), key=lambda i: free_at[i])
+        if free_at[index] > now:
+            return              # every player of this cue is still sounding
+        free_at[index] = now + self._length[cue] + _TAIL_S
+        # A player left marked as playing ignores play() until it is stopped.
+        voices[index].stop()
+        voices[index].play()
+
+
+def _length_of(path: Path) -> float:
+    """How long the cue sounds for."""
+    try:
+        with wave.open(str(path)) as cue:
+            return cue.getnframes() / cue.getframerate()
+    except (OSError, wave.Error) as exc:
+        logger.warning("Could not read the length of %s: %s", path, exc)
+        return _UNKNOWN_LENGTH

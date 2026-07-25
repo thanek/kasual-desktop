@@ -9,7 +9,7 @@ their declaration order:
   ext handle to a cosmic one.
 * ``cosmic-toplevel-management-unstable-v1`` — the control requests, of which
   cosmic-comp advertises close, activate, maximize, minimize and move_to_workspace.
-  Fullscreen is deliberately not among them.
+  Fullscreen is not among them; :mod:`.fullscreen` asks over X11 instead.
 """
 
 from __future__ import annotations

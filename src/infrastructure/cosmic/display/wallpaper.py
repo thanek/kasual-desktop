@@ -5,10 +5,10 @@ reads it: one file per key under ``com.system76.CosmicBackground/v1``, with the
 user's config directory layered over the system defaults. Resolved fresh on every
 launch, so a wallpaper changed in COSMIC Settings is picked up on restart.
 
-An entry names its image as ``source: Path("…")``. That path may be a directory —
-COSMIC's rotating slideshow — in which case the first image in the compositor's
-own alphanumeric order stands in for it. A ``source: Color(…)`` entry has no image
-at all, and falls through to the static file the other Wayland backends use.
+An entry names its image as ``source: Path("…")``, which may be a directory —
+COSMIC's slideshow — and then the first image in alphanumeric order stands in for
+it. ``source: Color(…)`` has no image at all and falls through to the static file
+the other Wayland backends use.
 """
 
 from __future__ import annotations
@@ -53,12 +53,8 @@ class CosmicSystemWallpaper(SystemWallpaper):
         return None
 
     def _entry_keys(self) -> list[str]:
-        """The entry keys to try, most specific first.
-
-        With ``same-on-all`` set there is only the shared ``all`` entry; otherwise
-        each output listed in ``backgrounds`` has its own, and ``all`` remains the
-        fallback for outputs that never got one.
-        """
+        """The entry keys to try, most specific first: an entry per output listed
+        in ``backgrounds`` unless ``same-on-all``, then the shared ``all``."""
         if (self._read("same-on-all") or "").strip() != "false":
             return ["all"]
         listed = self._read("backgrounds") or ""

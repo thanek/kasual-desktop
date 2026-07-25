@@ -70,6 +70,7 @@ SCENARIO = Scenario(
     requires=(
         require.window_source(),
         require.command('steam'),
+        require.steam_devtools_client(),
         require.not_running(
             'steam',
             'Steam is not running (the run starts it, and only a Steam started '

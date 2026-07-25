@@ -33,7 +33,8 @@ class Toplevel:
 
 
 class CosmicToplevels:
-    """The compositor's toplevels as Kasual sees them, and the requests it sends.
+    """The compositor's toplevels as Kasual Desktop sees them, and the requests it
+    sends.
 
     Raises :class:`WaylandError` from the constructor when the compositor does not
     implement the toplevel protocols, leaving the caller to degrade.
@@ -54,9 +55,8 @@ class CosmicToplevels:
             self._client.close()
             raise WaylandError("compositor implements no COSMIC toplevel management")
 
-        # No roundtrip: the globals already answered whether this session can be
-        # driven, and waiting for the first window list would block the composition
-        # root on compositor I/O. The list arrives on the socket a moment later and
+        # No roundtrip: waiting for the first window list would block the
+        # composition root on compositor I/O. It arrives a moment later, and
         # ``on_change`` schedules the refresh that publishes it.
         self._subscribe()
 
@@ -75,8 +75,7 @@ class CosmicToplevels:
     # ── operations ─────────────────────────────────────────────────────────
 
     def activate(self, handle: int) -> None:
-        # A minimized window ignores activate, so it is restored first; on an
-        # already-mapped window unset_minimized is a no-op.
+        # A minimized window ignores activate; on a mapped one this is a no-op.
         self._request(protocol.MANAGER_UNSET_MINIMIZED, handle)
         self._request(protocol.MANAGER_ACTIVATE, handle, self._seat)
 

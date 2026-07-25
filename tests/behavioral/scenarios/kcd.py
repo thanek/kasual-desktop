@@ -58,6 +58,7 @@ SCENARIO = Scenario(
     requires=(
         require.window_source(),
         require.command('steam'),
+        require.mangohud_configured(),
         require.manual('Steam is logged in, and Kingdom Come: Deliverance is installed'),
         require.tile(TILE_ID),
     ),

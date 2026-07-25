@@ -13,6 +13,7 @@ from domain.catalog.target import AddTileTarget, AppTarget, Target, target_at_in
 from domain.catalog.window import Window
 from domain.catalog.window_rules import external_windows, is_app_running, resolve_recall_trigger
 from domain.lifecycle.process_manager import ProcessManager
+from domain.shell.introspection import TILE_ADD, TILE_APP, TILE_WINDOW
 from infrastructure.common.qt._meta import ProtocolQtMeta
 from infrastructure.common.qt.ui import styles
 from domain.lifecycle.tile_bar_view import TileBarView
@@ -185,6 +186,16 @@ class TileBar(QScrollArea, TileBarView, TileFocusView, TileReorderView, metaclas
     def current_is_add(self) -> bool:
         """True if the focused tile is the synthetic [＋] add-app tile."""
         return isinstance(self.current_context(), AddTileTarget)
+
+    def cursor_index(self) -> int:
+        """Where the cursor sits across the whole bar, not just the app section."""
+        return self._tile_index
+
+    def current_kind(self) -> str:
+        """Which section of the bar the cursor is in."""
+        if self.current_is_app():
+            return TILE_APP
+        return TILE_ADD if self.current_is_add() else TILE_WINDOW
 
     # ── Move mode (TileReorderView) ──────────────────────────────────────────
 

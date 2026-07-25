@@ -1,22 +1,13 @@
 """Best-effort PID for a COSMIC toplevel.
 
-Every other backend hands Kasual the owning process outright — KWin's scripting
-API, the GNOME helper, ``swaymsg``, ``hyprctl`` — but no toplevel protocol carries
-one, and a Wayland client cannot ask who owns someone else's surface. Two sources
-recover it:
+No toplevel protocol carries one and a Wayland client cannot ask who owns someone
+else's surface, so two sources recover it: ``_NET_WM_PID`` on the XWayland window
+of the same class (:mod:`.xwayland`), and the process table matched by app_id.
 
-* **XWayland.** Every Proton and Steam title, and most older games, are X11 clients
-  underneath, publishing ``_NET_WM_PID`` on a window whose ``WM_CLASS`` is the very
-  app_id the toplevel reports.
-* **The process table.** A native Wayland client is matched by app_id against the
-  names its processes run under.
-
-The answer is a *set* of candidates rather than one PID, because app_id often
-cannot separate two instances of the same program. That is enough for the question
-the lifecycle actually asks — "is this window one of the ones I just launched?" —
-which :func:`representative_pid` cannot answer alone. Where a single number is
-unavoidable, an unresolvable set collapses to 0, which the domain already reads as
-"not attributable to an app of ours"; a wrong PID would be far worse than none.
+The answer is a *set*, because app_id cannot separate two instances of one program.
+That answers what the lifecycle asks — "is this window one I just launched?" — and
+where a single number is unavoidable an unresolvable set collapses to 0, which the
+domain reads as "not one of ours". A wrong PID would be worse than none.
 """
 
 from __future__ import annotations
@@ -28,6 +19,7 @@ from collections.abc import Iterable, Sequence
 
 from domain.catalog.window_rules import walk_parent_chain
 from infrastructure.cosmic.wm.toplevels import Toplevel
+from infrastructure.cosmic.wm.xwayland import X11Window, XWaylandWindows, match
 from infrastructure.linux.proc import parent_pid
 
 logger = logging.getLogger(__name__)
@@ -36,19 +28,24 @@ _COMM_MAX = 15
 
 
 class WindowPidResolver:
-    """Resolves toplevels to the PIDs that could own them, keyed by identifier."""
+    """Resolves toplevels to the PIDs that could own them, keyed by identifier.
 
-    def __init__(self) -> None:
-        self._xwayland = _XWaylandWindows()
+    The X11 table is passed in where a caller already scanned it, so a refresh
+    costs one scan; otherwise this takes its own.
+    """
 
-    def resolve(self, toplevels: Sequence[Toplevel]) -> dict[str, frozenset[int]]:
+    def __init__(self, xwayland: XWaylandWindows | None = None) -> None:
+        self._xwayland = xwayland or XWaylandWindows()
+
+    def resolve(self, toplevels: Sequence[Toplevel],
+                x11: Sequence[X11Window] | None = None) -> dict[str, frozenset[int]]:
         candidates: dict[str, frozenset[int]] = {}
         unresolved: list[Toplevel] = []
-        x11 = self._xwayland.snapshot()
+        x11 = self._xwayland.snapshot() if x11 is None else x11
         for toplevel in toplevels:
-            pid = _x11_pid(x11, toplevel)
-            if pid:
-                candidates[toplevel.identifier] = frozenset({pid})
+            window = match(x11, toplevel)
+            if window is not None and window.pid:
+                candidates[toplevel.identifier] = frozenset({window.pid})
             else:
                 unresolved.append(toplevel)
         if unresolved:
@@ -63,11 +60,9 @@ class WindowPidResolver:
 def representative_pid(candidates: frozenset[int]) -> int:
     """The one PID that stands for a window, or 0 when the candidates disagree.
 
-    A client that runs a process per window — cosmic-term does — offers several
-    equally named candidates for one toplevel. The process they all descend from
-    is the one a launch would have started, and expanding its tree finds the
-    others again, so it stands for the whole app. Genuinely separate instances
-    have no such root and stay unattributed rather than guessed at.
+    A client with a process per window (cosmic-term) offers several candidates for
+    one toplevel; the ancestor they all descend from is the one a launch started.
+    Separate instances have no such root and stay unattributed rather than guessed.
     """
     for pid in candidates:
         if all(pid in walk_parent_chain(other, parent_pid) for other in candidates):
@@ -75,116 +70,11 @@ def representative_pid(candidates: frozenset[int]) -> int:
     return 0
 
 
-# ── XWayland ───────────────────────────────────────────────────────────────
-
-class _X11Window:
-    __slots__ = ("classes", "title", "pid")
-
-    def __init__(self, classes: tuple[str, ...], title: str, pid: int) -> None:
-        self.classes = classes
-        self.title = title
-        self.pid = pid
-
-
-def _x11_pid(windows: Sequence[_X11Window], toplevel: Toplevel) -> int:
-    """The PID of the X11 window this toplevel is, matched by class then title.
-
-    Several instances of one app share a class, so the title breaks the tie; with
-    no title match a single candidate is still unambiguous.
-    """
-    candidates = [w for w in windows if toplevel.app_id in w.classes]
-    if not candidates:
-        return 0
-    titled = [w for w in candidates if w.title == toplevel.title]
-    if len(titled) == 1:
-        return titled[0].pid
-    return candidates[0].pid if len(candidates) == 1 else 0
-
-
-class _XWaylandWindows:
-    """The X11 client list, read through a connection reopened on demand.
-
-    Absent python-xlib or an X server the snapshot is simply empty, so a pure
-    Wayland COSMIC session falls straight through to the process table.
-    """
-
-    def __init__(self) -> None:
-        self._display = None
-        self._atoms: dict = {}
-        self._unavailable = False
-
-    def snapshot(self) -> list[_X11Window]:
-        try:
-            display = self._ensure_display()
-            if display is None:
-                return []
-            return self._read(display)
-        except Exception as exc:
-            logger.debug("XWayland window scan failed: %s", exc)
-            self._display = None
-            return []
-
-    def _ensure_display(self):
-        if self._display is not None:
-            return self._display
-        if self._unavailable or not os.environ.get("DISPLAY"):
-            self._unavailable = True
-            return None
-        try:
-            from Xlib import display
-        except ImportError:
-            logger.info("python-xlib not installed — XWayland window PIDs disabled")
-            self._unavailable = True
-            return None
-        disp = display.Display()
-        self._atoms = {
-            "list": disp.intern_atom("_NET_CLIENT_LIST"),
-            "pid": disp.intern_atom("_NET_WM_PID"),
-            "name": disp.intern_atom("_NET_WM_NAME"),
-        }
-        self._display = disp
-        return disp
-
-    def _read(self, display) -> list[_X11Window]:
-        from Xlib import X
-        from Xlib.Xatom import CARDINAL
-
-        listing = display.screen().root.get_full_property(
-            self._atoms["list"], X.AnyPropertyType)
-        if listing is None:
-            return []
-        windows: list[_X11Window] = []
-        for window_id in listing.value:
-            window = display.create_resource_object("window", window_id)
-            pid = window.get_full_property(self._atoms["pid"], CARDINAL)
-            if pid is None or not pid.value:
-                continue
-            windows.append(_X11Window(
-                classes=tuple(window.get_wm_class() or ()),
-                title=self._title(window),
-                pid=int(pid.value[0]),
-            ))
-        return windows
-
-    def _title(self, window) -> str:
-        from Xlib import X
-
-        prop = window.get_full_property(self._atoms["name"], X.AnyPropertyType)
-        if prop is not None and prop.value:
-            value = prop.value
-            return (value.decode("utf-8", "replace") if isinstance(value, bytes)
-                    else str(value))
-        return window.get_wm_name() or ""
-
-
 # ── process table ──────────────────────────────────────────────────────────
 
 def _named_processes(processes: dict[str, set[int]], app_id: str) -> frozenset[int]:
-    """Every process running under *app_id*.
-
-    A reverse-DNS app_id (``com.system76.CosmicTerm``) is also tried by its last
-    segment, which is what such a client's binary is normally called.
-    """
+    """Every process running under *app_id*, or under its last reverse-DNS segment
+    (``com.system76.CosmicTerm`` → the ``CosmicTerm`` binary)."""
     for key in (app_id, app_id.rsplit(".", 1)[-1]):
         candidates = processes.get(_normalise(key))
         if candidates:
@@ -209,9 +99,8 @@ def _process_names(pid: int) -> Iterable[str]:
     try:
         with open(f"/proc/{pid}/comm", encoding="utf-8") as f:
             comm = f.read().strip()
-        # comm is kernel-truncated to 15 characters, and a truncated name matches
-        # the wrong app_id outright: cosmic-settings-daemon arrives as
-        # "cosmic-settings". The untruncated sources below cover those.
+        # Truncated comm matches the wrong app_id outright: cosmic-settings-daemon
+        # arrives as "cosmic-settings". The sources below are untruncated.
         if len(comm) < _COMM_MAX:
             names.append(comm)
     except OSError:
@@ -231,6 +120,5 @@ def _process_names(pid: int) -> Iterable[str]:
 
 
 def _normalise(name: str) -> str:
-    """Fold the spelling differences between an app_id and a binary name —
-    ``CosmicTerm`` and ``cosmic-term`` name the same program."""
+    """``CosmicTerm`` and ``cosmic-term`` name the same program."""
     return "".join(c for c in name.lower() if c.isalnum())

@@ -405,6 +405,31 @@ class TestAddTile:
         # The [＋] is still the last position, after the new tile.
         assert isinstance(bar._all_tiles()[-1], AddTile)
 
+    def test_cursor_and_kind_place_the_focus_across_the_whole_bar(self, bar_with_tiles):
+        """tile_index alone cannot tell a window tile from no focus at all, and a
+        caller that reads it as "before the target" walks away from the app tiles."""
+        bar = bar_with_tiles
+        bar.update_windows([_win("w1", "Other")])
+
+        bar._tile_index = 0
+        assert (bar.cursor_index(), bar.current_kind()) == (0, "app")
+
+        bar._tile_index = len(bar._tiles)                  # the [＋]
+        assert (bar.cursor_index(), bar.current_kind()) == (len(bar._tiles), "add")
+
+        bar._tile_index = len(bar._tiles) + 1              # first window tile
+        assert bar.current_kind() == "window"
+        assert bar.current_is_app() is False
+
+    def test_window_tiles_sit_to_the_right_of_the_app_tiles(self, bar_with_tiles):
+        bar = bar_with_tiles
+        bar.update_windows([_win("w1", "Other")])
+        kinds = []
+        for i in range(bar._total()):
+            bar._tile_index = i
+            kinds.append(bar.current_kind())
+        assert kinds == ["app"] * len(bar._tiles) + ["add", "window"]
+
     def test_add_tile_has_no_management_context(self, bar_with_tiles):
         bar = bar_with_tiles
         bar._tile_index = len(bar._tiles)             # focus the [＋]

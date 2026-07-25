@@ -1,11 +1,9 @@
-"""Tests for the COSMIC WindowManager adapter.
-
-The protocol mirror and the PID recovery are both stubbed: what is under test is
-the mapping to domain windows and the routing of the port's operations, not the
-wire format (see test_cosmic_toplevels.py) or /proc (see test_cosmic_pids.py).
+"""Tests for the COSMIC WindowManager adapter: the mapping to domain windows and
+the routing of the port's operations. The protocol mirror, the PID recovery and the
+X11 table are stubbed — they have tests of their own.
 """
 
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -61,11 +59,15 @@ def manager_for(qapp):
         from infrastructure.cosmic.wm.window_manager import CosmicWindowManager
 
         mirror = FakeMirror(toplevels)
+        xwayland = MagicMock()
+        xwayland.snapshot.return_value = []
         with patch("infrastructure.cosmic.wm.window_manager.CosmicToplevels",
                    return_value=mirror), \
+             patch("infrastructure.cosmic.wm.window_manager.XWaylandWindows",
+                   return_value=xwayland), \
              patch("infrastructure.cosmic.wm.window_manager.QSocketNotifier"):
             wm = CosmicWindowManager()
-        wm._pids.resolve = lambda _toplevels: dict(candidates or {})
+        wm._pids.resolve = lambda _toplevels, _x11: dict(candidates or {})
         wm._do_refresh()
         return wm, mirror
     return build
@@ -109,14 +111,25 @@ class TestEnumWindows:
         assert wm.cached_windows() == []
 
     def test_our_own_surfaces_are_skipped_by_app_id(self, manager_for, qapp):
-        # Kasual's own PID is exactly what COSMIC will not report, so a surface of
-        # ours that is not layer-shell would otherwise be taken for a foreign
-        # window and given a dynamic tile.
+        # COSMIC will not report our own PID, so a surface of ours that is not
+        # layer-shell would otherwise earn itself a tile.
         qapp.setDesktopFileName("kasual-desktop")
         wm, _ = manager_for([_toplevel("id-a", "kasual-desktop", "Kasual Home"),
                              _toplevel("id-b", "kasual-desktop", "Kasual Hints"),
                              _toplevel("id-c", "firefox", "Firefox")])
         assert [w.resource_class for w in wm.cached_windows()] == ["firefox"]
+
+    def test_one_x11_scan_serves_the_whole_refresh(self, manager_for):
+        wm, _ = manager_for([_toplevel("id-a", "firefox")])
+        assert wm._xwayland.snapshot.call_count == 1
+
+    def test_a_refresh_asks_for_the_fullscreen_a_game_never_asked_for(self, manager_for):
+        wm, _ = manager_for([_toplevel("id-a", "game")])
+        wm._fullscreen = MagicMock()
+        wm._xwayland.snapshot.return_value = ["the x11 table"]
+        wm._do_refresh()
+        wm._fullscreen.apply.assert_called_once_with(
+            [_toplevel("id-a", "game")], ["the x11 table"])
 
     def test_active_window_id_follows_the_activated_toplevel(self, manager_for):
         wm, _ = manager_for([_toplevel("id-a", "firefox"),
@@ -150,8 +163,8 @@ class TestOperations:
         assert sorted(mirror.minimized) == [100, 101]
 
     def test_activate_for_pids_reaches_a_window_with_no_single_pid(self, manager_for):
-        # The launch case COSMIC cannot resolve to one PID: a second instance of a
-        # program already running. Membership in the tree still answers it.
+        # A second instance of a running program: membership of the tree answers
+        # what a single PID cannot.
         wm, mirror = manager_for([_toplevel("id-a", "term")],
                                  {"id-a": frozenset({10, 40})})
         assert wm.cached_windows()[0].pid == 0
@@ -174,6 +187,25 @@ class TestOperations:
             {"id-a": frozenset({11}), "id-b": frozenset({12})})
         wm.raise_windows_for_pid_exact(11)
         assert mirror.activated == [100]
+
+    def test_handing_an_app_the_screen_is_told_to_the_fullscreen_rule(self, manager_for):
+        wm, _ = manager_for([])
+        wm._fullscreen = MagicMock()
+        wm.screen_given_to_app()
+        wm._fullscreen.screen_given_to_app.assert_called_once()
+
+    def test_activating_a_window_hands_it_the_screen_too(self, manager_for):
+        # How the Home Menu returns to a running app, rather than through a launch.
+        wm, _ = manager_for([_toplevel("id-a", "game")])
+        wm._fullscreen = MagicMock()
+        wm.activate_window("id-a")
+        wm._fullscreen.screen_given_to_app.assert_called_once()
+
+    def test_kasual_taking_the_screen_back_ends_it(self, manager_for):
+        wm, _ = manager_for([])
+        wm._fullscreen = MagicMock()
+        wm.raise_self()
+        wm._fullscreen.screen_taken_back.assert_called_once()
 
     def test_close_disposes_the_connection(self, manager_for):
         wm, mirror = manager_for([])

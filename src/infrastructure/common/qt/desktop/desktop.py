@@ -294,6 +294,8 @@ class Desktop(QWidget, DesktopView, DesktopShell, DesktopControl, metaclass=Prot
             confirm=self._confirm_snapshot(),
             focus=FocusSnapshot(
                 zone=TILES if on_tiles else HEADER,
+                cursor=self._tilebar.cursor_index() if on_tiles else None,
+                kind=self._tilebar.current_kind() if on_tiles else None,
                 tile_index=index,
                 app_id=tiles[index].app_id if index is not None and index < len(tiles) else None,
             ),

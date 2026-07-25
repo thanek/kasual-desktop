@@ -2,14 +2,14 @@
 
 Unlike Sway and Hyprland, COSMIC has a real minimize, so the port's
 minimize/activate pair maps straight onto ``set_minimized``/``unset_minimized``
-with no scratchpad or special-workspace stand-in. It has no client-driven
-fullscreen — cosmic-comp does not advertise that capability — so a window is
-activated and left to request fullscreen itself.
+with no scratchpad or special-workspace stand-in. It has no fullscreen among its
+management requests — cosmic-comp does not advertise that capability — so
+:class:`ForegroundFullscreen` asks for it over X11 instead.
 
 The compositor pushes changes instead of answering queries, so the mirror in
 :class:`CosmicToplevels` is refreshed from the socket and the periodic snapshot
 merely re-reads it — which is also when PIDs, unknowable from the protocol, are
-resolved again for windows whose process has since become identifiable.
+resolved again.
 """
 
 from __future__ import annotations
@@ -18,8 +18,10 @@ from PyQt6.QtCore import QObject, QSocketNotifier
 from PyQt6.QtGui import QGuiApplication
 
 from domain.catalog.window import Window
+from infrastructure.cosmic.wm.fullscreen import ForegroundFullscreen
 from infrastructure.cosmic.wm.pids import WindowPidResolver, representative_pid
 from infrastructure.cosmic.wm.toplevels import CosmicToplevels
+from infrastructure.cosmic.wm.xwayland import XWaylandWindows
 from infrastructure.linux.proc import expand_pid_tree
 from infrastructure.linux.wm.base import PollingWindowManager
 
@@ -30,7 +32,9 @@ class CosmicWindowManager(PollingWindowManager):
     def __init__(self, parent: QObject | None = None) -> None:
         super().__init__(parent)
         self._toplevels = CosmicToplevels(self._request_list_refresh)
-        self._pids = WindowPidResolver()
+        self._xwayland = XWaylandWindows()
+        self._pids = WindowPidResolver(self._xwayland)
+        self._fullscreen = ForegroundFullscreen(self._xwayland)
         self._candidate_pids: dict[str, frozenset[int]] = {}
         self._notifier = QSocketNotifier(
             self._toplevels.fileno(), QSocketNotifier.Type.Read, self)
@@ -41,16 +45,15 @@ class CosmicWindowManager(PollingWindowManager):
 
     def _enum_windows(self) -> list[Window]:
         toplevels = self._toplevels.toplevels()
-        self._candidate_pids = self._pids.resolve(toplevels)
+        x11 = self._xwayland.snapshot()
+        self._candidate_pids = self._pids.resolve(toplevels, x11)
+        self._fullscreen.apply(toplevels, x11)
         own_app_id = QGuiApplication.desktopFileName()
         windows = []
         for toplevel in toplevels:
             if not toplevel.identifier or not toplevel.app_id:
                 continue
-            # By app_id, not by PID: our own PID is exactly what COSMIC will not
-            # tell us, and any Kasual surface that is not a layer-shell one — as
-            # happens wherever LayerShellQt is missing — would otherwise come back
-            # as a window of someone else's and earn itself a tile.
+            # By app_id: our own PID is exactly what COSMIC will not tell us.
             if toplevel.app_id == own_app_id:
                 continue
             candidates = self._candidate_pids.get(toplevel.identifier, frozenset())
@@ -69,12 +72,9 @@ class CosmicWindowManager(PollingWindowManager):
     def _windows_for_pids(self, pids: set[int]) -> list[Window]:
         """Windows any of whose candidate processes belong to *pids*' subtree.
 
-        The base class compares a window's single PID, which COSMIC often cannot
-        pin down; asking whether the launched tree contains *any* candidate needs
-        no such choice, and is the question the lifecycle is really posing. Two
-        instances of one program share their candidates and so are reached
-        together — the same over-reach ``matches_app`` already has, and far milder
-        than leaving a launched app's own window unreachable.
+        The base class compares one PID per window, which COSMIC often cannot pin
+        down; membership of the tree needs no such choice. Two instances of one
+        program share candidates and are reached together.
         """
         owned = expand_pid_tree(pids)
         return [w for w in self._cache.values()
@@ -86,6 +86,7 @@ class CosmicWindowManager(PollingWindowManager):
         handle = self._toplevels.handle_for(window_id)
         if handle is not None:
             self._toplevels.activate(handle)
+        self._fullscreen.screen_given_to_app()
 
     def close_window(self, window_id: str) -> None:
         handle = self._toplevels.handle_for(window_id)
@@ -101,6 +102,13 @@ class CosmicWindowManager(PollingWindowManager):
     def activate_windows_for_pids(self, pids: set[int]) -> None:
         for window in self._windows_for_pids(pids):
             self.activate_window(window.id)
+
+    def screen_given_to_app(self) -> None:
+        self._fullscreen.screen_given_to_app()
+
+    def raise_self(self) -> None:
+        super().raise_self()
+        self._fullscreen.screen_taken_back()
 
     def raise_windows_for_pid_exact(self, pid: int) -> None:
         for window in self._cache.values():

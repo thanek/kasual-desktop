@@ -7,6 +7,7 @@ by the `minimize` behavioral scenario, which reads this very snapshot back.
 from unittest.mock import MagicMock, patch
 
 from domain.menu.entry import RETURN_TO_DESKTOP
+from domain.catalog.window import Window
 from domain.shell.introspection import (
     HomeMenuSnapshot, MenuItemSnapshot, MenuSectionSnapshot,
 )
@@ -57,3 +58,52 @@ class TestSnapshot:
         running.name = 'Kingdom Come Deliverance'
         with patch.object(desktop.app_control, 'current_app', return_value=running):
             assert desktop.snapshot().foreground == 'Kingdom Come Deliverance'
+
+
+class TestTileCursor:
+    """`tile_index` describes an app tile and is None everywhere else, so on its own
+    it cannot tell a cursor parked on a window tile from no focus at all. The
+    behavioral harness read that as "before the target" and pressed right — away
+    from the app tiles, which are the leftmost section — until the bar ran out.
+
+    The app-tile case needs a populated bar; it is covered in test_tile_bar.py.
+    """
+
+    def _desktop_with_a_window_tile(self, mock_gamepad):
+        desktop = _make_desktop(mock_gamepad)
+        desktop._tilebar.update_windows(
+            [Window(id='w1', title='Brave', pid=0, resource_class='brave-browser')])
+        return desktop
+
+    def test_a_window_tile_still_reports_where_the_cursor_is(self, mock_gamepad):
+        desktop = self._desktop_with_a_window_tile(mock_gamepad)
+        cursor = len(desktop._tilebar._tiles) + 1        # past the apps and the [+]
+        desktop._tilebar._tile_index = cursor
+        focus = desktop.snapshot().focus
+
+        assert focus.tile_index is None                  # no app tile to name
+        assert (focus.cursor, focus.kind) == (cursor, 'window')
+
+    def test_the_add_tile_is_distinguishable_from_a_window_tile(self, mock_gamepad):
+        desktop = self._desktop_with_a_window_tile(mock_gamepad)
+        desktop._tilebar._tile_index = len(desktop._tilebar._tiles)
+        focus = desktop.snapshot().focus
+        assert (focus.kind, focus.tile_index) == ('add', None)
+
+    def test_the_cursor_orders_the_bar_left_to_right(self, mock_gamepad):
+        """What makes navigation decidable: anything that is not an app tile has a
+        cursor greater than every app tile's."""
+        desktop = self._desktop_with_a_window_tile(mock_gamepad)
+        kinds = []
+        for i in range(desktop._tilebar._total()):
+            desktop._tilebar._tile_index = i
+            kinds.append(desktop.snapshot().focus.kind)
+        assert kinds == ['app'] * len(desktop._tilebar._tiles) + ['add', 'window']
+
+    def test_the_header_zone_has_no_tile_cursor(self, mock_gamepad):
+        desktop = self._desktop_with_a_window_tile(mock_gamepad)
+        with patch.object(type(desktop._nav), 'in_tiles',
+                          property(lambda _self: False)):
+            focus = desktop.snapshot().focus
+        assert focus.zone == 'header'
+        assert (focus.cursor, focus.kind) == (None, None)

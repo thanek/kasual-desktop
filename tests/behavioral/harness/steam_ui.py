@@ -1,24 +1,14 @@
-"""Steam's own UI, read through the debugger its Chromium exposes.
+"""Steam's own UI, read through the debugger its Chromium exposes, so every pad
+press can be checked against what Steam says has the focus.
 
-Big Picture is Chromium (CEF), and with the debug flag on it speaks the Chrome
-DevTools Protocol — so a foreign, opaque application gains the one thing that makes
-driving it honest: a read-back. Every pad press is checked against what Steam says
-has the focus, exactly as `navigation.py` checks its presses against KD.
+Load-bearing, none of it a guess:
 
-Four things are load-bearing, and none of them is a guess:
-
-* `.Focusable` and `aria-label` survive Steam's updates. The class names beside them
-  (`WYgDg9NyCcMIVuMyZ_NBC`) are per-build hashes and must never be matched against.
-* Big Picture is not one page. Its main menu and quick-access panel are CEF targets
-  of their own, so the focus has to be read from whichever page currently holds it —
+* `.Focusable` and `aria-label` survive Steam's updates; the class names beside them
+  are per-build hashes and must never be matched against.
+* Big Picture is several CEF pages, so the focus is read from whichever holds it —
   `document.hasFocus()` says which.
-* The focus Steam reports is the one drawn on screen: the ring around the tile.
-  Verified against a screenshot before this was trusted.
-* A game is identified by its appid, never by its name. Steam hangs `data-id` on the
-  tile's panel, above whatever the pad actually focused, and that number is the same in
-  every language and every Steam build. The label is not: Big Picture localises it, so
-  a run matching on the English name walks straight past `Wiedźmin 3: Dziki Gon` and
-  reports the game as missing. Names are for the report; appids are for the decisions.
+* A game is identified by its appid, never its name: Big Picture localises labels,
+  and a run matching English walks straight past `Wiedźmin 3: Dziki Gon`.
 """
 
 from __future__ import annotations
@@ -43,15 +33,15 @@ ENDPOINT = 'http://localhost:8080'
 
 MAX_HOME_ROW = 20   # games on Big Picture's home row before the run gives up
 
-# Steam answers on the debugger while it is still logging in, and its loading
-# screens carry a handful of focusables where the UI proper carries hundreds.
-UI_IS_UP = 20
+# There whenever Steam runs at all, Big Picture or no — so a page answering on the
+# debugger cannot mean Big Picture is up. Big Picture brings pages of its own.
+SHARED_CONTEXT = 'SharedJSContext'
 
 # Steam's UI is localised, and the button is read by its name.
 PLAY_LABELS = frozenset({'graj', 'zagraj', 'play'})
 
-# Steam swaps Play for one of these when the game is not ready, and read by name they
-# are the difference between "the pad never reached Play" and "there was no Play to reach".
+# Steam swaps Play for one of these when the game is not ready: the difference
+# between "the pad never reached Play" and "there was no Play to reach".
 NOT_READY_LABELS = {
     'wstrzymaj': 'the game is downloading or updating',
     'pause': 'the game is downloading or updating',
@@ -81,11 +71,11 @@ _FOCUS_JS = """
         }
         return '';
     }
-    // gpfocus is Steam's own marker for where the pad cursor sits; activeElement
-    // agrees with it, and is the fallback when Steam has not set it.
+    // gpfocus is Steam's own marker for the pad cursor; activeElement is the
+    // fallback when Steam has not set it.
     var el = document.querySelector('.gpfocus') || document.activeElement;
     var name = el ? (labelOf(el) || el.innerText) : '';
-    // The appid sits on the tile's panel, several levels above what holds the focus.
+    // The appid sits on the tile's panel, above what holds the focus.
     var appid = '';
     for (var node = el; node; node = node.parentElement) {
         var id = node.getAttribute ? node.getAttribute('data-id') : null;
@@ -112,11 +102,8 @@ class SteamUnavailable(RuntimeError):
 
 @dataclass(frozen=True)
 class Focus:
-    """Where Steam's pad cursor sits: the appid decides, the label describes.
-
-    The label is whatever Steam calls it in the operator's language, so it belongs in
-    reports and nowhere near a comparison.
-    """
+    """Where Steam's pad cursor sits: the appid decides, the label only describes —
+    it is localised, so it belongs in reports and nowhere near a comparison."""
     label: str
     appid: str
 
@@ -129,19 +116,16 @@ class Focus:
 
 
 def _pump(seconds: float) -> None:
-    """Sleep without going deaf: the window source's events arrive on Qt's event loop,
-    and a plain sleep here leaves its window snapshots stale."""
+    """Sleep without going deaf: the window source's events arrive on Qt's event
+    loop, and a plain sleep leaves its snapshots stale."""
     QCoreApplication.processEvents(QEventLoop.ProcessEventsFlag.AllEvents, 50)
     time.sleep(seconds)
 
 
 class CefDebugging:
-    """The debug flag, put there for the run and taken away after it.
-
-    An open debug port lets any local process drive the user's Steam, so a run that
-    turns it on owns turning it off again. One that was there already is left alone:
-    it is not ours to remove.
-    """
+    """The debug flag, put there for the run and taken away after it — an open debug
+    port lets any local process drive Steam. One already there is not ours to
+    remove."""
 
     def __init__(self) -> None:
         self._ours = False
@@ -163,10 +147,8 @@ class CefDebugging:
 class SteamUI:
     """Big Picture, over the DevTools Protocol: what has the focus, and nothing else.
 
-    Read-only on purpose. Steam could be driven from here — the protocol dispatches
-    input, and `SteamClient` is right there — but then the run would prove something
-    about Steam's DOM instead of about the pad Kasual Desktop re-emits, which is the
-    only reason this scenario exists.
+    Read-only on purpose: driving Steam from here would prove something about its
+    DOM instead of about the pad Kasual Desktop re-emits.
     """
 
     def __init__(self, endpoint: str = ENDPOINT) -> None:
@@ -177,8 +159,7 @@ class SteamUI:
     # ── the pages ────────────────────────────────────────────────────────────
 
     def _pages(self) -> list[dict]:
-        # Toasts are pages too, and Steam reports them as focused while they are up —
-        # "Podłączono kontroler…" would then answer for the focus behind it.
+        # Toasts are pages too and report themselves focused while they are up.
         try:
             with urllib.request.urlopen(f'{self._endpoint}/json/list', timeout=2) as reply:
                 return [t for t in json.load(reply)
@@ -186,6 +167,10 @@ class SteamUI:
                         and not t.get('title', '').startswith('notificationtoasts')]
         except (urllib.error.URLError, TimeoutError, OSError):
             return []
+
+    def _own_pages(self) -> list[dict]:
+        """Big Picture's pages: everything but the context Steam always has open."""
+        return [p for p in self._pages() if p.get('title') != SHARED_CONTEXT]
 
     def _connection(self, page: dict) -> websocket.WebSocket:
         url = page['webSocketDebuggerUrl']
@@ -221,12 +206,15 @@ class SteamUI:
     # ── waiting for it ───────────────────────────────────────────────────────
 
     def connect(self, timeout_s: float = timeouts.STEAM_UI) -> None:
-        """Wait for Big Picture's UI itself — not for the login and loading screens it
-        shows first, which answer on the debugger just as readily and swallow a press
-        that lands on them."""
+        """Wait for a page of Big Picture's own to render something navigable.
+
+        Not for a count of focusables: how many a home page carries is a matter of
+        the build and of what is on the row, so a threshold only guesses at someone
+        else's DOM. That anything focusable exists is what says the pad can land.
+        """
         deadline = time.monotonic() + timeout_s
         while time.monotonic() < deadline:
-            if any(self._probe(page)['focusables'] > UI_IS_UP for page in self._pages()):
+            if any(self._probe(page)['focusables'] for page in self._own_pages()):
                 return
             _pump(1.0)
         raise SteamUnavailable(
@@ -243,12 +231,11 @@ class SteamUI:
     # ── what it has focused ──────────────────────────────────────────────────
 
     def focused(self) -> Focus:
-        """What Steam has focused, in whichever of its pages holds the focus — the main
-        menu is a page of its own.
+        """What Steam has focused, in whichever of its pages holds the focus.
 
-        Empty when no page holds it, which means Steam does not have the window focus
-        and is ignoring the pad. Answering from a page that merely *had* the focus is
-        how a run comes to believe a press landed when it went nowhere.
+        Empty when none does, which means Steam has not got the window focus and is
+        ignoring the pad — answering from a page that merely *had* it is how a run
+        comes to believe a press landed when it went nowhere.
         """
         for page in self._pages():
             probe = self._probe(page)
@@ -264,11 +251,13 @@ class SteamUI:
 
     def where(self) -> str:
         """What the UI is showing, in its own words — for when a press went somewhere
-        other than where the run believed."""
-        for page in self._pages():
-            if self._probe(page)['focusables'] > UI_IS_UP:   # the UI, not a menu
-                return self._evaluate(page, _WHERE_JS)
-        return '(no Steam UI)'
+        other than where the run believed. The busiest page is the one showing it; a
+        menu or a panel carries a fraction of what is behind it."""
+        pages = self._own_pages()
+        if not pages:
+            return '(no Steam UI)'
+        busiest = max(pages, key=lambda page: self._probe(page)['focusables'])
+        return self._evaluate(busiest, _WHERE_JS) or '(no Steam UI)'
 
     def wait_focus_gained(self, timeout_s: float) -> bool:
         deadline = time.monotonic() + timeout_s
@@ -299,9 +288,8 @@ class SteamUI:
     def seek_app(self, appid: str, move: Callable[[], None], max_steps: int) -> bool:
         """Press *move* until the focused tile is *appid*, reading it back each time.
 
-        Gives up as soon as the focus stops moving: the end of a row in Steam is
-        silent, and a scan that presses on regardless is how a test comes to launch
-        the wrong game.
+        Gives up once the focus stops moving: the end of a row is silent, and a scan
+        that presses on regardless is how a test launches the wrong game.
         """
         seen = self.focused()
         if seen.appid == appid:
@@ -333,8 +321,8 @@ def expect_big_picture(steam: SteamUI) -> None:
 
 
 def expect_window_focus(steam: SteamUI) -> None:
-    """Steam reads its gamepad only while its own window has the focus, so this is
-    also the assertion that KD handed the screen over rather than keeping it."""
+    """Steam reads its gamepad only while its window has the focus, so this also
+    asserts that KD handed the screen over."""
     if steam.wait_focus_gained(timeouts.CEDE):
         report('Steam has the window focus', 'PASS', 'KD handed it over')
         return
@@ -346,22 +334,10 @@ def expect_window_focus(steam: SteamUI) -> None:
 def focus_game(steam: SteamUI, pad: VirtualPad, appid: str, name: str) -> None:
     """Walk Big Picture's home page to the game, reading the focus back each press.
 
-    This is what the scenario is *for*: the pad Kasual Desktop re-emits has to reach a
-    foreign application, and every press has to land where we think it did.
-
-    Where the focus starts depends on how Steam came up — on the games, or on the news
-    row below them — and until a direction is pressed, the ring on screen is not yet a
-    pad cursor: the first press only engages it. So the run engages it deliberately,
-    down and back up, and only then trusts what it reads.
-
-    The row opens on whichever game was played last, which the run before this one may
-    well have changed, so the target can sit on either side of the start. Hence the
-    sweep back: a failed rightward scan leaves the cursor at the far end of the row, and
-    only a leftward one long enough to cross the whole row reaches what lies left of
-    where the walk began.
-
-    *name* never decides anything — it is what the failure says out loud. The tile is
-    recognised by *appid*, which no translation of Steam's UI can move.
+    Down and back up first: until a direction is pressed the ring on screen is not
+    yet a pad cursor. Then rightwards and, failing that, twice as far leftwards —
+    the row opens on whichever game was played last, so the target can lie either
+    side of the start, and a failed rightward scan ends at the far end of the row.
     """
     steam.step(pad.down)
     steam.step(pad.up)

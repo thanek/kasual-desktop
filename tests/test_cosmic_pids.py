@@ -7,10 +7,11 @@ rules rather than the host's real process list.
 from unittest.mock import patch
 
 from infrastructure.cosmic.wm.pids import (
-    WindowPidResolver, _named_processes, _normalise, _process_names, _X11Window,
-    _x11_pid, representative_pid,
+    WindowPidResolver, _named_processes, _normalise, _process_names,
+    representative_pid,
 )
 from infrastructure.cosmic.wm.toplevels import Toplevel
+from infrastructure.cosmic.wm.xwayland import X11Window
 
 
 def _toplevel(app_id, title="", identifier="id"):
@@ -53,26 +54,6 @@ class TestRepresentativePid:
         parents = {10: 1, 40: 1}
         with patch("infrastructure.cosmic.wm.pids.parent_pid", parents.get):
             assert representative_pid(frozenset({10, 40})) == 0
-
-
-class TestX11Matching:
-    def test_matches_on_window_class(self):
-        windows = [_X11Window(("steam_app_620", "steam_app_620"), "The Witcher", 500)]
-        assert _x11_pid(windows, _toplevel("steam_app_620")) == 500
-
-    def test_title_separates_two_instances_of_one_app(self):
-        windows = [_X11Window(("term", "term"), "left", 1),
-                   _X11Window(("term", "term"), "right", 2)]
-        assert _x11_pid(windows, _toplevel("term", title="right")) == 2
-
-    def test_ambiguous_without_a_title_match(self):
-        windows = [_X11Window(("term", "term"), "left", 1),
-                   _X11Window(("term", "term"), "right", 2)]
-        assert _x11_pid(windows, _toplevel("term", title="other")) == 0
-
-    def test_unknown_class_finds_nothing(self):
-        windows = [_X11Window(("term", "term"), "left", 1)]
-        assert _x11_pid(windows, _toplevel("firefox")) == 0
 
 
 class TestProcessNames:
@@ -127,7 +108,7 @@ class TestResolve:
                                return_value=table or {})
 
     def test_xwayland_pid_wins_and_is_exact(self):
-        x11 = [_X11Window(("steam_app_620",), "Game", 500)]
+        x11 = [X11Window(("steam_app_620",), "Game", 500)]
         resolver, table = self._resolver(x11, {"steamapp620": {1, 2}})
         with table:
             resolved = resolver.resolve([_toplevel("steam_app_620", "Game", "a")])
@@ -155,7 +136,7 @@ class TestResolve:
 
     def test_process_table_is_not_read_when_x11_answers_everything(self):
         resolver = WindowPidResolver()
-        resolver._xwayland.snapshot = lambda: [_X11Window(("game",), "G", 5)]
+        resolver._xwayland.snapshot = lambda: [X11Window(("game",), "G", 5)]
         with patch("infrastructure.cosmic.wm.pids._process_table") as table:
             resolver.resolve([_toplevel("game", "G", "a")])
         table.assert_not_called()
