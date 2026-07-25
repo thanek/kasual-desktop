@@ -95,7 +95,7 @@ class Session:
         self.kd = KDClient()
         self.windows = build_window_source()
         try:
-            requirements.check(self.scenario.requires, kd=self.kd)
+            requirements.check(requirements.BASE + self.scenario.requires, kd=self.kd)
             self.windows.start(timeouts.WINDOW_SOURCE)
             report('window source installed', 'PASS',
                    f'{type(self.windows).__name__}, '

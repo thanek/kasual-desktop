@@ -291,11 +291,13 @@ class AppLifecycle(AppControl):
         handed the launch to a running Steam and exited before the game drew anything,
         so its exit says nothing about whether the game is still coming.
 
-        Three things have to hold, and the launch is over the moment any of them stops:
-        the tile is still what is in front, the Desktop is still ceded to it — the return
-        watcher disarms itself once a window of it has been seen and then gone — and it
-        has no window right now. Reading the armed *hide* instead would miss the last
-        two: it disarms itself a few seconds in whether or not a window ever came.
+        Four things have to hold, and the launch is over the moment any of them stops:
+        the tile is still what is in front, the Desktop is still ceded to it, the game
+        has never had a window under this launch, and it has none right now. That third
+        one tells a handoff from an ending: a cold-started game tile *is* the Steam
+        client, so its process ends when Steam quits, long after the game left the
+        screen. Reading the armed *hide* instead would miss all three: it disarms itself
+        a few seconds in whether or not a window ever came.
         """
         app = next((a for a in self._apps if a.id == app_id), None)
         if app is None or app.steam_app_id is None:
@@ -303,6 +305,7 @@ class AppLifecycle(AppControl):
         target = self._foreground.current
         return (isinstance(target, AppTarget) and target.app_id == app_id
                 and self._deferred_show.is_armed
+                and not self._deferred_show.has_seen_window
                 and not self._still_windowed(app_id))
 
     def _forwarder_cede_grace_elapsed(self, app_id: str) -> None:

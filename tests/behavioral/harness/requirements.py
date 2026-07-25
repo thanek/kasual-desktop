@@ -17,7 +17,7 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 
 from tests.behavioral.harness import kd_client
-from tests.behavioral.harness.kd_client import KDClient
+from tests.behavioral.harness.kd_client import KasualDesktopUnavailable, KDClient
 from tests.behavioral.harness.report import ScenarioAborted, report
 
 
@@ -136,6 +136,26 @@ def kd_test_api() -> Requirement:
     )
 
 
+def kd_idle() -> Requirement:
+    """An app KD still believes is running changes what the pad does: over a game
+    BTN_MODE follows its hold-to-recall policy, so a short press opens nothing."""
+    def nothing_in_front(kd: KDClient | None) -> bool:
+        if kd is None:
+            return False
+        try:
+            return kd.snapshot()['foreground'] is None
+        except KasualDesktopUnavailable:
+            return False
+
+    return Requirement(
+        'Kasual Desktop has no app in the foreground',
+        nothing_in_front,
+        needs_kd=True,
+        remedy='KD still has an app in front — wait for it to notice the app is gone, '
+               'or restart KD, and run again',
+    )
+
+
 def window_source() -> Requirement:
     """For scenarios that watch a splash, a launcher or a game — everything else in the
     harness reads the pad and KD, which need no backend at all."""
@@ -202,6 +222,7 @@ BASE: tuple[Requirement, ...] = (
     writable('/dev/uinput',
              '/dev/uinput is writable (the `input` group, or a udev rule)'),
     no_physical_gamepad(),
+    kd_idle(),
 )
 
 

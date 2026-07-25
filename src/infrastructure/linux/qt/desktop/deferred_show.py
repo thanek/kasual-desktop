@@ -65,6 +65,10 @@ class DeferredShow(QObject, LaunchShow, metaclass=ProtocolQtMeta):
     def is_armed(self) -> bool:
         return self._app is not None
 
+    @property
+    def has_seen_window(self) -> bool:
+        return self._seen_window
+
     def arm(self, app: App) -> None:
         """Start watching *app*'s windows; show the Desktop once they are gone."""
         self.cancel()

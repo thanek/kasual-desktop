@@ -101,6 +101,7 @@ def _make(apps=None, visible=False, is_game_pid=None, paused=False):
     foreground = ForegroundState()
     deferred_hide = MagicMock()
     deferred_show = MagicMock()
+    deferred_show.has_seen_window = False   # as a launch arms it: nothing drawn yet
     cede_depth = MagicMock()
     tilebar = MagicMock()
     tilebar.is_closing.return_value = False
@@ -469,6 +470,17 @@ class TestOnAppFinished:
         c.lc.on_app_finished("witcher3")
         assert c.view.shown == 0
         assert c.scheduler.calls[-1][0] == _FORWARDER_CEDE_GRACE_MS
+
+    def test_steam_client_quitting_after_the_game_is_not_a_handoff_watcher_armed(self):
+        """The same exit with the watcher still armed — it can miss its shot, and the
+        game having been up is what says the launch is over."""
+        c = _make(apps=[_steam_game_app(appid="292030", id="witcher3")], visible=False)
+        c.ds.has_seen_window = True                 # the game was on the screen
+        c.fg.set(AppTarget(index=0, app_id="witcher3", name="Witcher 3"))
+        c.wm.cached_windows.return_value = []       # and is gone now
+        c.lc.on_app_finished("witcher3")
+        assert c.fg.is_idle()
+        assert c.view.shown == 1
 
     def test_steam_client_quitting_after_the_game_is_not_a_handoff(self):
         """A cold-started game tile *is* the Steam client, so its process outlives the

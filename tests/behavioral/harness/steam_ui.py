@@ -44,7 +44,9 @@ ENDPOINT = 'http://localhost:8080'
 MAX_HOME_ROW = 20   # games on Big Picture's home row before the run gives up
 
 # Steam answers on the debugger while it is still logging in, and its loading
-# screens carry a handful of focusables where the UI proper carries hundreds.
+# screens carry a handful of focusables where the UI proper carries hundreds — but a
+# drawn Big Picture home has been seen carrying thirteen, so the count is only one way
+# in. The other is a tile keyed by appid, which no loading screen has.
 UI_IS_UP = 20
 
 # Steam's UI is localised, and the button is read by its name.
@@ -91,9 +93,15 @@ _FOCUS_JS = """
         var id = node.getAttribute ? node.getAttribute('data-id') : null;
         if (id && /^[0-9]+$/.test(id)) { appid = id; break; }
     }
+    var tiles = 0;
+    document.querySelectorAll('[data-id]').forEach(function (node) {
+        if (/^[0-9]+$/.test(node.getAttribute('data-id'))) tiles++;
+    });
     return JSON.stringify({
         hasFocus: document.hasFocus(),
         focusables: document.querySelectorAll('.Focusable').length,
+        tiles: tiles,
+        gpfocus: !!document.querySelector('.gpfocus'),
         label: String(name).replace(/\\s+/g, ' ').trim().slice(0, 120),
         appid: appid
     });
@@ -126,6 +134,10 @@ class Focus:
         if self.appid:
             return f'an unlabelled tile (app {self.appid})'
         return repr(self.label)
+
+
+def _is_up(probe: dict) -> bool:
+    return probe['focusables'] > UI_IS_UP or probe['tiles'] > 0
 
 
 def _pump(seconds: float) -> None:
@@ -173,6 +185,7 @@ class SteamUI:
         self._endpoint = endpoint
         self._connections: dict[str, websocket.WebSocket] = {}
         self._next_id = 0
+        self._unreachable: Exception | None = None
 
     # ── the pages ────────────────────────────────────────────────────────────
 
@@ -181,11 +194,14 @@ class SteamUI:
         # "Podłączono kontroler…" would then answer for the focus behind it.
         try:
             with urllib.request.urlopen(f'{self._endpoint}/json/list', timeout=2) as reply:
-                return [t for t in json.load(reply)
-                        if t.get('type') == 'page'
-                        and not t.get('title', '').startswith('notificationtoasts')]
-        except (urllib.error.URLError, TimeoutError, OSError):
+                pages = [t for t in json.load(reply)
+                         if t.get('type') == 'page'
+                         and not t.get('title', '').startswith('notificationtoasts')]
+        except (urllib.error.URLError, TimeoutError, OSError) as exc:
+            self._unreachable = exc
             return []
+        self._unreachable = None
+        return pages
 
     def _connection(self, page: dict) -> websocket.WebSocket:
         url = page['webSocketDebuggerUrl']
@@ -226,19 +242,49 @@ class SteamUI:
         that lands on them."""
         deadline = time.monotonic() + timeout_s
         while time.monotonic() < deadline:
-            if any(self._probe(page)['focusables'] > UI_IS_UP for page in self._pages()):
+            if any(_is_up(self._probe(page)) for page in self._pages()):
                 return
             _pump(1.0)
         raise SteamUnavailable(
-            f'no Big Picture UI on {self._endpoint} after {timeout_s:.0f}s — was Steam '
-            'started with the CEF debug flag already in place?')
+            f'no Big Picture UI on {self._endpoint} after {timeout_s:.0f}s — '
+            f'{self._diagnosis()}')
+
+    def _diagnosis(self) -> str:
+        """What the debugger was saying when the wait ran out — a silent port and a
+        Steam short of its UI fail the same way here, and blaming the flag for both
+        sends the next run after the wrong thing."""
+        pages = self._pages()
+        if self._unreachable is not None:
+            return (f'the debugger does not answer ({self._unreachable}) — was Steam '
+                    'started with the CEF debug flag already in place?')
+        if not pages:
+            return 'the debugger answers, but Steam has no page open at all'
+        probed = sorted(((self._probe(page), page) for page in pages),
+                        key=lambda pair: pair[0]['focusables'], reverse=True)
+        seen = ', '.join(
+            f'{page.get("title", "")!r}: {probe["focusables"]} focusable(s), '
+            f'{probe["tiles"]} tile(s)'
+            f'{", pad cursor" if probe["gpfocus"] else ""}'
+            f'{", window focus" if probe["hasFocus"] else ""}'
+            for probe, page in probed if probe['focusables'] or probe['tiles'])
+        empty = sum(1 for probe, _ in probed
+                    if not (probe['focusables'] or probe['tiles']))
+        seen = ', '.join(filter(None, (seen, f'{empty} empty page(s)' if empty else '')))
+        try:
+            showing = self._evaluate(probed[0][1], _WHERE_JS)
+        except (OSError, websocket.WebSocketException) as exc:
+            showing = f'(unreadable: {exc})'
+        return (f'the debugger answers and Steam has pages, but none carries a UI '
+                f'(> {UI_IS_UP} focusables, or a tile to walk to) — {seen}; the '
+                f'fullest one is showing {showing!r}')
 
     def _probe(self, page: dict) -> dict:
         try:
             return json.loads(self._evaluate(page, _FOCUS_JS))
         except (ValueError, OSError, websocket.WebSocketException):
             self._connections.pop(page['webSocketDebuggerUrl'], None)
-            return {'hasFocus': False, 'focusables': 0, 'label': '', 'appid': ''}
+            return {'hasFocus': False, 'focusables': 0, 'tiles': 0, 'gpfocus': False,
+                    'label': '', 'appid': ''}
 
     # ── what it has focused ──────────────────────────────────────────────────
 
@@ -266,7 +312,7 @@ class SteamUI:
         """What the UI is showing, in its own words — for when a press went somewhere
         other than where the run believed."""
         for page in self._pages():
-            if self._probe(page)['focusables'] > UI_IS_UP:   # the UI, not a menu
+            if _is_up(self._probe(page)):   # the UI, not a menu
                 return self._evaluate(page, _WHERE_JS)
         return '(no Steam UI)'
 

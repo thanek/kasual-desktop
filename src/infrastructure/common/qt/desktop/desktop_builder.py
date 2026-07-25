@@ -82,6 +82,10 @@ class _NoDeferredShow:
     def is_armed(self) -> bool:
         return False
 
+    @property
+    def has_seen_window(self) -> bool:
+        return False
+
     def arm(self, app) -> None:
         pass
 

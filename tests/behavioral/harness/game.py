@@ -280,9 +280,12 @@ def _terminate(pid: int) -> bool:
     return False
 
 
+# steamwebhelper owns Big Picture's window and its debug port, and outlives the client.
+STEAM_PROCESSES = ('steam', 'steamwebhelper')
+
+
 def _steam_gone() -> bool:
-    return subprocess.run(['pgrep', '-x', 'steam'],
-                          stdout=subprocess.DEVNULL).returncode != 0
+    return not any(_pids_of(name) for name in STEAM_PROCESSES)
 
 
 def _shut_down_steam() -> None:
@@ -295,8 +298,9 @@ def _shut_down_steam() -> None:
         print('  steam shut down', flush=True)
         return
 
-    for pid in _pids_of('steam'):
-        _terminate(pid)
+    for name in STEAM_PROCESSES:
+        for pid in _pids_of(name):
+            _terminate(pid)
     print(f'  steam {"killed" if _steam_gone() else "still running"}', flush=True)
 
 
