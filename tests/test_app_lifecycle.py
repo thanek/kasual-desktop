@@ -482,6 +482,22 @@ class TestOnAppFinished:
         assert c.fg.is_idle()
         assert c.view.shown == 1
 
+    def test_game_that_showed_a_window_returns_on_exit_though_watchers_rearmed(self):
+        """A game whose window mapped and then closed has finished: its exit returns the
+        Desktop and drops the foreground, even though ceding to it re-armed the watchers
+        that would otherwise read it as a forwarder still handing off."""
+        c = _make(apps=[_steam_game_app(appid="292030", id="witcher3")], visible=False)
+        c.fg.set(AppTarget(index=0, app_id="witcher3", name="Witcher 3"))
+        c.wm.cached_windows.return_value = [
+            Window(id="w1", title="Witcher 3", pid=999, resource_class="steam_app_292030"),
+        ]
+        c.lc.note_launch_windowed()
+        c.wm.cached_windows.return_value = []
+        c.lc.on_app_finished("witcher3")
+        assert c.fg.is_idle()
+        assert c.view.shown == 1
+        assert all(delay != _FORWARDER_CEDE_GRACE_MS for delay, _ in c.scheduler.calls)
+
     def test_steam_forwarder_returns_when_its_window_is_late(self):
         """The grace elapses with no game window, so take the screen back rather than
         sit ceded behind nothing."""

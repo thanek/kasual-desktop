@@ -1,20 +1,17 @@
-"""The `Feedback` port's sound adapter — short UI cues via QSoundEffect.
+"""The `Feedback` port's sound adapter — short UI cues via QAudioSink + wave.
 
-One player per sounding, never rewound before its WAV has run out: cutting a player
-short damages it until the cues fall silent altogether, and this backend never
-reports a drained player as idle, so the timing is kept here. A press with every
-player of its cue still sounding goes unheard. See the README for the underlying
-Qt 6.4 bug, which no arrangement here cures.
+WAV files decode into memory once at init() (stdlib `wave`, no FFmpeg) and
+play as raw PCM. State lives on the instance, so one shared instance is
+created at the composition root and injected wherever cues are emitted.
 """
 
+import array
 import logging
-import time
 import wave
-
 from pathlib import Path
 
-from PyQt6.QtCore import QUrl
-from PyQt6.QtMultimedia import QMediaDevices, QSoundEffect
+from PyQt6.QtCore import QByteArray, QBuffer, QIODevice
+from PyQt6.QtMultimedia import QAudio, QAudioFormat, QAudioSink
 
 from domain.shared.feedback import Cue, Feedback
 from infrastructure.common.bundled import bundled_dir
@@ -22,76 +19,86 @@ from infrastructure.common.bundled import bundled_dir
 logger = logging.getLogger(__name__)
 
 _SOUNDS_DIR = bundled_dir("sounds")
-_VOICES = 8            # players per cue: how many may be sounding at once
-_UNKNOWN_LENGTH = 3.0  # held for this long when the WAV will not give its length
-_TAIL_S = 0.5          # what the sound takes to leave the audio server after that
+_SOUND_NAMES = tuple(c.value for c in Cue)
+
+
+def _convert_24_to_16(data: bytes) -> bytes:
+    out = array.array('h', [0] * (len(data) // 3))
+    for i in range(len(out)):
+        val24 = int.from_bytes(data[i * 3: i * 3 + 3], 'little', signed=True)
+        out[i] = val24 >> 8
+    return out.tobytes()
+
+
+def _read_wav(path: Path) -> 'tuple[QAudioFormat, bytes] | None':
+    try:
+        with wave.open(str(path)) as wf:
+            n_channels   = wf.getnchannels()
+            sample_rate  = wf.getframerate()
+            sample_width = wf.getsampwidth()
+            data         = wf.readframes(wf.getnframes())
+
+            # QAudioSink does not support 24-bit.
+            if sample_width == 3:
+                data         = _convert_24_to_16(data)
+                sample_width = 2
+
+            fmt = QAudioFormat()
+            fmt.setSampleRate(sample_rate)
+            fmt.setChannelCount(n_channels)
+            if sample_width == 1:
+                fmt.setSampleFormat(QAudioFormat.SampleFormat.UInt8)
+            elif sample_width == 2:
+                fmt.setSampleFormat(QAudioFormat.SampleFormat.Int16)
+            elif sample_width == 4:
+                fmt.setSampleFormat(QAudioFormat.SampleFormat.Int32)
+            else:
+                logger.warning("Unsupported sample format (%d B): %s", sample_width, path)
+                return None
+
+            return fmt, data
+    except Exception:
+        logger.exception("Error reading WAV: %s", path)
+        return None
 
 
 class SoundFeedback(Feedback):
-    """Implements the `Feedback` port over Qt's sound-effect player."""
+    """Implements the `Feedback` port over Qt Audio."""
 
     def __init__(self) -> None:
-        self._voices: dict[str, list[QSoundEffect]] = {}
-        self._free_at: dict[str, list[float]] = {}   # when each player finishes
-        self._length: dict[str, float] = {}
-        self._devices: QMediaDevices | None = None
+        self._loaded: dict[str, tuple[QAudioFormat, bytes]] = {}
+        # Held until playback finishes, or QAudioSink would be GC'd mid-sound.
+        self._active: list[tuple[QAudioSink, QBuffer]] = []
 
     def init(self) -> None:
-        """Builds the players for every cue. Call once after QApplication."""
-        # Kept alive for the signal below, which no instance emits once collected.
-        self._devices = QMediaDevices()
-        self._devices.audioOutputsChanged.connect(self._follow_default_output)
-        for cue in Cue:
-            path = _SOUNDS_DIR / f"{cue.value}.wav"
+        """Decodes WAV files into memory. Call once after QApplication."""
+        for name in _SOUND_NAMES:
+            path = _SOUNDS_DIR / f"{name}.wav"
             if not path.exists():
                 logger.warning("No sound file: %s", path)
                 continue
-            source = QUrl.fromLocalFile(str(path))
-            voices = []
-            for _ in range(_VOICES):
-                effect = QSoundEffect()
-                effect.setSource(source)
-                voices.append(effect)
-            self._voices[cue] = voices
-            self._free_at[cue] = [0.0] * _VOICES
-            self._length[cue] = _length_of(path)
-            logger.debug("Loaded sound: %s (%.2fs)", cue.value, self._length[cue])
-        self._follow_default_output()
-
-    def _follow_default_output(self) -> None:
-        output = QMediaDevices.defaultAudioOutput()
-        if output.isNull():
-            logger.warning("No audio output — cues will play into nothing")
-            return
-        for effect in self._all_effects():
-            effect.setAudioDevice(output)
-        logger.info("Sound cues play on %s", output.description())
-
-    def _all_effects(self) -> list[QSoundEffect]:
-        return [effect for voices in self._voices.values() for effect in voices]
+            result = _read_wav(path)
+            if result is not None:
+                self._loaded[name] = result
+                logger.debug("Loaded sound: %s", name)
 
     def play(self, cue: Cue) -> None:
         """Plays a previously loaded cue (no-op if unknown or not yet init()ed)."""
-        voices = self._voices.get(cue)
-        if not voices:
+        entry = self._loaded.get(cue)
+        if entry is None:
             logger.warning("Unknown sound or no init(): %s", cue)
             return
-        now = time.monotonic()
-        free_at = self._free_at[cue]
-        index = min(range(len(voices)), key=lambda i: free_at[i])
-        if free_at[index] > now:
-            return              # every player of this cue is still sounding
-        free_at[index] = now + self._length[cue] + _TAIL_S
-        # A player left marked as playing ignores play() until it is stopped.
-        voices[index].stop()
-        voices[index].play()
 
+        self._active[:] = [
+            (s, b) for s, b in self._active
+            if s.state() == QAudio.State.ActiveState
+        ]
 
-def _length_of(path: Path) -> float:
-    """How long the cue sounds for."""
-    try:
-        with wave.open(str(path)) as cue:
-            return cue.getnframes() / cue.getframerate()
-    except (OSError, wave.Error) as exc:
-        logger.warning("Could not read the length of %s: %s", path, exc)
-        return _UNKNOWN_LENGTH
+        fmt, data = entry
+        buf = QBuffer()
+        buf.setData(QByteArray(data))
+        buf.open(QIODevice.OpenModeFlag.ReadOnly)
+
+        sink = QAudioSink(fmt)
+        sink.start(buf)
+        self._active.append((sink, buf))

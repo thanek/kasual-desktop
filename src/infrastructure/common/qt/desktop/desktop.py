@@ -221,6 +221,7 @@ class Desktop(QWidget, DesktopView, DesktopShell, DesktopControl, metaclass=Prot
         # disappearance rebuilds nothing and the deferred return would never finish.
         self._wm.on_windows_updated(lambda _w: self._lifecycle.check_pending_return())
         self._wm.on_windows_updated(lambda _w: self._lifecycle.check_awaited_launch())
+        self._wm.on_windows_updated(lambda _w: self._lifecycle.note_launch_windowed())
         self._app_manager.on_finished(
             lambda e: self._lifecycle.on_app_finished(e.app_id))
         self._app_manager.on_launch_failed(

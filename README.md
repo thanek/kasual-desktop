@@ -318,36 +318,6 @@ etc. are *runtime* deps, not required to build).
 Publishing a GitHub Release triggers `.github/workflows/release.yml`, which runs
 `make all` on a clean runner and attaches the resulting packages to the release.
 
-### Known issue: UI sounds fade away on Qt 6.4
-
-**Symptom.** Navigate the tile bar long enough — roughly seventy moves, whether you
-tap the stick or hold a direction — and the cues get ragged, then quieter, then stop
-altogether. They stay gone until Kasual Desktop is restarted. Nothing is logged,
-because as far as Qt is concerned every cue is playing normally.
-
-**Cause.** `QSoundEffect` on Qt **6.4** with the PulseAudio backend, which is what
-Ubuntu 22.04 / Pop!_OS 22.04 ship. Recorded off the audio sink, ninety presses half
-a second apart peak at 1338, 1321, 1329, **4** across the run — full volume, then
-silence. The same code and the same run on Qt 6.11 (FFmpeg backend) holds 1313,
-1319, 1318, 1314. It is not the press rate (two a second fails as readily as
-thirty), not the `stop()`/`play()` pair, and not any single worn-out player:
-replacing players as they wear made it measurably worse, so the fault is
-process-wide rather than per-object.
-
-**What Kasual Desktop does about it.** `SoundFeedback` never rewinds a player that is still
-sounding — each cue owns a ring of players, and how long each one is busy is timed
-from the WAV's own length, since this Qt never reports a drained player as idle. A
-press with nothing free goes unheard rather than cutting one short. That roughly
-doubles how long the cues last (~35 moves before, ~70 after) but cannot cure it.
-
-**Resolution.** It is gone by Qt 6.11 — measured, not assumed; which release in
-between fixed it was not bisected. So it disappears once the distribution moves off
-6.4, with nothing to do in Kasual Desktop. Curing it
-on 6.4 itself would mean dropping `QSoundEffect` for one long-lived `QAudioSink` fed
-cues mixed in software, which is a fair amount of audio plumbing for a bug with an
-expiry date; the measurements and the reasoning are in
-`src/infrastructure/common/audio/feedback.py` if it ever becomes worth doing.
-
 ---
 
 # 🪟 Windows (10 / 11)

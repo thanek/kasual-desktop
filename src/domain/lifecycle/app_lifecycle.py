@@ -77,6 +77,7 @@ class AppLifecycle(AppControl):
         self._is_paused     = is_paused
         self._pending_return: str | None = None
         self._awaited_launch: str | None = None
+        self._launch_windowed: str | None = None
 
     def current_app(self) -> Target | None:
         return self._inspector.current_app()
@@ -114,6 +115,7 @@ class AppLifecycle(AppControl):
             self.restore_app(target)
         else:
             logger.info("Launching application %s", target.app_id)
+            self._launch_windowed = None
             self._feedback.play(Cue.SELECT)
             # So other apps' virtual pads don't interfere.
             self.arrange_windows()
@@ -287,23 +289,24 @@ class AppLifecycle(AppControl):
         return any(w.matches_app(app) for w in self._wm.cached_windows())
 
     def _forwarder_launch_in_flight(self, app_id: str) -> bool:
-        """A Steam-forwarder tile whose game window has not mapped yet: the forwarder
-        handed the launch to a running Steam and exited before the game drew anything,
-        so its exit says nothing about whether the game is still coming.
-
-        Three things have to hold, and the launch is over the moment any of them stops:
-        the tile is still what is in front, the Desktop is still ceded to it — the return
-        watcher disarms itself once a window of it has been seen and then gone — and it
-        has no window right now. Reading the armed *hide* instead would miss the last
-        two: it disarms itself a few seconds in whether or not a window ever came.
-        """
+        """A Steam forwarder handed off and exited before the game's first window
+        mapped. Only before that first window: ceding to a window re-arms the watchers,
+        so after one has shown, a later exit is the game finishing, not a handoff."""
         app = next((a for a in self._apps if a.id == app_id), None)
         if app is None or app.steam_app_id is None:
             return False
         target = self._foreground.current
         return (isinstance(target, AppTarget) and target.app_id == app_id
+                and self._launch_windowed != app_id
                 and self._deferred_show.is_armed
                 and not self._still_windowed(app_id))
+
+    def note_launch_windowed(self) -> None:
+        """A window has mapped for the foreground launch, so its later exit reads as the
+        game ending, not a forwarder still in flight."""
+        target = self._foreground.current
+        if isinstance(target, AppTarget) and self._still_windowed(target.app_id):
+            self._launch_windowed = target.app_id
 
     def _forwarder_cede_grace_elapsed(self, app_id: str) -> None:
         """The game's window has not come yet — take the screen back rather than sit
