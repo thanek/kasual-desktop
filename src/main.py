@@ -54,6 +54,7 @@ from infrastructure.linux.display.screensaver import (
 )
 from infrastructure.common.qt.scheduler import QtScheduler
 from infrastructure.linux.hud.mangohud import MangoHudControl
+from domain.system.hud import hud_launch_env
 from infrastructure.linux.notifications.notifications import FreedesktopNotificationMonitor
 from infrastructure.linux.network.network_manager import NMNetworkControl, NMNetworkMonitor
 from domain.notifications.center import NotificationCenter
@@ -164,6 +165,8 @@ def main() -> None:
 
         volume = PactlVolumeControl()
         brightness = select_brightness_control()
+        # Ahead of the controller below: launching a game already needs it.
+        hud = MangoHudControl()
         desktop = build_desktop(
             apps=apps, gamepad=gamepad, window_manager=wm,
             wallpaper=build_system_wallpaper(), feedback=feedback,
@@ -179,6 +182,7 @@ def main() -> None:
             is_game_pid=is_game_pid,
             app_adder=app_adder,
             power_preference=power_preference,
+            launch_env=lambda app: hud_launch_env(hud, app),
             deferred_hide_factory=lambda wm_, pm_, on_cede, on_hide:
                 DeferredHide(wm_, pm_, on_cede=on_cede, on_hide=on_hide,
                              always_cede=detect_compositor()
@@ -215,7 +219,6 @@ def main() -> None:
             version=version, gamepad=gamepad, quit_fn=app.quit,
         )
 
-        hud = MangoHudControl()
         controller = build_controller(
             gamepad=gamepad, desktop=desktop, tray=tray, wm=wm,
             power=power, hud=hud,

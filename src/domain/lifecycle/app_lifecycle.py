@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import logging
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 
+from domain.catalog.app import App
 from domain.catalog.live_catalog import LiveCatalog
 from domain.catalog.window_rules import is_app_running
 from domain.input.vocabulary import Trigger
@@ -57,6 +58,7 @@ class AppLifecycle(AppControl):
         prompts: Prompts,
         inspector: ForegroundInspector,
         is_paused: Callable[[], bool] = lambda: False,
+        launch_env: Callable[[App], Mapping[str, str]] = lambda _app: {},
     ):
         self._view          = view
         self._gamepad       = gamepad
@@ -75,6 +77,7 @@ class AppLifecycle(AppControl):
         self._prompts       = prompts
         self._inspector     = inspector
         self._is_paused     = is_paused
+        self._launch_env    = launch_env
         self._pending_return: str | None = None
         self._awaited_launch: str | None = None
 
@@ -122,7 +125,8 @@ class AppLifecycle(AppControl):
             self._gamepad.pop_handler(self._pad_handler)
             # launch() reports immediate failure synchronously (the Desktop is
             # already reactivated); only arm the deferred hide on a real launch.
-            if self._app_manager.launch(app.id, app.command, app.args, app.env):
+            env = {**self._launch_env(app), **app.env}   # app.env wins
+            if self._app_manager.launch(app.id, app.command, app.args, env):
                 # Defer the hide until the window maps, so no DE-desktop flash.
                 self._deferred_hide.arm(app)
                 self._deferred_show.arm(app)

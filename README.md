@@ -475,14 +475,21 @@ foreground is recognised as a game differs per platform:
 - **A MangoHud config file at `~/.config/MangoHud/MangoHud.conf`.** Its presence
   gates the whole feature — with no file, the toggle never appears (an empty
   file is enough). This is the file Kasual Desktop edits to show/hide the HUD.
-- **MangoHud actually injected into your games**, via any of:
-  - a global `MANGOHUD=1` in your environment (covers Vulkan games),
-  - `mangohud %command%` in a game's **Steam** launch options,
-  - the **Heroic**/**Lutris** "MangoHud" wrapper toggle,
-  - or per-tile `X-Kasual-Env=MANGOHUD=1` in the app's `.desktop`.
+- **MangoHud actually injected into your games** — Kasual Desktop does this for
+  you. Any tile declaring **`Categories=Game`** is launched with `MANGOHUD=1` (the
+  variable MangoHud's implicit Vulkan layer gates itself on), and a launcher tile
+  passes it down to every game it starts. Only game tiles get it, or an ordinary
+  Vulkan app would get the HUD too; a tile's own `X-Kasual-Env` overrides it
+  (`X-Kasual-Env=MANGOHUD=0` opts one tile out).
+
+  A launcher already running *outside* Kasual Desktop (Steam from your session's
+  autostart) never sees that variable, and its games inherit its environment.
+  Either let Kasual Desktop start the launcher, or set `MANGOHUD=1` session-wide
+  in `~/.config/environment.d/`.
 
   Note: `MANGOHUD=1` alone only injects into **Vulkan** apps; OpenGL games need
-  the `mangohud` wrapper (`LD_PRELOAD`).
+  the `mangohud` wrapper (`LD_PRELOAD`) — e.g. `mangohud %command%` in a game's
+  Steam launch options, or the Heroic/Lutris "MangoHud" wrapper toggle.
 
 **How toggling works** — the toggle comments/uncomments the `no_display` line in
 `~/.config/MangoHud/MangoHud.conf`. MangoHud watches this file (via `inotify`)

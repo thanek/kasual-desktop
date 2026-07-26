@@ -91,7 +91,7 @@ def _steam_game_app(appid="292030", trigger=Trigger.CLICK, id="witcher3"):
                args=(f"steam://rungameid/{appid}",), recall_menu_trigger=trigger)
 
 
-def _make(apps=None, visible=False, is_game_pid=None, paused=False):
+def _make(apps=None, visible=False, is_game_pid=None, paused=False, launch_env=None):
     view = FakeView(visible=visible)
     gamepad = MagicMock()
     gamepad.top_handler.return_value = None
@@ -136,6 +136,7 @@ def _make(apps=None, visible=False, is_game_pid=None, paused=False):
         prompts=prompts,
         inspector=inspector,
         is_paused=lambda: paused,
+        launch_env=launch_env if launch_env is not None else (lambda _app: {}),
     )
     return SimpleNamespace(
         lc=lc, view=view, gamepad=gamepad, wm=wm, am=app_manager,
@@ -252,6 +253,27 @@ class TestOnTileActivated:
         c.gamepad.pop_handler.assert_called_once_with(c.pad)
         c.dh.arm.assert_called_once_with(app)
         c.ds.arm.assert_called_once_with(app)
+
+    def test_launch_env_contributed_by_the_context(self):
+        c = _make(launch_env=lambda app: {"MANGOHUD": "1"})
+        c.am.is_running.return_value = False
+        c.am.launch.return_value = True
+        c.lc.on_tile_activated(AppTarget(index=0, app_id="app0", name="App"))
+        app = c.apps[0]
+        c.am.launch.assert_called_once_with(
+            app.id, app.command, app.args, {"MANGOHUD": "1"}
+        )
+
+    def test_app_env_wins_over_the_context(self):
+        apps = [App(name="App", command="prog", id="app0", env={"MANGOHUD": "0"})]
+        c = _make(apps=apps, launch_env=lambda app: {"MANGOHUD": "1", "EXTRA": "x"})
+        c.am.is_running.return_value = False
+        c.am.launch.return_value = True
+        c.lc.on_tile_activated(AppTarget(index=0, app_id="app0", name="App"))
+        app = c.apps[0]
+        c.am.launch.assert_called_once_with(
+            app.id, app.command, app.args, {"MANGOHUD": "0", "EXTRA": "x"}
+        )
 
     def test_failed_launch_does_not_arm_hide(self):
         c = _make()

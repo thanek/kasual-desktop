@@ -3,8 +3,10 @@ it is offered, how it reads, and which way a press flips it."""
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import Protocol
 
+from domain.catalog.app import App
 from domain.menu.entry import TOGGLE_HUD
 from domain.menu.item import MenuItem
 from domain.shared.i18n import translate
@@ -18,6 +20,19 @@ class HudControl(Protocol):
     def is_enabled(self) -> bool: ...
     def enable(self) -> None: ...
     def disable(self) -> None: ...
+
+    def launch_env(self) -> Mapping[str, str]:
+        """Environment a game must be started with for the HUD to attach to it;
+        empty where the HUD hooks running games by itself (RTSS)."""
+        return {}
+
+
+def hud_launch_env(hud: HudControl, app: App) -> Mapping[str, str]:
+    """The HUD's :meth:`launch_env` for *app*, or nothing — only games get it, or
+    any app rendering through the same graphics API would get the HUD too."""
+    if not app.is_game or not hud.is_available():
+        return {}
+    return hud.launch_env()
 
 
 def hud_menu_item(hud: HudControl, foreground_is_game: bool) -> MenuItem | None:

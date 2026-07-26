@@ -10,6 +10,7 @@ package, it may reach the widget's internal collaborators without widening
 its public API.
 """
 
+from domain.catalog.app import App
 from domain.catalog.app_pinner import AppPinner
 from domain.catalog.catalog import AppCatalog
 from domain.catalog.live_catalog import LiveCatalog
@@ -46,7 +47,7 @@ from domain.system.runner import ActionRunner
 from domain.system.volume import VolumeControl
 from domain.system.brightness import BrightnessControl
 
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 
 from .desktop import Desktop
 from .dialog_host_controller import DialogHostController
@@ -133,6 +134,7 @@ def build_desktop(
     is_game_pid: Callable[[int], bool] = lambda _: False,
     app_adder: AppAdder | None = None,
     power_preference: PowerPreference | None = None,
+    launch_env: 'Callable[[App], Mapping[str, str]] | None' = None,
 ) -> Desktop:
     """Build a fully wired Desktop: the view widget plus its domain coordinators.
 
@@ -142,6 +144,9 @@ def build_desktop(
     ``is_game_pid`` is the platform predicate that decides whether a foreground
     pid is a game (gates the in-game HUD toggle). KDE wires ``kde.proc.is_game_pid``
     (graphics-API maps check + launcher ancestry); Windows wires the RTSS signal.
+
+    ``launch_env`` contributes extra environment per launched app (the in-game HUD
+    arms a game at spawn time); the app's own ``X-Kasual-Env`` still wins over it.
 
     ``power_preference`` also gates the power-driven chrome: without it (bare
     test builds) no PowerMenu, Home surface or Power popover is built, and the
@@ -239,6 +244,7 @@ def build_desktop(
         prompts=LocalizedPrompts(),
         inspector=inspector,
         is_paused=lambda: widget._state.paused,
+        launch_env=launch_env or (lambda _app: {}),
     )
     # Coordinates show/pause/resume of the Desktop surface (the widget = view).
     desktop_coordinator = DesktopCoordinator(

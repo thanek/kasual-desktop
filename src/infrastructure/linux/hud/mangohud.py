@@ -13,12 +13,17 @@ format:
 
 Reads happen live on each call, so creating or deleting the file between Home
 Overlay opens is reflected without restarting Kasual.
+
+The config alone never puts the overlay on screen: MangoHud's Vulkan layer is
+*implicit*, gated on ``MANGOHUD=1``, so a game started without that variable loads
+no layer at all and ``no_display`` has nothing to hide — hence ``launch_env``.
 """
 
 from __future__ import annotations
 
 import logging
 import re
+from collections.abc import Mapping
 from pathlib import Path
 
 from domain.system.hud import HudControl
@@ -42,6 +47,9 @@ class MangoHudControl(HudControl):
 
     def is_available(self) -> bool:
         return self._path.is_file()
+
+    def launch_env(self) -> Mapping[str, str]:
+        return {"MANGOHUD": "1"}
 
     def is_enabled(self) -> bool:
         # Absent config: nothing forces the HUD off, so it counts as enabled.

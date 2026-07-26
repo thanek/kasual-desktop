@@ -28,6 +28,13 @@ class TestAvailability:
         assert control.is_available() is True
 
 
+class TestLaunchEnv:
+    def test_arms_the_implicit_vulkan_layer(self, tmp_path):
+        """The layer JSON gates itself on MANGOHUD=1; without it, no overlay."""
+        control, _ = _control(tmp_path, "fps_limit=60\n")
+        assert control.launch_env() == {"MANGOHUD": "1"}
+
+
 class TestState:
     def test_enabled_when_no_no_display(self, tmp_path):
         control, _ = _control(tmp_path, "fps_limit=60\ngpu_stats\n")
