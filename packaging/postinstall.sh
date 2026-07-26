@@ -18,4 +18,9 @@ else
 	echo "kasual-desktop: reboot, or run 'udevadm control --reload-rules && udevadm trigger' once available." >&2
 fi
 
+if [ -d /usr/share/gnome-shell/extensions/kasual-helper@consoledesktop.org ]; then
+	echo "kasual-desktop: on GNOME, log out and back in, then run:"
+	echo "kasual-desktop:   gnome-extensions enable kasual-helper@consoledesktop.org"
+fi
+
 exit 0

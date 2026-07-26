@@ -1,8 +1,11 @@
 """ExtensionProbe/ExtensionActivator for the Kasual Helper GNOME Shell extension.
 
 The bus ping is definitive only when the extension is answering; it is silent for
-both installed-but-disabled and not-installed. The `gnome-extensions` CLI (with an
-on-disk fallback) is what tells those two apart and enables the disabled one.
+installed-but-disabled, freshly-installed and not-installed alike. The
+`gnome-extensions` CLI tells those apart: it answers from GNOME Shell's in-memory
+extension list, which is built when the session starts. So a directory the CLI
+does not know about, yet which exists on disk, is one that landed there after
+login — Wayland cannot reload the Shell, so only a re-login makes it enablable.
 """
 
 from __future__ import annotations
@@ -41,14 +44,19 @@ class GnomeExtensionProbe(ExtensionProbe):
     def state(self) -> ExtensionState:
         if helper_present():
             return ExtensionState.READY
-        return (
-            ExtensionState.DISABLED if self._installed() else ExtensionState.ABSENT
-        )
+        known = self._shell_knows()
+        if known is True:
+            return ExtensionState.DISABLED
+        if not self._on_disk():
+            return ExtensionState.ABSENT
+        return ExtensionState.DISABLED if known is None else ExtensionState.UNLOADED
 
-    def _installed(self) -> bool:
+    def _shell_knows(self) -> bool | None:
+        """Whether GNOME Shell has the extension in its list — None if unanswerable."""
         result = _run("gnome-extensions", "info", EXTENSION_UUID)
-        if result is not None and result.returncode == 0:
-            return True
+        return None if result is None else result.returncode == 0
+
+    def _on_disk(self) -> bool:
         return any(
             (base / EXTENSION_UUID / "metadata.json").is_file()
             for base in _EXTENSION_DIRS

@@ -107,20 +107,23 @@ Desktop's frameless surfaces stacked above a fullscreen game — including
 suppressing Mutter's direct scanout, which would otherwise hide any overlay drawn
 over the game.
 
-`./install.sh` installs and enables it for the current user; the packages ship it
-system-wide, where each user enables it once:
+`./install.sh` installs it for the current user; the packages ship it system-wide.
+Either way it lands on disk after the running GNOME Shell built its extension
+list, and Wayland offers no way to reload the Shell — so **log out and back in
+first**, then enable it once per user:
 
 ```bash
 gnome-extensions enable kasual-helper@consoledesktop.org
 ```
 
-GNOME Shell cannot be reloaded on Wayland, so **log out and back in** afterwards.
+Until that re-login, `gnome-extensions` reports the extension does not exist.
 
 Because window management depends on it, Kasual Desktop checks the extension on
 GNOME **before starting anything else**. If it is installed but disabled, a dialog
-offers to enable it right there; if it is missing, the dialog shows the command
-above and waits for a **Retry**. Both are gamepad-operable, so nothing on GNOME
-requires reaching for a keyboard.
+offers to enable it right there. If it is on disk but this session never loaded
+it, the dialog offers **Log out** — the only remedy, one button press away. If it
+is missing outright, the dialog shows the command above and waits for a **Retry**.
+All are gamepad-operable, so nothing on GNOME requires reaching for a keyboard.
 
 ## 🚀 Getting Started
 

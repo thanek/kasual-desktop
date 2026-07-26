@@ -74,6 +74,7 @@ def _preflight_gate(app, gamepad, feedback, proceed) -> None:
     from infrastructure.gnome.extension import (
         GnomeExtensionActivator, GnomeExtensionProbe,
     )
+    from infrastructure.gnome.session import GnomeSessionEnder
     from infrastructure.common.qt.overlays.preflight_overlay import QtPreflightView
 
     gate = ExtensionGate(
@@ -81,6 +82,7 @@ def _preflight_gate(app, gamepad, feedback, proceed) -> None:
         GnomeExtensionActivator(),
         QtPreflightView(gamepad, feedback),
         on_quit=app.quit,
+        session=GnomeSessionEnder(),
     )
     gate.ensure(proceed)
 

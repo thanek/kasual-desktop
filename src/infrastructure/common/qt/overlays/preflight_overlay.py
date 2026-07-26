@@ -2,7 +2,7 @@
 before the session comes up, when the GNOME helper extension isn't answering yet.
 """
 
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QKeyEvent
@@ -20,29 +20,32 @@ from .base_overlay import BaseOverlay
 
 _INSTALL_HINT = "gnome-extensions enable kasual-helper@consoledesktop.org"
 
+_CARD_WIDTH = 880
+_CARD_MARGIN = 48
+_TEXT_PX = 24
+
 
 class _PreflightDialog(BaseOverlay):
+    """A message over a row of choices. The last choice is what Cancel and an
+    outside click resolve to, so it is always the way out."""
+
     def __init__(
         self,
         message: str,
-        primary_label: str,
-        secondary_label: str,
-        on_primary: Callable[[], None],
-        on_secondary: Callable[[], None],
+        choices: Sequence[tuple[str, Callable[[], None]]],
         gamepad: PadControl,
         feedback: Feedback,
         *,
         dismissable: bool,
     ) -> None:
         super().__init__(gamepad, self._handle_pad, feedback, keyboard=Keyboard.ON_DEMAND)
-        self._on_primary = on_primary
-        self._on_secondary = on_secondary
+        self._actions = [action for _, action in choices]
         self._dismissable = dismissable
         self._cursor = MenuCursor(
-            count=lambda: 2,
+            count=lambda: len(self._actions),
             render=self._refresh_buttons,
             on_activate=self._activate,
-            on_dismiss=self._dismiss_secondary,
+            on_dismiss=self._dismiss_last,
             feedback=feedback,
             wrap=True,
         )
@@ -50,29 +53,33 @@ class _PreflightDialog(BaseOverlay):
         outer = QVBoxLayout(self)
         outer.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
-        card = self.build_card(680)
+        card = self.build_card(_CARD_WIDTH)
         layout = QVBoxLayout(card)
-        layout.setContentsMargins(48, 48, 48, 48)
+        layout.setContentsMargins(
+            _CARD_MARGIN, _CARD_MARGIN, _CARD_MARGIN, _CARD_MARGIN)
         layout.setSpacing(36)
 
         label = QLabel(message)
         label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         label.setWordWrap(True)
-        label.setStyleSheet("font-size: 24px; color: white; background: transparent;")
+        font = label.font()
+        font.setPixelSize(_TEXT_PX)
+        label.setFont(font)
+        label.setStyleSheet("color: white; background: transparent;")
+        label.setMinimumHeight(label.heightForWidth(_CARD_WIDTH - 2 * _CARD_MARGIN))
         layout.addWidget(label)
 
         btn_row = QHBoxLayout()
         btn_row.setSpacing(20)
-        self._btn_primary = QPushButton(primary_label)
-        self._btn_secondary = QPushButton(secondary_label)
-        for i, btn in enumerate((self._btn_primary, self._btn_secondary)):
+        self._buttons = []
+        for i, (label_text, _) in enumerate(choices):
+            btn = QPushButton(label_text)
             btn.setMinimumSize(200, 80)
             btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
             self._bind_hover(btn, i)
-        self._btn_primary.clicked.connect(lambda: self._activate(0))
-        self._btn_secondary.clicked.connect(lambda: self._activate(1))
-        btn_row.addWidget(self._btn_primary)
-        btn_row.addWidget(self._btn_secondary)
+            btn.clicked.connect(lambda _checked=False, index=i: self._activate(index))
+            btn_row.addWidget(btn)
+            self._buttons.append(btn)
         layout.addLayout(btn_row)
 
         outer.addWidget(card)
@@ -107,22 +114,22 @@ class _PreflightDialog(BaseOverlay):
 
     def _on_outside_click(self) -> None:
         if self._dismissable:
-            self._dismiss_secondary()
+            self._dismiss_last()
 
     def _activate(self, index: int) -> None:
-        if index == 0:
-            if self._dismiss(sound=Cue.SELECT):
-                self._on_primary()
-        else:
-            self._dismiss_secondary()
+        if index == len(self._actions) - 1:
+            self._dismiss_last()
+        elif self._dismiss(sound=Cue.SELECT):
+            self._actions[index]()
 
-    def _dismiss_secondary(self) -> None:
+    def _dismiss_last(self) -> None:
         if self._dismiss(sound=Cue.POPUP_CLOSE):
-            self._on_secondary()
+            self._actions[-1]()
 
     def _refresh_buttons(self, index: int) -> None:
-        styles.style_dialog_button(self._btn_primary, role="primary", focused=index == 0)
-        styles.style_dialog_button(self._btn_secondary, role="secondary", focused=index == 1)
+        for i, btn in enumerate(self._buttons):
+            role = "primary" if i == 0 else "secondary"
+            styles.style_dialog_button(btn, role=role, focused=index == i)
 
 
 class QtPreflightView(PreflightView):
@@ -140,9 +147,9 @@ class QtPreflightView(PreflightView):
                 "Kasual Desktop needs its GNOME Shell helper extension to manage "
                 "windows.\n\nEnable it now?",
             ),
-            translate("Kasual Desktop", "Enable"),
-            translate("Kasual Desktop", "Not now"),
-            on_accept, on_decline, dismissable=True,
+            [(translate("Kasual Desktop", "Enable"), on_accept),
+             (translate("Kasual Desktop", "Not now"), on_decline)],
+            dismissable=True,
         )
 
     def show_instructions(
@@ -150,6 +157,7 @@ class QtPreflightView(PreflightView):
         state: ExtensionState,
         on_retry: Callable[[], None],
         on_quit: Callable[[], None],
+        on_logout: Callable[[], None] | None = None,
     ) -> None:
         if state is ExtensionState.ABSENT:
             body = translate(
@@ -157,32 +165,35 @@ class QtPreflightView(PreflightView):
                 "The Kasual Helper GNOME Shell extension isn't installed. Install the "
                 "Kasual Desktop package, then enable it with:",
             )
+        elif state is ExtensionState.UNLOADED:
+            body = translate(
+                "Kasual Desktop",
+                "The Kasual Helper GNOME Shell extension is installed, but this GNOME "
+                "session started before it and cannot load it. Log out and back in, "
+                "then enable it with:",
+            )
         else:
             body = translate(
                 "Kasual Desktop",
                 "Kasual Desktop couldn't enable its GNOME Shell helper extension. "
                 "Enable it manually with:",
             )
-        message = f"{body}\n\n{_INSTALL_HINT}\n\n" + translate("Kasual Desktop", "then retry.")
-        self._present(
-            message,
-            translate("Kasual Desktop", "Retry"),
-            translate("Kasual Desktop", "Quit"),
-            on_retry, on_quit, dismissable=False,
-        )
+        message = f"{body}\n\n{_INSTALL_HINT}"
+        if on_logout is not None:
+            choices = [(translate("Kasual Desktop", "Log out"), on_logout)]
+        else:
+            message += "\n\n" + translate("Kasual Desktop", "then retry.")
+            choices = [(translate("Kasual Desktop", "Retry"), on_retry)]
+        choices.append((translate("Kasual Desktop", "Quit"), on_quit))
+        self._present(message, choices, dismissable=False)
 
     def _present(
         self,
         message: str,
-        primary_label: str,
-        secondary_label: str,
-        on_primary: Callable[[], None],
-        on_secondary: Callable[[], None],
+        choices: Sequence[tuple[str, Callable[[], None]]],
         *,
         dismissable: bool,
     ) -> None:
         self._current = _PreflightDialog(
-            message, primary_label, secondary_label,
-            on_primary, on_secondary,
-            self._gamepad, self._feedback, dismissable=dismissable,
+            message, choices, self._gamepad, self._feedback, dismissable=dismissable,
         )
