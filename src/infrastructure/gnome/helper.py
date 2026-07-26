@@ -68,14 +68,18 @@ def simulate_user_activity() -> None:
     QDBusConnection.sessionBus().asyncCall(msg)
 
 
-def set_surface_role(title: str, layer: int, anchors: int) -> None:
+def set_surface_role(title: str, layer: int, anchors: int, keyboard: int) -> None:
     """Declare what a Kasual window is, keyed by its window title.
 
-    Mutter lets no client size or place its own top-levels, and offers no layer
-    concept — so the layer-shell vocabulary is handed to the extension, which
-    applies it compositor-side: anchors become geometry, the layer becomes the
-    stacking order among Kasual's pinned surfaces."""
-    call("SetSurfaceRole", title, int(layer), int(anchors))
+    Mutter lets no client size or place its own top-levels, offers no layer concept,
+    and focuses whatever window it maps — so the layer-shell vocabulary is handed to
+    the extension, which applies it compositor-side: anchors become geometry, the
+    layer becomes the stacking order among Kasual's pinned surfaces, and a surface
+    that wants no keyboard is kept off the focus. An extension predating the keyboard
+    argument rejects the call, and keeps the role it always had."""
+    reply = call("SetSurfaceRole", title, int(layer), int(anchors), int(keyboard))
+    if reply.type() != QDBusMessage.MessageType.ReplyMessage:
+        call("SetSurfaceRole", title, int(layer), int(anchors))
 
 
 def activate_surface(title: str) -> None:

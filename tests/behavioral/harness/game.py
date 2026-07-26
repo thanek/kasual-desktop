@@ -110,6 +110,31 @@ class SteamGame:
                f'"{window["title"]}" pid={window["pid"]}')
         return window
 
+    def check_still_on_screen(self, what: str) -> None:
+        """A surface that takes the *focus* takes the game with it — a fullscreen Wine
+        window minimizes itself on focus loss — and KD's own state cannot see that.
+        """
+        # No minimize concept outside KWin and Mutter; there the window simply goes.
+        def gone(event: dict) -> bool:
+            window = next(iter(self._fresh(event['stack'], fullscreen=True)), None)
+            return (window is None or window.get('minimized', False)
+                    or not window['focused'])
+
+        self._source.catch_up()
+        now = {'stack': self._source.last_stack()}
+        try:
+            event = now if gone(now) else self._source.wait_for(
+                gone, timeouts.STILL_ON_SCREEN,
+                f'nothing to happen to the game under the {what}')
+        except TimeoutError:
+            report(f'the game holds the screen under the {what}', 'PASS')
+            return
+        window = next(iter(self._fresh(event['stack'], fullscreen=True)), None)
+        report(f'the game holds the screen under the {what}', 'FAIL',
+               'its fullscreen window is gone' if window is None else
+               f'minimized={window.get("minimized")} focused={window["focused"]} — '
+               'did a KD surface take the focus from it?')
+
     def check_process(self, window: dict) -> None:
         pid = window['pid']
         if pid and os.path.isdir(f'/proc/{pid}'):

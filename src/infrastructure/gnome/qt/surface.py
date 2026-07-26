@@ -18,7 +18,7 @@ from collections.abc import Callable
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QWidget
 
-from infrastructure.common.qt.ui.layer_shell import Anchor, Layer
+from infrastructure.common.qt.ui.layer_shell import Anchor, Keyboard, Layer
 from infrastructure.gnome import helper
 
 _TITLE = "Kasual Desktop"
@@ -34,7 +34,7 @@ class GnomeSurface:
         widget.setWindowFlags(Qt.WindowType.FramelessWindowHint)
         widget.setWindowTitle(_TITLE)
         # Below the overlays, which register themselves in the OVERLAY layer.
-        helper.set_surface_role(_TITLE, Layer.TOP, Anchor.ALL)
+        helper.set_surface_role(_TITLE, Layer.TOP, Anchor.ALL, Keyboard.ON_DEMAND)
 
     def show_fullscreen(self) -> None:
         # Ask first: Mutter decides to scan a fullscreen window straight out as it

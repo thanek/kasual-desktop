@@ -41,6 +41,7 @@ const IFACE = `
       <arg type="s" direction="in" name="title"/>
       <arg type="i" direction="in" name="layer"/>
       <arg type="i" direction="in" name="anchors"/>
+      <arg type="i" direction="in" name="keyboard"/>
     </method>
     <method name="ActivateSurface">
       <arg type="s" direction="in" name="title"/>
@@ -72,6 +73,7 @@ const IFACE = `
 const ANCHOR_TOP = 1, ANCHOR_BOTTOM = 2, ANCHOR_LEFT = 4, ANCHOR_RIGHT = 8;
 const DEFAULT_LAYER = 3;
 const OVERLAY_LAYER = 3;
+const KEYBOARD_NONE = 0;
 
 // Mutter moved the unredirect toggle from Meta to global.compositor across 45–50.
 function unredirectApi() {
@@ -111,6 +113,22 @@ function lowerWindow(w) {
         w.lower_with_transients(global.get_current_time());
     else if (typeof w.lower === 'function')
         w.lower();
+}
+
+let loggedNoSetType = false;
+
+// Measured on Mutter 50: a DOCK window is not focused as it maps, a NORMAL one is.
+function denyFocus(win) {
+    if (win.get_window_type() === Meta.WindowType.DOCK)
+        return;
+    if (typeof win.set_type !== 'function') {
+        if (!loggedNoSetType) {
+            loggedNoSetType = true;
+            console.log(`${TAG} Meta.Window.set_type is missing: overlays will take the focus`);
+        }
+        return;
+    }
+    win.set_type(Meta.WindowType.DOCK);
 }
 
 function mappedWindows() {
@@ -222,14 +240,18 @@ class Helper {
         // Only Kasual's own windows matter here; a terminal's spinner retitling
         // itself ten times a second must not restack the session.
         const syncIfOurs = () => {
-            if (this._isOurs(win))
+            if (this._isOurs(win)) {
+                // Not on the idle sync: Mutter focuses the window as it maps, next.
+                this._applyFocusPolicy(win);
                 this._scheduleSync();
+            }
         };
         this._windowSignals.set(win, [
             // An XWayland window (every Steam game) is created before its WM_CLASS
             // arrives: this, not window-created, is where it becomes identifiable.
             win.connect('notify::wm-class', () => {
                 this._suppressScanoutForOurs(win);
+                this._applyFocusPolicy(win);
                 this._scheduleSync();
                 this._emitWindows('class');
             }),
@@ -253,6 +275,7 @@ class Helper {
             this._emitWindows('removed');
         }));
         this._suppressScanoutForOurs(win);
+        this._applyFocusPolicy(win);
         this._scheduleSync();
         this._emitWindows('added');
     }
@@ -338,6 +361,12 @@ class Helper {
         return this._isOurs(win) ? this._roles.get(win.get_title()) : undefined;
     }
 
+    _applyFocusPolicy(win) {
+        const role = this._roleOf(win);
+        if (role && role.keyboard === KEYBOARD_NONE)
+            denyFocus(win);
+    }
+
     // Wayland gives placement to the compositor and size to the client, so only
     // the position is ours: resizing here would hand Qt a buffer it never repaints.
     _applyAnchor(win) {
@@ -410,8 +439,10 @@ class Helper {
                 w.unmake_above();
         this._pinned = new Set(wanted);
 
-        for (const w of wanted)
+        for (const w of wanted) {
             this._applyAnchor(w);
+            this._applyFocusPolicy(w);
+        }
 
         // Desktop above ordinary windows, below every fullscreen app. make_above
         // would lift the fullscreen Desktop to the TOP layer over the app (Mutter
@@ -431,7 +462,8 @@ class Helper {
             // Only an overlay needs the app redirected; the ceded Desktop is happy
             // to stay under a scanned-out game.
             this._setUnredirectSuppressed(overlays.length > 0);
-            this._setRestackGuard(false);
+            // A game that keeps the focus restacks itself; the overlays must go back up.
+            this._setRestackGuard(overlays.length > 0);
             return;
         }
 
@@ -500,7 +532,8 @@ class Helper {
     }
 
     // Layer, not map order, decides: the Desktop must stay below the overlays even
-    // when it is re-shown — and so re-mapped — after them.
+    // when it is re-shown — and so re-mapped — after them. Ceded, only the overlays:
+    // raising the Desktop there would bury the game.
     _reassertStacking() {
         if (this._restacking)
             return;
@@ -509,10 +542,12 @@ class Helper {
             return;
 
         const layerOf = w => this._roleOf(w)?.layer ?? DEFAULT_LAYER;
-        const ordered = ours
+        const ordered = (this._ceded ? ours.filter(w => this._isOverlay(w)) : ours)
             .map((w, depth) => ({w, depth}))
             .sort((a, b) => layerOf(a.w) - layerOf(b.w) || a.depth - b.depth)
             .map(({w}) => w);
+        if (!ordered.length)
+            return;
 
         // Raising emits 'restacked', so without a fixpoint every pass feeds the next.
         const all = stackedBottomToTop(mappedWindows());
@@ -566,6 +601,7 @@ class Helper {
             unredirect: unredirectApi(),
             raise: (typeof Meta.Window.prototype.raise_and_make_recent === 'function')
                 ? 'raise_and_make_recent' : 'raise',
+            setType: typeof Meta.Window.prototype.set_type === 'function',
         });
     }
 
@@ -592,12 +628,12 @@ class Helper {
                     title: w.get_title() || '',
                     pid: w.get_pid(),
                     layer: w.get_layer(),
+                    type: w.get_window_type(),
                     above: w.is_above(),
                     fullscreen: w.is_fullscreen(),
                     minimized: w.minimized,
                     hidden: w.is_hidden(),
                     showing: w.showing_on_its_workspace(),
-                    csd: w.is_client_decorated(),
                     focus: w.has_focus(),
                     frame: rect(w.get_frame_rect()),
                     // What Mutter actually has to paint, and whether it paints it.
@@ -679,8 +715,11 @@ class Helper {
                 w.minimize();
     }
 
-    SetSurfaceRole(title, layer, anchors) {
-        this._roles.set(title, {layer, anchors});
+    SetSurfaceRole(title, layer, anchors, keyboard) {
+        this._roles.set(title, {layer, anchors, keyboard});
+        for (const win of this._ourWindows())
+            if (win.get_title() === title)
+                this._applyFocusPolicy(win);
         this._scheduleSync();
     }
 

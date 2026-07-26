@@ -55,7 +55,7 @@ def _body(session: Session) -> None:
     window = game.wait_fullscreen()
     game.check_process(window)
     shell.check_kd_ceded(session.kd)
-    shell.check_home_menu_over_game(session.kd, session.pad)
+    shell.check_home_menu_over_game(session.kd, session.pad, game)
 
 
 SCENARIO = Scenario(

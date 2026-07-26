@@ -79,13 +79,11 @@ def promote_overlay_surface(
         if detect_compositor() is Compositor.GNOME:
             # Mutter has no layer-shell; the Kasual Helper extension pins Kasual's
             # surfaces above the foreground app (a plain frameless top-level here)
-            # and applies the layer/anchors itself, keyed by the window title.
-            from infrastructure.gnome.helper import (
-                helper_present, set_surface_role, show_overlay,
-            )
+            # and applies the layer/anchors/keyboard mode itself, keyed by the window
+            # title. Asking for the screen here would take it from the app underneath.
+            from infrastructure.gnome.helper import helper_present, set_surface_role
             if helper_present():
-                set_surface_role(widget.windowTitle(), layer, anchors)
-                show_overlay()
+                set_surface_role(widget.windowTitle(), layer, anchors, keyboard)
             return
         # The LayerShellQt binding is the Wayland adapter; imported lazily so this
         # shared dispatcher carries no eager dependency on it (the enums above are

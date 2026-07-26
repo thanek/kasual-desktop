@@ -31,6 +31,8 @@ class WindowSource(Protocol):
     def wait_for(self, predicate: Callable[[dict], bool], timeout_s: float,
                  description: str) -> dict: ...
 
+    def catch_up(self) -> None: ...
+
     def last_stack(self) -> list[dict]: ...
 
 
@@ -68,6 +70,21 @@ class EventLog:
                     QEventLoop.ProcessEventsFlag.WaitForMoreEvents,
                     int(min(remaining, 0.2) * 1000),
                 )
+
+    def catch_up(self, quiet_s: float = 0.4, limit_s: float = 3.0) -> None:
+        """The log is only as current as the last turn of the event loop: a step that
+        sleeps or polls KD over HTTP leaves the compositor's signals queued — measured
+        on GNOME, ten at once — so a wait for *nothing* takes delivery before it starts.
+        """
+        deadline = time.monotonic() + limit_s
+        quiet_at = time.monotonic() + quiet_s
+        while time.monotonic() < min(deadline, quiet_at):
+            arrived = len(self.events)
+            QCoreApplication.processEvents(
+                QEventLoop.ProcessEventsFlag.WaitForMoreEvents, 50)
+            if len(self.events) != arrived:
+                quiet_at = time.monotonic() + quiet_s
+        self._cursor = len(self.events)
 
     def last_stack(self) -> list[dict]:
         return self.events[-1]['stack'] if self.events else []

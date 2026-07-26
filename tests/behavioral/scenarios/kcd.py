@@ -44,7 +44,7 @@ def _body(session: Session) -> None:
     # in a scenario of its own that would have to compile its shaders again to ask one
     # question. Picking a card collapses the menu, so flipping it back needs the hold
     # again: over a game, KD keeps the hold and leaves the click to the game.
-    shell.check_home_menu_over_game(session.kd, session.pad)
+    shell.check_home_menu_over_game(session.kd, session.pad, game)
     shell.toggle_hud(session.kd, session.pad)
     shell.open_home_menu(session.kd, session.pad, hold=True)
     shell.toggle_hud(session.kd, session.pad)

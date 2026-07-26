@@ -2,7 +2,7 @@
 
 import socket
 
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -225,6 +225,37 @@ class TestFullscreenTranslucency:
 
     def test_non_wayland_keeps_the_alpha(self, clean_env):
         assert self._loses_alpha("offscreen") is False
+
+
+class TestGnomeOverlayPromotion:
+    """The role an overlay declares carries its keyboard mode: Mutter focuses whatever
+    it maps, and a game that loses the focus minimizes itself off the screen."""
+
+    def _promote(self, keyboard):
+        from infrastructure.common.qt.ui import top_surface
+        widget = MagicMock()
+        widget.windowTitle.return_value = "Kasual Home"
+        with patch.object(top_surface.QGuiApplication, "platformName",
+                          return_value="wayland"), \
+             patch("infrastructure.gnome.helper.helper_present", return_value=True), \
+             patch("infrastructure.gnome.helper.set_surface_role") as role, \
+             patch("infrastructure.gnome.helper.show_overlay") as screen:
+            top_surface.promote_overlay_surface(widget, keyboard=keyboard)
+        return role, screen
+
+    def test_role_carries_the_keyboard_mode(self, clean_env):
+        clean_env.setenv("XDG_CURRENT_DESKTOP", "GNOME")
+        from infrastructure.common.qt.ui.layer_shell import Anchor, Keyboard, Layer
+        role, _ = self._promote(Keyboard.NONE)
+        assert role.call_args.args == (
+            "Kasual Home", Layer.OVERLAY, Anchor.ALL, Keyboard.NONE)
+
+    def test_promoting_does_not_take_the_screen(self, clean_env):
+        """Asking for it would un-cede the Desktop and pull it in front of the app."""
+        clean_env.setenv("XDG_CURRENT_DESKTOP", "GNOME")
+        from infrastructure.common.qt.ui.layer_shell import Keyboard
+        _, screen = self._promote(Keyboard.NONE)
+        screen.assert_not_called()
 
 
 class TestNullWindowManager:
