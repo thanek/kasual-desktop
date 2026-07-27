@@ -218,17 +218,19 @@ class TileBar(QScrollArea, TileBarView, TileFocusView, TileReorderView, metaclas
 
     # ── Tile settings (Tile Settings modal) ───────────────────────────────────
 
-    def current_app_name(self) -> str | None:
-        """Name of the focused app tile, or None if it is not an app tile."""
+    def _current_static_app(self):
+        """The focused static app, or None if the focus is on a non-app tile."""
         if 0 <= self._tile_index < len(self._tiles):
-            return self._apps[self._tile_index].name
+            return self._apps[self._tile_index]
         return None
 
+    def current_app_name(self) -> str | None:
+        app = self._current_static_app()
+        return app.name if app else None
+
     def current_app_color(self) -> str | None:
-        """Colour of the focused app tile, or None if it is not an app tile."""
-        if 0 <= self._tile_index < len(self._tiles):
-            return self._apps[self._tile_index].color
-        return None
+        app = self._current_static_app()
+        return app.color if app else None
 
     def set_app_color(self, index: int, color: str) -> None:
         """Recolour the static app tile at *index*, on screen and in the catalog."""
@@ -238,11 +240,8 @@ class TileBar(QScrollArea, TileBarView, TileFocusView, TileReorderView, metaclas
         self._tiles[index].set_color(color)
 
     def current_app_recall_trigger(self) -> str | None:
-        """Recall-menu trigger of the focused app tile, or None if it is not an
-        app tile."""
-        if 0 <= self._tile_index < len(self._tiles):
-            return self._apps[self._tile_index].recall_menu_trigger
-        return None
+        app = self._current_static_app()
+        return app.recall_menu_trigger if app else None
 
     # ── Pin to menu (Tile Management Popover) ────────────────────────────────
 
@@ -451,7 +450,7 @@ class TileBar(QScrollArea, TileBarView, TileFocusView, TileReorderView, metaclas
             )
             tile.set_running(True)   # window exists → application is running
             win_id = w.id
-            abs_idx = len(self._tiles) + 1 + len(self._dynamic_tiles)   # +1: [＋] tile
+            abs_idx = self._first_dynamic_index() + len(self._dynamic_tiles)
             tile.clicked.connect(lambda wid=win_id: self._on_dynamic_clicked(wid))
             tile.hovered.connect(lambda i=abs_idx: self._on_tile_hovered(i))
             tile.right_clicked.connect(lambda i=abs_idx: self._on_tile_right_clicked(i))
@@ -466,8 +465,12 @@ class TileBar(QScrollArea, TileBarView, TileFocusView, TileReorderView, metaclas
 
     # ── Private helpers ─────────────────────────────────────────────────────
 
+    def _first_dynamic_index(self) -> int:
+        """Row index of the first dynamic tile: static tiles, then the [＋] tile."""
+        return len(self._tiles) + 1
+
     def _total(self) -> int:
-        return len(self._tiles) + 1 + len(self._dynamic_tiles)   # +1: the [＋] tile
+        return self._first_dynamic_index() + len(self._dynamic_tiles)
 
     def _all_tiles(self) -> list[QWidget]:
         """Static app tiles, the [＋] add tile, then dynamic (open-window) tiles —
@@ -484,11 +487,12 @@ class TileBar(QScrollArea, TileBarView, TileFocusView, TileReorderView, metaclas
 
     def _render_tiles(self, scroll: bool = True) -> None:
         n_static = len(self._tiles)
+        dyn_base = self._first_dynamic_index()
         for i, tile in enumerate(self._tiles):
             tile.set_selected(self._focused and i == self._tile_index)
         self._add_tile.set_selected(self._focused and n_static == self._tile_index)
         for i, (_, _, tile) in enumerate(self._dynamic_tiles):
-            tile.set_selected(self._focused and (n_static + 1 + i) == self._tile_index)
+            tile.set_selected(self._focused and (dyn_base + i) == self._tile_index)
         if self._focused and scroll:
             QTimer.singleShot(0, self.center_current)
 
@@ -545,10 +549,10 @@ class TileBar(QScrollArea, TileBarView, TileFocusView, TileReorderView, metaclas
         self.tile_context_menu.emit()
 
     def _on_dynamic_clicked(self, win_id: str) -> None:
-        n_static = len(self._tiles)
+        dyn_base = self._first_dynamic_index()
         for j, (wid, _, _) in enumerate(self._dynamic_tiles):
             if wid == win_id:
-                self._activate_index(n_static + 1 + j)   # +1: the [＋] tile
+                self._activate_index(dyn_base + j)
                 return
 
     def _context_for_index(self, idx: int) -> Target | None:

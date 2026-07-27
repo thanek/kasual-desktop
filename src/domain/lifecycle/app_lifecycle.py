@@ -38,8 +38,6 @@ _FORWARDER_CEDE_GRACE_MS = 120_000
 
 
 class AppLifecycle(AppControl):
-    """Coordinates launching, restoring, closing and exit-handling of apps."""
-
     def __init__(
         self,
         view: DesktopView,
@@ -80,6 +78,12 @@ class AppLifecycle(AppControl):
         self._launch_env    = launch_env
         self._pending_return: str | None = None
         self._awaited_launch: str | None = None
+
+    def _app_by_id(self, app_id: str) -> App | None:
+        return next((a for a in self._apps if a.id == app_id), None)
+
+    def _index_by_id(self, app_id: str) -> int | None:
+        return next((i for i, a in enumerate(self._apps) if a.id == app_id), None)
 
     def current_app(self) -> Target | None:
         return self._inspector.current_app()
@@ -173,7 +177,6 @@ class AppLifecycle(AppControl):
         )
 
     def arrange_windows(self, activate_pid: int | None = None) -> None:
-        """Activate windows for activate_pid and minimize all other running apps."""
         self._arranger.arrange(activate_pid)
 
     # ── Closing an application ──────────────────────────────────────────────
@@ -285,7 +288,7 @@ class AppLifecycle(AppControl):
         self._scheduler.call_later(1000, self._gamepad.refresh)
 
     def _still_windowed(self, app_id: str) -> bool:
-        app = next((a for a in self._apps if a.id == app_id), None)
+        app = self._app_by_id(app_id)
         if app is None:
             return False
         return any(w.matches_app(app) for w in self._wm.cached_windows())
@@ -303,7 +306,7 @@ class AppLifecycle(AppControl):
         screen. Reading the armed *hide* instead would miss all three: it disarms itself
         a few seconds in whether or not a window ever came.
         """
-        app = next((a for a in self._apps if a.id == app_id), None)
+        app = self._app_by_id(app_id)
         if app is None or app.steam_app_id is None:
             return False
         target = self._foreground.current
@@ -337,7 +340,7 @@ class AppLifecycle(AppControl):
         app_id = self._awaited_launch
         if app_id is None or not self._foreground.is_idle():
             return
-        index = next((i for i, a in enumerate(self._apps) if a.id == app_id), None)
+        index = self._index_by_id(app_id)
         if index is None or not self._still_windowed(app_id):
             return
         logger.info("%s window mapped after its grace – ceding to it", app_id)
