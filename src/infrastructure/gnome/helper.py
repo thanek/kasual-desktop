@@ -35,9 +35,17 @@ def _interface() -> QDBusInterface:
     return _iface
 
 
+def call(method: str, *args) -> QDBusMessage:
+    return _interface().call(method, *args)
+
+
+def _succeeded(reply: QDBusMessage) -> bool:
+    return reply.type() == QDBusMessage.MessageType.ReplyMessage
+
+
 def helper_present() -> bool:
     """True if the extension is loaded and answering on the session bus."""
-    return _interface().call("Ping").type() == QDBusMessage.MessageType.ReplyMessage
+    return _succeeded(call("Ping"))
 
 
 def app_id() -> str:
@@ -46,14 +54,10 @@ def app_id() -> str:
     return QGuiApplication.desktopFileName() or _DEFAULT_APP_ID
 
 
-def call(method: str, *args) -> QDBusMessage:
-    return _interface().call(method, *args)
-
-
 def list_windows_json() -> str | None:
     """Raw JSON from ``ListWindows``, or None if the call failed."""
     reply = call("ListWindows")
-    if reply.type() != QDBusMessage.MessageType.ReplyMessage:
+    if not _succeeded(reply):
         logger.debug("ListWindows failed: %s", reply.errorMessage())
         return None
     arguments = reply.arguments()
@@ -78,7 +82,7 @@ def set_surface_role(title: str, layer: int, anchors: int, keyboard: int) -> Non
     that wants no keyboard is kept off the focus. An extension predating the keyboard
     argument rejects the call, and keeps the role it always had."""
     reply = call("SetSurfaceRole", title, int(layer), int(anchors), int(keyboard))
-    if reply.type() != QDBusMessage.MessageType.ReplyMessage:
+    if not _succeeded(reply):
         call("SetSurfaceRole", title, int(layer), int(anchors))
 
 
@@ -109,7 +113,7 @@ def is_sunk() -> bool:
     """Whether the ceded surfaces sit under the app's ordinary windows. The extension
     decides that from the focus, so Kasual cannot answer it on its own."""
     reply = call("IsSunk")
-    if reply.type() != QDBusMessage.MessageType.ReplyMessage:
+    if not _succeeded(reply):
         logger.debug("IsSunk failed: %s", reply.errorMessage())
         return False
     arguments = reply.arguments()
