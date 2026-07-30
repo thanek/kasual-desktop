@@ -1,7 +1,9 @@
 """Tests for compositor detection and the backend factory seam."""
 
 import socket
+import tempfile
 
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -31,8 +33,16 @@ def clean_env(monkeypatch):
 
 
 @pytest.fixture
-def live_sway_socket(clean_env, tmp_path):
-    socket_path = tmp_path / "sway-ipc.sock"
+def short_tmp_path():
+    # AF_UNIX paths cap at ~104 bytes on macOS and pytest's tmp_path alone
+    # already exceeds that, so bind sockets under /tmp instead.
+    with tempfile.TemporaryDirectory(dir="/tmp") as path:
+        yield Path(path)
+
+
+@pytest.fixture
+def live_sway_socket(clean_env, short_tmp_path):
+    socket_path = short_tmp_path / "sway-ipc.sock"
     with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as listener:
         listener.bind(str(socket_path))
         clean_env.setenv("SWAYSOCK", str(socket_path))
@@ -40,13 +50,13 @@ def live_sway_socket(clean_env, tmp_path):
 
 
 @pytest.fixture
-def live_hyprland_socket(clean_env, tmp_path):
+def live_hyprland_socket(clean_env, short_tmp_path):
     signature = "abc123"
-    socket_dir = tmp_path / "hypr" / signature
+    socket_dir = short_tmp_path / "hypr" / signature
     socket_dir.mkdir(parents=True)
     with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as listener:
         listener.bind(str(socket_dir / ".socket.sock"))
-        clean_env.setenv("XDG_RUNTIME_DIR", str(tmp_path))
+        clean_env.setenv("XDG_RUNTIME_DIR", str(short_tmp_path))
         clean_env.setenv("HYPRLAND_INSTANCE_SIGNATURE", signature)
         yield
 
