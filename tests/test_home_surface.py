@@ -626,3 +626,79 @@ class TestGrabHandle:
         assert header._handle._prominent is True
         header._handle.set_prominent(False)
         assert header._handle._prominent is False
+
+
+class TestGrabHandleDocking:
+    """The pull rides the bottom edge of whatever the pill currently is."""
+
+    def _laid_out(self, qapp):
+        surface, _ = _surface(qapp)
+        surface.setFixedWidth(1920)
+        surface.show()
+        qapp.processEvents()
+        return surface, surface.header.grab_handle()
+
+    def _finish_morph(self, surface, qapp):
+        from infrastructure.common.qt.desktop.home_surface import MORPH_MS
+        surface._anim.setCurrentTime(MORPH_MS)
+        qapp.processEvents()
+
+    def test_collapsed_handle_sits_on_the_header(self, qapp):
+        surface, handle = self._laid_out(qapp)
+        assert handle.parentWidget() is surface.header
+        assert surface.header.rect().contains(handle.geometry())
+
+    def test_expanded_handle_rides_the_panel_bottom(self, qapp):
+        surface, handle = self._laid_out(qapp)
+        surface.expand()
+        self._finish_morph(surface, qapp)
+        assert handle.parentWidget() is surface
+        panel = surface._panel.geometry()
+        assert panel.contains(handle.geometry())
+        assert panel.bottom() - handle.geometry().bottom() < 10
+
+    def test_handle_returns_to_the_header_only_once_the_morph_ends(self, qapp):
+        surface, handle = self._laid_out(qapp)
+        surface.expand()
+        self._finish_morph(surface, qapp)
+        surface.collapse()
+        assert handle.parentWidget() is surface   # still riding the closing panel
+        surface._settle_collapsed()
+        assert handle.parentWidget() is surface.header
+
+    def test_reopening_inside_the_morph_keeps_the_pill_fused(self, qapp):
+        surface, handle = self._laid_out(qapp)
+        surface.expand()
+        surface.collapse()
+        surface.expand()
+        surface._settle_collapsed()   # the stale timer the collapse left behind
+        assert handle.parentWidget() is surface
+
+    def test_on_demand_open_and_close_move_the_handle(self, qapp):
+        surface, handle = self._laid_out(qapp)
+        surface.show_for_context(
+            foreground=None, foreground_is_game=False, hud=FakeHud(),
+            on_action=lambda i: None, on_cancel=None, set_hints=lambda h: None)
+        qapp.processEvents()
+        assert handle.parentWidget() is surface
+        surface.hide_overlay()
+        assert handle.parentWidget() is surface.header
+
+    def test_collapse_immediately_takes_the_handle_back(self, qapp):
+        surface, handle = self._laid_out(qapp)
+        surface.expand()
+        self._finish_morph(surface, qapp)
+        surface.collapse_immediately()
+        assert handle.parentWidget() is surface.header
+        assert surface.header.rect().contains(handle.geometry())
+
+    def test_handle_keeps_the_accent_until_it_lands(self, qapp):
+        # The accent tracks the fused pill, not the close request: the handle is
+        # still riding the shrinking panel while the morph runs.
+        surface, handle = self._laid_out(qapp)
+        surface.expand()
+        assert handle._focused is True
+        surface.collapse()
+        assert handle._focused is True
+        surface._settle_collapsed()
+        assert handle._focused is False

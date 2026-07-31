@@ -7,8 +7,10 @@ COLOR_TEXT      = "white"
 COLOR_TOPBAR    = "rgba(15, 17, 25, 210)"
 COLOR_RUNNING   = "#a3be8c"
 COLOR_CARD_BG   = "#2e3440"
+COLOR_CHROME_BG = "rgba(46, 52, 64, 204)"   # transparency test: 20%
 COLOR_SEPARATOR = "#3b4252"
 CARD_RADIUS_PX = 40
+PILL_RADIUS    = 40
 _TOPBAR_RADIUS = 30
 _DIALOG_RADIUS = 25
 # Kept ≤ half the menu row's min-height (58px) — Qt QSS squares corners past that.
@@ -34,6 +36,14 @@ def apply_card_shadow(
     effect.setColor(c)
     effect.setBlurRadius(blur)
     widget.setGraphicsEffect(effect)
+
+
+def pill_background(*, top: int = PILL_RADIUS, bottom: int = PILL_RADIUS) -> str:
+    return (
+        f"background-color: {COLOR_CHROME_BG};"
+        f" border-top-left-radius: {top}px; border-top-right-radius: {top}px;"
+        f" border-bottom-left-radius: {bottom}px; border-bottom-right-radius: {bottom}px;"
+    )
 
 
 def make_card(width: int):

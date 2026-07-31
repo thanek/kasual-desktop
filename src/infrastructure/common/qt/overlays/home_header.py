@@ -31,6 +31,7 @@ from domain.menu.item import MenuItem
 from domain.menu.entry import POWER
 from domain.system.actions import ACTIONS, NETWORK, NOTIFICATIONS
 from domain.shared.i18n import translate
+from infrastructure.common.qt.ui import styles
 
 HEADER_H = 80    # matches the old top bar / hint bar height
 _BTN     = 56
@@ -68,6 +69,11 @@ class _GrabHandle(QWidget):
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self._prominent = False
         self._focused = False
+
+    def pin_to(self, bottom_edge: int) -> None:
+        """Centre on the current parent, riding *bottom_edge* in its coordinates."""
+        self.move((self.parentWidget().width() - self.width()) // 2,
+                  bottom_edge - self.height() - _HANDLE_BOTTOM_INSET)
 
     def set_prominent(self, prominent: bool) -> None:
         if prominent == self._prominent:
@@ -110,6 +116,11 @@ class _GrabHandle(QWidget):
                 and self.rect().contains(event.pos())):
             self.clicked.emit()
         super().mouseReleaseEvent(event)
+
+
+def _header_style(docked: bool) -> str:
+    bottom = 0 if docked else styles.PILL_RADIUS
+    return "#homeheader {" + styles.pill_background(bottom=bottom) + "}"
 
 
 def _btn_style(selected: bool) -> str:
@@ -181,12 +192,8 @@ class HomeHeader(QWidget):
         # honour it (unlike the plain-QWidget bars elsewhere) — without this the
         # header renders fully transparent over the wallpaper.
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
-        self.setStyleSheet(
-            "#homeheader {"
-            "  background-color: rgba(46, 52, 64, 204);"  # transparency test: 20%
-            "  border-radius: 40px;"
-            "}"
-        )
+        self._docked = False
+        self.setStyleSheet(_header_style(False))
         row = QHBoxLayout(self)
         row.setContentsMargins(24, 0, 16, 0)
 
@@ -255,9 +262,9 @@ class HomeHeader(QWidget):
 
     def resizeEvent(self, event) -> None:
         super().resizeEvent(event)
-        self._handle.move((self.width() - self._handle.width()) // 2,
-                          self.height() - self._handle.height() - _HANDLE_BOTTOM_INSET)
-        self._handle.raise_()
+        if self._handle.parentWidget() is self:   # not while the surface has it
+            self._handle.pin_to(self.height())
+            self._handle.raise_()
 
     def eventFilter(self, obj, event) -> bool:
         # Re-evaluate on the next tick: the header gets no Leave when the pointer
@@ -280,11 +287,19 @@ class HomeHeader(QWidget):
         btn.setStyleSheet(_btn_style(False))
         return btn
 
-    def set_menu_open(self, open_: bool) -> None:
-        """Lights the grab handle in the focused look while the Home menu it
-        toggles is showing, so the handle reads as "pressed" for as long as the
-        menu it opened stays up."""
-        self._handle.set_focused(open_)
+    def set_docked(self, docked: bool) -> None:
+        """Docked: the Home menu panel stands on the bottom edge. The corners they
+        share are square and the handle, which the host re-pins to that panel, wears
+        the accent."""
+        if docked == self._docked:
+            return
+        self._docked = docked
+        self.setStyleSheet(_header_style(docked))
+        self._handle.set_focused(docked)
+
+    def grab_handle(self) -> _GrabHandle:
+        """The pull that toggles the Home menu. The host re-pins it while docked."""
+        return self._handle
 
     def power_button(self) -> QPushButton:
         """The Power button, so the host can anchor the chooser popover below it."""
