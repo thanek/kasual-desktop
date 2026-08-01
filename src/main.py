@@ -14,7 +14,8 @@ from infrastructure.linux.compositor import (
 # Mutter has no layer-shell, and naming the missing integration makes the wayland
 # plugin itself fail to load — there Kasual is a plain window the extension pins.
 os.environ.setdefault("QT_QPA_PLATFORM", "wayland")
-if detect_compositor() is not Compositor.GNOME:
+COMPOSITOR = detect_compositor()
+if COMPOSITOR is not Compositor.GNOME:
     os.environ.setdefault("QT_WAYLAND_SHELL_INTEGRATION", "layer-shell")
 
 from PyQt6.QtCore import QTimer
@@ -67,7 +68,7 @@ logger = logging.getLogger(__name__)
 def _preflight_gate(app, gamepad, feedback, proceed) -> None:
     """On GNOME, ensure the helper extension is active before any subsystem starts;
     everywhere else there is nothing to gate."""
-    if detect_compositor() is not Compositor.GNOME:
+    if COMPOSITOR is not Compositor.GNOME:
         proceed()
         return
     from domain.preflight.extension_gate import ExtensionGate
@@ -96,7 +97,7 @@ def main() -> None:
     log_file = setup_logging(Path.home() / ".local" / "cache" / "kasual")
     version = get_version()
     logger.info("Running Kasual Desktop %s", version)
-    logger.info("Detected compositor: %s", detect_compositor().value)
+    logger.info("Detected compositor: %s", COMPOSITOR.value)
 
     app = QApplication(sys.argv)
     app.setApplicationName("Kasual Desktop")
@@ -120,7 +121,7 @@ def main() -> None:
     install_translations(app, str(Path(__file__).parent.parent / "locale"))
 
     gamepad = GamepadWatcher()
-    screensaver_waker = build_screensaver_waker()
+    screensaver_waker = build_screensaver_waker(COMPOSITOR)
     gamepad.on_activity(screensaver_waker.poke)
     feedback = SoundFeedback()
 
@@ -146,7 +147,7 @@ def main() -> None:
         apps = load_apps()
         logger.info("Loaded %d apps", len(apps))
 
-        wm = build_window_manager()
+        wm = build_window_manager(COMPOSITOR)
         # One PowerControl shared by the Desktop's action runner and the Application.
         power = SystemdPowerControl()
 
@@ -171,7 +172,7 @@ def main() -> None:
         hud = MangoHudControl()
         desktop = build_desktop(
             apps=apps, gamepad=gamepad, window_manager=wm,
-            wallpaper=build_system_wallpaper(), feedback=feedback,
+            wallpaper=build_system_wallpaper(COMPOSITOR), feedback=feedback,
             volume=volume, brightness=brightness,
             power=power, scheduler=QtScheduler(),
             process_manager=AppManager(), notifications=notification_center,
@@ -179,7 +180,7 @@ def main() -> None:
             order_store=DesktopTileOrderStore(),
             settings_store=DesktopTileSettingsStore(),
             app_pinning=DesktopAppPinning(),
-            surface=build_desktop_surface(),
+            surface=build_desktop_surface(COMPOSITOR),
             parent_of=parent_pid,
             is_game_pid=is_game_pid,
             app_adder=app_adder,
@@ -187,7 +188,7 @@ def main() -> None:
             launch_env=lambda app: hud_launch_env(hud, app),
             deferred_hide_factory=lambda wm_, pm_, on_cede, on_hide:
                 DeferredHide(wm_, pm_, on_cede=on_cede, on_hide=on_hide,
-                             always_cede=detect_compositor()
+                             always_cede=COMPOSITOR
                              in (Compositor.HYPRLAND, Compositor.SWAY)),
             deferred_show_factory=lambda wm_, pm_, on_show:
                 DeferredShow(wm_, pm_, on_show=on_show),

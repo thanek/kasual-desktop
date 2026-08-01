@@ -14,6 +14,7 @@ the overlays themselves shared across platforms.
 """
 
 import logging
+from typing import TYPE_CHECKING
 
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QGuiApplication
@@ -21,46 +22,57 @@ from PyQt6.QtWidgets import QWidget
 
 from .layer_shell import Anchor, Keyboard, Layer
 
+if TYPE_CHECKING:
+    from infrastructure.linux.compositor import Compositor
+
 logger = logging.getLogger(__name__)
 
 HOME_EDGE_MARGIN      = 10
 GNOME_PANEL_CLEARANCE = 32
 
 
-def home_chrome_edge_margin() -> int:
+def _wayland_compositor(compositor: "Compositor | None" = None) -> "Compositor | None":
+    """The compositor in play, or None when this is not a Wayland session."""
+    if QGuiApplication.platformName() != "wayland":
+        return None
+    if compositor is not None:
+        return compositor
+    from infrastructure.linux.compositor import detect_compositor
+    return detect_compositor()
+
+
+def _on_gnome(compositor: "Compositor | None" = None) -> bool:
+    resolved = _wayland_compositor(compositor)
+    if resolved is None:
+        return False
+    from infrastructure.linux.compositor import Compositor
+    return resolved is Compositor.GNOME
+
+
+def home_chrome_edge_margin(compositor: "Compositor | None" = None) -> int:
     """The gap the Home header (top) and hint bar (bottom) keep from the screen
     edge — widened on GNOME to clear its unstackable top panel."""
-    if QGuiApplication.platformName() != "wayland":
-        return HOME_EDGE_MARGIN
-    from infrastructure.linux.compositor import Compositor, detect_compositor
-    if detect_compositor() is Compositor.GNOME:
-        return GNOME_PANEL_CLEARANCE
-    return HOME_EDGE_MARGIN
+    return GNOME_PANEL_CLEARANCE if _on_gnome(compositor) else HOME_EDGE_MARGIN
 
 
-def surface_sized_by_compositor() -> bool:
+def surface_sized_by_compositor(compositor: "Compositor | None" = None) -> bool:
     """Whether the windowing system gives an anchored overlay its geometry.
 
     wlr-layer-shell sizes a surface from its anchors before it is ever mapped.
     Everywhere else the widget must size itself: a compositor-driven resize after
     the fact leaves the client with a buffer it never repaints."""
-    if QGuiApplication.platformName() != "wayland":
-        return False
-    from infrastructure.linux.compositor import Compositor, detect_compositor
-    return detect_compositor() is not Compositor.GNOME
+    resolved = _wayland_compositor(compositor)
+    return resolved is not None and not _on_gnome(resolved)
 
 
-def fullscreen_loses_translucency() -> bool:
+def fullscreen_loses_translucency(compositor: "Compositor | None" = None) -> bool:
     """Whether a fullscreen surface is composited over opaque black.
 
     Mutter blends a fullscreen window onto black and drops its alpha channel, so a
     dimming backdrop would hide the screen instead of shading it. A screen-sized
     ordinary window keeps its alpha. Measured: painting rgba(255,0,0,100) fullscreen
     reads back as rgba(100,0,0,255)."""
-    if QGuiApplication.platformName() != "wayland":
-        return False
-    from infrastructure.linux.compositor import Compositor, detect_compositor
-    return detect_compositor() is Compositor.GNOME
+    return _on_gnome(compositor)
 
 
 def promote_overlay_surface(
@@ -70,13 +82,13 @@ def promote_overlay_surface(
     anchors: Anchor = Anchor.ALL,
     exclusive_zone: int = -1,
     keyboard: Keyboard = Keyboard.NONE,
+    compositor: "Compositor | None" = None,
 ) -> None:
     """Lift *widget* above everything using the platform's mechanism. Call before
     the widget is shown."""
     platform = QGuiApplication.platformName()
     if platform == "wayland":
-        from infrastructure.linux.compositor import Compositor, detect_compositor
-        if detect_compositor() is Compositor.GNOME:
+        if _on_gnome(compositor):
             # Mutter has no layer-shell; the Kasual Helper extension pins Kasual's
             # surfaces above the foreground app (a plain frameless top-level here)
             # and applies the layer/anchors/keyboard mode itself, keyed by the window

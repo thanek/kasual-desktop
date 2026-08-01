@@ -8,7 +8,11 @@ COLOR_TOPBAR    = "rgba(15, 17, 25, 210)"
 COLOR_RUNNING   = "#a3be8c"
 COLOR_CARD_BG   = "#2e3440"
 COLOR_CHROME_BG = "rgba(46, 52, 64, 204)"   # transparency test: 20%
-COLOR_SEPARATOR = "#3b4252"
+COLOR_SURFACE_HI = "#3b4252"
+COLOR_SEPARATOR = COLOR_SURFACE_HI
+COLOR_BTN_BG    = "#434c5e"
+COLOR_TRACK     = "#4c566a"                 # slider/scrollbar track; also the button hover fill
+COLOR_BTN_HI    = "#5b6884"
 CARD_RADIUS_PX = 40
 PILL_RADIUS    = 40
 _TOPBAR_RADIUS = 30
@@ -183,18 +187,18 @@ def dialog_primary(focused: bool = False) -> str:
 
 
 def dialog_secondary(focused: bool = False) -> str:
-    return _dialog_button("#434c5e", "white", "#4c566a", focused=focused)
+    return _dialog_button(COLOR_BTN_BG, "white", COLOR_TRACK, focused=focused)
 
 
 def dialog_selected(focused: bool = False) -> str:
     """A chosen radio value: accent *outline*, not fill, so it marks the pick
     without reading as a primary action."""
-    return _dialog_button("#4c566a", "white", "#5b6884",
+    return _dialog_button(COLOR_TRACK, "white", COLOR_BTN_HI,
                           focused=focused, border=COLOR_ACCENT)
 
 
 def dialog_disabled() -> str:
-    return _dialog_button("#3b4252", "#6b7280", "#3b4252", focused=False)
+    return _dialog_button(COLOR_SURFACE_HI, "#6b7280", COLOR_SURFACE_HI, focused=False)
 
 
 _DIALOG_ROLES = {
@@ -237,7 +241,7 @@ def home_menu_item_normal() -> str:
         QPushButton {{
             font-size: 24px;
             padding: 18px 32px;
-            background-color: #2e3440;
+            background-color: {COLOR_CARD_BG};
             color: white;
             border: 2px solid transparent;
             border-radius: {_MENU_RADIUS}px;
@@ -264,25 +268,25 @@ def flat_scrollbar() -> str:
     """A flat scrollbar: solid rounded track and handle, no native pseudo-3D
     frame, no arrow buttons. Apply to a QScrollArea (the rule also clears the
     area's own border/background)."""
-    return """
-        QScrollArea { background: transparent; border: none; }
-        QScrollBar:vertical {
-            background: #2e3440;
+    return f"""
+        QScrollArea {{ background: transparent; border: none; }}
+        QScrollBar:vertical {{
+            background: {COLOR_CARD_BG};
             width: 10px;
             margin: 0;
             border: none;
             border-radius: 5px;
-        }
-        QScrollBar::handle:vertical {
-            background: #4c566a;
+        }}
+        QScrollBar::handle:vertical {{
+            background: {COLOR_TRACK};
             min-height: 30px;
             border: none;
             border-radius: 5px;
-        }
-        QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+        }}
+        QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{
             height: 0; border: none; background: none;
-        }
-        QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {
+        }}
+        QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {{
             background: none;
-        }
+        }}
     """

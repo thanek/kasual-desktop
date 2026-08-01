@@ -162,8 +162,8 @@ def main():
             app_adder=app_adder,
             # Protocol apps (ms-settings) have no detectable window to wait on, so
             # hide on a short timer and let the surface's foreground monitor bring
-            # the Desktop back; the builder's wm/pm/apps/on_hide args don't apply.
-            deferred_hide_factory=lambda _wm, _pm, _on_hide:
+            # the Desktop back.
+            deferred_hide_factory=lambda _wm, _pm, _on_cede, _on_hide:
                 TimedLaunchHide(on_hide=surface.hide_for_launch),
             power_preference=power_preference,
         )

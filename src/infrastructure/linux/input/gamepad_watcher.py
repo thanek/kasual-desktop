@@ -122,8 +122,8 @@ class GamepadWatcher(BaseGamepadWatcher):
                 if uinput is not None:
                     try:
                         uinput.close()
-                    except Exception:
-                        pass
+                    except Exception as exc:
+                        logger.debug("Closing virtual pad failed: %s", exc)
                     uinput = None
 
                 found = False
@@ -160,8 +160,8 @@ class GamepadWatcher(BaseGamepadWatcher):
                         if d is not None:
                             try:
                                 d.close()
-                            except Exception:
-                                pass
+                            except Exception as close_exc:
+                                logger.debug("Releasing %s failed: %s", d.path, close_exc)
 
                 if not found and refresh_started_at is not None and was_connected:
                     # Give up the optimistic "still connected" state after a grace period.
@@ -191,8 +191,8 @@ class GamepadWatcher(BaseGamepadWatcher):
                             refresh_started_at = time.monotonic()
                             try:
                                 device.close()
-                            except Exception:
-                                pass
+                            except Exception as exc:
+                                logger.debug("Closing %s failed: %s", device.path, exc)
                             device = None
                             with self._lock:
                                 self._device = None

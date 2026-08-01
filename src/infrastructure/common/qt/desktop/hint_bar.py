@@ -264,7 +264,7 @@ class HintBar(QWidget, HintBarView, metaclass=ProtocolQtMeta):
         lbl.setFixedSize(GLYPH_SIZE + 12, GLYPH_SIZE)
         lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         lbl.setStyleSheet(
-            f"background-color: #3b4252; color: white;"
+            f"background-color: {styles.COLOR_SURFACE_HI}; color: white;"
             f" border-radius: {GLYPH_SIZE // 2}px;"
             "  font-weight: bold; font-size: 12px;"
         )
@@ -286,7 +286,7 @@ class HintBar(QWidget, HintBarView, metaclass=ProtocolQtMeta):
         lbl.setFixedSize(GLYPH_SIZE, GLYPH_SIZE)
         lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         lbl.setStyleSheet(
-            f"background-color: #3b4252; border-radius: {GLYPH_SIZE // 2}px;"
+            f"background-color: {styles.COLOR_SURFACE_HI}; border-radius: {GLYPH_SIZE // 2}px;"
         )
         lbl.setPixmap(qta.icon(glyph, color="white").pixmap(QSize(ICON_PX, ICON_PX)))
         return lbl

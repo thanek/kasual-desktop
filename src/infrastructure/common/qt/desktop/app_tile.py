@@ -5,11 +5,12 @@ from PyQt6.QtCore import (Qt, QSize, QPoint, QEasingCurve,
                           QPropertyAnimation, QVariantAnimation,
                           QSequentialAnimationGroup, QPauseAnimation,
                           pyqtSignal)
-from PyQt6.QtGui import QCursor, QFont, QFontMetrics
+from PyQt6.QtGui import QFont, QFontMetrics
 from PyQt6.QtWidgets import QWidget, QToolButton, QLabel
 
 from infrastructure.common.qt.icons import fitted_icon
 from infrastructure.common.qt.ui import styles
+from infrastructure.common.qt.ui.hover import HoverReporting
 
 TILE_W        = 180
 TILE_H        = 200
@@ -27,11 +28,10 @@ MARQUEE_PAUSE_MS  = 900   # hold at each end before reversing
 SCALE_ANIM_MS = 160       # grow/shrink when (de)selected
 
 
-class AppTile(QWidget):
+class AppTile(HoverReporting, QWidget):
     """Single application tile."""
 
     clicked       = pyqtSignal()
-    hovered       = pyqtSignal()
     right_clicked = pyqtSignal()
 
     def __init__(self, name: str, icon_name: str, color: str, qicon=None, full_name: str | None = None, parent=None):
@@ -64,9 +64,6 @@ class AppTile(QWidget):
 
         self._closing = False
         self._running = False
-        # Rejects the synthetic enterEvent Qt fires when an overlay above us
-        # closes over a stationary cursor (see enterEvent).
-        self._pos_at_leave: QPoint | None = None
         self._status_bar = QLabel(self)
         self._status_bar.hide()
 
@@ -78,18 +75,6 @@ class AppTile(QWidget):
 
     def click(self) -> None:
         self._btn.click()
-
-    def enterEvent(self, event) -> None:
-        super().enterEvent(event)
-        pos = event.globalPosition().toPoint()
-        synthetic = pos == self._pos_at_leave
-        self._pos_at_leave = None
-        if not synthetic:
-            self.hovered.emit()
-
-    def leaveEvent(self, event) -> None:
-        super().leaveEvent(event)
-        self._pos_at_leave = QCursor.pos()
 
     def mousePressEvent(self, event) -> None:
         if event.button() == Qt.MouseButton.RightButton:
@@ -258,16 +243,11 @@ class AppTile(QWidget):
         return anim
 
 
-class AddTile(QWidget):
-    """The synthetic ``[＋]`` "Add app" tile that ends the pinned section.
-
-    A deliberately app-unlike tile: transparent, dashed outline, a single
-    circle-plus glyph, no title/status bar/marquee. Mirrors :class:`AppTile`'s
-    fixed slot and grow-on-select animation but carries none of an app's state.
-    """
+class AddTile(HoverReporting, QWidget):
+    """The synthetic ``[＋]`` "Add app" tile that ends the pinned section —
+    deliberately unlike a real app tile, so it never reads as one."""
 
     clicked = pyqtSignal()
-    hovered = pyqtSignal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -279,23 +259,10 @@ class AddTile(QWidget):
         self._is_selected = False
         self._scale_t     = 0.0
         self._scale_anim: QVariantAnimation | None = None
-        self._pos_at_leave: QPoint | None = None
 
         self.setFixedSize(TILE_SEL_W, TILE_SEL_H)
         self._refit(TILE_W, TILE_H, ICON_SIZE)
         self._apply_icon(selected=False)
-
-    def enterEvent(self, event) -> None:
-        super().enterEvent(event)
-        pos = event.globalPosition().toPoint()
-        synthetic = pos == self._pos_at_leave
-        self._pos_at_leave = None
-        if not synthetic:
-            self.hovered.emit()
-
-    def leaveEvent(self, event) -> None:
-        super().leaveEvent(event)
-        self._pos_at_leave = QCursor.pos()
 
     def click(self) -> None:
         self._btn.click()

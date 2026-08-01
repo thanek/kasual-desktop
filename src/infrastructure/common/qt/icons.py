@@ -56,8 +56,8 @@ def resolve_app_icon(app) -> QIcon | None:
     if app.icon:
         try:
             return qtawesome.icon(app.icon, color="white")
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("qtawesome icon %r unavailable: %s", app.icon, exc)
     return shell_icon(app.command)
 
 

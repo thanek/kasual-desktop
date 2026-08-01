@@ -193,6 +193,23 @@ class TestFactories:
         assert isinstance(build_desktop_surface(), LayerShellSurface)
 
 
+class TestInjectedCompositor:
+    """The composition root detects once and passes the result down; an explicit
+    compositor wins over the session env."""
+
+    def test_factory_uses_the_given_compositor(self, clean_env, qapp):
+        clean_env.setenv("XDG_CURRENT_DESKTOP", "GNOME")
+        from infrastructure.wlroots.wm.sway import SwayWindowManager
+        assert isinstance(build_window_manager(Compositor.SWAY), SwayWindowManager)
+
+    def test_surface_helper_uses_the_given_compositor(self, clean_env):
+        clean_env.setenv("KDE_FULL_SESSION", "true")
+        from infrastructure.common.qt.ui import top_surface
+        with patch.object(top_surface.QGuiApplication, "platformName",
+                          return_value="wayland"):
+            assert top_surface.surface_sized_by_compositor(Compositor.GNOME) is False
+
+
 class TestSurfaceSizing:
     """Only wlr-layer-shell sizes an anchored overlay before it maps; everywhere
     else the widget must, or Mutter's after-the-fact resize blanks its buffer."""

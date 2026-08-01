@@ -61,7 +61,7 @@ def _home_button_icon() -> QIcon:
     painter = QPainter(canvas)
     painter.setRenderHint(QPainter.RenderHint.Antialiasing)
     painter.setPen(Qt.PenStyle.NoPen)
-    painter.setBrush(QColor("#3b4252"))
+    painter.setBrush(QColor(styles.COLOR_SURFACE_HI))
     painter.drawEllipse(_GLYPH_GAP, 0, _GLYPH_DISC, _GLYPH_DISC)
     house = qta.icon(_HOME_GLYPH, color="white").pixmap(
         QSize(_GLYPH_INNER, _GLYPH_INNER))
@@ -411,7 +411,7 @@ class TileSettings(BaseOverlay):
             if is_cursor and focused:
                 border = "3px solid white"
             elif is_staged:
-                border = "3px solid #88c0d0"
+                border = f"3px solid {styles.COLOR_ACCENT}"
             else:
                 border = "3px solid #888888"
             btn.setStyleSheet(

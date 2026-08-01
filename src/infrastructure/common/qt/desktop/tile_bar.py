@@ -371,42 +371,10 @@ class TileBar(QScrollArea, TileBarView, TileFocusView, TileReorderView, metaclas
     # ── Dynamic tiles (currently open windows) ─────────────────────────────
 
     def update_windows(self, windows: list[Window]) -> None:
-        """Rebuild the dynamic tile section from the refreshed window list.
-
-        Filters out windows belonging to an application launched by AppManager —
-        they are already represented by a static tile. Emits ``windows_changed``
-        whenever the tile set is actually rebuilt (including down to empty) so the
-        coordinator can re-check active state — e.g. reactivate the desktop when
-        the last open window closes.
-        """
+        """Rebuild the dynamic tile section. Emits ``windows_changed`` on every
+        rebuild, including down to empty, so the coordinator re-checks active state."""
         self._last_windows = windows
-
-        # The "external window" rule lives in the domain; the process-group
-        # check it needs is supplied here as an os.getpgid-backed callable.
-        running_pids = set(self._app_manager.all_running_pids())
-
-        def _owned_by_running_group(window: Window) -> bool:
-            # os.getpgid is Unix-only (absent on Windows → AttributeError); the
-            # process-group rule simply doesn't apply there, so fall through to
-            # False and let matches_app / pinned-id filtering stand on its own.
-            try:
-                return bool(running_pids) and os.getpgid(window.pid) in running_pids
-            except (OSError, AttributeError):
-                return False
-
-        extern_windows = external_windows(windows, self._apps, _owned_by_running_group)
-        # A window pinned this session is now a static tile — keep it out of the
-        # dynamic section even while its window is still open (its app identity may
-        # not match the pinned tile, e.g. reverse-DNS app-ids, so filter by id).
-        if self._pinned_window_ids:
-            extern_windows = [w for w in extern_windows if w.id not in self._pinned_window_ids]
-
-        seen = {w.id: w for w in extern_windows}
-        ordered: list[Window] = [seen[wid] for wid in self._dyn_order if wid in seen]
-        known = set(self._dyn_order)
-        new_windows: list[Window] = [w for w in extern_windows if w.id not in known]
-        self._dyn_order = [wid for wid in self._dyn_order if wid in seen] + [w.id for w in new_windows]
-        extern_windows = ordered + new_windows
+        extern_windows = self._reordered(self._external_windows(windows))
 
         signature = tuple(
             (w.id, w.title, w.desktop_file, w.resource_class) for w in extern_windows
@@ -416,52 +384,71 @@ class TileBar(QScrollArea, TileBarView, TileFocusView, TileReorderView, metaclas
         self._dyn_signature = signature
 
         self._clear_dynamic_tiles()
-
-        if not extern_windows:
-            self._clamp_index()
-            self._render_tiles()
-            self.windows_changed.emit()
-            return
-
-        # Visual separator between static and dynamic tiles
-        sep = QWidget()
-        sep.setFixedSize(2, TILE_H - 24)
-        sep.setStyleSheet("background: #3b4252;")
-        self._tile_layout.addWidget(sep)
-        self._dyn_separator = sep
-
-        for w in extern_windows:
-            full_title = w.title
-            app_name   = self._icon_resolver.resolve_name(w.desktop_file, w.resource_class)
-            if app_name and app_name != full_title:
-                combined = f"{app_name} ({full_title})"
-            else:
-                combined = app_name or full_title
-            display_title = styles.truncate(combined, _DYN_TILE_MAX_TITLE)
-            app_icon = self._icon_resolver.resolve_icon(
-                w.desktop_file, w.resource_class, w.pid,
-            )
-            tile = AppTile(
-                name=display_title,
-                icon_name='fa5s.window-maximize',
-                color='#2e3440',
-                qicon=app_icon,
-                full_name=combined,
-            )
-            tile.set_running(True)   # window exists → application is running
-            win_id = w.id
-            abs_idx = self._first_dynamic_index() + len(self._dynamic_tiles)
-            tile.clicked.connect(lambda wid=win_id: self._on_dynamic_clicked(wid))
-            tile.hovered.connect(lambda i=abs_idx: self._on_tile_hovered(i))
-            tile.right_clicked.connect(lambda i=abs_idx: self._on_tile_right_clicked(i))
-            self._tile_layout.addWidget(tile)
-            self._dynamic_tiles.append((win_id, full_title, tile))
-            self._dynamic_pids[win_id] = w.pid
+        if extern_windows:
+            self._add_separator()
+            for w in extern_windows:
+                abs_idx = self._first_dynamic_index() + len(self._dynamic_tiles)
+                tile = self._build_dynamic_tile(w, abs_idx)
+                self._tile_layout.addWidget(tile)
+                self._dynamic_tiles.append((w.id, w.title, tile))
+                self._dynamic_pids[w.id] = w.pid
 
         self._clamp_index()
         self._render_tiles()
         logger.debug('Dynamic tiles: %d', len(self._dynamic_tiles))
         self.windows_changed.emit()
+
+    def _external_windows(self, windows: list[Window]) -> list[Window]:
+        running_pids = set(self._app_manager.all_running_pids())
+
+        def _owned_by_running_group(window: Window) -> bool:
+            # os.getpgid is Unix-only; elsewhere the process-group rule
+            # doesn't apply.
+            try:
+                return bool(running_pids) and os.getpgid(window.pid) in running_pids
+            except (OSError, AttributeError):
+                return False
+
+        extern = external_windows(windows, self._apps, _owned_by_running_group)
+        # By id, not app identity: a pinned tile's app-id may differ from its
+        # window's (e.g. reverse-DNS app-ids).
+        if self._pinned_window_ids:
+            extern = [w for w in extern if w.id not in self._pinned_window_ids]
+        return extern
+
+    def _reordered(self, extern: list[Window]) -> list[Window]:
+        """Known windows keep their established order; new ones go to the end."""
+        seen = {w.id: w for w in extern}
+        known = set(self._dyn_order)
+        new_windows = [w for w in extern if w.id not in known]
+        self._dyn_order = [wid for wid in self._dyn_order if wid in seen] + [w.id for w in new_windows]
+        return [seen[wid] for wid in self._dyn_order if wid in seen]
+
+    def _add_separator(self) -> None:
+        sep = QWidget()
+        sep.setFixedSize(2, TILE_H - 24)
+        sep.setStyleSheet(f"background: {styles.COLOR_SEPARATOR};")
+        self._tile_layout.addWidget(sep)
+        self._dyn_separator = sep
+
+    def _build_dynamic_tile(self, w: Window, abs_idx: int) -> AppTile:
+        app_name = self._icon_resolver.resolve_name(w.desktop_file, w.resource_class)
+        if app_name and app_name != w.title:
+            combined = f"{app_name} ({w.title})"
+        else:
+            combined = app_name or w.title
+        tile = AppTile(
+            name=styles.truncate(combined, _DYN_TILE_MAX_TITLE),
+            icon_name='fa5s.window-maximize',
+            color=styles.COLOR_CARD_BG,
+            qicon=self._icon_resolver.resolve_icon(w.desktop_file, w.resource_class, w.pid),
+            full_name=combined,
+        )
+        tile.set_running(True)
+        tile.clicked.connect(lambda wid=w.id: self._on_dynamic_clicked(wid))
+        tile.hovered.connect(lambda i=abs_idx: self._on_tile_hovered(i))
+        tile.right_clicked.connect(lambda i=abs_idx: self._on_tile_right_clicked(i))
+        return tile
 
     # ── Private helpers ─────────────────────────────────────────────────────
 

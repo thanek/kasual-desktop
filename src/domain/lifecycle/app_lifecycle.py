@@ -13,10 +13,8 @@ from domain.shell.foreground import ForegroundState
 from domain.catalog.target import AppTarget, Target, WindowTarget
 from domain.input.pad_control import PadControl
 from domain.lifecycle.app_control import AppControl
-from domain.lifecycle.cede_depth import CedeDepth
 from domain.lifecycle.foreground_inspector import ForegroundInspector
-from domain.lifecycle.launch_hide import LaunchHide
-from domain.lifecycle.launch_show import LaunchShow
+from domain.lifecycle.launch_transitions import LaunchTransitions
 from domain.menu.entry import CLOSE, LAUNCH, RESTORE
 from domain.menu.item import MenuItem
 from domain.lifecycle.process_manager import ProcessManager
@@ -30,10 +28,8 @@ from domain.shell.desktop_view import DesktopView
 
 logger = logging.getLogger(__name__)
 
-# A Steam forwarder exits the instant it hands the game to an already-running Steam;
-# the game's own window can be a minute or more behind it — Steam's own progress is what
-# belongs on the screen until then, so the Desktop stays ceded this long before taking it
-# back. It keeps expecting the window either way, and cedes again whenever it maps.
+# A Steam forwarder exits long before the game's window maps; the Desktop stays
+# ceded this long so Steam's own progress keeps the screen.
 _FORWARDER_CEDE_GRACE_MS = 120_000
 
 
@@ -46,9 +42,7 @@ class AppLifecycle(AppControl):
         app_manager: ProcessManager,
         apps: LiveCatalog,
         foreground: ForegroundState,
-        deferred_hide: LaunchHide,
-        deferred_show: LaunchShow,
-        cede_depth: CedeDepth,
+        transitions: LaunchTransitions,
         tilebar: TileBarView,
         pad_handler: Callable[[str], None],
         scheduler: Scheduler,
@@ -65,9 +59,7 @@ class AppLifecycle(AppControl):
         self._arranger      = WindowArranger(window_manager, app_manager)
         self._apps          = apps
         self._foreground    = foreground
-        self._deferred_hide = deferred_hide
-        self._deferred_show = deferred_show
-        self._cede_depth    = cede_depth
+        self._transitions   = transitions
         self._tilebar       = tilebar
         self._pad_handler   = pad_handler
         self._scheduler     = scheduler
@@ -132,9 +124,9 @@ class AppLifecycle(AppControl):
             env = {**self._launch_env(app), **app.env}   # app.env wins
             if self._app_manager.launch(app.id, app.command, app.args, env):
                 # Defer the hide until the window maps, so no DE-desktop flash.
-                self._deferred_hide.arm(app)
-                self._deferred_show.arm(app)
-                self._cede_depth.arm(app)
+                self._transitions.hide.arm(app)
+                self._transitions.show.arm(app)
+                self._transitions.cede_depth.arm(app)
 
     def dispatch_tile_action(self, item: MenuItem) -> None:
         if item.action in (LAUNCH, RESTORE):
@@ -148,8 +140,8 @@ class AppLifecycle(AppControl):
             app = self._apps[target.index]
             self._gamepad.set_app_btn_mode_trigger(app.recall_menu_trigger)
             self._arranger.raise_app(app)
-            self._deferred_show.arm(app)
-            self._cede_depth.arm(app)
+            self._transitions.show.arm(app)
+            self._transitions.cede_depth.arm(app)
         else:
             self._gamepad.set_app_btn_mode_trigger(target.trigger)
             self._wm.activate_window(target.window_id)
@@ -231,7 +223,7 @@ class AppLifecycle(AppControl):
     def on_app_launch_failed(self, app_id: str, error: str) -> None:
         logger.warning("Application %s failed to launch: %s", app_id, error)
         # Keep the Desktop up for the error dialog.
-        self._deferred_hide.cancel()
+        self._transitions.hide.cancel()
         # The optimistic foreground set in on_tile_activated never started, so
         # clear it or BTN_MODE would target the never-launched app.
         self._foreground.clear_if_app(app_id)
@@ -253,7 +245,7 @@ class AppLifecycle(AppControl):
 
         logger.info("Application %s finished – returning to desktop", app_id)
         # Don't hide onto a closed app.
-        self._deferred_hide.cancel()
+        self._transitions.hide.cancel()
         self._view.close_active_dialog()
         self._tilebar.refresh_status()
         self._wm.refresh_now()
@@ -278,8 +270,8 @@ class AppLifecycle(AppControl):
 
     def _return_from(self, app_id: str) -> None:
         self._pending_return = None
-        self._deferred_show.cancel()
-        self._cede_depth.cancel()
+        self._transitions.show.cancel()
+        self._transitions.cede_depth.cancel()
         self._foreground.clear_if_app(app_id)
         if not self._view.is_visible():
             self.reactivate_desktop()
@@ -311,8 +303,8 @@ class AppLifecycle(AppControl):
             return False
         target = self._foreground.current
         return (isinstance(target, AppTarget) and target.app_id == app_id
-                and self._deferred_show.is_armed
-                and not self._deferred_show.has_seen_window
+                and self._transitions.show.is_armed
+                and not self._transitions.show.has_seen_window
                 and not self._still_windowed(app_id))
 
     def _forwarder_cede_grace_elapsed(self, app_id: str) -> None:
@@ -326,7 +318,7 @@ class AppLifecycle(AppControl):
         if not self._forwarder_launch_in_flight(app_id):
             return
         logger.info("%s window has not mapped; returning to the desktop to wait", app_id)
-        self._deferred_hide.cancel()
+        self._transitions.hide.cancel()
         self._return_from(app_id)
         self._awaited_launch = app_id
 
@@ -389,8 +381,8 @@ class AppLifecycle(AppControl):
     def reactivate_desktop(self) -> None:
         """Restore Desktop input control and surface it. Idempotent. Resets the
         BTN_MODE trigger so no app-specific HOLD_1S lingers."""
-        self._deferred_show.cancel()
-        self._cede_depth.cancel()
+        self._transitions.show.cancel()
+        self._transitions.cede_depth.cancel()
         self._gamepad.set_app_btn_mode_trigger(Trigger.CLICK)
         self._gamepad.push_handler(self._pad_handler)
         if not self._gamepad.is_connected():

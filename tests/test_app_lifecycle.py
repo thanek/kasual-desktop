@@ -13,6 +13,7 @@ from unittest.mock import MagicMock
 from domain.input.vocabulary import Trigger
 from domain.lifecycle.app_lifecycle import AppLifecycle, _FORWARDER_CEDE_GRACE_MS
 from domain.lifecycle.foreground_inspector import ForegroundInspector
+from domain.lifecycle.launch_transitions import LaunchTransitions
 from domain.catalog.app import App
 from domain.shell.foreground import ForegroundState
 from domain.catalog.target import AppTarget, WindowTarget
@@ -126,9 +127,8 @@ def _make(apps=None, visible=False, is_game_pid=None, paused=False, launch_env=N
         app_manager=app_manager,
         apps=apps,
         foreground=foreground,
-        deferred_hide=deferred_hide,
-        deferred_show=deferred_show,
-        cede_depth=cede_depth,
+        transitions=LaunchTransitions(
+            hide=deferred_hide, show=deferred_show, cede_depth=cede_depth),
         tilebar=tilebar,
         pad_handler=pad,
         scheduler=scheduler,

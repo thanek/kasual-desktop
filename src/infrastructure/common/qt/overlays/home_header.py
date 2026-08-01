@@ -22,7 +22,7 @@ Both roles ultimately open the same Network / Notifications overlay, so a single
 import qtawesome as qta
 from collections.abc import Callable
 
-from PyQt6.QtCore import Qt, QSize, QTimer, QLocale, QPoint, QRectF, QEvent, pyqtSignal
+from PyQt6.QtCore import Qt, QSize, QTimer, QLocale, QRectF, QEvent, pyqtSignal
 from PyQt6.QtGui import QCursor, QColor, QPainter
 from datetime import datetime
 from PyQt6.QtWidgets import QWidget, QHBoxLayout, QLabel, QPushButton
@@ -32,6 +32,7 @@ from domain.menu.entry import POWER
 from domain.system.actions import ACTIONS, NETWORK, NOTIFICATIONS
 from domain.shared.i18n import translate
 from infrastructure.common.qt.ui import styles
+from infrastructure.common.qt.ui.hover import HoverReporting
 
 HEADER_H = 80    # matches the old top bar / hint bar height
 _BTN     = 56
@@ -44,7 +45,7 @@ _POWER_GLYPH = "fa5s.power-off"
 # The whole header wears it too (its resting background), so bar and buttons read
 # as one family.
 _FOCUS_FILL   = "rgba(136, 192, 208, 60)"
-_FOCUS_BORDER = "#88c0d0"
+_FOCUS_BORDER = styles.COLOR_ACCENT
 
 # The grab handle: a wide-but-thin pull at the bottom of the pill (mouse path
 # into the menu). Its hit target is generous; only the centred bar is drawn.
@@ -130,39 +131,12 @@ def _btn_style(selected: bool) -> str:
     return f"background: transparent; border: 2px solid transparent; border-radius: {_BTN // 2}px;"
 
 
-class _HeaderButton(QPushButton):
-    """Header action button that reports genuine pointer hovers.
-
-    ``enterEvent`` must be overridden at the class level: PyQt dispatches Qt
-    virtual events to class methods, not to attributes assigned per instance, so
-    the highlight can follow the mouse only from here. Mirrors :class:`AppTile`'s
-    synthetic-enter guard, so an overlay hiding over a parked cursor doesn't yank
-    the header highlight to the button under it.
-    """
-
-    hovered       = pyqtSignal()
+class _HeaderButton(HoverReporting, QPushButton):
     right_clicked = pyqtSignal()
 
-    def __init__(self, parent: QWidget | None = None) -> None:
-        super().__init__(parent)
-        self._pos_at_leave: QPoint | None = None
-
-    def enterEvent(self, event) -> None:
-        super().enterEvent(event)
-        pos = event.globalPosition().toPoint()
-        synthetic = pos == self._pos_at_leave
-        self._pos_at_leave = None
-        if not synthetic:
-            self.hovered.emit()
-
-    def leaveEvent(self, event) -> None:
-        super().leaveEvent(event)
-        self._pos_at_leave = QCursor.pos()
-
     def mousePressEvent(self, event) -> None:
-        # Right-click opens the button's dropdown (the Power chooser), mirroring a
-        # right-click on a tile opening its popover. The host decides which buttons
-        # actually have a menu.
+        # Right-click opens the button's dropdown; the host decides which
+        # buttons have one.
         if event.button() == Qt.MouseButton.RightButton:
             self.right_clicked.emit()
         else:
@@ -242,7 +216,7 @@ class HomeHeader(QWidget):
         self._power_badge.setPixmap(
             qta.icon("fa5s.chevron-down", color="white").pixmap(QSize(10, 10)))
         self._power_badge.setStyleSheet(
-            "background-color: #2e3440; border: 1px solid white; border-radius: 9px;")
+            f"background-color: {styles.COLOR_CARD_BG}; border: 1px solid white; border-radius: 9px;")
         self._power_badge.setFixedSize(18, 18)
         self._power_badge.move(_BTN - 20, _BTN - 20)
         self._power_badge.raise_()

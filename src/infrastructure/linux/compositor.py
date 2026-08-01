@@ -135,9 +135,9 @@ class NullWindowManager(WindowManager):
         pass
 
 
-def build_window_manager() -> WindowManager:
-    """Construct the WindowManager adapter for the detected compositor."""
-    compositor = detect_compositor()
+def build_window_manager(compositor: Compositor | None = None) -> WindowManager:
+    """Construct the WindowManager adapter for *compositor* (detected if omitted)."""
+    compositor = compositor or detect_compositor()
     if compositor is Compositor.KDE:
         from infrastructure.kde.wm.window_manager import KWinWindowManager
         return KWinWindowManager()
@@ -162,9 +162,9 @@ def build_window_manager() -> WindowManager:
     return NullWindowManager()
 
 
-def build_system_wallpaper() -> SystemWallpaper:
-    """Construct the SystemWallpaper adapter for the detected compositor."""
-    compositor = detect_compositor()
+def build_system_wallpaper(compositor: Compositor | None = None) -> SystemWallpaper:
+    """Construct the SystemWallpaper adapter for *compositor* (detected if omitted)."""
+    compositor = compositor or detect_compositor()
     if compositor is Compositor.KDE:
         from infrastructure.kde.display.wallpaper import KdeSystemWallpaper
         return KdeSystemWallpaper()
@@ -181,8 +181,8 @@ def build_system_wallpaper() -> SystemWallpaper:
     return StaticFileWallpaper()
 
 
-def build_screensaver_waker() -> "ScreenSaverWaker":
-    """Construct the gamepad-activity → screensaver wake for the detected compositor.
+def build_screensaver_waker(compositor: Compositor | None = None) -> "ScreenSaverWaker":
+    """Construct the gamepad-activity → screensaver wake for *compositor*.
 
     GNOME's freedesktop ScreenSaver proxy only handles Inhibit, so the poke goes
     through the Kasual Helper extension there; everywhere else the standard
@@ -190,20 +190,20 @@ def build_screensaver_waker() -> "ScreenSaverWaker":
     from infrastructure.linux.display.screensaver import (
         ScreenSaverWaker, simulate_freedesktop_activity,
     )
-    if detect_compositor() is Compositor.GNOME:
+    if (compositor or detect_compositor()) is Compositor.GNOME:
         from infrastructure.gnome.helper import simulate_user_activity
         return ScreenSaverWaker(simulate_user_activity)
     return ScreenSaverWaker(simulate_freedesktop_activity)
 
 
-def build_desktop_surface() -> "DesktopSurface":
-    """Construct the DesktopSurface adapter for the detected compositor.
+def build_desktop_surface(compositor: Compositor | None = None) -> "DesktopSurface":
+    """Construct the DesktopSurface adapter for *compositor* (detected if omitted).
 
     Layer-shell compositors (KWin, Sway, Hyprland) promote the Desktop to a
     wlr-layer-shell surface; GNOME (no layer-shell) uses a frameless window that
     the Kasual Helper extension pins above the foreground app.
     """
-    compositor = detect_compositor()
+    compositor = compositor or detect_compositor()
     if compositor is Compositor.GNOME:
         from infrastructure.gnome.helper import helper_present
         if helper_present():
