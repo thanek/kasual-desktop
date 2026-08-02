@@ -23,7 +23,7 @@ import qtawesome as qta
 from collections.abc import Callable
 
 from PyQt6.QtCore import Qt, QSize, QTimer, QLocale, QRectF, QEvent, pyqtSignal
-from PyQt6.QtGui import QCursor, QColor, QPainter
+from PyQt6.QtGui import QCursor, QColor, QPainter, QPixmap
 from datetime import datetime
 from PyQt6.QtWidgets import QWidget, QHBoxLayout, QLabel, QPushButton
 
@@ -46,6 +46,14 @@ _POWER_GLYPH = "fa5s.power-off"
 # as one family.
 _FOCUS_FILL   = "rgba(136, 192, 208, 60)"
 _FOCUS_BORDER = styles.COLOR_ACCENT
+
+_BADGE_SIZE     = 18
+_BADGE_GLYPH    = "fa5s.chevron-down"
+_BADGE_INK      = "white"
+_BADGE_INK_SEL  = styles.COLOR_BG_DARK
+# _FOCUS_FILL flattened onto the header: a translucent fill is invisible while
+# the button behind it is unselected.
+_BADGE_FILL     = "#43555f"
 
 # The grab handle: a wide-but-thin pull at the bottom of the pill (mouse path
 # into the menu). Its hit target is generous; only the centred bar is drawn.
@@ -131,6 +139,16 @@ def _btn_style(selected: bool) -> str:
     return f"background: transparent; border: 2px solid transparent; border-radius: {_BTN // 2}px;"
 
 
+def _badge_style(selected: bool) -> str:
+    fill = _FOCUS_BORDER if selected else _BADGE_FILL
+    return f"background-color: {fill}; border: none; border-radius: {_BADGE_SIZE // 2}px;"
+
+
+def _badge_pixmap(selected: bool) -> QPixmap:
+    ink = _BADGE_INK_SEL if selected else _BADGE_INK
+    return qta.icon(_BADGE_GLYPH, color=ink).pixmap(QSize(10, 10))
+
+
 class _HeaderButton(HoverReporting, QPushButton):
     right_clicked = pyqtSignal()
 
@@ -213,13 +231,9 @@ class HomeHeader(QWidget):
         # opposite the notification count badge so the two never collide.
         self._power_badge = QLabel(self._power_btn)
         self._power_badge.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._power_badge.setPixmap(
-            qta.icon("fa5s.chevron-down", color="white").pixmap(QSize(10, 10)))
-        self._power_badge.setStyleSheet(
-            f"background-color: {styles.COLOR_CARD_BG}; border: 1px solid white; border-radius: 9px;")
-        self._power_badge.setFixedSize(18, 18)
-        self._power_badge.move(_BTN - 20, _BTN - 20)
-        self._power_badge.raise_()
+        self._power_badge.setFixedSize(_BADGE_SIZE, _BADGE_SIZE)
+        self._power_badge.move(_BTN - _BADGE_SIZE - 2, _BTN - _BADGE_SIZE - 2)
+        self._style_power_badge(selected=False)
 
         self._buttons = [self._net_btn, self._notif_btn, self._power_btn]
 
@@ -260,6 +274,11 @@ class HomeHeader(QWidget):
         btn.setIconSize(QSize(24, 24))
         btn.setStyleSheet(_btn_style(False))
         return btn
+
+    def _style_power_badge(self, *, selected: bool) -> None:
+        self._power_badge.setStyleSheet(_badge_style(selected))
+        self._power_badge.setPixmap(_badge_pixmap(selected))
+        self._power_badge.raise_()
 
     def set_docked(self, docked: bool) -> None:
         """Docked: the Home menu panel stands on the bottom edge. The corners they
@@ -313,6 +332,7 @@ class HomeHeader(QWidget):
         self._selected = index
         for i, btn in enumerate(self._buttons):
             btn.setStyleSheet(_btn_style(i == index))
+        self._style_power_badge(selected=index == _NAV_KEYS.index(POWER))
 
     def trigger(self, index: int) -> None:
         if 0 <= index < len(_NAV_KEYS):
