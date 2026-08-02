@@ -36,27 +36,16 @@ instruction page when missing). Acquisition differs per platform:
 
 ## DRM setup wizard (reusable beyond Netflix)
 
-Idea: a KD-guided wizard that prepares the system for Widevine-based apps.
-Any future DRM streaming app (Canal+, HBO Max, …) has the same prerequisite,
-so this should be a shared "DRM readiness" flow, not a Netflix feature:
-
-- [ ] Detect: arch (x86_64 vs aarch64), distro, CDM present/absent
-      (reuse/extract `_find_cdm()` into shared code instead of a per-app copy).
-- [ ] Guide: show the right acquisition path for the detected platform;
-      where a privileged install step is needed (`sudo widevine-installer`),
-      display the command rather than running it.
-- [ ] Verify: after install, re-detect and confirm EME
-      (`com.widevine.alpha`) actually resolves in a QtWebEngine probe.
-- [ ] Legal note in the wizard: the user downloads Google's blob themselves
-      and accepts its license — KD only points the way.
+Built as a shared "DRM readiness" facility, designed and documented in
+**`drm_plan.md`** — every future DRM app (HBO Max, Canal+, …) has the same
+prerequisite, so nothing about it is Netflix-specific.
 
 ## Starter catalog registration
 
-- [ ] Netflix is deliberately NOT in `src/domain/provisioning/catalog.py`
-      yet. When registering, gate the candidate on CDM presence (analogous
-      to `discovery.is_available("steam")`) — or offer it always and route
-      the no-CDM case into the wizard above, which is the nicer UX.
-- [ ] Add `"netflix.sh": "kasual-netflix"` to `BUNDLED_WM_CLASS`.
+- [x] Registered in `src/domain/provisioning/catalog.py` (key `netflix`, order
+      35, `requires_cdm=True`, **not** selected by default) and added to
+      `BUNDLED_WM_CLASS`. Picking it in the starter list is what triggers the
+      readiness wizard — see `drm_plan.md`.
 
 ## Known open problems (app itself)
 

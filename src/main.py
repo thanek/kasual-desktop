@@ -44,6 +44,11 @@ from infrastructure.linux.catalog.app_pinning import DesktopAppPinning
 from infrastructure.linux.catalog.installed_apps import XdgInstalledApps
 from domain.provisioning.provisioning import Provisioning
 from domain.provisioning.add_apps import AppAdder
+from domain.drm.gate import DrmSetupGate
+from domain.drm.readiness import DrmReadiness
+from infrastructure.common.drm.playback_probe import QtWebEnginePlaybackProbe
+from infrastructure.common.qt.overlays.drm_setup_overlay import QtDrmSetupView
+from infrastructure.linux.drm.facts import LinuxSystemFacts
 from infrastructure.linux.catalog.app_manager import AppManager
 from infrastructure.linux.proc import parent_pid, is_game_pid
 from infrastructure.linux.log.log_viewer_launcher import LogViewerLauncher
@@ -138,6 +143,13 @@ def main() -> None:
     # installed app (XDG .desktop scan), minus the apps already pinned, and
     # persists the chosen ones through the same store as onboarding.
     app_adder = AppAdder(XdgInstalledApps(), provisioning)
+
+    drm_facts = LinuxSystemFacts()
+    drm_gate = DrmSetupGate(
+        DrmReadiness(drm_facts),
+        QtDrmSetupView(gamepad, feedback),
+        QtWebEnginePlaybackProbe(drm_facts),
+    )
 
     def start_session() -> None:
         """Bring up the Desktop and controller from the (now-provisioned) apps.
@@ -242,7 +254,8 @@ def main() -> None:
 
     def start() -> None:
         run_onboarding_or_start(
-            provisioning, provisioning_uc, gamepad, feedback, start_session)
+            provisioning, provisioning_uc, gamepad, feedback, start_session,
+            drm_gate=drm_gate)
 
     _preflight_gate(app, gamepad, feedback, start)
 

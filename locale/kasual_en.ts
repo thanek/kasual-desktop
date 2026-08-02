@@ -240,6 +240,66 @@
 </context><context>
     <name>Kasual Desktop</name>
     <message>
+        <location filename="../src/domain/drm/recipes.py" line="30" />
+        <source>Install the Widevine installer</source>
+        <translation>Install the Widevine installer</translation>
+    </message>
+    <message>
+        <location filename="../src/domain/drm/recipes.py" line="31" />
+        <source>Fedora packages the installer script itself. Install it, then come back here.</source>
+        <translation>Fedora packages the installer script itself. Install it, then come back here.</translation>
+    </message>
+    <message>
+        <location filename="../src/domain/drm/recipes.py" line="51" />
+        <source>Install the extraction tools</source>
+        <translation>Install the extraction tools</translation>
+    </message>
+    <message>
+        <location filename="../src/domain/drm/recipes.py" line="52" />
+        <source>The installer unpacks a squashfs image and patches the module, so it needs curl, unsquashfs and Python.</source>
+        <translation>The installer unpacks a squashfs image and patches the module, so it needs curl, unsquashfs and Python.</translation>
+    </message>
+    <message>
+        <location filename="../src/domain/drm/recipes.py" line="61" />
+        <source>Get the installer script</source>
+        <translation>Get the installer script</translation>
+    </message>
+    <message>
+        <location filename="../src/domain/drm/recipes.py" line="62" />
+        <source>Your distribution does not package it, so fetch it from the Asahi Linux project.</source>
+        <translation>Your distribution does not package it, so fetch it from the Asahi Linux project.</translation>
+    </message>
+    <message>
+        <location filename="../src/domain/drm/recipes.py" line="79" />
+        <source>Kasual Desktop does not ship Widevine. Google Chrome carries it, and installing Chrome is what makes DRM playback work here.</source>
+        <translation>Kasual Desktop does not ship Widevine. Google Chrome carries it, and installing Chrome is what makes DRM playback work here.</translation>
+    </message>
+    <message>
+        <location filename="../src/domain/drm/recipes.py" line="86" />
+        <source>Install Google Chrome</source>
+        <translation>Install Google Chrome</translation>
+    </message>
+    <message>
+        <location filename="../src/domain/drm/recipes.py" line="87" />
+        <source>Install Chrome with your distribution's package manager. Its bundled Widevine module is picked up automatically — a Chromium build that fetches Widevine works too.</source>
+        <translation>Install Chrome with your distribution's package manager. Its bundled Widevine module is picked up automatically — a Chromium build that fetches Widevine works too.</translation>
+    </message>
+    <message>
+        <location filename="../src/domain/drm/recipes.py" line="102" />
+        <source>Run the installer</source>
+        <translation>Run the installer</translation>
+    </message>
+    <message>
+        <location filename="../src/domain/drm/recipes.py" line="103" />
+        <source>It downloads the module from Google, shows you the licence and asks you to accept it. Run it in a terminal — it needs root and your answers.</source>
+        <translation>It downloads the module from Google, shows you the licence and asks you to accept it. Run it in a terminal — it needs root and your answers.</translation>
+    </message>
+    <message>
+        <location filename="../src/domain/drm/recipes.py" line="115" />
+        <source>Kasual Desktop does not ship Widevine. The installer downloads it from Google and shows you Google's licence, which you accept yourself.</source>
+        <translation>Kasual Desktop does not ship Widevine. The installer downloads it from Google and shows you Google's licence, which you accept yourself.</translation>
+    </message>
+    <message>
         <location filename="../src/domain/menu/home.py" line="18" />
         <source>Return to Home screen</source>
         <translation>Return to Home screen</translation>
@@ -372,32 +432,107 @@
         <translation>Minimize Kasual Desktop</translation>
     </message>
     <message>
-        <location filename="../src/domain/system/hud.py" line="31" />
+        <location filename="../src/domain/system/hud.py" line="46" />
         <source>Disable HUD</source>
         <translation>Disable HUD</translation>
     </message>
     <message>
-        <location filename="../src/domain/system/hud.py" line="32" />
+        <location filename="../src/domain/system/hud.py" line="47" />
         <source>Enable HUD</source>
         <translation>Enable HUD</translation>
     </message>
     <message>
-        <location filename="../src/infrastructure/common/qt/overlays/home_header.py" line="357" />
+        <location filename="../src/infrastructure/common/qt/overlays/drm_setup_overlay.py" line="127" />
+        <source>Streaming apps need Widevine</source>
+        <translation>Streaming apps need Widevine</translation>
+    </message>
+    <message>
+        <location filename="../src/infrastructure/common/qt/overlays/drm_setup_overlay.py" line="172" />
+        <source>Check again</source>
+        <translation>Check again</translation>
+    </message>
+    <message>
+        <location filename="../src/infrastructure/common/qt/overlays/drm_setup_overlay.py" line="173" />
+        <source>Continue</source>
+        <translation>Continue</translation>
+    </message>
+    <message>
+        <location filename="../src/infrastructure/common/qt/overlays/drm_setup_overlay.py" line="217" />
+        <source>Widevine is installed</source>
+        <translation>Widevine is installed</translation>
+    </message>
+    <message>
+        <location filename="../src/infrastructure/common/qt/overlays/drm_setup_overlay.py" line="218" />
+        <source>Widevine is not installed</source>
+        <translation>Widevine is not installed</translation>
+    </message>
+    <message>
+        <location filename="../src/infrastructure/common/qt/overlays/drm_setup_overlay.py" line="231" />
+        <source>Kasual Desktop has no Widevine recipe for this system. The apps stay installed in case you set it up yourself.</source>
+        <translation>Kasual Desktop has no Widevine recipe for this system. The apps stay installed in case you set it up yourself.</translation>
+    </message>
+    <message>
+        <location filename="../src/infrastructure/common/qt/overlays/drm_setup_overlay.py" line="236" />
+        <source>Work through these steps in a terminal, then check again. You can also continue now and come back later.</source>
+        <translation>Work through these steps in a terminal, then check again. You can also continue now and come back later.</translation>
+    </message>
+    <message>
+        <location filename="../src/infrastructure/common/qt/overlays/drm_setup_overlay.py" line="255" />
+        <source>Protected video plays on this system</source>
+        <translation>Protected video plays on this system</translation>
+    </message>
+    <message>
+        <location filename="../src/infrastructure/common/qt/overlays/drm_setup_overlay.py" line="258" />
+        <source>Checking playback…</source>
+        <translation>Checking playback…</translation>
+    </message>
+    <message>
+        <location filename="../src/infrastructure/common/qt/overlays/drm_setup_overlay.py" line="261" />
+        <source>Protected video does not play yet</source>
+        <translation>Protected video does not play yet</translation>
+    </message>
+    <message>
+        <location filename="../src/infrastructure/common/qt/overlays/drm_setup_overlay.py" line="262" />
+        <source>The module is installed but did not load. It may have been built for a different system — reinstall it and check again.</source>
+        <translation>The module is installed but did not load. It may have been built for a different system — reinstall it and check again.</translation>
+    </message>
+    <message>
+        <location filename="../src/infrastructure/common/qt/overlays/drm_setup_overlay.py" line="268" />
+        <source>There is nothing to play protected video with until Widevine is installed.</source>
+        <translation>There is nothing to play protected video with until Widevine is installed.</translation>
+    </message>
+    <message>
+        <location filename="../src/infrastructure/common/qt/overlays/drm_setup_overlay.py" line="275" />
+        <source>Playback has not been checked yet</source>
+        <translation>Playback has not been checked yet</translation>
+    </message>
+    <message>
+        <location filename="../src/infrastructure/common/qt/overlays/drm_setup_overlay.py" line="276" />
+        <source>Checking starts a short test playback with the installed module.</source>
+        <translation>Checking starts a short test playback with the installed module.</translation>
+    </message>
+    <message>
+        <location filename="../src/infrastructure/common/qt/overlays/drm_setup_overlay.py" line="347" />
+        <source>Copy to clipboard</source>
+        <translation>Copy to clipboard</translation>
+    </message>
+    <message>
+        <location filename="../src/infrastructure/common/qt/overlays/home_header.py" line="346" />
         <source>Power</source>
         <translation>Power</translation>
     </message>
     <message>
-        <location filename="../src/infrastructure/common/qt/overlays/notifications_overlay.py" line="149" />
+        <location filename="../src/infrastructure/common/qt/overlays/notifications_overlay.py" line="147" />
         <source>Recent notifications</source>
         <translation>Recent notifications</translation>
     </message>
     <message>
-        <location filename="../src/infrastructure/common/qt/overlays/notifications_overlay.py" line="168" />
+        <location filename="../src/infrastructure/common/qt/overlays/notifications_overlay.py" line="166" />
         <source>No notifications</source>
         <translation>No notifications</translation>
     </message>
     <message>
-        <location filename="../src/infrastructure/common/qt/overlays/preflight_overlay.py" line="136" />
+        <location filename="../src/infrastructure/common/qt/overlays/preflight_overlay.py" line="145" />
         <source>Kasual Desktop needs its GNOME Shell helper extension to manage windows.
 
 Enable it now?</source>
@@ -406,65 +541,97 @@ Enable it now?</source>
 Enable it now?</translation>
     </message>
     <message>
-        <location filename="../src/infrastructure/common/qt/overlays/preflight_overlay.py" line="141" />
+        <location filename="../src/infrastructure/common/qt/overlays/preflight_overlay.py" line="150" />
         <source>Enable</source>
         <translation>Enable</translation>
     </message>
     <message>
-        <location filename="../src/infrastructure/common/qt/overlays/preflight_overlay.py" line="142" />
+        <location filename="../src/infrastructure/common/qt/overlays/preflight_overlay.py" line="151" />
         <source>Not now</source>
         <translation>Not now</translation>
     </message>
     <message>
-        <location filename="../src/infrastructure/common/qt/overlays/preflight_overlay.py" line="154" />
+        <location filename="../src/infrastructure/common/qt/overlays/preflight_overlay.py" line="163" />
         <source>The Kasual Helper GNOME Shell extension isn't installed. Install the Kasual Desktop package, then enable it with:</source>
         <translation>The Kasual Helper GNOME Shell extension isn't installed. Install the Kasual Desktop package, then enable it with:</translation>
     </message>
     <message>
-        <location filename="../src/infrastructure/common/qt/overlays/preflight_overlay.py" line="160" />
+        <location filename="../src/infrastructure/common/qt/overlays/preflight_overlay.py" line="169" />
         <source>The Kasual Helper GNOME Shell extension is installed, but this GNOME session started before it and cannot load it. Log out and back in, then enable it with:</source>
         <translation>The Kasual Helper GNOME Shell extension is installed, but this GNOME session started before it and cannot load it. Log out and back in, then enable it with:</translation>
     </message>
     <message>
-        <location filename="../src/infrastructure/common/qt/overlays/preflight_overlay.py" line="167" />
+        <location filename="../src/infrastructure/common/qt/overlays/preflight_overlay.py" line="176" />
         <source>Kasual Desktop couldn't enable its GNOME Shell helper extension. Enable it manually with:</source>
         <translation>Kasual Desktop couldn't enable its GNOME Shell helper extension. Enable it manually with:</translation>
     </message>
     <message>
-        <location filename="../src/infrastructure/common/qt/overlays/preflight_overlay.py" line="172" />
-        <source>then retry.</source>
-        <translation>then retry.</translation>
-    </message>
-    <message>
-        <location filename="../src/infrastructure/common/qt/overlays/preflight_overlay.py" line="175" />
+        <location filename="../src/infrastructure/common/qt/overlays/preflight_overlay.py" line="183" />
         <source>Log out</source>
         <translation>Log out</translation>
     </message>
     <message>
-        <location filename="../src/infrastructure/common/qt/overlays/preflight_overlay.py" line="176" />
+        <location filename="../src/infrastructure/common/qt/overlays/preflight_overlay.py" line="185" />
+        <source>then retry.</source>
+        <translation>then retry.</translation>
+    </message>
+    <message>
+        <location filename="../src/infrastructure/common/qt/overlays/preflight_overlay.py" line="186" />
         <source>Retry</source>
         <translation>Retry</translation>
     </message>
     <message>
-        <location filename="../src/infrastructure/common/qt/ui/tray.py" line="42" />
-        <location filename="../src/infrastructure/common/qt/overlays/preflight_overlay.py" line="177" />
+        <location filename="../src/infrastructure/common/qt/ui/tray.py" line="43" />
+        <location filename="../src/infrastructure/common/qt/overlays/preflight_overlay.py" line="187" />
         <source>Quit</source>
         <translation>Quit</translation>
     </message>
     <message>
-        <location filename="../src/infrastructure/common/qt/ui/tray.py" line="35" />
+        <location filename="../src/infrastructure/common/qt/ui/tray.py" line="36" />
         <source>Show Desktop</source>
         <translation>Show Desktop</translation>
     </message>
     <message>
-        <location filename="../src/infrastructure/common/qt/ui/tray.py" line="37" />
+        <location filename="../src/infrastructure/common/qt/ui/tray.py" line="38" />
         <source>Logs</source>
         <translation>Logs</translation>
     </message>
     <message>
-        <location filename="../src/infrastructure/common/qt/ui/tray.py" line="39" />
+        <location filename="../src/infrastructure/common/qt/ui/tray.py" line="40" />
         <source>About…</source>
         <translation>About…</translation>
+    </message>
+    <message>
+        <source>Copy</source>
+        <translation type="vanished">Copy</translation>
+    </message>
+    <message>
+        <source>Copied</source>
+        <translation type="vanished">Copied</translation>
+    </message>
+    <message>
+        <source>Verify playback</source>
+        <translation type="vanished">Verify playback</translation>
+    </message>
+    <message>
+        <source>This system is ready to play protected video.</source>
+        <translation type="vanished">This system is ready to play protected video.</translation>
+    </message>
+    <message>
+        <source>Kasual Desktop has no Widevine recipe for this system, so protected video will not play. The apps stay installed in case you set it up yourself.</source>
+        <translation type="vanished">Kasual Desktop has no Widevine recipe for this system, so protected video will not play. The apps stay installed in case you set it up yourself.</translation>
+    </message>
+    <message>
+        <source>Widevine is missing, so protected video will not play yet. Work through these steps in a terminal, then check again — you can also continue now and come back later.</source>
+        <translation type="vanished">Widevine is missing, so protected video will not play yet. Work through these steps in a terminal, then check again — you can also continue now and come back later.</translation>
+    </message>
+    <message>
+        <source>Protected video plays on this system.</source>
+        <translation type="vanished">Protected video plays on this system.</translation>
+    </message>
+    <message>
+        <source>Widevine is installed but did not load. It may have been built for a different system — reinstall it and check again.</source>
+        <translation type="vanished">Widevine is installed but did not load. It may have been built for a different system — reinstall it and check again.</translation>
     </message>
 </context><context>
     <name>LogViewer</name>
@@ -481,12 +648,12 @@ Enable it now?</translation>
 </context><context>
     <name>OnboardingOverlay</name>
     <message>
-        <location filename="../src/infrastructure/common/qt/overlays/onboarding_overlay.py" line="101" />
+        <location filename="../src/infrastructure/common/qt/overlays/onboarding_overlay.py" line="100" />
         <source>Welcome — pick your apps</source>
         <translation>Welcome — pick your apps</translation>
     </message>
     <message>
-        <location filename="../src/infrastructure/common/qt/overlays/onboarding_overlay.py" line="129" />
+        <location filename="../src/infrastructure/common/qt/overlays/onboarding_overlay.py" line="128" />
         <source>Confirm</source>
         <translation>Confirm</translation>
     </message>

@@ -13,21 +13,27 @@ import platform
 import sys
 import threading
 
-# widevine-installer (Fedora, Asahi) — /usr/lib64/chromium-browser links here —
-# then Google Chrome's bundled copy, then Chrome's per-user component updates.
+# Kept in step with infrastructure/linux/drm/facts.py, which Kasual Desktop's
+# readiness check uses: this app runs as a standalone process against the system
+# Python and imports nothing from the main source tree.
 _CDM_GLOBS = (
     "/var/lib/widevine/WidevineCdm/_platform_specific/linux_*/libwidevinecdm.so",
     "/opt/google/chrome/WidevineCdm/_platform_specific/linux_*/libwidevinecdm.so",
-    os.path.expanduser(
-        "~/.config/google-chrome/WidevineCdm/*/_platform_specific/linux_*/libwidevinecdm.so"
-    ),
+    "~/.config/google-chrome/WidevineCdm/*/_platform_specific/linux_*/libwidevinecdm.so",
+    "~/.config/chromium/WidevineCdm/*/_platform_specific/linux_*/libwidevinecdm.so",
+    "/usr/lib*/chromium*/WidevineCdm/_platform_specific/linux_*/libwidevinecdm.so",
 )
 
 
 def _find_cdm() -> str | None:
+    """widevine-installer leaves an empty linux_x64 stub beside the real ARM
+    module because Chromium insists on that path, hence the size test."""
     arch = "arm64" if platform.machine() in ("aarch64", "arm64") else "x64"
     for pattern in _CDM_GLOBS:
-        hits = [p for p in sorted(glob.glob(pattern)) if f"linux_{arch}" in p]
+        hits = sorted(
+            path for path in glob.glob(os.path.expanduser(pattern))
+            if f"linux_{arch}" in path and os.path.getsize(path) > 0
+        )
         if hits:
             return hits[-1]
     return None

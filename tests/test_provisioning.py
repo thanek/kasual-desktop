@@ -66,7 +66,18 @@ class TestStarterCandidates:
 
     def test_defaults_selected_when_present(self):
         cands = starter_candidates(FakeDiscovery({"steam", "heroic"}), "/x")
-        assert all(c.default_selected for c in cands)
+        assert all(c.default_selected for c in cands if not c.requires_cdm)
+
+    def test_drm_apps_are_offered_but_never_preselected(self):
+        cands = starter_candidates(FakeDiscovery(set()), bundled_base="/opt/kd")
+        netflix = next(c for c in cands if c.key == "netflix")
+        assert netflix.requires_cdm
+        assert not netflix.default_selected
+        assert netflix.app.command == "/opt/kd/apps/netflix/netflix.sh"
+
+    def test_only_drm_apps_ask_for_a_cdm(self):
+        cands = starter_candidates(FakeDiscovery({"steam", "heroic"}), "/x")
+        assert {c.key for c in cands if c.requires_cdm} == {"netflix"}
 
     def test_steam_is_a_game_with_hold_trigger(self):
         steam = next(c for c in starter_candidates(FakeDiscovery({"steam"}), "/x")
@@ -101,13 +112,22 @@ class TestStarterCandidates:
 # ── AppSelection ──────────────────────────────────────────────────────────────
 
 class TestAppSelection:
-    def _candidates(self):
-        return starter_candidates(FakeDiscovery({"steam", "heroic"}), "/x")
+    def _candidates(self, *defaults: bool):
+        chosen = defaults or (True, True, True, True)
+        return [
+            CandidateApp(
+                key=f"app{i}",
+                app=App(name=f"App {i}", command=f"/x/app{i}"),
+                order=i,
+                default_selected=default,
+            )
+            for i, default in enumerate(chosen)
+        ]
 
     def test_seeds_from_default_selected(self):
-        sel = AppSelection(self._candidates())
-        assert sel.count == 4
-        assert all(sel.is_selected(i) for i in range(sel.count))
+        sel = AppSelection(self._candidates(True, False, True))
+        assert sel.count == 3
+        assert [sel.is_selected(i) for i in range(sel.count)] == [True, False, True]
 
     def test_toggle_flips_state(self):
         sel = AppSelection(self._candidates())
@@ -143,7 +163,7 @@ class TestProvisioningUseCase:
     def test_candidates_delegates_to_starter_list(self):
         uc = Provisioning(FakeProvisioning(), FakeDiscovery({"steam"}), "/opt/kd")
         keys = {c.key for c in uc.candidates()}
-        assert keys == {"files", "youtube", "steam"}
+        assert keys == {"files", "youtube", "netflix", "steam"}
 
     def test_complete_passes_exactly_the_chosen_candidates(self):
         fake = FakeProvisioning()

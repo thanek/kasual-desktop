@@ -16,6 +16,7 @@ from domain.provisioning.ports import AppDiscovery
 BUNDLED_WM_CLASS = {
     "file_browser.sh": "kasual-file-browser",
     "yt.sh":           "kasual-youtube",
+    "netflix.sh":      "kasual-netflix",
 }
 
 
@@ -58,6 +59,19 @@ def starter_candidates(discovery: AppDiscovery, bundled_base: str) -> list[Candi
             ), "youtube"),
             order=30,
             default_selected=True,
+        ),
+        CandidateApp(
+            key="netflix",
+            app=with_real_icon(App(
+                name="Netflix",
+                command=f"{bundled_base}/apps/netflix/netflix.sh",
+                wm_class=BUNDLED_WM_CLASS["netflix.sh"],
+                icon="fa5s.film",
+                color="#e50914",
+            ), "netflix"),
+            order=35,
+            default_selected=False,
+            requires_cdm=True,
         ),
     ]
 

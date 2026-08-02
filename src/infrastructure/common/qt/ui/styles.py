@@ -264,6 +264,22 @@ def home_menu_item_selected() -> str:
     """
 
 
+def tooltip() -> str:
+    """Tooltip colours for the dark theme. The platform default pairs a dark
+    background with near-black text here, which is unreadable; Qt only takes a
+    QToolTip rule from the stylesheet of the widget that owns the tooltip."""
+    return f"""
+        QToolTip {{
+            background-color: {COLOR_CARD_BG};
+            color: {COLOR_TEXT};
+            border: 1px solid {COLOR_SURFACE_HI};
+            border-radius: 6px;
+            padding: 6px 10px;
+            font-size: 15px;
+        }}
+    """
+
+
 def flat_scrollbar() -> str:
     """A flat scrollbar: solid rounded track and handle, no native pseudo-3D
     frame, no arrow buttons. Apply to a QScrollArea (the rule also clears the

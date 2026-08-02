@@ -239,6 +239,66 @@
 </context><context>
     <name>Kasual Desktop</name>
     <message>
+        <location filename="../src/domain/drm/recipes.py" line="30" />
+        <source>Install the Widevine installer</source>
+        <translation>Zainstaluj instalator Widevine</translation>
+    </message>
+    <message>
+        <location filename="../src/domain/drm/recipes.py" line="31" />
+        <source>Fedora packages the installer script itself. Install it, then come back here.</source>
+        <translation>Fedora ma ten skrypt instalacyjny w repozytorium. Zainstaluj go i wróć tutaj.</translation>
+    </message>
+    <message>
+        <location filename="../src/domain/drm/recipes.py" line="51" />
+        <source>Install the extraction tools</source>
+        <translation>Zainstaluj narzędzia do rozpakowania</translation>
+    </message>
+    <message>
+        <location filename="../src/domain/drm/recipes.py" line="52" />
+        <source>The installer unpacks a squashfs image and patches the module, so it needs curl, unsquashfs and Python.</source>
+        <translation>Instalator rozpakowuje obraz squashfs i łata moduł, więc potrzebuje curl, unsquashfs i Pythona.</translation>
+    </message>
+    <message>
+        <location filename="../src/domain/drm/recipes.py" line="61" />
+        <source>Get the installer script</source>
+        <translation>Pobierz skrypt instalacyjny</translation>
+    </message>
+    <message>
+        <location filename="../src/domain/drm/recipes.py" line="62" />
+        <source>Your distribution does not package it, so fetch it from the Asahi Linux project.</source>
+        <translation>Twoja dystrybucja go nie dostarcza — pobierz go z projektu Asahi Linux.</translation>
+    </message>
+    <message>
+        <location filename="../src/domain/drm/recipes.py" line="79" />
+        <source>Kasual Desktop does not ship Widevine. Google Chrome carries it, and installing Chrome is what makes DRM playback work here.</source>
+        <translation>Kasual Desktop nie dostarcza Widevine. Moduł jest częścią Google Chrome — to jego instalacja uruchamia tutaj odtwarzanie DRM.</translation>
+    </message>
+    <message>
+        <location filename="../src/domain/drm/recipes.py" line="86" />
+        <source>Install Google Chrome</source>
+        <translation>Zainstaluj Google Chrome</translation>
+    </message>
+    <message>
+        <location filename="../src/domain/drm/recipes.py" line="87" />
+        <source>Install Chrome with your distribution's package manager. Its bundled Widevine module is picked up automatically — a Chromium build that fetches Widevine works too.</source>
+        <translation>Zainstaluj Chrome menedżerem pakietów swojej dystrybucji. Dołączony do niego moduł Widevine zostanie wykryty automatycznie — wersja Chromium pobierająca Widevine też zadziała.</translation>
+    </message>
+    <message>
+        <location filename="../src/domain/drm/recipes.py" line="102" />
+        <source>Run the installer</source>
+        <translation>Uruchom instalator</translation>
+    </message>
+    <message>
+        <location filename="../src/domain/drm/recipes.py" line="103" />
+        <source>It downloads the module from Google, shows you the licence and asks you to accept it. Run it in a terminal — it needs root and your answers.</source>
+        <translation>Pobiera moduł od Google, pokazuje licencję i prosi o jej akceptację. Uruchom go w terminalu — wymaga roota i Twoich odpowiedzi.</translation>
+    </message>
+    <message>
+        <location filename="../src/domain/drm/recipes.py" line="115" />
+        <source>Kasual Desktop does not ship Widevine. The installer downloads it from Google and shows you Google's licence, which you accept yourself.</source>
+        <translation>Kasual Desktop nie dostarcza Widevine. Instalator pobiera moduł od Google i pokazuje licencję Google, którą akceptujesz samodzielnie.</translation>
+    </message>
+    <message>
         <location filename="../src/domain/menu/home.py" line="18" />
         <source>Return to Home screen</source>
         <translation>Wróć do ekranu głównego</translation>
@@ -371,32 +431,107 @@
         <translation>Minimalizuj Kasual Desktop</translation>
     </message>
     <message>
-        <location filename="../src/domain/system/hud.py" line="31" />
+        <location filename="../src/domain/system/hud.py" line="46" />
         <source>Disable HUD</source>
         <translation>Wyłącz HUD</translation>
     </message>
     <message>
-        <location filename="../src/domain/system/hud.py" line="32" />
+        <location filename="../src/domain/system/hud.py" line="47" />
         <source>Enable HUD</source>
         <translation>Włącz HUD</translation>
     </message>
     <message>
-        <location filename="../src/infrastructure/common/qt/overlays/home_header.py" line="357" />
+        <location filename="../src/infrastructure/common/qt/overlays/drm_setup_overlay.py" line="127" />
+        <source>Streaming apps need Widevine</source>
+        <translation>Aplikacje streamingowe wymagają Widevine</translation>
+    </message>
+    <message>
+        <location filename="../src/infrastructure/common/qt/overlays/drm_setup_overlay.py" line="172" />
+        <source>Check again</source>
+        <translation>Sprawdź ponownie</translation>
+    </message>
+    <message>
+        <location filename="../src/infrastructure/common/qt/overlays/drm_setup_overlay.py" line="173" />
+        <source>Continue</source>
+        <translation>Kontynuuj</translation>
+    </message>
+    <message>
+        <location filename="../src/infrastructure/common/qt/overlays/drm_setup_overlay.py" line="217" />
+        <source>Widevine is installed</source>
+        <translation>Widevine jest zainstalowany</translation>
+    </message>
+    <message>
+        <location filename="../src/infrastructure/common/qt/overlays/drm_setup_overlay.py" line="218" />
+        <source>Widevine is not installed</source>
+        <translation>Widevine nie jest zainstalowany</translation>
+    </message>
+    <message>
+        <location filename="../src/infrastructure/common/qt/overlays/drm_setup_overlay.py" line="231" />
+        <source>Kasual Desktop has no Widevine recipe for this system. The apps stay installed in case you set it up yourself.</source>
+        <translation>Kasual Desktop nie ma przepisu na Widevine dla tego systemu. Aplikacje pozostaną zainstalowane, gdybyś chciał skonfigurować go samodzielnie.</translation>
+    </message>
+    <message>
+        <location filename="../src/infrastructure/common/qt/overlays/drm_setup_overlay.py" line="236" />
+        <source>Work through these steps in a terminal, then check again. You can also continue now and come back later.</source>
+        <translation>Wykonaj poniższe kroki w terminalu i sprawdź ponownie. Możesz też kontynuować teraz i wrócić do tego później.</translation>
+    </message>
+    <message>
+        <location filename="../src/infrastructure/common/qt/overlays/drm_setup_overlay.py" line="255" />
+        <source>Protected video plays on this system</source>
+        <translation>Chronione wideo odtwarza się na tym systemie</translation>
+    </message>
+    <message>
+        <location filename="../src/infrastructure/common/qt/overlays/drm_setup_overlay.py" line="258" />
+        <source>Checking playback…</source>
+        <translation>Sprawdzam odtwarzanie…</translation>
+    </message>
+    <message>
+        <location filename="../src/infrastructure/common/qt/overlays/drm_setup_overlay.py" line="261" />
+        <source>Protected video does not play yet</source>
+        <translation>Chronione wideo jeszcze się nie odtwarza</translation>
+    </message>
+    <message>
+        <location filename="../src/infrastructure/common/qt/overlays/drm_setup_overlay.py" line="262" />
+        <source>The module is installed but did not load. It may have been built for a different system — reinstall it and check again.</source>
+        <translation>Moduł jest zainstalowany, ale się nie załadował. Mógł zostać zbudowany dla innego systemu — zainstaluj go ponownie i sprawdź jeszcze raz.</translation>
+    </message>
+    <message>
+        <location filename="../src/infrastructure/common/qt/overlays/drm_setup_overlay.py" line="268" />
+        <source>There is nothing to play protected video with until Widevine is installed.</source>
+        <translation>Nie ma czym odtworzyć chronionego wideo, dopóki Widevine nie zostanie zainstalowany.</translation>
+    </message>
+    <message>
+        <location filename="../src/infrastructure/common/qt/overlays/drm_setup_overlay.py" line="275" />
+        <source>Playback has not been checked yet</source>
+        <translation>Odtwarzanie nie zostało jeszcze sprawdzone</translation>
+    </message>
+    <message>
+        <location filename="../src/infrastructure/common/qt/overlays/drm_setup_overlay.py" line="276" />
+        <source>Checking starts a short test playback with the installed module.</source>
+        <translation>Sprawdzenie uruchamia krótki test odtwarzania z zainstalowanym modułem.</translation>
+    </message>
+    <message>
+        <location filename="../src/infrastructure/common/qt/overlays/drm_setup_overlay.py" line="347" />
+        <source>Copy to clipboard</source>
+        <translation>Skopiuj do schowka</translation>
+    </message>
+    <message>
+        <location filename="../src/infrastructure/common/qt/overlays/home_header.py" line="346" />
         <source>Power</source>
         <translation>Zasilanie</translation>
     </message>
     <message>
-        <location filename="../src/infrastructure/common/qt/overlays/notifications_overlay.py" line="149" />
+        <location filename="../src/infrastructure/common/qt/overlays/notifications_overlay.py" line="147" />
         <source>Recent notifications</source>
         <translation>Ostatnie powiadomienia</translation>
     </message>
     <message>
-        <location filename="../src/infrastructure/common/qt/overlays/notifications_overlay.py" line="168" />
+        <location filename="../src/infrastructure/common/qt/overlays/notifications_overlay.py" line="166" />
         <source>No notifications</source>
         <translation>Brak powiadomień</translation>
     </message>
     <message>
-        <location filename="../src/infrastructure/common/qt/overlays/preflight_overlay.py" line="136" />
+        <location filename="../src/infrastructure/common/qt/overlays/preflight_overlay.py" line="145" />
         <source>Kasual Desktop needs its GNOME Shell helper extension to manage windows.
 
 Enable it now?</source>
@@ -405,65 +540,97 @@ Enable it now?</source>
 Włączyć je teraz?</translation>
     </message>
     <message>
-        <location filename="../src/infrastructure/common/qt/overlays/preflight_overlay.py" line="141" />
+        <location filename="../src/infrastructure/common/qt/overlays/preflight_overlay.py" line="150" />
         <source>Enable</source>
         <translation>Włącz</translation>
     </message>
     <message>
-        <location filename="../src/infrastructure/common/qt/overlays/preflight_overlay.py" line="142" />
+        <location filename="../src/infrastructure/common/qt/overlays/preflight_overlay.py" line="151" />
         <source>Not now</source>
         <translation>Nie teraz</translation>
     </message>
     <message>
-        <location filename="../src/infrastructure/common/qt/overlays/preflight_overlay.py" line="154" />
+        <location filename="../src/infrastructure/common/qt/overlays/preflight_overlay.py" line="163" />
         <source>The Kasual Helper GNOME Shell extension isn't installed. Install the Kasual Desktop package, then enable it with:</source>
         <translation>Rozszerzenie GNOME Shell „Kasual Helper” nie jest zainstalowane. Zainstaluj pakiet Kasual Desktop, a następnie włącz je poleceniem:</translation>
     </message>
     <message>
-        <location filename="../src/infrastructure/common/qt/overlays/preflight_overlay.py" line="160" />
+        <location filename="../src/infrastructure/common/qt/overlays/preflight_overlay.py" line="169" />
         <source>The Kasual Helper GNOME Shell extension is installed, but this GNOME session started before it and cannot load it. Log out and back in, then enable it with:</source>
         <translation>Rozszerzenie GNOME Shell „Kasual Helper” jest zainstalowane, ale ta sesja GNOME wystartowała wcześniej i nie może go wczytać. Wyloguj się i zaloguj ponownie, a następnie włącz je poleceniem:</translation>
     </message>
     <message>
-        <location filename="../src/infrastructure/common/qt/overlays/preflight_overlay.py" line="167" />
+        <location filename="../src/infrastructure/common/qt/overlays/preflight_overlay.py" line="176" />
         <source>Kasual Desktop couldn't enable its GNOME Shell helper extension. Enable it manually with:</source>
         <translation>Kasual Desktop nie mógł włączyć swojego rozszerzenia GNOME Shell. Włącz je ręcznie poleceniem:</translation>
     </message>
     <message>
-        <location filename="../src/infrastructure/common/qt/overlays/preflight_overlay.py" line="172" />
-        <source>then retry.</source>
-        <translation>a następnie spróbuj ponownie.</translation>
-    </message>
-    <message>
-        <location filename="../src/infrastructure/common/qt/overlays/preflight_overlay.py" line="175" />
+        <location filename="../src/infrastructure/common/qt/overlays/preflight_overlay.py" line="183" />
         <source>Log out</source>
         <translation>Wyloguj</translation>
     </message>
     <message>
-        <location filename="../src/infrastructure/common/qt/overlays/preflight_overlay.py" line="176" />
+        <location filename="../src/infrastructure/common/qt/overlays/preflight_overlay.py" line="185" />
+        <source>then retry.</source>
+        <translation>a następnie spróbuj ponownie.</translation>
+    </message>
+    <message>
+        <location filename="../src/infrastructure/common/qt/overlays/preflight_overlay.py" line="186" />
         <source>Retry</source>
         <translation>Ponów</translation>
     </message>
     <message>
-        <location filename="../src/infrastructure/common/qt/ui/tray.py" line="42" />
-        <location filename="../src/infrastructure/common/qt/overlays/preflight_overlay.py" line="177" />
+        <location filename="../src/infrastructure/common/qt/ui/tray.py" line="43" />
+        <location filename="../src/infrastructure/common/qt/overlays/preflight_overlay.py" line="187" />
         <source>Quit</source>
         <translation>Zamknij</translation>
     </message>
     <message>
-        <location filename="../src/infrastructure/common/qt/ui/tray.py" line="35" />
+        <location filename="../src/infrastructure/common/qt/ui/tray.py" line="36" />
         <source>Show Desktop</source>
         <translation>Pokaż pulpit</translation>
     </message>
     <message>
-        <location filename="../src/infrastructure/common/qt/ui/tray.py" line="37" />
+        <location filename="../src/infrastructure/common/qt/ui/tray.py" line="38" />
         <source>Logs</source>
         <translation>Logi</translation>
     </message>
     <message>
-        <location filename="../src/infrastructure/common/qt/ui/tray.py" line="39" />
+        <location filename="../src/infrastructure/common/qt/ui/tray.py" line="40" />
         <source>About…</source>
         <translation>O programie…</translation>
+    </message>
+    <message>
+        <source>Copy</source>
+        <translation type="vanished">Kopiuj</translation>
+    </message>
+    <message>
+        <source>Copied</source>
+        <translation type="vanished">Skopiowano</translation>
+    </message>
+    <message>
+        <source>Verify playback</source>
+        <translation type="vanished">Zweryfikuj odtwarzanie</translation>
+    </message>
+    <message>
+        <source>This system is ready to play protected video.</source>
+        <translation type="vanished">Ten system jest gotowy do odtwarzania chronionego wideo.</translation>
+    </message>
+    <message>
+        <source>Kasual Desktop has no Widevine recipe for this system, so protected video will not play. The apps stay installed in case you set it up yourself.</source>
+        <translation type="vanished">Kasual Desktop nie ma przepisu na Widevine dla tego systemu, więc chronione wideo się nie odtworzy. Aplikacje zostaną zainstalowane, gdybyś chciał skonfigurować je samodzielnie.</translation>
+    </message>
+    <message>
+        <source>Widevine is missing, so protected video will not play yet. Work through these steps in a terminal, then check again — you can also continue now and come back later.</source>
+        <translation type="vanished">Brakuje Widevine, więc chronione wideo jeszcze się nie odtworzy. Wykonaj poniższe kroki w terminalu i sprawdź ponownie — możesz też kontynuować teraz i wrócić do tego później.</translation>
+    </message>
+    <message>
+        <source>Protected video plays on this system.</source>
+        <translation type="vanished">Chronione wideo odtwarza się na tym systemie.</translation>
+    </message>
+    <message>
+        <source>Widevine is installed but did not load. It may have been built for a different system — reinstall it and check again.</source>
+        <translation type="vanished">Widevine jest zainstalowany, ale się nie załadował. Mógł zostać zbudowany dla innego systemu — zainstaluj go ponownie i sprawdź jeszcze raz.</translation>
     </message>
 </context><context>
     <name>LogViewer</name>
@@ -480,12 +647,12 @@ Włączyć je teraz?</translation>
 </context><context>
     <name>OnboardingOverlay</name>
     <message>
-        <location filename="../src/infrastructure/common/qt/overlays/onboarding_overlay.py" line="101" />
+        <location filename="../src/infrastructure/common/qt/overlays/onboarding_overlay.py" line="100" />
         <source>Welcome — pick your apps</source>
         <translation>Witaj - wybierz aplikacje, z którymi wystartujesz</translation>
     </message>
     <message>
-        <location filename="../src/infrastructure/common/qt/overlays/onboarding_overlay.py" line="129" />
+        <location filename="../src/infrastructure/common/qt/overlays/onboarding_overlay.py" line="128" />
         <source>Confirm</source>
         <translation>Potwierdź</translation>
     </message>

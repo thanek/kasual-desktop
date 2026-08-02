@@ -55,6 +55,7 @@ def run_onboarding_or_start(
     feedback,
     start_session: Callable[[], None],
     keep_alive: Callable[[object], None] = _no_keep_alive,
+    drm_gate=None,
 ) -> None:
     """First run shows the picker; otherwise goes straight to `start_session`.
 
@@ -66,10 +67,15 @@ def run_onboarding_or_start(
         logger.info("First run — showing onboarding")
         onboarding = OnboardingOverlayFactory(gamepad, feedback).create()
         keep_alive(onboarding)
-        onboarding.present(
-            provisioning_uc.candidates(),
-            on_confirm=lambda chosen: (provisioning_uc.complete(chosen), start_session()),
-        )
+
+        def on_confirm(chosen) -> None:
+            provisioning_uc.complete(chosen)
+            if drm_gate is not None and any(c.requires_cdm for c in chosen):
+                drm_gate.ensure(start_session)
+            else:
+                start_session()
+
+        onboarding.present(provisioning_uc.candidates(), on_confirm=on_confirm)
     else:
         start_session()
 
