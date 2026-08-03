@@ -15,6 +15,31 @@ _INSTALL = Step("Install", "Install it", Check(CheckKind.COMMAND, "widevine-inst
 _RUN = Step("Run", "Run it", Check(CheckKind.CDM), command="widevine-installer")
 
 
+class FakeProbe:
+    """The real probe answers from a child process, so the answer is separated
+    from the request here too: ``finish`` stands in for that process exiting."""
+
+    def __init__(self, plays: bool = True) -> None:
+        self._plays = plays
+        self._pending = None
+        self.cancelled = False
+
+    def verify(self, on_result) -> None:
+        self._pending = on_result
+
+    def cancel(self) -> None:
+        self.cancelled = True
+        self._pending = None
+
+    def finish(self, plays: bool | None = None) -> None:
+        pending, self._pending = self._pending, None
+        pending(self._plays if plays is None else plays)
+
+    @property
+    def running(self) -> bool:
+        return self._pending is not None
+
+
 def _report(state=Readiness.INCOMPLETE, done=(False, False)):
     steps = tuple(
         StepStatus(step, is_done)
@@ -23,13 +48,13 @@ def _report(state=Readiness.INCOMPLETE, done=(False, False)):
     return ReadinessReport(state, steps, notice="Notice")
 
 
-def _make(mock_gamepad, report=None, on_recheck=None, on_done=None, on_verify=None):
+def _make(mock_gamepad, report=None, on_recheck=None, on_done=None, probe=None):
     report = report or _report()
     return _DrmSetupDialog(
         report,
         on_recheck or (lambda: report),
         on_done or (lambda: None),
-        on_verify,
+        probe,
         mock_gamepad,
         MagicMock(),
     )
@@ -82,29 +107,36 @@ class TestModuleCondition:
 
 class TestPlaybackCondition:
     def test_starts_unchecked_rather_than_claiming_either_outcome(self, mock_gamepad):
-        dialog = _make(mock_gamepad, on_verify=lambda: True)
+        dialog = _make(mock_gamepad, probe=FakeProbe())
         assert not _is_met(dialog._status_playback)
         assert "not been checked" in dialog._status_playback.text()
 
     def test_confirmed_playback_is_ticked(self, mock_gamepad):
+        probe = FakeProbe(plays=True)
         dialog = _make(mock_gamepad, _report(Readiness.READY, (True, True)),
-                       on_verify=lambda: True)
-        dialog._perform_checks()
+                       probe=probe)
+        dialog._run_checks()
+        probe.finish()
         assert _is_met(dialog._status_playback)
         assert "plays" in dialog._status_playback.text()
 
     def test_failed_playback_explains_the_likely_cause(self, mock_gamepad):
+        probe = FakeProbe(plays=False)
         dialog = _make(mock_gamepad, _report(Readiness.READY, (True, True)),
-                       on_verify=lambda: False)
-        dialog._perform_checks()
+                       probe=probe)
+        dialog._run_checks()
+        probe.finish()
         assert not _is_met(dialog._status_playback)
         assert "did not load" in dialog._playback_detail.text()
+        assert "page size" in dialog._playback_detail.text()
 
     def test_failure_without_the_module_does_not_claim_it_is_installed(
         self, mock_gamepad
     ):
-        dialog = _make(mock_gamepad, on_verify=lambda: False)
-        dialog._perform_checks()
+        probe = FakeProbe(plays=False)
+        dialog = _make(mock_gamepad, probe=probe)
+        dialog._run_checks()
+        probe.finish()
         assert "is installed but" not in dialog._playback_detail.text()
         assert "until Widevine is installed" in dialog._playback_detail.text()
 
@@ -118,55 +150,98 @@ class TestChecking:
         calls = []
         report = _report(Readiness.READY, (True, True))
 
+        class RecordingProbe(FakeProbe):
+            def verify(self, on_result):
+                calls.append("verify")
+                super().verify(on_result)
+
         def recheck():
             calls.append("recheck")
             return report
 
-        def verify():
-            calls.append("verify")
-            return True
-
-        dialog = _make(mock_gamepad, on_recheck=recheck, on_verify=verify)
-        dialog._perform_checks()
+        probe = RecordingProbe()
+        dialog = _make(mock_gamepad, on_recheck=recheck, probe=probe)
+        dialog._run_checks()
+        probe.finish()
         assert calls == ["recheck", "verify"]
         assert _is_met(dialog._status_module)
         assert _is_met(dialog._status_playback)
 
+    def test_the_module_status_is_up_to_date_before_the_probe_answers(
+        self, mock_gamepad
+    ):
+        probe = FakeProbe()
+        dialog = _make(mock_gamepad, _report(), probe=probe,
+                       on_recheck=lambda: _report(Readiness.READY, (True, True)))
+        dialog._run_checks()
+        assert _is_met(dialog._status_module)
+        assert "Checking" in dialog._status_playback.text()
+        assert not dialog._check_button.isEnabled()
+
     def test_checking_runs_even_when_the_module_is_still_missing(self, mock_gamepad):
-        verify = MagicMock(return_value=False)
-        dialog = _make(mock_gamepad, on_verify=verify)
-        dialog._perform_checks()
-        verify.assert_called_once_with()
+        probe = FakeProbe(plays=False)
+        dialog = _make(mock_gamepad, probe=probe)
+        dialog._run_checks()
+        assert probe.running
 
     def test_instructions_survive_a_check_that_changes_nothing(self, mock_gamepad):
-        dialog = _make(mock_gamepad, on_verify=lambda: False)
+        probe = FakeProbe(plays=False)
+        dialog = _make(mock_gamepad, probe=probe)
         dialog.show()
         for _ in range(3):
-            dialog._perform_checks()
+            dialog._run_checks()
+            probe.finish()
         assert dialog._steps_layout.count() == 2
         assert dialog._steps_area.isVisible()
         assert dialog._steps_area.maximumHeight() > 0
 
     def test_a_later_check_can_withdraw_an_earlier_confirmation(self, mock_gamepad):
-        outcomes = iter([True, False])
+        probe = FakeProbe()
         dialog = _make(mock_gamepad, _report(Readiness.READY, (True, True)),
-                       on_verify=lambda: next(outcomes))
-        dialog._perform_checks()
+                       probe=probe)
+        dialog._run_checks()
+        probe.finish(True)
         assert _is_met(dialog._status_playback)
-        dialog._perform_checks()
+        dialog._run_checks()
+        probe.finish(False)
         assert not _is_met(dialog._status_playback)
 
     def test_the_button_returns_after_the_check(self, mock_gamepad):
-        dialog = _make(mock_gamepad, on_verify=lambda: True)
-        dialog._perform_checks()
+        probe = FakeProbe()
+        dialog = _make(mock_gamepad, probe=probe)
+        dialog._run_checks()
+        probe.finish()
         assert dialog._check_button.isEnabled()
 
     def test_checking_stays_open_so_the_user_can_keep_working(self, mock_gamepad):
         on_done = MagicMock()
-        dialog = _make(mock_gamepad, on_done=on_done, on_verify=lambda: True)
-        dialog._perform_checks()
+        probe = FakeProbe()
+        dialog = _make(mock_gamepad, on_done=on_done, probe=probe)
+        dialog._run_checks()
+        probe.finish()
         on_done.assert_not_called()
         assert dialog._handle_pad in mock_gamepad._stack
+
+    def test_a_check_in_flight_does_not_hold_the_user_in_the_wizard(
+        self, mock_gamepad
+    ):
+        on_done = MagicMock()
+        probe = FakeProbe()
+        dialog = _make(mock_gamepad, on_done=on_done, probe=probe)
+        dialog._run_checks()
+        dialog._finish()
+        on_done.assert_called_once_with()
+        assert probe.cancelled
+
+    def test_a_result_arriving_after_the_wizard_closed_changes_nothing(
+        self, mock_gamepad
+    ):
+        probe = FakeProbe()
+        dialog = _make(mock_gamepad, probe=probe)
+        dialog._run_checks()
+        dialog._finish()
+        dialog._verified(True)
+        assert not _is_met(dialog._status_playback)
 
 
 class TestCopyingCommands:

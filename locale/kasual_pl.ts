@@ -239,62 +239,97 @@
 </context><context>
     <name>Kasual Desktop</name>
     <message>
-        <location filename="../src/domain/drm/recipes.py" line="30" />
+        <location filename="../src/domain/drm/recipes.py" line="36" />
+        <source>Layer the Widevine installer</source>
+        <translation>Nałóż warstwę z instalatorem Widevine</translation>
+    </message>
+    <message>
+        <location filename="../src/domain/drm/recipes.py" line="37" />
+        <source>Your system image is read-only, so the installer is layered onto it instead of installed into it. It exists only after the reboot that command asks for.</source>
+        <translation>Twój obraz systemu jest tylko do odczytu, więc instalator zostaje na niego nałożony jako warstwa, a nie zainstalowany w środku. Pojawi się dopiero po restarcie, o który poprosi ta komenda.</translation>
+    </message>
+    <message>
+        <location filename="../src/domain/drm/recipes.py" line="59" />
         <source>Install the Widevine installer</source>
         <translation>Zainstaluj instalator Widevine</translation>
     </message>
     <message>
-        <location filename="../src/domain/drm/recipes.py" line="31" />
+        <location filename="../src/domain/drm/recipes.py" line="60" />
         <source>Fedora packages the installer script itself. Install it, then come back here.</source>
         <translation>Fedora ma ten skrypt instalacyjny w repozytorium. Zainstaluj go i wróć tutaj.</translation>
     </message>
     <message>
-        <location filename="../src/domain/drm/recipes.py" line="51" />
-        <source>Install the extraction tools</source>
-        <translation>Zainstaluj narzędzia do rozpakowania</translation>
+        <location filename="../src/domain/drm/recipes.py" line="79" />
+        <source>Kasual Desktop does not ship Widevine. Raspberry Pi OS packages Google's module itself, and installing that package is what makes DRM playback work here.</source>
+        <translation>Kasual Desktop nie dostarcza Widevine. Raspberry Pi OS ma moduł Google'a we własnym pakiecie — to jego instalacja uruchamia tutaj odtwarzanie DRM.</translation>
     </message>
     <message>
-        <location filename="../src/domain/drm/recipes.py" line="52" />
-        <source>The installer unpacks a squashfs image and patches the module, so it needs curl, unsquashfs and Python.</source>
-        <translation>Instalator rozpakowuje obraz squashfs i łata moduł, więc potrzebuje curl, unsquashfs i Pythona.</translation>
+        <location filename="../src/domain/drm/recipes.py" line="87" />
+        <source>Install the Widevine package</source>
+        <translation>Zainstaluj pakiet Widevine</translation>
     </message>
     <message>
-        <location filename="../src/domain/drm/recipes.py" line="61" />
+        <location filename="../src/domain/drm/recipes.py" line="88" />
+        <source>One package is all this system needs — no download and no unpacking by hand.</source>
+        <translation>Ten system potrzebuje jednego pakietu — bez pobierania i rozpakowywania ręcznie.</translation>
+    </message>
+    <message>
+        <location filename="../src/domain/drm/recipes.py" line="107" />
+        <source>Install the extraction tool</source>
+        <translation>Zainstaluj narzędzie do rozpakowania</translation>
+    </message>
+    <message>
+        <location filename="../src/domain/drm/recipes.py" line="108" />
+        <source>The installer unpacks a squashfs image, which needs unsquashfs — the one tool your system may not have already.</source>
+        <translation>Instalator rozpakowuje obraz squashfs, do czego potrzebuje unsquashfs — jedynego narzędzia, którego możesz jeszcze nie mieć.</translation>
+    </message>
+    <message>
+        <location filename="../src/domain/drm/recipes.py" line="117" />
         <source>Get the installer script</source>
         <translation>Pobierz skrypt instalacyjny</translation>
     </message>
     <message>
-        <location filename="../src/domain/drm/recipes.py" line="62" />
-        <source>Your distribution does not package it, so fetch it from the Asahi Linux project.</source>
-        <translation>Twoja dystrybucja go nie dostarcza — pobierz go z projektu Asahi Linux.</translation>
+        <location filename="../src/domain/drm/recipes.py" line="118" />
+        <source>Your distribution does not package it, so fetch it from the Asahi Linux project. It lands in your home directory.</source>
+        <translation>Twoja dystrybucja go nie dostarcza — pobierz go z projektu Asahi Linux. Trafi do Twojego katalogu domowego.</translation>
     </message>
     <message>
-        <location filename="../src/domain/drm/recipes.py" line="79" />
-        <source>Kasual Desktop does not ship Widevine. Google Chrome carries it, and installing Chrome is what makes DRM playback work here.</source>
-        <translation>Kasual Desktop nie dostarcza Widevine. Moduł jest częścią Google Chrome — to jego instalacja uruchamia tutaj odtwarzanie DRM.</translation>
+        <location filename="../src/domain/drm/recipes.py" line="139" />
+        <source>Install Google Chrome from Flathub</source>
+        <translation>Zainstaluj Google Chrome z Flathuba</translation>
     </message>
     <message>
-        <location filename="../src/domain/drm/recipes.py" line="86" />
+        <location filename="../src/domain/drm/recipes.py" line="140" />
+        <source>Your system image is read-only, so take Chrome as a Flatpak. Kasual Desktop reads the Widevine module out of it.</source>
+        <translation>Twój obraz systemu jest tylko do odczytu, więc weź Chrome jako Flatpaka. Kasual Desktop odczyta z niego moduł Widevine.</translation>
+    </message>
+    <message>
+        <location filename="../src/domain/drm/recipes.py" line="159" />
         <source>Install Google Chrome</source>
         <translation>Zainstaluj Google Chrome</translation>
     </message>
     <message>
-        <location filename="../src/domain/drm/recipes.py" line="87" />
+        <location filename="../src/domain/drm/recipes.py" line="160" />
         <source>Install Chrome with your distribution's package manager. Its bundled Widevine module is picked up automatically — a Chromium build that fetches Widevine works too.</source>
         <translation>Zainstaluj Chrome menedżerem pakietów swojej dystrybucji. Dołączony do niego moduł Widevine zostanie wykryty automatycznie — wersja Chromium pobierająca Widevine też zadziała.</translation>
     </message>
     <message>
-        <location filename="../src/domain/drm/recipes.py" line="102" />
+        <location filename="../src/domain/drm/recipes.py" line="175" />
         <source>Run the installer</source>
         <translation>Uruchom instalator</translation>
     </message>
     <message>
-        <location filename="../src/domain/drm/recipes.py" line="103" />
+        <location filename="../src/domain/drm/recipes.py" line="176" />
         <source>It downloads the module from Google, shows you the licence and asks you to accept it. Run it in a terminal — it needs root and your answers.</source>
         <translation>Pobiera moduł od Google, pokazuje licencję i prosi o jej akceptację. Uruchom go w terminalu — wymaga roota i Twoich odpowiedzi.</translation>
     </message>
     <message>
-        <location filename="../src/domain/drm/recipes.py" line="115" />
+        <location filename="../src/domain/drm/recipes.py" line="188" />
+        <source>Kasual Desktop does not ship Widevine. Google Chrome carries it, and installing Chrome is what makes DRM playback work here.</source>
+        <translation>Kasual Desktop nie dostarcza Widevine. Moduł jest częścią Google Chrome — to jego instalacja uruchamia tutaj odtwarzanie DRM.</translation>
+    </message>
+    <message>
+        <location filename="../src/domain/drm/recipes.py" line="196" />
         <source>Kasual Desktop does not ship Widevine. The installer downloads it from Google and shows you Google's licence, which you accept yourself.</source>
         <translation>Kasual Desktop nie dostarcza Widevine. Instalator pobiera moduł od Google i pokazuje licencję Google, którą akceptujesz samodzielnie.</translation>
     </message>
@@ -441,77 +476,77 @@
         <translation>Włącz HUD</translation>
     </message>
     <message>
-        <location filename="../src/infrastructure/common/qt/overlays/drm_setup_overlay.py" line="127" />
+        <location filename="../src/infrastructure/common/qt/overlays/drm_setup_overlay.py" line="122" />
         <source>Streaming apps need Widevine</source>
         <translation>Aplikacje streamingowe wymagają Widevine</translation>
     </message>
     <message>
-        <location filename="../src/infrastructure/common/qt/overlays/drm_setup_overlay.py" line="172" />
+        <location filename="../src/infrastructure/common/qt/overlays/drm_setup_overlay.py" line="167" />
         <source>Check again</source>
         <translation>Sprawdź ponownie</translation>
     </message>
     <message>
-        <location filename="../src/infrastructure/common/qt/overlays/drm_setup_overlay.py" line="173" />
+        <location filename="../src/infrastructure/common/qt/overlays/drm_setup_overlay.py" line="168" />
         <source>Continue</source>
         <translation>Kontynuuj</translation>
     </message>
     <message>
-        <location filename="../src/infrastructure/common/qt/overlays/drm_setup_overlay.py" line="217" />
+        <location filename="../src/infrastructure/common/qt/overlays/drm_setup_overlay.py" line="212" />
         <source>Widevine is installed</source>
         <translation>Widevine jest zainstalowany</translation>
     </message>
     <message>
-        <location filename="../src/infrastructure/common/qt/overlays/drm_setup_overlay.py" line="218" />
+        <location filename="../src/infrastructure/common/qt/overlays/drm_setup_overlay.py" line="213" />
         <source>Widevine is not installed</source>
         <translation>Widevine nie jest zainstalowany</translation>
     </message>
     <message>
-        <location filename="../src/infrastructure/common/qt/overlays/drm_setup_overlay.py" line="231" />
+        <location filename="../src/infrastructure/common/qt/overlays/drm_setup_overlay.py" line="226" />
         <source>Kasual Desktop has no Widevine recipe for this system. The apps stay installed in case you set it up yourself.</source>
         <translation>Kasual Desktop nie ma przepisu na Widevine dla tego systemu. Aplikacje pozostaną zainstalowane, gdybyś chciał skonfigurować go samodzielnie.</translation>
     </message>
     <message>
-        <location filename="../src/infrastructure/common/qt/overlays/drm_setup_overlay.py" line="236" />
+        <location filename="../src/infrastructure/common/qt/overlays/drm_setup_overlay.py" line="231" />
         <source>Work through these steps in a terminal, then check again. You can also continue now and come back later.</source>
         <translation>Wykonaj poniższe kroki w terminalu i sprawdź ponownie. Możesz też kontynuować teraz i wrócić do tego później.</translation>
     </message>
     <message>
-        <location filename="../src/infrastructure/common/qt/overlays/drm_setup_overlay.py" line="255" />
+        <location filename="../src/infrastructure/common/qt/overlays/drm_setup_overlay.py" line="250" />
         <source>Protected video plays on this system</source>
         <translation>Chronione wideo odtwarza się na tym systemie</translation>
     </message>
     <message>
-        <location filename="../src/infrastructure/common/qt/overlays/drm_setup_overlay.py" line="258" />
+        <location filename="../src/infrastructure/common/qt/overlays/drm_setup_overlay.py" line="253" />
         <source>Checking playback…</source>
         <translation>Sprawdzam odtwarzanie…</translation>
     </message>
     <message>
-        <location filename="../src/infrastructure/common/qt/overlays/drm_setup_overlay.py" line="261" />
+        <location filename="../src/infrastructure/common/qt/overlays/drm_setup_overlay.py" line="256" />
         <source>Protected video does not play yet</source>
         <translation>Chronione wideo jeszcze się nie odtwarza</translation>
     </message>
     <message>
-        <location filename="../src/infrastructure/common/qt/overlays/drm_setup_overlay.py" line="262" />
-        <source>The module is installed but did not load. It may have been built for a different system — reinstall it and check again.</source>
-        <translation>Moduł jest zainstalowany, ale się nie załadował. Mógł zostać zbudowany dla innego systemu — zainstaluj go ponownie i sprawdź jeszcze raz.</translation>
+        <location filename="../src/infrastructure/common/qt/overlays/drm_setup_overlay.py" line="257" />
+        <source>The module is installed but did not load. It may have been built for a different system — a kernel with a different memory page size is the usual reason. Reinstall it and check again.</source>
+        <translation>Moduł jest zainstalowany, ale się nie załadował. Mógł zostać zbudowany dla innego systemu — zwykle chodzi o jądro z inną wielkością strony pamięci. Zainstaluj go ponownie i sprawdź jeszcze raz.</translation>
     </message>
     <message>
-        <location filename="../src/infrastructure/common/qt/overlays/drm_setup_overlay.py" line="268" />
+        <location filename="../src/infrastructure/common/qt/overlays/drm_setup_overlay.py" line="265" />
         <source>There is nothing to play protected video with until Widevine is installed.</source>
         <translation>Nie ma czym odtworzyć chronionego wideo, dopóki Widevine nie zostanie zainstalowany.</translation>
     </message>
     <message>
-        <location filename="../src/infrastructure/common/qt/overlays/drm_setup_overlay.py" line="275" />
+        <location filename="../src/infrastructure/common/qt/overlays/drm_setup_overlay.py" line="272" />
         <source>Playback has not been checked yet</source>
         <translation>Odtwarzanie nie zostało jeszcze sprawdzone</translation>
     </message>
     <message>
-        <location filename="../src/infrastructure/common/qt/overlays/drm_setup_overlay.py" line="276" />
+        <location filename="../src/infrastructure/common/qt/overlays/drm_setup_overlay.py" line="273" />
         <source>Checking starts a short test playback with the installed module.</source>
         <translation>Sprawdzenie uruchamia krótki test odtwarzania z zainstalowanym modułem.</translation>
     </message>
     <message>
-        <location filename="../src/infrastructure/common/qt/overlays/drm_setup_overlay.py" line="347" />
+        <location filename="../src/infrastructure/common/qt/overlays/drm_setup_overlay.py" line="342" />
         <source>Copy to clipboard</source>
         <translation>Skopiuj do schowka</translation>
     </message>
@@ -599,6 +634,22 @@ Włączyć je teraz?</translation>
         <location filename="../src/infrastructure/common/qt/ui/tray.py" line="40" />
         <source>About…</source>
         <translation>O programie…</translation>
+    </message>
+    <message>
+        <source>Install the extraction tools</source>
+        <translation type="vanished">Zainstaluj narzędzia do rozpakowania</translation>
+    </message>
+    <message>
+        <source>The installer unpacks a squashfs image and patches the module, so it needs curl, unsquashfs and Python.</source>
+        <translation type="vanished">Instalator rozpakowuje obraz squashfs i łata moduł, więc potrzebuje curl, unsquashfs i Pythona.</translation>
+    </message>
+    <message>
+        <source>Your distribution does not package it, so fetch it from the Asahi Linux project.</source>
+        <translation type="vanished">Twoja dystrybucja go nie dostarcza — pobierz go z projektu Asahi Linux.</translation>
+    </message>
+    <message>
+        <source>The module is installed but did not load. It may have been built for a different system — reinstall it and check again.</source>
+        <translation type="vanished">Moduł jest zainstalowany, ale się nie załadował. Mógł zostać zbudowany dla innego systemu — zainstaluj go ponownie i sprawdź jeszcze raz.</translation>
     </message>
     <message>
         <source>Copy</source>

@@ -18,25 +18,60 @@ import threading
 # Python and imports nothing from the main source tree.
 _CDM_GLOBS = (
     "/var/lib/widevine/WidevineCdm/_platform_specific/linux_*/libwidevinecdm.so",
-    "/opt/google/chrome/WidevineCdm/_platform_specific/linux_*/libwidevinecdm.so",
+    "/opt/google/chrome*/WidevineCdm/_platform_specific/linux_*/libwidevinecdm.so",
+    "/opt/microsoft/msedge*/WidevineCdm/_platform_specific/linux_*/libwidevinecdm.so",
     "~/.config/google-chrome/WidevineCdm/*/_platform_specific/linux_*/libwidevinecdm.so",
     "~/.config/chromium/WidevineCdm/*/_platform_specific/linux_*/libwidevinecdm.so",
+    "~/.config/BraveSoftware/Brave-Browser/WidevineCdm/*/_platform_specific/linux_*/libwidevinecdm.so",
+    "~/.var/app/com.google.Chrome/config/google-chrome/WidevineCdm/*/_platform_specific/linux_*/libwidevinecdm.so",
+    "~/.var/app/org.chromium.Chromium/config/chromium/WidevineCdm/*/_platform_specific/linux_*/libwidevinecdm.so",
+    "~/.var/app/com.brave.Browser/config/BraveSoftware/Brave-Browser/WidevineCdm/*/_platform_specific/linux_*/libwidevinecdm.so",
+    "~/snap/chromium/common/chromium/WidevineCdm/*/_platform_specific/linux_*/libwidevinecdm.so",
     "/usr/lib*/chromium*/WidevineCdm/_platform_specific/linux_*/libwidevinecdm.so",
+    "/opt/WidevineCdm/_platform_specific/linux_*/libwidevinecdm.so",
+    # Firefox's GMP updater downloads the same library. Whether Qt WebEngine
+    # accepts that copy is unverified.
+    "~/.mozilla/firefox/*/gmp-widevinecdm/*/libwidevinecdm.so",
 )
+
+# An architecture absent here gets the setup page instead of Netflix.
+_ARCH_DIRS = {
+    "aarch64": "linux_arm64",
+    "arm64": "linux_arm64",
+    "armv7l": "linux_arm",
+    "x86_64": "linux_x64",
+    "amd64": "linux_x64",
+}
 
 
 def _find_cdm() -> str | None:
-    """widevine-installer leaves an empty linux_x64 stub beside the real ARM
-    module because Chromium insists on that path, hence the size test."""
-    arch = "arm64" if platform.machine() in ("aarch64", "arm64") else "x64"
+    """Chrome files each component update under its own version directory, and
+    those names do not sort: 4.10.9 sits above 4.10.10."""
+    wanted = _ARCH_DIRS.get(platform.machine())
+    if wanted is None:
+        return None
     for pattern in _CDM_GLOBS:
-        hits = sorted(
-            path for path in glob.glob(os.path.expanduser(pattern))
-            if f"linux_{arch}" in path and os.path.getsize(path) > 0
-        )
+        hits = [path for path in glob.glob(os.path.expanduser(pattern))
+                if _is_module(path, wanted)]
         if hits:
-            return hits[-1]
+            return max(hits, key=os.path.getmtime)
     return None
+
+
+def _is_module(path: str, arch_dir: str) -> bool:
+    """widevine-installer leaves an empty linux_x64 stub beside the real ARM
+    module because Chromium insists on that path. A Firefox profile, in turn,
+    holds one build under no architecture directory at all.
+
+    Distro Chromium packages symlink into /var/lib/widevine, so a glob hit can
+    be a link that leads nowhere until the installer has run.
+    """
+    if "_platform_specific" in path and arch_dir not in path:
+        return False
+    try:
+        return os.path.getsize(path) > 0
+    except OSError:
+        return False
 
 
 DEBUG = bool(os.environ.get("KASUAL_NETFLIX_DEBUG"))

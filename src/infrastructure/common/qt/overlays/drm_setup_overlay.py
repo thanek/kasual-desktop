@@ -16,7 +16,7 @@ from PyQt6.QtWidgets import (
 )
 
 from domain.drm.plan import Readiness, ReadinessReport, StepStatus
-from domain.drm.ports import DrmSetupView
+from domain.drm.ports import DrmSetupView, PlaybackProbe
 from domain.input.pad_control import PadControl
 from domain.input.vocabulary import Event
 from domain.menu.cursor import MenuCursor
@@ -59,7 +59,7 @@ class _DrmSetupDialog(BaseOverlay):
         report: ReadinessReport,
         on_recheck: Callable[[], ReadinessReport],
         on_done: Callable[[], None],
-        on_verify: Callable[[], bool] | None,
+        probe: PlaybackProbe | None,
         gamepad: PadControl,
         feedback: Feedback,
     ) -> None:
@@ -68,7 +68,7 @@ class _DrmSetupDialog(BaseOverlay):
         self._report = report
         self._on_recheck = on_recheck
         self._on_done = on_done
-        self._on_verify = on_verify
+        self._probe = probe
         self._verification = _Verification.UNKNOWN
         self._buttons: list[QPushButton] = []
         self._actions: list[Callable[[], None]] = []
@@ -235,7 +235,7 @@ class _DrmSetupDialog(BaseOverlay):
         )
 
     def _render_playback(self) -> None:
-        if self._on_verify is None:
+        if self._probe is None:
             self._status_playback.setVisible(False)
             self._playback_detail.setVisible(False)
             return
@@ -257,7 +257,9 @@ class _DrmSetupDialog(BaseOverlay):
                 translate(
                     "Kasual Desktop",
                     "The module is installed but did not load. It may have been "
-                    "built for a different system — reinstall it and check again.",
+                    "built for a different system — a kernel with a different "
+                    "memory page size is the usual reason. Reinstall it and "
+                    "check again.",
                 )
                 if self._report.state is Readiness.READY else
                 translate(
@@ -375,22 +377,21 @@ class _DrmSetupDialog(BaseOverlay):
     # ── Actions ──────────────────────────────────────────────────────────────
 
     def _run_checks(self) -> None:
-        self._verification = _Verification.RUNNING
-        self._render_playback()
-        self._check_button.setEnabled(False)
-        # Let "checking" paint before the probe blocks the loop.
-        QTimer.singleShot(0, self._perform_checks)
-
-    def _perform_checks(self) -> None:
         report = self._on_recheck()
-        if self._on_verify is None:
-            self._verification = _Verification.UNKNOWN
-        else:
-            self._verification = (
-                _Verification.CONFIRMED if self._on_verify()
-                else _Verification.FAILED
-            )
+        if self._probe is None:
+            self._apply(report)
+            return
+        self._verification = _Verification.RUNNING
+        self._check_button.setEnabled(False)
         self._apply(report)
+        self._probe.verify(self._verified)
+
+    def _verified(self, plays: bool) -> None:
+        if self._closed:
+            return
+        self._verification = (
+            _Verification.CONFIRMED if plays else _Verification.FAILED)
+        self._render_playback()
         self._check_button.setEnabled(True)
 
     def _activate(self, index: int) -> None:
@@ -401,6 +402,9 @@ class _DrmSetupDialog(BaseOverlay):
 
     def _finish(self) -> None:
         if self._dismiss(sound=Cue.SELECT):
+            # Continue is deliberately live while a check runs.
+            if self._probe is not None:
+                self._probe.cancel()
             self._on_done()
 
     # ── Navigation ───────────────────────────────────────────────────────────
@@ -436,8 +440,8 @@ class QtDrmSetupView(DrmSetupView):
         report: ReadinessReport,
         on_recheck: Callable[[], ReadinessReport],
         on_done: Callable[[], None],
-        on_verify: Callable[[], bool] | None = None,
+        probe: PlaybackProbe | None = None,
     ) -> None:
         self._current = _DrmSetupDialog(
-            report, on_recheck, on_done, on_verify, self._gamepad, self._feedback,
+            report, on_recheck, on_done, probe, self._gamepad, self._feedback,
         )

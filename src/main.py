@@ -12,7 +12,8 @@ from infrastructure.linux.compositor import (
 # The platform and the shell integration must be selected before QApplication is
 # created; setdefault lets the environment override (e.g. tests force offscreen).
 # Mutter has no layer-shell, and naming the missing integration makes the wayland
-# plugin itself fail to load — there Kasual is a plain window the extension pins.
+# plugin itself fail to load — there Kasual Desktop is a plain window the
+# extension pins.
 os.environ.setdefault("QT_QPA_PLATFORM", "wayland")
 COMPOSITOR = detect_compositor()
 if COMPOSITOR is not Compositor.GNOME:
@@ -144,6 +145,8 @@ def main() -> None:
     # persists the chosen ones through the same store as onboarding.
     app_adder = AppAdder(XdgInstalledApps(), provisioning)
 
+    # Widevine readiness exists for Linux only; a Windows port needs its own
+    # SystemFacts behind these same ports.
     drm_facts = LinuxSystemFacts()
     drm_gate = DrmSetupGate(
         DrmReadiness(drm_facts),

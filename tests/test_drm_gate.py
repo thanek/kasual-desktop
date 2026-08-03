@@ -49,9 +49,9 @@ class TestEnsure:
         probe = MagicMock()
         gate, _, view = _make(Readiness.INCOMPLETE, probe)
         gate.ensure(MagicMock())
-        assert view.present.call_args.kwargs["on_verify"] is probe.can_play_protected
+        assert view.present.call_args.kwargs["probe"] is probe
 
     def test_verification_is_absent_without_a_probe(self):
         gate, _, view = _make(Readiness.INCOMPLETE)
         gate.ensure(MagicMock())
-        assert view.present.call_args.kwargs["on_verify"] is None
+        assert view.present.call_args.kwargs["probe"] is None

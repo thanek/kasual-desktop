@@ -38,20 +38,26 @@ class Step:
 
 @dataclass(frozen=True)
 class Recipe:
-    """Empty ``arch``/``distros`` match any machine."""
+    """Empty ``arch``/``distros``/``traits`` match any machine; a recipe that
+    names traits needs all of them."""
 
     key: str
     notice: str
     steps: tuple[Step, ...]
     arch: tuple[str, ...] = ()
     distros: tuple[str, ...] = ()
+    traits: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
 class MachineProfile:
+    """*traits* are properties that cut across distributions: a read-only
+    ostree deployment, a Raspberry Pi board."""
+
     arch: str
     distro_id: str = ""
     like: tuple[str, ...] = ()
+    traits: tuple[str, ...] = ()
 
     @property
     def distro_names(self) -> tuple[str, ...]:
@@ -81,7 +87,9 @@ def recipe_for(machine: MachineProfile, recipes: tuple[Recipe, ...]) -> Recipe |
 
 
 def _matches(recipe: Recipe, machine: MachineProfile) -> bool:
-    return _matches_arch(recipe, machine) and _matches_distro(recipe, machine)
+    return (_matches_arch(recipe, machine)
+            and _matches_distro(recipe, machine)
+            and _matches_traits(recipe, machine))
 
 
 def _matches_arch(recipe: Recipe, machine: MachineProfile) -> bool:
@@ -92,3 +100,7 @@ def _matches_distro(recipe: Recipe, machine: MachineProfile) -> bool:
     return not recipe.distros or any(
         name in recipe.distros for name in machine.distro_names
     )
+
+
+def _matches_traits(recipe: Recipe, machine: MachineProfile) -> bool:
+    return set(recipe.traits) <= set(machine.traits)

@@ -31,5 +31,5 @@ class DrmSetupGate:
             report,
             on_recheck=self._readiness.report,
             on_done=on_done,
-            on_verify=None if self._probe is None else self._probe.can_play_protected,
+            probe=self._probe,
         )

@@ -87,7 +87,7 @@ def main() -> int:
         report,
         on_recheck=readiness.report,
         on_done=app.quit,
-        on_verify=QtWebEnginePlaybackProbe(LinuxSystemFacts()).can_play_protected,
+        probe=QtWebEnginePlaybackProbe(LinuxSystemFacts()),
     )
     return app.exec()
 

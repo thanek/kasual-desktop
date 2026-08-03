@@ -25,7 +25,13 @@ class SystemFacts(Protocol):
 class PlaybackProbe(Protocol):
     """Confirms the CDM actually loads, which its presence on disk does not."""
 
-    def can_play_protected(self) -> bool: ...
+    def verify(self, on_result: Callable[[bool], None]) -> None:
+        """The outcome reaches *on_result* tens of seconds later at worst."""
+        ...
+
+    def cancel(self) -> None:
+        """Drops a check in flight — its ``on_result`` is then never called."""
+        ...
 
 
 class DrmSetupView(Protocol):
@@ -34,8 +40,5 @@ class DrmSetupView(Protocol):
         report: ReadinessReport,
         on_recheck: Callable[[], ReadinessReport],
         on_done: Callable[[], None],
-        on_verify: Callable[[], bool] | None = None,
-    ) -> None:
-        """``on_verify`` blocks for seconds, so a view must let a repaint
-        through before calling it."""
-        ...
+        probe: PlaybackProbe | None = None,
+    ) -> None: ...
