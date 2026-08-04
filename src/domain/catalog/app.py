@@ -39,6 +39,7 @@ class App:
     env:                  Mapping[str, str] = field(default_factory=dict)
     categories:           tuple[str, ...]   = ()      # freedesktop Categories
     wm_class:             str | None        = None    # freedesktop StartupWMClass
+    requires_cdm:         bool              = False   # X-Kasual-RequiresCdm
 
     @property
     def command_basename(self) -> str:
@@ -112,6 +113,7 @@ class App:
             env=_parse_env(entry.get("X-Kasual-Env")),
             categories=_parse_categories(entry.get("Categories")),
             wm_class=_str_entry(entry, "StartupWMClass"),
+            requires_cdm=_bool_entry(entry, "X-Kasual-RequiresCdm"),
         )
         order = _parse_int(entry.get("X-Kasual-Order"), ORDER_DEFAULT)
         return order, app
@@ -140,6 +142,8 @@ class App:
             entry["X-Kasual-Env"] = ";".join(f"{k}={v}" for k, v in self.env.items())
         if self.categories:
             entry["Categories"] = ";".join(self.categories) + ";"
+        if self.requires_cdm:
+            entry["X-Kasual-RequiresCdm"] = "true"
         entry["X-Kasual-Order"] = str(order)
         return entry
 

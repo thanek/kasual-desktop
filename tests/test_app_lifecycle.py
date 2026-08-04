@@ -92,7 +92,8 @@ def _steam_game_app(appid="292030", trigger=Trigger.CLICK, id="witcher3"):
                args=(f"steam://rungameid/{appid}",), recall_menu_trigger=trigger)
 
 
-def _make(apps=None, visible=False, is_game_pid=None, paused=False, launch_env=None):
+def _make(apps=None, visible=False, is_game_pid=None, paused=False, launch_env=None,
+          offer_drm_setup=None):
     view = FakeView(visible=visible)
     gamepad = MagicMock()
     gamepad.top_handler.return_value = None
@@ -137,6 +138,7 @@ def _make(apps=None, visible=False, is_game_pid=None, paused=False, launch_env=N
         inspector=inspector,
         is_paused=lambda: paused,
         launch_env=launch_env if launch_env is not None else (lambda _app: {}),
+        offer_drm_setup=offer_drm_setup if offer_drm_setup is not None else (lambda: False),
     )
     return SimpleNamespace(
         lc=lc, view=view, gamepad=gamepad, wm=wm, am=app_manager,
@@ -282,6 +284,45 @@ class TestOnTileActivated:
         c.lc.on_tile_activated(AppTarget(index=0, app_id="app0", name="App"))
         c.dh.arm.assert_not_called()
         c.ds.arm.assert_not_called()
+
+    def test_drm_app_waits_for_the_checklist_instead_of_launching(self):
+        apps = [App(name="Netflix", command="netflix.sh", id="netflix",
+                    requires_cdm=True)]
+        c = _make(apps=apps, offer_drm_setup=lambda: True)
+        c.am.is_running.return_value = False
+        c.lc.on_tile_activated(AppTarget(index=0, app_id="netflix", name="Netflix"))
+        c.am.launch.assert_not_called()
+        c.gamepad.pop_handler.assert_not_called()
+        c.dh.arm.assert_not_called()
+        assert c.fg.is_idle()
+        assert c.view.hidden == 0 and c.view.withdrawn == 0
+
+    def test_drm_app_launches_when_the_system_is_ready(self):
+        apps = [App(name="Netflix", command="netflix.sh", id="netflix",
+                    requires_cdm=True)]
+        c = _make(apps=apps, offer_drm_setup=lambda: False)
+        c.am.is_running.return_value = False
+        c.am.launch.return_value = True
+        c.lc.on_tile_activated(AppTarget(index=0, app_id="netflix", name="Netflix"))
+        c.am.launch.assert_called_once()
+
+    def test_an_ordinary_app_is_never_checked(self):
+        offered = MagicMock(return_value=True)
+        c = _make(offer_drm_setup=offered)
+        c.am.is_running.return_value = False
+        c.am.launch.return_value = True
+        c.lc.on_tile_activated(AppTarget(index=0, app_id="app0", name="App"))
+        offered.assert_not_called()
+        c.am.launch.assert_called_once()
+
+    def test_a_running_drm_app_restores_without_a_check(self):
+        apps = [App(name="Netflix", command="netflix.sh", id="netflix",
+                    requires_cdm=True)]
+        offered = MagicMock(return_value=True)
+        c = _make(apps=apps, offer_drm_setup=offered)
+        c.am.is_running.return_value = True
+        c.lc.on_tile_activated(AppTarget(index=0, app_id="netflix", name="Netflix"))
+        offered.assert_not_called()
 
     def test_closing_app_activation_is_ignored(self):
         """Activating an app tile mid-shutdown is a no-op (the relocated guard)."""

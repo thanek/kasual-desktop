@@ -51,6 +51,7 @@ class AppLifecycle(AppControl):
         inspector: ForegroundInspector,
         is_paused: Callable[[], bool] = lambda: False,
         launch_env: Callable[[App], Mapping[str, str]] = lambda _app: {},
+        offer_drm_setup: Callable[[], bool] = lambda: False,
     ):
         self._view          = view
         self._gamepad       = gamepad
@@ -68,6 +69,7 @@ class AppLifecycle(AppControl):
         self._inspector     = inspector
         self._is_paused     = is_paused
         self._launch_env    = launch_env
+        self._offer_drm_setup = offer_drm_setup
         self._pending_return: str | None = None
         self._awaited_launch: str | None = None
 
@@ -112,11 +114,14 @@ class AppLifecycle(AppControl):
             logger.info("Restoring application %s", target.app_id)
             self.restore_app(target)
         else:
+            app = self._apps[idx]
+            if app.requires_cdm and self._offer_drm_setup():
+                self._foreground.clear_if_app(app.id)
+                return
             logger.info("Launching application %s", target.app_id)
             self._feedback.play(Cue.SELECT)
             # So other apps' virtual pads don't interfere.
             self.arrange_windows()
-            app = self._apps[idx]
             self._gamepad.set_app_btn_mode_trigger(app.recall_menu_trigger)
             self._gamepad.pop_handler(self._pad_handler)
             # launch() reports immediate failure synchronously (the Desktop is

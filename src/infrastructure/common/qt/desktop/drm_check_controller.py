@@ -37,19 +37,21 @@ class DrmCheckController:
     def show(self) -> None:
         self._open(force=True)
 
-    def ensure(self) -> None:
-        """For a DRM app added after first run — the question onboarding asks."""
-        self._open(force=False)
+    def ensure(self) -> bool:
+        """True when the card went up: a DRM app whose CDM is missing waits for
+        the answer instead of starting."""
+        return self._open(force=False)
 
-    def _open(self, *, force: bool) -> None:
+    def _open(self, *, force: bool) -> bool:
         if self._gate is None or self._view is None or self._card is not None:
-            return
+            return False
         self._gate.ensure(self._forget, force=force)
         self._card = self._view.current
         if self._card is None:
-            return
+            return False
         self._overlays.register(self._card)
         self._hint_bar.show_hints(home_hints.CONFIRM)
+        return True
 
     def cancel(self) -> None:
         """The overlay registry tears the card down itself, and without running

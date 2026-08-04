@@ -181,6 +181,7 @@ def build_desktop(
         inspector=inspector,
         is_paused=lambda: widget._state.paused,
         launch_env=launch_env or (lambda _app: {}),
+        offer_drm_setup=widget._drm_check.ensure,
     )
     # Coordinates show/pause/resume of the Desktop surface (the widget = view).
     desktop_coordinator = DesktopCoordinator(

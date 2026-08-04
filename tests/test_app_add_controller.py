@@ -24,8 +24,10 @@ class FakePicker:
 
 def _candidate(key, *, requires_cdm=False):
     return CandidateApp(
-        key=key, app=App(name=key.title(), command=f"/opt/kd/{key}.sh"),
-        order=10, default_selected=False, requires_cdm=requires_cdm,
+        key=key,
+        app=App(name=key.title(), command=f"/opt/kd/{key}.sh",
+                requires_cdm=requires_cdm),
+        order=10, default_selected=False,
     )
 
 

@@ -121,11 +121,10 @@ NO_CDM_HTML = """
 display:flex;align-items:center;justify-content:center;height:100%">
 <div style="max-width:40em">
 <h1 style="color:#e50914">Widevine CDM not found</h1>
-<p>Netflix needs the Widevine DRM module. On Fedora install it with:</p>
-<pre style="background:#000;padding:1em">sudo dnf install widevine-installer
-sudo widevine-installer</pre>
-<p>then restart this app. On other distros, installing Google Chrome
-provides the CDM.</p>
+<p>Netflix needs Google's Widevine module, which Kasual Desktop does not ship.</p>
+<p>Go back to the Home screen, open the menu and pick
+<b>Check DRM playback</b>: it lists the steps for this system and tells you
+when playback works. Then start Netflix again.</p>
 </div></body></html>
 """
 

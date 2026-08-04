@@ -5,6 +5,7 @@ from domain.provisioning.add_apps import AppAdder
 from domain.provisioning.candidate import CandidateApp
 from domain.provisioning.catalog import (
     order_for_adding, starter_candidates, unpinned_candidates,
+    with_bundled_identity,
 )
 from domain.provisioning.selection import AppSelection
 from domain.provisioning.provisioning import Provisioning, needs_provisioning
@@ -285,6 +286,31 @@ class TestAppAdder:
         adder = AppAdder(FakeInstalledApps(cands), fake)
         adder.add(cands[:2])
         assert fake.received == cands[:2]
+
+
+class TestBundledIdentity:
+    """Tiles written before Kasual Desktop knew a field get it filled in on load."""
+
+    def test_netflix_tile_gets_the_widevine_flag(self):
+        app = App(name="Netflix", command="/opt/kd/apps/netflix/netflix.sh")
+        assert with_bundled_identity(app).requires_cdm
+
+    def test_wm_class_is_still_filled_in(self):
+        app = App(name="Netflix", command="/opt/kd/apps/netflix/netflix.sh")
+        assert with_bundled_identity(app).wm_class == "kasual-netflix"
+
+    def test_an_explicit_wm_class_is_kept(self):
+        app = App(name="Netflix", command="/opt/kd/apps/netflix/netflix.sh",
+                  wm_class="something-else")
+        assert with_bundled_identity(app).wm_class == "something-else"
+
+    def test_other_bundled_apps_need_no_cdm(self):
+        app = App(name="YouTube", command="/opt/kd/apps/yt/yt.sh")
+        assert not with_bundled_identity(app).requires_cdm
+
+    def test_foreign_apps_are_untouched(self):
+        app = App(name="GIMP", command="/usr/bin/gimp")
+        assert with_bundled_identity(app) == app
 
 
 class TestAppAdderStarters:

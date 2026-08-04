@@ -422,6 +422,7 @@ X-Kasual-Env=MANGOHUD=1;FOO=bar     # extra environment variables (optional)
 | `X-Kasual-HideGraceMs` | Grace period before hiding the Desktop after launch (default `0`) |
 | `X-Kasual-Env` | `KEY=val;KEY2=val2` — merged into the launched process environment |
 | `X-Kasual-Order` | Integer sort key (default last; ties broken by filename) |
+| `X-Kasual-RequiresCdm` | `true` for an app that plays DRM-protected video — starting it on a system without a Widevine CDM opens the DRM check instead |
 
 `NoDisplay=true`, `Hidden=true` and non-`Application` entries are ignored.
 

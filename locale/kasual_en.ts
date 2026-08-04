@@ -94,7 +94,7 @@
         <translation>Pin to menu</translation>
     </message>
     <message>
-        <location filename="../src/infrastructure/common/qt/desktop/app_add_controller.py" line="71" />
+        <location filename="../src/infrastructure/common/qt/desktop/app_add_controller.py" line="73" />
         <source>Add app</source>
         <translation>Add app</translation>
     </message>
@@ -321,16 +321,16 @@
     </message>
     <message>
         <location filename="../src/domain/drm/recipes.py" line="176" />
-        <source>It downloads the module from Google, shows you the licence and asks you to accept it. Run it in a terminal — it needs root and your answers.</source>
-        <translation>It downloads the module from Google, shows you the licence and asks you to accept it. Run it in a terminal — it needs root and your answers.</translation>
+        <source>It downloads the module from Google, shows you the licence and asks you to accept it. Run it in a terminal — it needs root and your answers. Kasual Desktop finds the module right away; the re-login the installer asks for is only for browsers.</source>
+        <translation>It downloads the module from Google, shows you the licence and asks you to accept it. Run it in a terminal — it needs root and your answers. Kasual Desktop finds the module right away; the re-login the installer asks for is only for browsers.</translation>
     </message>
     <message>
-        <location filename="../src/domain/drm/recipes.py" line="188" />
+        <location filename="../src/domain/drm/recipes.py" line="189" />
         <source>Kasual Desktop does not ship Widevine. Google Chrome carries it, and installing Chrome is what makes DRM playback work here.</source>
         <translation>Kasual Desktop does not ship Widevine. Google Chrome carries it, and installing Chrome is what makes DRM playback work here.</translation>
     </message>
     <message>
-        <location filename="../src/domain/drm/recipes.py" line="196" />
+        <location filename="../src/domain/drm/recipes.py" line="197" />
         <source>Kasual Desktop does not ship Widevine. The installer downloads it from Google and shows you Google's licence, which you accept yourself.</source>
         <translation>Kasual Desktop does not ship Widevine. The installer downloads it from Google and shows you Google's licence, which you accept yourself.</translation>
     </message>
@@ -340,12 +340,12 @@
         <translation>Return to Home screen</translation>
     </message>
     <message>
-        <location filename="../src/domain/menu/home.py" line="98" />
+        <location filename="../src/domain/menu/home.py" line="97" />
         <source>Return to {0}</source>
         <translation>Return to {0}</translation>
     </message>
     <message>
-        <location filename="../src/domain/menu/home.py" line="100" />
+        <location filename="../src/domain/menu/home.py" line="99" />
         <source>Close {0}</source>
         <translation>Close {0}</translation>
     </message>
@@ -640,6 +640,10 @@ Enable it now?</translation>
         <location filename="../src/infrastructure/common/qt/ui/tray.py" line="40" />
         <source>About…</source>
         <translation>About…</translation>
+    </message>
+    <message>
+        <source>It downloads the module from Google, shows you the licence and asks you to accept it. Run it in a terminal — it needs root and your answers.</source>
+        <translation type="vanished">It downloads the module from Google, shows you the licence and asks you to accept it. Run it in a terminal — it needs root and your answers.</translation>
     </message>
     <message>
         <source>Install the extraction tools</source>

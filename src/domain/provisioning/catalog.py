@@ -19,14 +19,22 @@ BUNDLED_WM_CLASS = {
     "netflix.sh":      "kasual-netflix",
 }
 
+_BUNDLED_CDM = ("netflix.sh",)
+
 
 def with_bundled_identity(app: App) -> App:
-    """Tiles provisioned before Kasual's own apps announced an app_id carry no
-    StartupWMClass, so those apps' windows look foreign to Kasual — it would offer to
-    close "the window" rather than the app. Their identity is known; fill it in."""
-    if app.wm_class or app.command_basename not in BUNDLED_WM_CLASS:
+    """Tiles provisioned before Kasual Desktop's own apps announced an app_id carry
+    no StartupWMClass, so those apps' windows look foreign to it — it would offer to
+    close "the window" rather than the app. Same for the Widevine flag on a Netflix
+    tile older than it. Their identity is known; fill it in."""
+    basename = app.command_basename
+    if basename not in BUNDLED_WM_CLASS:
         return app
-    return replace(app, wm_class=BUNDLED_WM_CLASS[app.command_basename])
+    return replace(
+        app,
+        wm_class=app.wm_class or BUNDLED_WM_CLASS[basename],
+        requires_cdm=app.requires_cdm or basename in _BUNDLED_CDM,
+    )
 
 
 def starter_candidates(discovery: AppDiscovery, bundled_base: str) -> list[CandidateApp]:
@@ -68,10 +76,10 @@ def starter_candidates(discovery: AppDiscovery, bundled_base: str) -> list[Candi
                 wm_class=BUNDLED_WM_CLASS["netflix.sh"],
                 icon="fa5s.film",
                 color="#e50914",
+                requires_cdm=True,
             ), "netflix"),
             order=35,
             default_selected=False,
-            requires_cdm=True,
         ),
     ]
 

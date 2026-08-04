@@ -177,7 +177,8 @@ def _run_installer_step(command: str) -> Step:
             "Kasual Desktop",
             "It downloads the module from Google, shows you the licence and asks "
             "you to accept it. Run it in a terminal — it needs root and your "
-            "answers.",
+            "answers. Kasual Desktop finds the module right away; the re-login "
+            "the installer asks for is only for browsers.",
         ),
         check=Check(CheckKind.CDM),
         command=command,

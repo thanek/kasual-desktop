@@ -83,13 +83,13 @@ class TestShow:
 
 class TestEnsure:
     def test_an_incomplete_system_gets_the_card(self, parts):
-        parts.controller.ensure()
+        assert parts.controller.ensure() is True
         assert parts.gate.forced is False
         parts.overlays.register.assert_called_once_with(parts.card)
 
     def test_a_ready_system_is_left_alone(self, make):
         p = make(ready=True)
-        p.controller.ensure()
+        assert p.controller.ensure() is False
         p.overlays.register.assert_not_called()
         p.overlays.forget.assert_not_called()
         p.hint_bar.show_hints.assert_not_called()

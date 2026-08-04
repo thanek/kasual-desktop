@@ -192,6 +192,19 @@ class TestToDesktopEntry:
     def test_omits_startupwmclass_when_unset(self):
         assert "StartupWMClass" not in App(name="M", command="m").to_desktop_entry(order=1)
 
+    def test_emits_requires_cdm(self):
+        app = App(name="Netflix", command="netflix.sh", requires_cdm=True)
+        assert app.to_desktop_entry(order=1)["X-Kasual-RequiresCdm"] == "true"
+
+    def test_omits_requires_cdm_when_unset(self):
+        entry = App(name="M", command="m").to_desktop_entry(order=1)
+        assert "X-Kasual-RequiresCdm" not in entry
+
+    def test_requires_cdm_survives_round_trip(self):
+        app = App(name="Netflix", command="netflix.sh", requires_cdm=True)
+        _, parsed = App.from_desktop_entry(app.to_desktop_entry(order=1))
+        assert parsed.requires_cdm
+
     def test_exec_requoting_survives_round_trip(self):
         app = App(name="X", command="/opt/my app/run.sh", args=("--flag", "a b"))
         entry = app.to_desktop_entry(order=1)
