@@ -403,9 +403,16 @@ class _DrmSetupDialog(BaseOverlay):
     def _finish(self) -> None:
         if self._dismiss(sound=Cue.SELECT):
             # Continue is deliberately live while a check runs.
-            if self._probe is not None:
-                self._probe.cancel()
+            self._drop_check()
             self._on_done()
+
+    def cancel(self) -> None:
+        self._drop_check()
+        super().cancel()
+
+    def _drop_check(self) -> None:
+        if self._probe is not None:
+            self._probe.cancel()
 
     # ── Navigation ───────────────────────────────────────────────────────────
 
@@ -445,3 +452,9 @@ class QtDrmSetupView(DrmSetupView):
         self._current = _DrmSetupDialog(
             report, on_recheck, on_done, probe, self._gamepad, self._feedback,
         )
+
+    @property
+    def current(self) -> _DrmSetupDialog | None:
+        """The card on screen, for a host that has to place it in its own
+        overlay group."""
+        return self._current

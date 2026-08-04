@@ -17,6 +17,7 @@ SLEEP         = "sleep"
 RESTART       = "restart"
 SHUTDOWN      = "shutdown"
 HIDE_DESKTOP  = "hide_desktop"
+DRM_CHECK     = "drm_check"
 
 # First is the out-of-the-box default.
 POWER_ACTIONS = (SLEEP, RESTART, SHUTDOWN)
@@ -88,5 +89,9 @@ ACTIONS: dict[str, SystemAction] = {
     HIDE_DESKTOP: SystemAction(
         lambda d: d.desktop.pause(),
         translate("Kasual Desktop", "Minimize Kasual Desktop"), "fa5s.window-minimize", "#d580ff",
+    ),
+    DRM_CHECK: SystemAction(
+        lambda d: d.desktop.open_drm_check(),
+        translate("Kasual Desktop", "Check DRM playback"), "fa5s.film", "#8fbcbb",
     ),
 }

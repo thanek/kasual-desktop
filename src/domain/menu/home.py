@@ -8,7 +8,8 @@ from domain.menu.entry import CLOSE_APP, POWER, RETURN_TO_APP, RETURN_TO_DESKTOP
 from domain.menu.item import MenuItem
 from domain.shared.text import truncate
 from domain.system.actions import (
-    ACTIONS, BRIGHTNESS, HIDE_DESKTOP, NETWORK, NOTIFICATIONS, POWER_ACTIONS, VOLUME,
+    ACTIONS, BRIGHTNESS, DRM_CHECK, HIDE_DESKTOP, NETWORK, NOTIFICATIONS,
+    POWER_ACTIONS, VOLUME,
 )
 from domain.system.hud import HudControl, hud_menu_item
 from domain.shared.i18n import translate
@@ -76,13 +77,15 @@ def compose_home_sections(
         quick.append(_action_item(BRIGHTNESS))
 
     if foreground is None:
-        # "Return to Home screen" stays here: when Kasual is minimized it is the
-        # only way back. Harmless when already on screen (just re-raises).
+        # "Return to Home screen" stays here: when Kasual Desktop is minimized
+        # it is the only way back. Harmless when already on screen (just re-raises).
         actions = []
         if include_status_actions:
             actions += [_power_card(power_default),
                         _action_item(NETWORK), _action_item(NOTIFICATIONS)]
-        actions += [_action_item(HIDE_DESKTOP), _return_to_desktop_item()]
+        # Home screen only: the DRM card is modal and its check can take a minute.
+        actions += [_action_item(DRM_CHECK), _action_item(HIDE_DESKTOP),
+                    _return_to_desktop_item()]
         return HomeSections(
             sections=[HomeSection(SectionKind.QUICK, quick),
                       HomeSection(SectionKind.ACTIONS, actions)],

@@ -28,6 +28,7 @@ from domain.menu.dispatcher import TileMenuDispatcher
 from domain.menu.ports import AppPinning, TileSettingsStore, TileOrderStore
 from domain.navigation.focus_navigator import FocusNavigator
 from domain.navigation.tile_mover import TileMover
+from domain.drm.gate import DrmSetupGate
 from domain.network.control import NetworkControl
 from domain.notifications.center import NotificationCenter
 from domain.provisioning.add_apps import AppAdder
@@ -48,6 +49,8 @@ from domain.system.volume import VolumeControl
 from domain.system.brightness import BrightnessControl
 
 from collections.abc import Callable, Mapping
+
+from infrastructure.common.qt.overlays.drm_setup_overlay import QtDrmSetupView
 
 from .desktop import Desktop
 from .dialog_host_controller import DialogHostController
@@ -82,6 +85,8 @@ def build_desktop(
     app_adder: AppAdder | None = None,
     power_preference: PowerPreference | None = None,
     launch_env: 'Callable[[App], Mapping[str, str]] | None' = None,
+    drm_gate: DrmSetupGate | None = None,
+    drm_view: QtDrmSetupView | None = None,
 ) -> Desktop:
     """Build a fully wired Desktop: the view widget plus its domain coordinators.
 
@@ -119,6 +124,8 @@ def build_desktop(
         surface=surface,
         parent_of=parent_of,
         app_adder=app_adder,
+        drm_gate=drm_gate,
+        drm_view=drm_view,
     )
 
     nav = FocusNavigator(

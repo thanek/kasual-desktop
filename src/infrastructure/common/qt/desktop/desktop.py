@@ -5,10 +5,12 @@ from PyQt6.QtGui import QPainter, QColor
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QApplication
 
 from domain.catalog.live_catalog import LiveCatalog
+from domain.drm.gate import DrmSetupGate
 from domain.shell.desktop_state import DesktopState
 from domain.input.vocabulary import Event
 from domain.input.pad_control import PadControl
 from domain.navigation import hints as home_hints
+from infrastructure.common.qt.overlays.drm_setup_overlay import QtDrmSetupView
 from infrastructure.common.qt.overlays.info_dialog import InfoDialog
 from infrastructure.common.qt.overlays.notifications_overlay import NotificationsOverlay
 from infrastructure.common.qt.overlays.network_overlay import NetworkOverlay
@@ -42,6 +44,7 @@ from infrastructure.common.qt.ui.nav_key_map import nav_key_map
 from infrastructure.common.qt.ui.screen_watcher import ScreenWatcher
 from .app_add_controller import AppAddController
 from .dialog_host_controller import DialogHostController
+from .drm_check_controller import DrmCheckController
 from .hint_bar import HintBar
 from .home_surface import HomeSurface
 from .power_popover_controller import PowerPopoverController
@@ -79,6 +82,8 @@ class Desktop(QWidget, DesktopView, DesktopShell, DesktopControl, metaclass=Prot
         surface: DesktopSurface | None = None,
         parent_of: 'Callable[[int], int | None] | None' = None,
         app_adder: AppAdder | None = None,
+        drm_gate: DrmSetupGate | None = None,
+        drm_view: QtDrmSetupView | None = None,
     ):
         super().__init__()
         self._apps        = apps
@@ -150,6 +155,10 @@ class Desktop(QWidget, DesktopView, DesktopShell, DesktopControl, metaclass=Prot
             restore_hints=lambda: self._nav.render() if self._nav else None,
         )
         self._tilebar.add_requested.connect(self._app_add.show)
+        self._drm_check = DrmCheckController(
+            drm_gate, drm_view, self._overlays, self._hintbar,
+            restore_hints=lambda: self._nav.render() if self._nav else None,
+        )
         main.addWidget(self._tilebar)
         main.addStretch(1)
 
@@ -332,6 +341,7 @@ class Desktop(QWidget, DesktopView, DesktopShell, DesktopControl, metaclass=Prot
         self._overlays.cancel()
         self._dialogs.cancel()
         self._app_add.cancel()
+        self._drm_check.cancel()
         if self._tile_mover is not None:
             self._tile_mover.cancel()
 
@@ -588,6 +598,9 @@ class Desktop(QWidget, DesktopView, DesktopShell, DesktopControl, metaclass=Prot
 
     def open_notifications_overlay(self) -> None:
         self._chrome.open_notifications()
+
+    def open_drm_check(self) -> None:
+        self._drm_check.show()
 
     def _show_notifications_view(self) -> None:
         overlay = NotificationsOverlay(

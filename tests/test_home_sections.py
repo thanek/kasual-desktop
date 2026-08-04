@@ -9,7 +9,8 @@ from domain.menu.entry import (
 )
 from domain.menu.home import SectionKind, compose_home_sections
 from domain.system.actions import (
-    BRIGHTNESS, HIDE_DESKTOP, NETWORK, NOTIFICATIONS, RESTART, SHUTDOWN, SLEEP, VOLUME,
+    BRIGHTNESS, DRM_CHECK, HIDE_DESKTOP, NETWORK, NOTIFICATIONS, RESTART, SHUTDOWN,
+    SLEEP, VOLUME,
 )
 from domain.catalog.target import AppTarget, WindowTarget
 
@@ -32,10 +33,11 @@ class FakeHud:
         self._enabled = False
 
 
-def _desktop(brightness=True, power_default=SLEEP):
+def _desktop(brightness=True, power_default=SLEEP, status_actions=True):
     return compose_home_sections(
         None, FakeHud(),
         brightness_controllable=brightness, power_default=power_default,
+        include_status_actions=status_actions,
     )
 
 
@@ -59,7 +61,13 @@ class TestDesktopContext:
     def test_actions_lead_with_power_then_system_grid(self):
         actions = _by_kind(_desktop(), SectionKind.ACTIONS)
         assert [i.action for i in actions.items] == [
-            POWER, NETWORK, NOTIFICATIONS, HIDE_DESKTOP, RETURN_TO_DESKTOP,
+            POWER, NETWORK, NOTIFICATIONS, DRM_CHECK, HIDE_DESKTOP, RETURN_TO_DESKTOP,
+        ]
+
+    def test_drm_check_survives_the_status_header(self):
+        actions = _by_kind(_desktop(status_actions=False), SectionKind.ACTIONS)
+        assert [i.action for i in actions.items] == [
+            DRM_CHECK, HIDE_DESKTOP, RETURN_TO_DESKTOP,
         ]
 
     def test_return_to_home_present_so_minimized_kd_can_be_restored(self):

@@ -335,22 +335,22 @@
         <translation>Kasual Desktop does not ship Widevine. The installer downloads it from Google and shows you Google's licence, which you accept yourself.</translation>
     </message>
     <message>
-        <location filename="../src/domain/menu/home.py" line="18" />
+        <location filename="../src/domain/menu/home.py" line="19" />
         <source>Return to Home screen</source>
         <translation>Return to Home screen</translation>
     </message>
     <message>
-        <location filename="../src/domain/menu/home.py" line="94" />
+        <location filename="../src/domain/menu/home.py" line="98" />
         <source>Return to {0}</source>
         <translation>Return to {0}</translation>
     </message>
     <message>
-        <location filename="../src/domain/menu/home.py" line="96" />
+        <location filename="../src/domain/menu/home.py" line="100" />
         <source>Close {0}</source>
         <translation>Close {0}</translation>
     </message>
     <message>
-        <location filename="../src/domain/system/actions.py" line="86" />
+        <location filename="../src/domain/system/actions.py" line="87" />
         <location filename="../src/domain/network/view.py" line="47" />
         <location filename="../src/domain/network/view.py" line="30" />
         <source>Network</source>
@@ -417,54 +417,59 @@
         <translation>{0} h ago</translation>
     </message>
     <message>
-        <location filename="../src/domain/system/actions.py" line="55" />
+        <location filename="../src/domain/system/actions.py" line="56" />
         <source>Volume</source>
         <translation>Volume</translation>
     </message>
     <message>
-        <location filename="../src/domain/system/actions.py" line="60" />
+        <location filename="../src/domain/system/actions.py" line="61" />
         <source>Brightness</source>
         <translation>Brightness</translation>
     </message>
     <message>
-        <location filename="../src/domain/system/actions.py" line="64" />
+        <location filename="../src/domain/system/actions.py" line="65" />
         <source>Sleep</source>
         <translation>Sleep</translation>
     </message>
     <message>
-        <location filename="../src/domain/system/actions.py" line="66" />
+        <location filename="../src/domain/system/actions.py" line="67" />
         <source>Are you sure you want to sleep?</source>
         <translation>Are you sure you want to sleep?</translation>
     </message>
     <message>
-        <location filename="../src/domain/system/actions.py" line="70" />
+        <location filename="../src/domain/system/actions.py" line="71" />
         <source>Restart</source>
         <translation>Restart</translation>
     </message>
     <message>
-        <location filename="../src/domain/system/actions.py" line="72" />
+        <location filename="../src/domain/system/actions.py" line="73" />
         <source>Are you sure you want to restart?</source>
         <translation>Are you sure you want to restart?</translation>
     </message>
     <message>
-        <location filename="../src/domain/system/actions.py" line="76" />
+        <location filename="../src/domain/system/actions.py" line="77" />
         <source>Shut Down</source>
         <translation>Shut Down</translation>
     </message>
     <message>
-        <location filename="../src/domain/system/actions.py" line="78" />
+        <location filename="../src/domain/system/actions.py" line="79" />
         <source>Are you sure you want to shut down?</source>
         <translation>Are you sure you want to shut down?</translation>
     </message>
     <message>
-        <location filename="../src/domain/system/actions.py" line="82" />
+        <location filename="../src/domain/system/actions.py" line="83" />
         <source>Notifications</source>
         <translation>Notifications</translation>
     </message>
     <message>
-        <location filename="../src/domain/system/actions.py" line="90" />
+        <location filename="../src/domain/system/actions.py" line="91" />
         <source>Minimize Kasual Desktop</source>
         <translation>Minimize Kasual Desktop</translation>
+    </message>
+    <message>
+        <location filename="../src/domain/system/actions.py" line="95" />
+        <source>Check DRM playback</source>
+        <translation>Check DRM playback</translation>
     </message>
     <message>
         <location filename="../src/domain/system/hud.py" line="46" />

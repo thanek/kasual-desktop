@@ -148,9 +148,10 @@ def main() -> None:
     # Widevine readiness exists for Linux only; a Windows port needs its own
     # SystemFacts behind these same ports.
     drm_facts = LinuxSystemFacts()
+    drm_view = QtDrmSetupView(gamepad, feedback)
     drm_gate = DrmSetupGate(
         DrmReadiness(drm_facts),
-        QtDrmSetupView(gamepad, feedback),
+        drm_view,
         QtWebEnginePlaybackProbe(drm_facts),
     )
 
@@ -199,6 +200,8 @@ def main() -> None:
             parent_of=parent_pid,
             is_game_pid=is_game_pid,
             app_adder=app_adder,
+            drm_gate=drm_gate,
+            drm_view=drm_view,
             power_preference=power_preference,
             launch_env=lambda app: hud_launch_env(hud, app),
             deferred_hide_factory=lambda wm_, pm_, on_cede, on_hide:

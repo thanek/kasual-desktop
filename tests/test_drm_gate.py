@@ -21,6 +21,13 @@ class TestEnsure:
         on_done.assert_called_once_with()
         view.present.assert_not_called()
 
+    def test_forced_ready_system_still_shows_the_checklist(self):
+        gate, _, view = _make(Readiness.READY)
+        on_done = MagicMock()
+        gate.ensure(on_done, force=True)
+        view.present.assert_called_once()
+        on_done.assert_not_called()
+
     def test_incomplete_system_shows_the_checklist(self):
         gate, _, view = _make(Readiness.INCOMPLETE)
         gate.ensure(MagicMock())

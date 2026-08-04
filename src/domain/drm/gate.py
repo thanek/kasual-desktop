@@ -22,9 +22,11 @@ class DrmSetupGate:
         self._view = view
         self._probe = probe
 
-    def ensure(self, on_done: Callable[[], None]) -> None:
+    def ensure(self, on_done: Callable[[], None], *, force: bool = False) -> None:
+        """*force* serves deliberate re-entry: on a ready system the confirmation
+        itself is what the user came for."""
         report = self._readiness.report()
-        if report.state is Readiness.READY:
+        if report.state is Readiness.READY and not force:
             on_done()
             return
         self._view.present(
