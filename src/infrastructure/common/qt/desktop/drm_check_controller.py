@@ -35,9 +35,16 @@ class DrmCheckController:
         self._card = None
 
     def show(self) -> None:
+        self._open(force=True)
+
+    def ensure(self) -> None:
+        """For a DRM app added after first run — the question onboarding asks."""
+        self._open(force=False)
+
+    def _open(self, *, force: bool) -> None:
         if self._gate is None or self._view is None or self._card is not None:
             return
-        self._gate.ensure(self._forget, force=True)
+        self._gate.ensure(self._forget, force=force)
         self._card = self._view.current
         if self._card is None:
             return
@@ -50,7 +57,8 @@ class DrmCheckController:
         self._card = None
 
     def _forget(self) -> None:
-        if self._card is not None:
-            self._overlays.forget(self._card)
-            self._card = None
+        if self._card is None:
+            return
+        self._overlays.forget(self._card)
+        self._card = None
         self._restore_hints()

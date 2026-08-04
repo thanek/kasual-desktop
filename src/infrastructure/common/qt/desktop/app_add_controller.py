@@ -40,6 +40,7 @@ class AppAddController:
         overlays: OpenOverlays,
         hint_bar: HintBar,
         restore_hints: Callable[[], None],
+        on_cdm_app: Callable[[], None] | None = None,
     ) -> None:
         self._apps = apps
         self._app_adder = app_adder
@@ -49,6 +50,7 @@ class AppAddController:
         self._overlays = overlays
         self._hint_bar = hint_bar
         self._restore_hints = restore_hints
+        self._on_cdm_app = on_cdm_app
         self._picker: OnboardingOverlay | None = None
 
     def show(self) -> None:
@@ -83,6 +85,8 @@ class AppAddController:
             # same id here so process tracking matches without waiting for a reload.
             self._tilebar.add_app(replace(candidate.app, id=candidate.key))
         self._feedback.play(Cue.SELECT)
+        if self._on_cdm_app is not None and any(c.requires_cdm for c in chosen):
+            self._on_cdm_app()
 
     def _forget(self) -> None:
         self._overlays.forget(self._picker)

@@ -147,18 +147,19 @@ class Desktop(QWidget, DesktopView, DesktopShell, DesktopControl, metaclass=Prot
         self._hintbar = HintBar()
         self._hintbar.install_surface()
 
+        self._drm_check = DrmCheckController(
+            drm_gate, drm_view, self._overlays, self._hintbar,
+            restore_hints=lambda: self._nav.render() if self._nav else None,
+        )
         # The [＋] add-app flow lives in its own controller; the tile bar's
         # add-requested signal drives it directly.
         self._app_add = AppAddController(
             self._apps, self._app_adder, self._gamepad, self._feedback,
             self._tilebar, self._overlays, self._hintbar,
             restore_hints=lambda: self._nav.render() if self._nav else None,
+            on_cdm_app=self._drm_check.ensure,
         )
         self._tilebar.add_requested.connect(self._app_add.show)
-        self._drm_check = DrmCheckController(
-            drm_gate, drm_view, self._overlays, self._hintbar,
-            restore_hints=lambda: self._nav.render() if self._nav else None,
-        )
         main.addWidget(self._tilebar)
         main.addStretch(1)
 

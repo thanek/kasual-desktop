@@ -117,10 +117,12 @@ def main():
         bundled_base=str(Path(__file__).parent.parent),
     )
     # The [＋] add-app tile reopens provisioning after first run: it offers every
-    # installed app (Start Menu scan), minus the apps already pinned, persisting
-    # the chosen ones through the same store as onboarding.
+    # installed app (Start Menu scan) plus the starter apps, minus the apps
+    # already pinned, persisting the chosen ones through the same store as
+    # onboarding.
     from infrastructure.windows.catalog.installed_apps import WindowsInstalledApps
-    app_adder = AppAdder(WindowsInstalledApps(), provisioning)
+    app_adder = AppAdder(WindowsInstalledApps(), provisioning,
+                         starters=provisioning_uc.candidates)
 
     # ── Session (deferred behind onboarding on first run) ────────────────────
     _refs: dict = {}  # keep tray/controller/overlay alive past their scope

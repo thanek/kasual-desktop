@@ -285,3 +285,44 @@ class TestAppAdder:
         adder = AppAdder(FakeInstalledApps(cands), fake)
         adder.add(cands[:2])
         assert fake.received == cands[:2]
+
+
+class TestAppAdderStarters:
+    """The starters are in no system app scan, so the adder offers them itself."""
+
+    def _starters(self):
+        return starter_candidates(FakeDiscovery({"steam"}), "/opt/kd")
+
+    def _adder(self, scanned=()):
+        return AppAdder(FakeInstalledApps(scanned), FakeProvisioning(True),
+                        starters=self._starters)
+
+    def _scanned(self, key, name, command):
+        return CandidateApp(key=key, app=App(name=name, command=command),
+                            order=50, default_selected=False)
+
+    def test_skipped_starter_is_offered(self):
+        keys = {c.key for c in self._adder().available([])}
+        assert "netflix" in keys
+
+    def test_starter_still_drops_out_once_pinned(self):
+        existing = [App(name="Netflix", command="/opt/kd/apps/netflix/netflix.sh")]
+        keys = {c.key for c in self._adder().available(existing)}
+        assert "netflix" not in keys
+
+    def test_starter_metadata_wins_over_the_scanned_copy(self):
+        scanned = [self._scanned("netflix", "Netflix", "/usr/bin/netflix-launcher")]
+        offered = self._adder(scanned).available([])
+        netflix = [c for c in offered if c.key == "netflix"]
+        assert len(netflix) == 1
+        assert netflix[0].requires_cdm
+
+    def test_the_same_app_under_another_key_is_not_offered_twice(self):
+        scanned = [self._scanned("steam-native", "Steam", "steam")]
+        offered = self._adder(scanned).available([])
+        assert [c.key for c in offered].count("steam") == 1
+        assert "steam-native" not in {c.key for c in offered}
+
+    def test_unrelated_installed_apps_are_kept(self):
+        scanned = [self._scanned("gimp", "GIMP", "gimp")]
+        assert "gimp" in {c.key for c in self._adder(scanned).available([])}

@@ -125,6 +125,20 @@ def _launch_identity(app: App) -> tuple[str, tuple[str, ...]]:
     return (app.command, tuple(app.args))
 
 
+def merge_candidates(
+    preferred: Sequence[CandidateApp], others: Sequence[CandidateApp]
+) -> list[CandidateApp]:
+    """*preferred* wins on a matching key or executable. The distro's Steam entry
+    and the starter's Big Picture one are the same app to someone picking tiles,
+    so the arguments stay out of the comparison."""
+    keys = {c.key for c in preferred}
+    commands = {c.app.command_basename for c in preferred}
+    return list(preferred) + [
+        c for c in others
+        if c.key not in keys and c.app.command_basename not in commands
+    ]
+
+
 # Gaming launchers surfaced first (KD is gamepad-first); matched against a
 # candidate's key or command basename. Order here is the shown order.
 _WELL_KNOWN: tuple[str, ...] = (

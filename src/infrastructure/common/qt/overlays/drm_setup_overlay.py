@@ -449,12 +449,17 @@ class QtDrmSetupView(DrmSetupView):
         on_done: Callable[[], None],
         probe: PlaybackProbe | None = None,
     ) -> None:
-        self._current = _DrmSetupDialog(
+        dialog = _DrmSetupDialog(
             report, on_recheck, on_done, probe, self._gamepad, self._feedback,
         )
+        dialog.destroyed.connect(self._forget)
+        self._current = dialog
 
     @property
     def current(self) -> _DrmSetupDialog | None:
-        """The card on screen, for a host that has to place it in its own
-        overlay group."""
+        """The card on screen — None once it closes, so a host that registers it
+        in its own overlay group never gets a dead one."""
         return self._current
+
+    def _forget(self) -> None:
+        self._current = None

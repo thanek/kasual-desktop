@@ -141,9 +141,11 @@ def main() -> None:
         bundled_base=str(Path(__file__).parent.parent),
     )
     # The [＋] add-app tile reopens provisioning after first run: it offers every
-    # installed app (XDG .desktop scan), minus the apps already pinned, and
-    # persists the chosen ones through the same store as onboarding.
-    app_adder = AppAdder(XdgInstalledApps(), provisioning)
+    # installed app (XDG .desktop scan) plus the starter apps, minus the apps
+    # already pinned, and persists the chosen ones through the same store as
+    # onboarding.
+    app_adder = AppAdder(XdgInstalledApps(), provisioning,
+                         starters=provisioning_uc.candidates)
 
     # Widevine readiness exists for Linux only; a Windows port needs its own
     # SystemFacts behind these same ports.
