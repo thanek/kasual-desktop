@@ -18,6 +18,7 @@ from infrastructure.linux.display.screensaver import (
 _ENV_VARS = (
     "KDE_FULL_SESSION",
     "XDG_CURRENT_DESKTOP",
+    "XDG_SESSION_DESKTOP",
     "SWAYSOCK",
     "HYPRLAND_INSTANCE_SIGNATURE",
 )

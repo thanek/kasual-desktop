@@ -13,6 +13,11 @@ names the windows it needs and the harness picks the backend for whatever is
 running; see `PORTING.md` for how that was arrived at, down to the last product gap
 it exposed (Sway would not focus a launcher behind a fullscreen window) and closed.
 
+labwc and wayfire (Raspberry Pi OS) have a backend too — the same
+wlr-foreign-toplevel connection the product uses — but no run on real hardware
+yet. It reports no geometry, so there `covers_screen` is always False and only a
+window that declares itself fullscreen counts as holding the screen.
+
 ## Why this exists
 
 The unit suite covers KD's logic (parsing, filtering, command building, factory

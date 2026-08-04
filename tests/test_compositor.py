@@ -20,6 +20,7 @@ from infrastructure.linux.compositor import (
 _ENV_VARS = (
     "KDE_FULL_SESSION",
     "XDG_CURRENT_DESKTOP",
+    "XDG_SESSION_DESKTOP",
     "SWAYSOCK",
     "HYPRLAND_INSTANCE_SIGNATURE",
 )
@@ -126,10 +127,34 @@ class TestDetectCompositor:
     def test_unknown_when_nothing_set(self, clean_env):
         assert detect_compositor() is Compositor.UNKNOWN
 
+    def test_labwc_from_raspberry_pi_session_name(self, clean_env):
+        clean_env.setenv("XDG_CURRENT_DESKTOP", "LXDE-pi-labwc")
+        assert detect_compositor() is Compositor.LABWC
+
+    def test_wayfire_from_session_desktop(self, clean_env):
+        clean_env.setenv("XDG_SESSION_DESKTOP", "LXDE-pi-wayfire")
+        assert detect_compositor() is Compositor.WAYFIRE
+
+    def test_labwc_nested_under_kde_is_kde(self, clean_env):
+        # KDE_FULL_SESSION comes from the outer session, and only the outer one
+        # owns the windows Kasual manages.
+        clean_env.setenv("KDE_FULL_SESSION", "true")
+        clean_env.setenv("XDG_SESSION_DESKTOP", "labwc")
+        assert detect_compositor() is Compositor.KDE
+
 
 class TestFactories:
     def test_window_manager_falls_back_to_null(self, clean_env):
-        assert isinstance(build_window_manager(), NullWindowManager)
+        with patch("infrastructure.wlroots.wm.foreign_toplevel.build",
+                   return_value=None):
+            assert isinstance(build_window_manager(), NullWindowManager)
+
+    def test_window_manager_is_foreign_toplevel_on_labwc(self, clean_env):
+        clean_env.setenv("XDG_CURRENT_DESKTOP", "LXDE-pi-labwc")
+        backend = MagicMock()
+        with patch("infrastructure.wlroots.wm.foreign_toplevel.build",
+                   return_value=backend):
+            assert build_window_manager() is backend
 
     def test_window_manager_is_sway_adapter(self, live_sway_socket, qapp):
         from infrastructure.wlroots.wm.sway import SwayWindowManager
@@ -139,12 +164,13 @@ class TestFactories:
         from infrastructure.wlroots.wm.hyprland import HyprlandWindowManager
         assert isinstance(build_window_manager(), HyprlandWindowManager)
 
-    def test_wallpaper_falls_back_to_static_file(self, clean_env, tmp_path):
+    def test_wallpaper_falls_back_to_pcmanfm_then_static_file(self, clean_env, tmp_path):
         clean_env.setenv("XDG_CONFIG_HOME", str(tmp_path))
-        from infrastructure.linux.display.wallpaper import StaticFileWallpaper
+        clean_env.setenv("XDG_CONFIG_DIRS", str(tmp_path / "etc"))
+        from infrastructure.linux.display.wallpaper import PcmanfmWallpaper
         wallpaper = build_system_wallpaper()
-        assert isinstance(wallpaper, StaticFileWallpaper)
-        assert wallpaper.current() is None   # no <config>/wallpaper present
+        assert isinstance(wallpaper, PcmanfmWallpaper)
+        assert wallpaper.current() is None   # neither pcmanfm nor <config>/wallpaper
 
     def test_wallpaper_is_kde_adapter_on_kde(self, clean_env):
         clean_env.setenv("KDE_FULL_SESSION", "true")

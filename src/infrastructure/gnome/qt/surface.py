@@ -2,9 +2,9 @@
 by the Kasual Helper extension (Mutter has no wlr-layer-shell).
 
 Mirrors :class:`LayerShellSurface`: the Desktop is its own frameless top-level
-window; showing it asks the extension to pin Kasual's surfaces above the
-foreground app. The app returning to the foreground is driven by the domain
-(``activate_windows_for_pids``), exactly as on the layer-shell path.
+window; showing it asks the extension to pin Kasual Desktop's surfaces above 
+the foreground app. The app returning to the foreground is driven by the 
+domain (``activate_windows_for_pids``), exactly as on the layer-shell path.
 
 Ceding to a launched app (``drop_below``) keeps the Desktop mapped but tells the
 extension to stop raising it over the app and let the app scan out; a fullscreen

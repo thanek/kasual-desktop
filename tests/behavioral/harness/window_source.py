@@ -113,7 +113,8 @@ def find(stack: list[dict], app_id: str | None = None,
     return out
 
 
-_BACKENDS = {'kde': 'kwin', 'gnome': 'gnome', 'hyprland': 'hyprland', 'sway': 'sway'}
+_BACKENDS = {'kde': 'kwin', 'gnome': 'gnome', 'hyprland': 'hyprland', 'sway': 'sway',
+             'labwc': 'foreign-toplevel', 'wayfire': 'foreign-toplevel'}
 
 
 def backend() -> str | None:
@@ -138,6 +139,11 @@ def build_window_source() -> WindowSource:
     if name == 'sway':
         from tests.behavioral.harness.sources.sway import SwayWindowSource
         return SwayWindowSource()
+    if name == 'foreign-toplevel':
+        from tests.behavioral.harness.sources.foreign_toplevel import (
+            ForeignToplevelWindowSource,
+        )
+        return ForeignToplevelWindowSource()
     report('window source', 'INFO',
            'no window backend for this compositor — a scenario that reads windows '
            'will not run here (see tests/behavioral/PORTING.md)')

@@ -1,9 +1,10 @@
-"""Shared skeleton for window managers driven by a compositor's JSON IPC CLI.
+"""Shared skeletons for the wlroots window managers.
 
-Sway (``swaymsg``) and Hyprland (``hyprctl``) both expose the window list and the
-control operations over a JSON-speaking CLI, so the polling/cache/emitter
-machinery and the /proc PID expansion live here; each subclass supplies only the
-CLI vocabulary and the window mapping.
+:class:`PollingWindowManager` holds what every backend here needs — the refresh
+cycle, the window cache, the update emitter and the /proc PID expansion — and
+:class:`WlrootsWindowManager` adds the JSON IPC CLI that Sway (``swaymsg``) and
+Hyprland (``hyprctl``) are driven through. Compositors without such a CLI (labwc,
+wayfire) build on the former and speak Wayland instead.
 """
 
 from __future__ import annotations
@@ -27,9 +28,9 @@ logger = logging.getLogger(__name__)
 _CLI_TIMEOUT_S = 2.0
 
 
-class WlrootsWindowManager(QObject, WindowManager, metaclass=ProtocolQtMeta):
-    """Polling window manager over a compositor CLI. Subclasses implement
-    ``_enum_windows`` and the imperative operations in that compositor's IPC."""
+class PollingWindowManager(QObject, WindowManager, metaclass=ProtocolQtMeta):
+    """Window manager built on a periodic re-enumeration. Subclasses implement
+    ``_enum_windows`` and the imperative operations in the compositor's own terms."""
 
     def __init__(self, parent: QObject | None = None) -> None:
         super().__init__(parent)
@@ -106,7 +107,14 @@ class WlrootsWindowManager(QObject, WindowManager, metaclass=ProtocolQtMeta):
         owned = expand_pid_tree(pids)
         return [w for w in self._cache.values() if w.pid in owned]
 
-    # ── CLI helpers ────────────────────────────────────────────────────────
+    # ── subclass contract ──────────────────────────────────────────────────
+
+    def _enum_windows(self) -> list[Window]:
+        raise NotImplementedError
+
+
+class WlrootsWindowManager(PollingWindowManager):
+    """Polling window manager over a compositor's JSON IPC CLI."""
 
     def _run(self, args: list[str]) -> None:
         """Fire-and-forget CLI command; failures degrade to a logged warning."""
@@ -129,8 +137,3 @@ class WlrootsWindowManager(QObject, WindowManager, metaclass=ProtocolQtMeta):
         except (OSError, subprocess.SubprocessError, json.JSONDecodeError) as exc:
             logger.warning("%s query failed: %s", args[0], exc)
             return None
-
-    # ── subclass contract ──────────────────────────────────────────────────
-
-    def _enum_windows(self) -> list[Window]:
-        raise NotImplementedError

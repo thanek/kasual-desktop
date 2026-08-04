@@ -1,5 +1,6 @@
-"""Tests for the non-Plasma wallpaper adapters: the static file fallback and the
-Sway/Hyprland compositor sources (both resolved fresh per Kasual launch)."""
+"""Tests for the non-Plasma wallpaper adapters: the static file fallback, the
+pcmanfm desktop (Raspberry Pi OS) and the Sway/Hyprland compositor sources (all
+resolved fresh per Kasual Desktop launch)."""
 
 import subprocess
 from pathlib import Path
@@ -7,7 +8,7 @@ from unittest.mock import patch
 
 import pytest
 
-from infrastructure.linux.display.wallpaper import StaticFileWallpaper
+from infrastructure.linux.display.wallpaper import PcmanfmWallpaper, StaticFileWallpaper
 from infrastructure.wlroots.display.wallpaper import HyprlandWallpaper, SwayWallpaper
 
 
@@ -137,6 +138,60 @@ class TestSwayWallpaper:
 
     def test_none_when_no_config(self, config_home):
         assert SwayWallpaper().current() is None
+
+
+class TestPcmanfmWallpaper:
+    @pytest.fixture(autouse=True)
+    def isolated_system_config(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("XDG_CONFIG_DIRS", str(tmp_path / "etc"))
+
+    def _write_items(self, config_home, body, profile="LXDE-pi", index=0):
+        items = config_home / "pcmanfm" / profile
+        items.mkdir(parents=True, exist_ok=True)
+        (items / f"desktop-items-{index}.conf").write_text(body, encoding="utf-8")
+
+    def test_reads_the_wallpaper_the_desktop_shows(self, config_home, tmp_path):
+        img = _image(tmp_path, "rpd.jpg")
+        self._write_items(config_home, f"[*]\nwallpaper_mode=crop\nwallpaper={img}\n")
+        assert PcmanfmWallpaper().current().image_path == str(img)
+
+    def test_a_per_compositor_profile_is_found_too(self, config_home, tmp_path):
+        img = _image(tmp_path, "rpd.jpg")
+        self._write_items(config_home, f"[*]\nwallpaper={img}\n",
+                          profile="LXDE-pi-labwc")
+        assert PcmanfmWallpaper().current().image_path == str(img)
+
+    def test_a_system_profile_is_the_next_source(self, config_home, tmp_path):
+        img = _image(tmp_path, "rpd.jpg")
+        system = tmp_path / "etc" / "pcmanfm" / "LXDE-pi"
+        system.mkdir(parents=True)
+        (system / "desktop-items-0.conf").write_text(f"[*]\nwallpaper={img}\n")
+        assert PcmanfmWallpaper().current().image_path == str(img)
+
+    def test_a_plain_colour_desktop_has_no_image(self, config_home, tmp_path):
+        img = _image(tmp_path, "rpd.jpg")
+        self._write_items(
+            config_home, f"[*]\nwallpaper_mode=color\nwallpaper={img}\n")
+        assert PcmanfmWallpaper().current() is None
+
+    def test_a_missing_image_falls_through(self, config_home):
+        self._write_items(config_home, "[*]\nwallpaper=/gone/rpd.jpg\n")
+        assert PcmanfmWallpaper().current() is None
+
+    def test_falls_back_to_the_static_file(self, config_home, tmp_path):
+        img = _image(tmp_path)
+        (config_home / "kasual-desktop").mkdir()
+        (config_home / "kasual-desktop" / "wallpaper").symlink_to(img)
+        assert PcmanfmWallpaper().current().image_path.endswith("wallpaper")
+
+    def test_an_unparsable_config_is_skipped(self, config_home, tmp_path):
+        img = _image(tmp_path, "rpd.jpg")
+        self._write_items(config_home, "not an ini file at all\n", index=0)
+        self._write_items(config_home, f"[*]\nwallpaper={img}\n", index=1)
+        assert PcmanfmWallpaper().current().image_path == str(img)
+
+    def test_none_without_any_pcmanfm_profile(self, config_home):
+        assert PcmanfmWallpaper().current() is None
 
 
 class TestGnomeWallpaper:

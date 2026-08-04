@@ -2,9 +2,9 @@
 
 The extension exports ``org.consoledesktop.GnomeHelper`` and does the work Mutter
 gives us no protocol for: reporting the window list (with PIDs), the window
-operations, and pinning Kasual's own surfaces above a fullscreen app. This module
-is the thin session-bus caller shared by the GNOME window-manager, surface and
-overlay adapters.
+operations, and pinning Kasual Desktop's own surfaces above a fullscreen app. This 
+module is the thin session-bus caller shared by the GNOME window-manager, surface 
+and overlay adapters.
 """
 
 from __future__ import annotations
@@ -49,8 +49,8 @@ def helper_present() -> bool:
 
 
 def app_id() -> str:
-    """Kasual's Wayland app_id — the ``wm_class`` the extension pins by. Set from
-    ``QGuiApplication.setDesktopFileName`` in the composition root."""
+    """Kasual Desktop's Wayland app_id — the ``wm_class`` the extension pins by. 
+    Set from ``QGuiApplication.setDesktopFileName`` in the composition root."""
     return QGuiApplication.desktopFileName() or _DEFAULT_APP_ID
 
 
@@ -78,29 +78,29 @@ def set_surface_role(title: str, layer: int, anchors: int, keyboard: int) -> Non
     Mutter lets no client size or place its own top-levels, offers no layer concept,
     and focuses whatever window it maps — so the layer-shell vocabulary is handed to
     the extension, which applies it compositor-side: anchors become geometry, the
-    layer becomes the stacking order among Kasual's pinned surfaces, and a surface
-    that wants no keyboard is kept off the focus. An extension predating the keyboard
-    argument rejects the call, and keeps the role it always had."""
+    layer becomes the stacking order among Kasual Desktop's pinned surfaces, and a 
+    surface that wants no keyboard is kept off the focus. An extension predating the 
+    keyboard argument rejects the call, and keeps the role it always had."""
     reply = call("SetSurfaceRole", title, int(layer), int(anchors), int(keyboard))
     if not _succeeded(reply):
         call("SetSurfaceRole", title, int(layer), int(anchors))
 
 
 def activate_surface(title: str) -> None:
-    """Focus and raise one of Kasual's own windows, by title."""
+    """Focus and raise one of Kasual Desktop's own windows, by title."""
     call("ActivateSurface", title)
 
 
 def show_overlay() -> None:
-    """Pin Kasual's surfaces above everything (incl. fullscreen) and drop
+    """Pin Kasual Desktop's surfaces above everything (incl. fullscreen) and drop
     Mutter's unredirect so they actually paint over a scanned-out fullscreen app."""
     call("ShowOverlay", app_id())
 
 
 def cede_overlay() -> None:
-    """Yield the screen to the launched app while keeping Kasual's surfaces
-    mapped just below it — so closing the app reveals the Desktop with no remap.
-    The Qt side keeps the window shown."""
+    """Yield the screen to the launched app while keeping Kasual Desktop's 
+    surfaces mapped just below it — so closing the app reveals the Desktop 
+    with no remap. The Qt side keeps the window shown."""
     call("CedeOverlay", app_id())
 
 

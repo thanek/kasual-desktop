@@ -4,10 +4,12 @@ Kasual Desktop is an interactive, graphical "launcher/desktop" interface, design
 
 It runs on two platforms from a single shared core:
 
-- **Linux / Wayland (KDE Plasma 6, Sway, Hyprland, GNOME)** — renders its UI as
-  overlays above applications (including fullscreen games). KDE is the original
-  target; Sway and Hyprland are driven through their native IPC; GNOME is served
-  by a bundled Shell extension. See [Supported compositors](#-supported-compositors).
+- **Linux / Wayland (KDE Plasma 6, Sway, Hyprland, GNOME, labwc, wayfire)** —
+  renders its UI as overlays above applications (including fullscreen games). KDE
+  is the original target; Sway and Hyprland are driven through their native IPC;
+  GNOME is served by a bundled Shell extension; labwc and wayfire (Raspberry Pi
+  OS) through the Wayland protocol their taskbars use. See
+  [Supported compositors](#-supported-compositors).
 - **Windows 10/11** — a newer port that runs the *same* UI as a desktop surface,
   currently a development build run from source.
 
@@ -43,11 +45,12 @@ adapters**:
   cross-platform config, reused on both platforms via a `DesktopSurface` seam.
 - `src/infrastructure/linux/` — DE-independent Linux adapters (audio, network,
   brightness, freedesktop notifications, the generic `wayland/` layer-shell
-  surface, `/proc`, and compositor detection).
+  surface and Wayland protocol client, `/proc`, and compositor detection).
 - `src/infrastructure/kde/` — KDE Plasma adapters (KWin window management, Plasma
   wallpaper).
-- `src/infrastructure/wlroots/` — Sway and Hyprland adapters (window management
-  and wallpaper via each compositor's native IPC).
+- `src/infrastructure/wlroots/` — wlroots adapters: Sway and Hyprland through
+  each compositor's native IPC, labwc and wayfire through
+  `wlr-foreign-toplevel-management`, plus their wallpaper sources.
 - `src/infrastructure/gnome/` — GNOME adapters (window management and overlay
   stacking over D-Bus to the Kasual Helper Shell extension, gsettings wallpaper).
 - `packaging/gnome-extension/` — the Kasual Helper GNOME Shell extension itself.
@@ -86,7 +89,8 @@ DE-independent.
 | **Sway** | Full | `swaymsg` (i3-IPC) | `output … bg` from the Sway config | Minimize is emulated by moving windows to the scratchpad. |
 | **Hyprland** | Full | `hyprctl` | swww, hyprpaper, or HyDE's current-wallpaper file — whichever answers first | Minimize is emulated via a dedicated special workspace. |
 | **GNOME 45+ (Mutter)** | Full | Kasual Helper extension (D-Bus) | `gsettings` background (dark variant and slideshow XML understood) | Requires the [Kasual Helper extension](#gnome-the-kasual-helper-extension); Mutter has no `wlr-layer-shell`. |
-| Other wlroots (e.g. labwc) | Partial | none (no-op) | `<config>/wallpaper` static file | Starts and renders, but window switching is unavailable. |
+| **labwc**, **wayfire** (Raspberry Pi OS) | Untested on hardware | `wlr-foreign-toplevel-management` | pcmanfm's desktop profile, else `<config>/wallpaper` | Neither has an IPC CLI, so Kasual Desktop speaks the protocol itself. See [Raspberry Pi OS](#-raspberry-pi-os). |
+| Other wlroots (e.g. river) | Partial | `wlr-foreign-toplevel-management`, where offered | `<config>/wallpaper` static file | Falls back to no window switching if the compositor does not offer the protocol. |
 
 The four full backends are exercised end-to-end on live sessions by the
 [behavioral suite](tests/behavioral/README.md) — including launching real games
@@ -300,6 +304,52 @@ etc. are *runtime* deps, not required to build).
 
 Publishing a GitHub Release triggers `.github/workflows/release.yml`, which runs
 `make all` on a clean runner and attaches the resulting packages to the release.
+
+## 🍓 Raspberry Pi OS
+
+Raspberry Pi OS draws its desktop on **labwc** (**wayfire** before the 2024
+switch), both of them wlroots compositors — so Kasual Desktop's layer-shell
+surfaces work there as they do on Sway. Neither has an IPC CLI, though, so the
+window list and the switching come from the `wlr-foreign-toplevel-management`
+protocol, which Kasual Desktop speaks over a Wayland connection of its own. That
+is the same protocol the `wf-panel-pi` taskbar is built on.
+
+**Written for the Pi but not yet run on one** — the code is complete and unit
+tested, the hardware pass is still outstanding. Start with the probe, which says
+in one command whether this compositor can be driven at all:
+
+```bash
+python3 tools/spike_foreign_toplevel.py
+```
+
+It prints the compositor's globals and then every window it reports, with the pid
+Kasual Desktop resolves for it.
+
+Install the same Debian packages as any other Debian/Ubuntu host (see
+[Prerequisites](#prerequisites)); all of them are built for arm64:
+
+```bash
+sudo apt install python3-pyqt6 python3-pyqt6.sip python3-pyqt6.qtmultimedia \
+    python3-pyqt6.qtwebengine python3-qtawesome python3-evdev python3-xlib \
+    layer-shell-qt qt6-wayland brightnessctl
+```
+
+What to expect on a Pi:
+
+- **A window's process is a guess.** The protocol names windows (`app_id`) but
+  never says whose process they are, so Kasual Desktop matches the app id against
+  `/proc`. A window it cannot attribute still gets a tile; what it loses is being
+  minimized when you leave the app it belongs to.
+- **The wallpaper comes from the Raspberry Pi desktop** — the `wallpaper=` of
+  pcmanfm's profile — else from `<config>/wallpaper` like anywhere else.
+- **No MangoHud**, so the in-game HUD toggle stays hidden.
+- **QtWebEngine is heavy on a Pi.** The bundled YouTube app runs, but expect a Pi
+  5 for anything comfortable.
+- **The screensaver is not held off.** The Raspberry Pi session runs no
+  `org.freedesktop.ScreenSaver` service, so the inhibition Kasual Desktop takes
+  everywhere else does nothing here.
+- **Older models are out.** Kasual Desktop needs Wayland; a Pi running the X11
+  session is not supported.
 
 ---
 
