@@ -199,6 +199,9 @@ def build_system_wallpaper(compositor: Compositor | None = None) -> SystemWallpa
     if compositor is Compositor.HYPRLAND:
         from infrastructure.wlroots.display.wallpaper import HyprlandWallpaper
         return HyprlandWallpaper()
+    if compositor is Compositor.WAYFIRE:
+        from infrastructure.wlroots.display.wallpaper import WayfireWallpaper
+        return WayfireWallpaper()
     if compositor is Compositor.GNOME:
         from infrastructure.gnome.display.wallpaper import GnomeSystemWallpaper
         return GnomeSystemWallpaper()

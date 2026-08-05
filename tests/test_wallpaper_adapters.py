@@ -1,6 +1,6 @@
 """Tests for the non-Plasma wallpaper adapters: the static file fallback, the
-pcmanfm desktop (Raspberry Pi OS) and the Sway/Hyprland compositor sources (all
-resolved fresh per Kasual Desktop launch)."""
+pcmanfm desktop (Raspberry Pi OS) and the Sway/Hyprland/Wayfire compositor
+sources (all resolved fresh per Kasual Desktop launch)."""
 
 import subprocess
 from pathlib import Path
@@ -9,7 +9,9 @@ from unittest.mock import patch
 import pytest
 
 from infrastructure.linux.display.wallpaper import PcmanfmWallpaper, StaticFileWallpaper
-from infrastructure.wlroots.display.wallpaper import HyprlandWallpaper, SwayWallpaper
+from infrastructure.wlroots.display.wallpaper import (
+    HyprlandWallpaper, SwayWallpaper, WayfireWallpaper,
+)
 
 
 @pytest.fixture
@@ -138,6 +140,78 @@ class TestSwayWallpaper:
 
     def test_none_when_no_config(self, config_home):
         assert SwayWallpaper().current() is None
+
+
+# ── WayfireWallpaper ─────────────────────────────────────────────────────────
+
+class TestWayfireWallpaper:
+    @pytest.fixture(autouse=True)
+    def _isolate_session(self, config_home, tmp_path, monkeypatch):
+        # Neither the host's own wf-shell defaults nor the wf-background image
+        # shipped with Wayfire may leak into the resolution under test.
+        monkeypatch.setenv("XDG_CONFIG_DIRS", str(tmp_path / "etc"))
+        monkeypatch.setattr(
+            WayfireWallpaper, "_configs",
+            lambda self: [config_home / "wf-shell.ini", tmp_path / "defaults.ini"],
+        )
+        monkeypatch.setattr(
+            "infrastructure.wlroots.display.wallpaper._WF_BACKGROUND_DEFAULT_IMAGE",
+            str(tmp_path / "stock.jpg"),
+        )
+
+    def _write_config(self, config_home, body):
+        (config_home / "wf-shell.ini").write_text(body, encoding="utf-8")
+
+    def _write_pcmanfm(self, config_home, image):
+        items = config_home / "pcmanfm" / "LXDE-pi-wayfire"
+        items.mkdir(parents=True)
+        (items / "desktop-items-0.conf").write_text(f"[*]\nwallpaper={image}\n")
+
+    def test_reads_the_wf_background_image(self, config_home, tmp_path):
+        img = _image(tmp_path)
+        self._write_config(config_home, f"[background]\nimage = {img}\n")
+        assert WayfireWallpaper().current().image_path == str(img)
+
+    def test_expands_home(self, config_home, tmp_path, monkeypatch):
+        img = _image(tmp_path)
+        monkeypatch.setenv("HOME", str(tmp_path))
+        self._write_config(config_home, f"[background]\nimage = ~/{img.name}\n")
+        assert WayfireWallpaper().current().image_path == str(img)
+
+    def test_the_system_defaults_are_the_next_config(self, config_home, tmp_path):
+        img = _image(tmp_path)
+        self._write_config(config_home, "[panel]\nautohide = 1\n")
+        (tmp_path / "defaults.ini").write_text(f"[background]\nimage = {img}\n")
+        assert WayfireWallpaper().current().image_path == str(img)
+
+    def test_an_unconfigured_session_shows_what_wf_background_shows(self, tmp_path):
+        stock = _image(tmp_path, "stock.jpg")
+        assert WayfireWallpaper().current().image_path == str(stock)
+
+    def test_a_directory_resolves_to_its_first_image(self, config_home, tmp_path):
+        gallery = tmp_path / "gallery"
+        gallery.mkdir()
+        (gallery / "README.md").write_text("not an image")
+        _image(gallery, "b.png")
+        first = _image(gallery, "a.png")
+        self._write_config(config_home, f"[background]\nimage = {gallery}\n")
+        assert WayfireWallpaper().current().image_path == str(first)
+
+    def test_pcmanfm_wins_over_the_stock_image(self, config_home, tmp_path):
+        _image(tmp_path, "stock.jpg")
+        chosen = _image(tmp_path, "rpd.jpg")
+        self._write_pcmanfm(config_home, chosen)
+        assert WayfireWallpaper().current().image_path == str(chosen)
+
+    def test_falls_back_to_the_static_file(self, config_home, tmp_path):
+        img = _image(tmp_path)
+        (config_home / "kasual-desktop").mkdir()
+        (config_home / "kasual-desktop" / "wallpaper").symlink_to(img)
+        assert WayfireWallpaper().current().image_path.endswith("wallpaper")
+
+    def test_none_when_nothing_names_a_readable_image(self, config_home):
+        self._write_config(config_home, "[background]\nimage = /gone/wall.png\n")
+        assert WayfireWallpaper().current() is None
 
 
 class TestPcmanfmWallpaper:

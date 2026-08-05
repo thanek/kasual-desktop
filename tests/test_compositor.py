@@ -185,6 +185,11 @@ class TestFactories:
         from infrastructure.wlroots.display.wallpaper import HyprlandWallpaper
         assert isinstance(build_system_wallpaper(), HyprlandWallpaper)
 
+    def test_wallpaper_is_wayfire_adapter(self, clean_env):
+        clean_env.setenv("XDG_CURRENT_DESKTOP", "Wayfire:wlroots")
+        from infrastructure.wlroots.display.wallpaper import WayfireWallpaper
+        assert isinstance(build_system_wallpaper(), WayfireWallpaper)
+
     def test_wallpaper_is_gnome_adapter(self, clean_env):
         clean_env.setenv("XDG_CURRENT_DESKTOP", "GNOME")
         from infrastructure.gnome.display.wallpaper import GnomeSystemWallpaper

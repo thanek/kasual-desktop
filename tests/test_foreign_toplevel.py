@@ -61,7 +61,8 @@ def client(compositor, qapp):
 @pytest.fixture
 def manager(client, compositor):
     changes = []
-    proxy = ForeignToplevelManager(client, lambda: changes.append(True))
+    proxy = ForeignToplevelManager(client)
+    proxy.observe(lambda: changes.append(True))
     proxy.changes = changes
     return proxy
 

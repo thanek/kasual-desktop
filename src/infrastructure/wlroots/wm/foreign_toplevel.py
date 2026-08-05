@@ -34,7 +34,8 @@ class ForeignToplevelWindowManager(PollingWindowManager):
         super().__init__(parent)
         self._client = client
         self._pids = pid_resolver or AppIdPidResolver()
-        self._toplevels = ForeignToplevelManager(client, self._request_list_refresh)
+        self._toplevels = ForeignToplevelManager(client)
+        self._toplevels.observe(self._request_list_refresh)
         client.start(on_disconnect=self._on_disconnect)
 
     def _enum_windows(self) -> list[Window]:

@@ -69,20 +69,11 @@ def _with_states(info: ToplevelInfo, states: list[int]) -> ToplevelInfo:
 
 
 class ForeignToplevelManager:
-    """Live view of the compositor's toplevels, and the requests that act on them.
+    """Live view of the compositor's toplevels, and the requests that act on them."""
 
-    *on_changed* fires once per committed change (a handle appeared, updated or
-    closed), never mid-update: the compositor sends title, app_id and state as
-    separate events and only ``done`` means they belong together.
-    """
-
-    def __init__(
-        self,
-        client: WaylandClient,
-        on_changed: Callable[[], None] | None = None,
-    ) -> None:
+    def __init__(self, client: WaylandClient) -> None:
         self._client = client
-        self._on_changed = on_changed
+        self._on_changed: Callable[[], None] | None = None
         self._pending: dict[int, ToplevelInfo] = {}
         self._committed: dict[int, ToplevelInfo] = {}
         self._seat = (
@@ -96,6 +87,14 @@ class ForeignToplevelManager:
     @staticmethod
     def available(client: WaylandClient) -> bool:
         return client.has_global(MANAGER_INTERFACE)
+
+    def observe(self, on_changed: Callable[[], None]) -> None:
+        """Call *on_changed* once per committed change from here on — a handle
+        appeared, updated or closed. Never mid-update: title, app_id and state
+        arrive as separate events and only ``done`` means they belong together.
+        The toplevels open before this call are already in :meth:`snapshot`.
+        """
+        self._on_changed = on_changed
 
     def snapshot(self) -> list[ToplevelInfo]:
         """Every mapped toplevel, in the order the compositor announced them."""

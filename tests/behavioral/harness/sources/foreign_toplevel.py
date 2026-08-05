@@ -38,7 +38,8 @@ class ForeignToplevelWindowSource(QObject, EventLog):
             raise RuntimeError(
                 'this compositor does not offer wlr-foreign-toplevel-management — '
                 'the harness cannot read its windows')
-        self._toplevels = ForeignToplevelManager(self._client, self._on_change)
+        self._toplevels = ForeignToplevelManager(self._client)
+        self._toplevels.observe(self._on_change)
         self._client.start()
         self._snapshot('init')
 

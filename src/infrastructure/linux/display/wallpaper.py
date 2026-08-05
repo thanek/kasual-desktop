@@ -32,41 +32,51 @@ class StaticFileWallpaper(SystemWallpaper):
         return Wallpaper(image_path=str(path))
 
 
-class PcmanfmWallpaper(SystemWallpaper):
-    """The pcmanfm desktop's wallpaper, else the static file.
+def pcmanfm_image() -> str | None:
+    """The image the pcmanfm desktop draws, or None where it draws none.
 
     Profiles are globbed rather than named: Raspberry Pi OS ships ``LXDE-pi`` and
     a per-compositor variant of it, and each monitor gets its own
     ``desktop-items-<n>.conf`` — the first that names a readable image wins.
     """
+    for config in _pcmanfm_configs():
+        path = _image_in(config)
+        if path:
+            return path
+    return None
+
+
+def _pcmanfm_configs() -> list[Path]:
+    user_config = os.environ.get("XDG_CONFIG_HOME") or str(Path.home() / ".config")
+    system_config = os.environ.get("XDG_CONFIG_DIRS") or "/etc/xdg"
+    directories = [user_config, *system_config.split(":")]
+    return [config
+            for directory in directories if directory
+            for config in sorted(Path(directory).glob(_PCMANFM_ITEMS))]
+
+
+def _image_in(config: Path) -> str | None:
+    parser = configparser.ConfigParser(interpolation=None)
+    try:
+        parser.read(config, encoding="utf-8")
+    except (OSError, configparser.Error) as exc:
+        logger.debug("Unreadable pcmanfm config %s: %s", config, exc)
+        return None
+    for section in parser.sections():
+        if parser.get(section, "wallpaper_mode", fallback="") == "color":
+            continue
+        path = os.path.expanduser(parser.get(section, "wallpaper", fallback=""))
+        if path and os.path.isfile(path):
+            return path
+    return None
+
+
+class PcmanfmWallpaper(SystemWallpaper):
+    """The pcmanfm desktop's wallpaper, else the static file."""
 
     def current(self) -> Wallpaper | None:
-        for config in self._configs():
-            path = self._wallpaper_in(config)
-            if path:
-                logger.info("pcmanfm wallpaper: %s", path)
-                return Wallpaper(image_path=path)
+        path = pcmanfm_image()
+        if path:
+            logger.info("pcmanfm wallpaper: %s", path)
+            return Wallpaper(image_path=path)
         return StaticFileWallpaper().current()
-
-    def _configs(self) -> list[Path]:
-        user_config = os.environ.get("XDG_CONFIG_HOME") or str(Path.home() / ".config")
-        system_config = os.environ.get("XDG_CONFIG_DIRS") or "/etc/xdg"
-        directories = [user_config, *system_config.split(":")]
-        return [config
-                for directory in directories if directory
-                for config in sorted(Path(directory).glob(_PCMANFM_ITEMS))]
-
-    def _wallpaper_in(self, config: Path) -> str | None:
-        parser = configparser.ConfigParser(interpolation=None)
-        try:
-            parser.read(config, encoding="utf-8")
-        except (OSError, configparser.Error) as exc:
-            logger.debug("Unreadable pcmanfm config %s: %s", config, exc)
-            return None
-        for section in parser.sections():
-            if parser.get(section, "wallpaper_mode", fallback="") == "color":
-                continue
-            path = os.path.expanduser(parser.get(section, "wallpaper", fallback=""))
-            if path and os.path.isfile(path):
-                return path
-        return None
