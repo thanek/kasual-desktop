@@ -267,6 +267,26 @@ class TestPcmanfmWallpaper:
     def test_none_without_any_pcmanfm_profile(self, config_home):
         assert PcmanfmWallpaper().current() is None
 
+    def _write_settings(self, config_home, body, profile="lxqt"):
+        profile_dir = config_home / "pcmanfm-qt" / profile
+        profile_dir.mkdir(parents=True, exist_ok=True)
+        (profile_dir / "settings.conf").write_text(body, encoding="utf-8")
+
+    def test_reads_the_wallpaper_the_lxqt_desktop_shows(self, config_home, tmp_path):
+        img = _image(tmp_path, "lxqt.jpg")
+        self._write_settings(
+            config_home,
+            f"[Desktop]\nWallpaperMode=stretch\nWallpaper={img}\n"
+            "WallpaperDirectory=\n",
+        )
+        assert PcmanfmWallpaper().current().image_path == str(img)
+
+    def test_a_plain_colour_lxqt_desktop_has_no_image(self, config_home, tmp_path):
+        img = _image(tmp_path, "lxqt.jpg")
+        self._write_settings(
+            config_home, f"[Desktop]\nWallpaperMode=color\nWallpaper={img}\n")
+        assert PcmanfmWallpaper().current() is None
+
 
 class TestGnomeWallpaper:
     def _wallpaper(self, monkeypatch, uri):

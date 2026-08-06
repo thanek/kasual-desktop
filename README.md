@@ -90,7 +90,8 @@ DE-independent.
 | **Hyprland** | Full | `hyprctl` | swww, hyprpaper, or HyDE's current-wallpaper file — whichever answers first | Minimize is emulated via a dedicated special workspace. |
 | **GNOME 45+ (Mutter)** | Full | Kasual Helper extension (D-Bus) | `gsettings` background (dark variant and slideshow XML understood) | Requires the [Kasual Helper extension](#gnome-the-kasual-helper-extension); Mutter has no `wlr-layer-shell`. |
 | **labwc**, **wayfire** (Raspberry Pi OS) | Untested on hardware | `wlr-foreign-toplevel-management` | pcmanfm's desktop profile, else `<config>/wallpaper` | Neither has an IPC CLI, so Kasual Desktop speaks the protocol itself. See [Raspberry Pi OS](#-raspberry-pi-os). |
-| Other wlroots (e.g. river) | Partial | `wlr-foreign-toplevel-management`, where offered | `<config>/wallpaper` static file | Falls back to no window switching if the compositor does not offer the protocol. |
+| **LXQt** | Partial | `wlr-foreign-toplevel-management`, where the session's compositor offers it | pcmanfm-qt's desktop profile, else `<config>/wallpaper` | Tested on LXQt Wayland (Miriway). |
+| Other wlroots (e.g. river) | Partial | `wlr-foreign-toplevel-management`, where offered | pcmanfm/pcmanfm-qt's desktop profile, else `<config>/wallpaper` static file | Falls back to no window switching if the compositor does not offer the protocol. |
 
 The four full backends are exercised end-to-end on live sessions by the
 [behavioral suite](tests/behavioral/README.md) — including launching real games
