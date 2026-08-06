@@ -371,32 +371,32 @@
         <translation>Minimalizuj Kasual Desktop</translation>
     </message>
     <message>
-        <location filename="../src/domain/system/hud.py" line="31" />
+        <location filename="../src/domain/system/hud.py" line="46" />
         <source>Disable HUD</source>
         <translation>Wyłącz HUD</translation>
     </message>
     <message>
-        <location filename="../src/domain/system/hud.py" line="32" />
+        <location filename="../src/domain/system/hud.py" line="47" />
         <source>Enable HUD</source>
         <translation>Włącz HUD</translation>
     </message>
     <message>
-        <location filename="../src/infrastructure/common/qt/overlays/home_header.py" line="357" />
+        <location filename="../src/infrastructure/common/qt/overlays/home_header.py" line="366" />
         <source>Power</source>
         <translation>Zasilanie</translation>
     </message>
     <message>
-        <location filename="../src/infrastructure/common/qt/overlays/notifications_overlay.py" line="149" />
+        <location filename="../src/infrastructure/common/qt/overlays/notifications_overlay.py" line="147" />
         <source>Recent notifications</source>
         <translation>Ostatnie powiadomienia</translation>
     </message>
     <message>
-        <location filename="../src/infrastructure/common/qt/overlays/notifications_overlay.py" line="168" />
+        <location filename="../src/infrastructure/common/qt/overlays/notifications_overlay.py" line="166" />
         <source>No notifications</source>
         <translation>Brak powiadomień</translation>
     </message>
     <message>
-        <location filename="../src/infrastructure/common/qt/overlays/preflight_overlay.py" line="136" />
+        <location filename="../src/infrastructure/common/qt/overlays/preflight_overlay.py" line="145" />
         <source>Kasual Desktop needs its GNOME Shell helper extension to manage windows.
 
 Enable it now?</source>
@@ -405,65 +405,80 @@ Enable it now?</source>
 Włączyć je teraz?</translation>
     </message>
     <message>
-        <location filename="../src/infrastructure/common/qt/overlays/preflight_overlay.py" line="141" />
+        <location filename="../src/infrastructure/common/qt/overlays/preflight_overlay.py" line="150" />
         <source>Enable</source>
         <translation>Włącz</translation>
     </message>
     <message>
-        <location filename="../src/infrastructure/common/qt/overlays/preflight_overlay.py" line="142" />
+        <location filename="../src/infrastructure/common/qt/overlays/preflight_overlay.py" line="151" />
         <source>Not now</source>
         <translation>Nie teraz</translation>
     </message>
     <message>
-        <location filename="../src/infrastructure/common/qt/overlays/preflight_overlay.py" line="154" />
+        <location filename="../src/infrastructure/common/qt/overlays/preflight_overlay.py" line="163" />
         <source>The Kasual Helper GNOME Shell extension isn't installed. Install the Kasual Desktop package, then enable it with:</source>
         <translation>Rozszerzenie GNOME Shell „Kasual Helper” nie jest zainstalowane. Zainstaluj pakiet Kasual Desktop, a następnie włącz je poleceniem:</translation>
     </message>
     <message>
-        <location filename="../src/infrastructure/common/qt/overlays/preflight_overlay.py" line="160" />
+        <location filename="../src/infrastructure/common/qt/overlays/preflight_overlay.py" line="169" />
         <source>The Kasual Helper GNOME Shell extension is installed, but this GNOME session started before it and cannot load it. Log out and back in, then enable it with:</source>
         <translation>Rozszerzenie GNOME Shell „Kasual Helper” jest zainstalowane, ale ta sesja GNOME wystartowała wcześniej i nie może go wczytać. Wyloguj się i zaloguj ponownie, a następnie włącz je poleceniem:</translation>
     </message>
     <message>
-        <location filename="../src/infrastructure/common/qt/overlays/preflight_overlay.py" line="167" />
+        <location filename="../src/infrastructure/common/qt/overlays/preflight_overlay.py" line="176" />
         <source>Kasual Desktop couldn't enable its GNOME Shell helper extension. Enable it manually with:</source>
         <translation>Kasual Desktop nie mógł włączyć swojego rozszerzenia GNOME Shell. Włącz je ręcznie poleceniem:</translation>
     </message>
     <message>
-        <location filename="../src/infrastructure/common/qt/overlays/preflight_overlay.py" line="172" />
-        <source>then retry.</source>
-        <translation>a następnie spróbuj ponownie.</translation>
-    </message>
-    <message>
-        <location filename="../src/infrastructure/common/qt/overlays/preflight_overlay.py" line="175" />
+        <location filename="../src/infrastructure/common/qt/overlays/preflight_overlay.py" line="183" />
         <source>Log out</source>
         <translation>Wyloguj</translation>
     </message>
     <message>
-        <location filename="../src/infrastructure/common/qt/overlays/preflight_overlay.py" line="176" />
+        <location filename="../src/infrastructure/common/qt/overlays/preflight_overlay.py" line="185" />
+        <source>then retry.</source>
+        <translation>a następnie spróbuj ponownie.</translation>
+    </message>
+    <message>
+        <location filename="../src/infrastructure/common/qt/overlays/preflight_overlay.py" line="186" />
         <source>Retry</source>
         <translation>Ponów</translation>
     </message>
     <message>
-        <location filename="../src/infrastructure/common/qt/ui/tray.py" line="42" />
-        <location filename="../src/infrastructure/common/qt/overlays/preflight_overlay.py" line="177" />
+        <location filename="../src/infrastructure/common/qt/ui/tray.py" line="43" />
+        <location filename="../src/infrastructure/common/qt/overlays/preflight_overlay.py" line="187" />
         <source>Quit</source>
         <translation>Zamknij</translation>
     </message>
     <message>
-        <location filename="../src/infrastructure/common/qt/ui/tray.py" line="35" />
+        <location filename="../src/infrastructure/common/qt/ui/tray.py" line="36" />
         <source>Show Desktop</source>
         <translation>Pokaż pulpit</translation>
     </message>
     <message>
-        <location filename="../src/infrastructure/common/qt/ui/tray.py" line="37" />
+        <location filename="../src/infrastructure/common/qt/ui/tray.py" line="38" />
         <source>Logs</source>
         <translation>Logi</translation>
     </message>
     <message>
-        <location filename="../src/infrastructure/common/qt/ui/tray.py" line="39" />
+        <location filename="../src/infrastructure/common/qt/ui/tray.py" line="40" />
         <source>About…</source>
         <translation>O programie…</translation>
+    </message>
+    <message>
+        <location filename="../src/infrastructure/common/single_instance.py" line="62" />
+        <source>Another instance is already running in the background (PID {0}).</source>
+        <translation>Inna instancja działa już w tle (PID {0}).</translation>
+    </message>
+    <message>
+        <location filename="../src/infrastructure/common/single_instance.py" line="64" />
+        <source>Another instance is already running in the background.</source>
+        <translation>Inna instancja działa już w tle.</translation>
+    </message>
+    <message>
+        <location filename="../src/infrastructure/common/single_instance.py" line="67" />
+        <source>Kasual Desktop did not start</source>
+        <translation>Kasual Desktop nie został uruchomiony</translation>
     </message>
 </context><context>
     <name>LogViewer</name>
@@ -480,12 +495,12 @@ Włączyć je teraz?</translation>
 </context><context>
     <name>OnboardingOverlay</name>
     <message>
-        <location filename="../src/infrastructure/common/qt/overlays/onboarding_overlay.py" line="101" />
+        <location filename="../src/infrastructure/common/qt/overlays/onboarding_overlay.py" line="100" />
         <source>Welcome — pick your apps</source>
         <translation>Witaj - wybierz aplikacje, z którymi wystartujesz</translation>
     </message>
     <message>
-        <location filename="../src/infrastructure/common/qt/overlays/onboarding_overlay.py" line="129" />
+        <location filename="../src/infrastructure/common/qt/overlays/onboarding_overlay.py" line="128" />
         <source>Confirm</source>
         <translation>Potwierdź</translation>
     </message>

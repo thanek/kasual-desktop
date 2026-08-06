@@ -57,6 +57,7 @@ from infrastructure.common.qt.scheduler import QtScheduler
 from infrastructure.linux.hud.mangohud import MangoHudControl
 from domain.system.hud import hud_launch_env
 from infrastructure.linux.notifications.notifications import FreedesktopNotificationMonitor
+from infrastructure.linux.notifications.notifier import FreedesktopNotifier
 from infrastructure.linux.network.network_manager import NMNetworkControl, NMNetworkMonitor
 from domain.notifications.center import NotificationCenter
 from infrastructure.common.catalog.preferences import DesktopPowerPreference
@@ -109,7 +110,11 @@ def main() -> None:
 
     CursorAutoHide(app)
 
-    guard = SingleInstanceGuard(log_file.parent)
+    # Before the single-instance check — its notification is a second instance's
+    # only visible string.
+    install_translations(app, str(Path(__file__).parent.parent / "locale"))
+
+    guard = SingleInstanceGuard(log_file.parent, FreedesktopNotifier())
     if not guard.try_lock():
         sys.exit(0)
     app.aboutToQuit.connect(guard.release)
@@ -117,8 +122,6 @@ def main() -> None:
     # Use the bundled genuine Font Awesome 5 fonts, not the distro's Fork Awesome
     # substitute (see icons.install_fontawesome5). Before any icon is built.
     install_fontawesome5()
-
-    install_translations(app, str(Path(__file__).parent.parent / "locale"))
 
     gamepad = GamepadWatcher()
     screensaver_waker = build_screensaver_waker(COMPOSITOR)
