@@ -5,7 +5,9 @@ import json
 import pytest
 
 from domain.system.actions import SLEEP, RESTART, SHUTDOWN
-from infrastructure.common.catalog.preferences import DesktopPowerPreference
+from infrastructure.common.catalog.preferences import (
+    DesktopBackgroundHintMemory, DesktopPowerPreference,
+)
 
 
 @pytest.fixture
@@ -55,3 +57,18 @@ class TestSetDefault:
         DesktopPowerPreference().set_default(RESTART)
         data = json.loads((cfg / "preferences.json").read_text())
         assert data == {"other": 1, "power_default": RESTART}
+
+
+class TestBackgroundHintMemory:
+    def test_unshown_until_marked(self, cfg):
+        assert DesktopBackgroundHintMemory().was_ever_shown() is False
+
+    def test_the_mark_outlives_the_process(self, cfg):
+        DesktopBackgroundHintMemory().mark_shown()
+        assert DesktopBackgroundHintMemory().was_ever_shown() is True
+
+    def test_shares_the_file_with_the_power_default(self, cfg):
+        DesktopPowerPreference().set_default(RESTART)
+        DesktopBackgroundHintMemory().mark_shown()
+        data = json.loads((cfg / "preferences.json").read_text())
+        assert data == {"power_default": RESTART, "background_hint_shown": True}

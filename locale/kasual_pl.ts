@@ -321,6 +321,16 @@
         <translation>{0} godz. temu</translation>
     </message>
     <message>
+        <location filename="../src/domain/shell/background_hint.py" line="56" />
+        <source>Kasual Desktop is running in the background</source>
+        <translation>Kasual Desktop działa w tle</translation>
+    </message>
+    <message>
+        <location filename="../src/domain/shell/background_hint.py" line="57" />
+        <source>The full desktop appears when you turn on a gamepad or use the system tray icon</source>
+        <translation>Zobaczysz pełny pulpit, gdy włączysz pada albo użyjesz ikony w zasobniku systemowym</translation>
+    </message>
+    <message>
         <location filename="../src/domain/system/actions.py" line="55" />
         <source>Volume</source>
         <translation>Głośność</translation>
@@ -466,19 +476,23 @@ Włączyć je teraz?</translation>
         <translation>O programie…</translation>
     </message>
     <message>
-        <location filename="../src/infrastructure/common/single_instance.py" line="62" />
+        <location filename="../src/infrastructure/common/single_instance.py" line="59" />
         <source>Another instance is already running in the background (PID {0}).</source>
         <translation>Inna instancja działa już w tle (PID {0}).</translation>
     </message>
     <message>
-        <location filename="../src/infrastructure/common/single_instance.py" line="64" />
+        <location filename="../src/infrastructure/common/single_instance.py" line="61" />
         <source>Another instance is already running in the background.</source>
         <translation>Inna instancja działa już w tle.</translation>
     </message>
     <message>
-        <location filename="../src/infrastructure/common/single_instance.py" line="67" />
+        <location filename="../src/infrastructure/common/single_instance.py" line="64" />
         <source>Kasual Desktop did not start</source>
         <translation>Kasual Desktop nie został uruchomiony</translation>
+    </message>
+    <message>
+        <source>Connect a gamepad, or open it from the tray icon.</source>
+        <translation type="vanished">Podłącz pada albo otwórz go ikoną w zasobniku.</translation>
     </message>
 </context><context>
     <name>LogViewer</name>

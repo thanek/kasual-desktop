@@ -60,7 +60,11 @@ from infrastructure.linux.notifications.notifications import FreedesktopNotifica
 from infrastructure.linux.notifications.notifier import FreedesktopNotifier
 from infrastructure.linux.network.network_manager import NMNetworkControl, NMNetworkMonitor
 from domain.notifications.center import NotificationCenter
-from infrastructure.common.catalog.preferences import DesktopPowerPreference
+from infrastructure.common.catalog.preferences import (
+    DesktopBackgroundHintMemory, DesktopPowerPreference,
+)
+from domain.shell.background_hint import BackgroundHint
+from domain.shell.desktop_control import DesktopControl
 from infrastructure.common.qt.i18n import install_translations
 
 logger = logging.getLogger(__name__)
@@ -142,7 +146,7 @@ def main() -> None:
     # persists the chosen ones through the same store as onboarding.
     app_adder = AppAdder(XdgInstalledApps(), provisioning)
 
-    def start_session() -> None:
+    def start_session() -> DesktopControl:
         """Bring up the Desktop and controller from the (now-provisioned) apps.
 
         Deferred behind onboarding via a callback continuation rather than a
@@ -242,10 +246,21 @@ def main() -> None:
         defer_start(app, notification_monitor)
         app.aboutToQuit.connect(controller.shutdown)
         app.aboutToQuit.connect(log_viewer.close)
+        return desktop
+
+    def start_session_then_offer_background_hint() -> None:
+        desktop = start_session()
+        BackgroundHint(
+            notifier=FreedesktopNotifier(),
+            memory=DesktopBackgroundHintMemory(),
+            desktop=desktop,
+            scheduler=QtScheduler(),
+        ).offer()
 
     def start() -> None:
         run_onboarding_or_start(
-            provisioning, provisioning_uc, gamepad, feedback, start_session)
+            provisioning, provisioning_uc, gamepad, feedback,
+            start_session_then_offer_background_hint)
 
     _preflight_gate(app, gamepad, feedback, start)
 

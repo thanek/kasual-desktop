@@ -5,6 +5,4 @@ from typing import Protocol
 
 
 class DesktopNotifier(Protocol):
-    """Shows a notification through whatever the desktop uses for them."""
-
     def notify(self, summary: str, body: str = "") -> None: ...

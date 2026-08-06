@@ -10,6 +10,7 @@ import json
 import logging
 from pathlib import Path
 
+from domain.shell.background_hint import BackgroundHintMemory
 from domain.system.actions import POWER_ACTIONS, SLEEP
 from domain.system.power_preference import PowerPreference
 
@@ -18,6 +19,7 @@ from infrastructure.common.catalog.app_config import config_root
 logger = logging.getLogger(__name__)
 
 _POWER_DEFAULT_KEY = "power_default"
+_BACKGROUND_HINT_KEY = "background_hint_shown"
 
 
 def _preferences_file() -> Path:
@@ -55,4 +57,14 @@ class DesktopPowerPreference(PowerPreference):
             return
         data = _read()
         data[_POWER_DEFAULT_KEY] = action_key
+        _write(data)
+
+
+class DesktopBackgroundHintMemory(BackgroundHintMemory):
+    def was_ever_shown(self) -> bool:
+        return bool(_read().get(_BACKGROUND_HINT_KEY))
+
+    def mark_shown(self) -> None:
+        data = _read()
+        data[_BACKGROUND_HINT_KEY] = True
         _write(data)
