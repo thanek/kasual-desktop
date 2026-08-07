@@ -60,6 +60,24 @@ def tile(tile_id: str, description: str | None = None) -> Requirement:
     )
 
 
+def tiles(at_least: int) -> Requirement:
+    def kd_has_enough_tiles(kd: KDClient | None) -> bool:
+        if kd is None:
+            return False
+        try:
+            return len(kd.snapshot()['tiles']) >= at_least
+        except KasualDesktopUnavailable:
+            return False
+
+    return Requirement(
+        f'Kasual Desktop has at least {at_least} tiles, so the cursor has somewhere '
+        f'to move',
+        kd_has_enough_tiles,
+        needs_kd=True,
+        remedy=f'add tiles until there are {at_least}, and run again',
+    )
+
+
 def manual(description: str) -> Requirement:
     """Something only the operator can confirm. Stated and printed, never verified."""
     return Requirement(description)
