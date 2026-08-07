@@ -151,7 +151,7 @@ class GnomeWindowManager(QObject, WindowManager, metaclass=ProtocolQtMeta):
         self._activate(pids, windows, retries)
 
     def raise_self(self) -> None:
-        # The extension keeps Kasual's surfaces pinned above; nothing to raise.
+        # The extension keeps Kasual Desktop's surfaces pinned above; nothing to raise.
         pass
 
     def raise_windows_for_pid_exact(self, pid: int) -> None:

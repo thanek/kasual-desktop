@@ -1,10 +1,11 @@
 """Compositor detection and the backend seam that picks DE-specific adapters.
 
-Kasual's only hard desktop-environment dependencies are window management and
-the wallpaper source. The rest of the stack talks to ports, so a single
+Kasual Desktop's only hard desktop-environment dependencies are window management 
+and the wallpaper source. The rest of the stack talks to ports, so a single
 detection here decides which concrete adapters the composition root wires up.
-An unrecognised compositor degrades to no-op window management rather than
-crashing, so the app still starts (e.g. on labwc) with reduced functionality.
+A compositor that offers neither an IPC CLI nor a toplevel-management protocol
+degrades to no-op window management rather than crashing, so the app still starts
+with reduced functionality.
 """
 
 import enum
@@ -31,7 +32,14 @@ class Compositor(enum.Enum):
     GNOME = "gnome"
     SWAY = "sway"
     HYPRLAND = "hyprland"
+    LABWC = "labwc"
+    WAYFIRE = "wayfire"
     UNKNOWN = "unknown"
+
+
+WLROOTS = frozenset({
+    Compositor.SWAY, Compositor.HYPRLAND, Compositor.LABWC, Compositor.WAYFIRE,
+})
 
 
 def _is_socket(path: str) -> bool:
@@ -58,6 +66,15 @@ def _in_hyprland_session() -> bool:
     )
 
 
+def _session_names() -> str:
+    """The session's own names, lowercased. Raspberry Pi OS reports its compositor
+    only inside a composite name (``LXDE-pi-labwc``), so these are matched loosely."""
+    return ":".join((
+        os.environ.get("XDG_CURRENT_DESKTOP", ""),
+        os.environ.get("XDG_SESSION_DESKTOP", ""),
+    )).lower()
+
+
 def detect_compositor() -> Compositor:
     """Identify the running Wayland compositor from session env vars.
 
@@ -74,11 +91,15 @@ def detect_compositor() -> Compositor:
         return Compositor.SWAY
     if _in_hyprland_session():
         return Compositor.HYPRLAND
-    desktop = os.environ.get("XDG_CURRENT_DESKTOP", "").lower()
+    desktop = _session_names()
     if os.environ.get("KDE_FULL_SESSION") or "kde" in desktop:
         return Compositor.KDE
     if "gnome" in desktop:
         return Compositor.GNOME
+    if "labwc" in desktop:
+        return Compositor.LABWC
+    if "wayfire" in desktop:
+        return Compositor.WAYFIRE
     return Compositor.UNKNOWN
 
 
@@ -155,6 +176,10 @@ def build_window_manager(compositor: Compositor | None = None) -> WindowManager:
         logger.warning(
             "GNOME session without the Kasual Helper extension; window switching disabled")
         return NullWindowManager()
+    from infrastructure.wlroots.wm import foreign_toplevel
+    window_manager = foreign_toplevel.build()
+    if window_manager is not None:
+        return window_manager
     logger.warning(
         "No window-manager backend for compositor %s; window switching disabled",
         compositor.value,
@@ -174,11 +199,14 @@ def build_system_wallpaper(compositor: Compositor | None = None) -> SystemWallpa
     if compositor is Compositor.HYPRLAND:
         from infrastructure.wlroots.display.wallpaper import HyprlandWallpaper
         return HyprlandWallpaper()
+    if compositor is Compositor.WAYFIRE:
+        from infrastructure.wlroots.display.wallpaper import WayfireWallpaper
+        return WayfireWallpaper()
     if compositor is Compositor.GNOME:
         from infrastructure.gnome.display.wallpaper import GnomeSystemWallpaper
         return GnomeSystemWallpaper()
-    from infrastructure.linux.display.wallpaper import StaticFileWallpaper
-    return StaticFileWallpaper()
+    from infrastructure.linux.display.wallpaper import PcmanfmWallpaper
+    return PcmanfmWallpaper()
 
 
 def build_screensaver_waker(compositor: Compositor | None = None) -> "ScreenSaverWaker":
@@ -199,7 +227,7 @@ def build_screensaver_waker(compositor: Compositor | None = None) -> "ScreenSave
 def build_desktop_surface(compositor: Compositor | None = None) -> "DesktopSurface":
     """Construct the DesktopSurface adapter for *compositor* (detected if omitted).
 
-    Layer-shell compositors (KWin, Sway, Hyprland) promote the Desktop to a
+    Layer-shell compositors (KWin and every wlroots one) promote the Desktop to a
     wlr-layer-shell surface; GNOME (no layer-shell) uses a frameless window that
     the Kasual Helper extension pins above the foreground app.
     """
@@ -212,6 +240,4 @@ def build_desktop_surface(compositor: Compositor | None = None) -> "DesktopSurfa
     from infrastructure.linux.wayland.surface import LayerShellSurface
     # wlroots keeps layer-shell TOP above every window, so there the Desktop
     # cedes by dropping to the BOTTOM layer; KWin lets a fullscreen app cover TOP.
-    return LayerShellSurface(
-        cede_to_bottom=compositor in (Compositor.HYPRLAND, Compositor.SWAY)
-    )
+    return LayerShellSurface(cede_to_bottom=compositor in WLROOTS)

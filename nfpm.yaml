@@ -13,9 +13,9 @@ section: games
 priority: optional
 maintainer: xis <xis@schowek.net>
 description: |
-  Gamepad-first launcher/desktop for Wayland: KDE Plasma 6, Sway and Hyprland via
-  wlr-layer-shell, GNOME via the bundled Kasual Helper Shell extension. Bundles the
-  File Browser and YouTube couch apps.
+  Gamepad-first launcher/desktop for Wayland: KDE Plasma 6, Sway, Hyprland, labwc
+  and wayfire via wlr-layer-shell, GNOME via the bundled Kasual Helper Shell
+  extension. Bundles the File Browser and YouTube couch apps.
 vendor: Kasual Desktop
 homepage: https://github.com/thanek/kasual-desktop
 license: GPL-3.0-or-later
