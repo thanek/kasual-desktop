@@ -316,7 +316,11 @@ first draft of this suite "passed" through.
   with the pad, then asserts the game reaches the screen and the Home Menu comes back
   over it as before.
 - **`steam_kcd`** — tile → Big Picture → Steam's own UI, walked with the pad → the
-  game. Proves KD's re-emitted pad reaches a foreign application.
+  game → and back out through the Home Menu. Proves KD's re-emitted pad reaches a
+  foreign application, and then that a "Close" press ends what it names: the game,
+  whose window KD can only *ask* to go, and Steam, whose process group KD started and
+  owns. The one scenario that leaves the way a player does — everywhere else the
+  teardown's kill is the exit, and proves nothing about KD.
 - **`steam_w3`** — the same walk through Steam's UI, but the game stops at the RED Launcher,
   which has to be *used*: a window that maps after KD has ceded and must still be
   reachable by the pad.

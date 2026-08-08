@@ -42,10 +42,7 @@ def _body(session: Session) -> None:
     shell.expect_menu_offers(kd, CARDS, focused=shell.RETURN_TO_APP)
     shell.expect_no_hud_card(kd, name)
     shell.expect_foreground(kd, name)
-    shell.pick_menu_action(kd, pad, shell.CLOSE_APP)
-
-    shell.expect_confirm(kd, about=name)
-    shell.confirm(kd, pad)
+    shell.close_from_open_menu(kd, pad, about=name)
 
     file_browser.expect_gone(browser)
     shell.expect_home_view_restored(kd)

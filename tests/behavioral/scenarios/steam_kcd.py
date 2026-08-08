@@ -1,4 +1,4 @@
-"""Kasual Desktop → Steam → *through Steam's own UI* → Kingdom Come → the Home Menu.
+"""Kasual Desktop → Steam → *through Steam's own UI* → Kingdom Come → and back out.
 
 Where `kcd` launches the game straight from its tile, this one goes the way a player
 on a couch does: KD launches Big Picture, and the game is then started from inside
@@ -16,11 +16,15 @@ game that needs no launcher, which makes it the shorter proof of the pad alone.
 It is also the scenario that answers the question a tile launch cannot: whether KD
 gives the window focus away at all. Steam reads its gamepad only while its own window
 holds it.
+
+And it is the one that leaves the way a player does: the game and then Steam closed from
+the Home Menu, so what a "Close" press ends is asserted rather than assumed — everywhere
+else the teardown's kill is the exit, and proves nothing about KD.
 """
 
 from tests.behavioral.harness import requirements as require
 from tests.behavioral.harness import shell, steam_ui
-from tests.behavioral.harness.game import SteamGame
+from tests.behavioral.harness.game import SteamGame, expect_steam_gone
 from tests.behavioral.harness.session import Scenario, Session
 from tests.behavioral.harness.steam_ui import CefDebugging, SteamUI
 
@@ -29,12 +33,30 @@ GAME = 'Kingdom Come: Deliverance'
 APPID = '379430'
 
 
-def _body(session: Session) -> None:
-    # Steam reads the debug flag at startup only, so it goes in before KD starts it —
-    # and comes out again on the way out, wherever the run ends.
+def _enable_cef_debugging_before_kd_starts_steam(session: Session) -> None:
     debugging = CefDebugging()
     session.add_cleanup(debugging.restore)
     debugging.enable()
+
+
+def _ask_the_games_window_to_close(session: Session, game: SteamGame,
+                                   window: dict) -> None:
+    shell.close_from_open_menu(session.kd, session.pad, about=window['title'])
+    game.expect_gone()
+    shell.expect_home_view_restored(session.kd)
+
+
+def _close_the_steam_kd_started(session: Session) -> None:
+    shell.restore_tile(session.kd, session.pad, STEAM_TILE)
+    shell.open_home_menu(session.kd, session.pad, hold=True)
+    shell.close_from_open_menu(session.kd, session.pad,
+                               about=session.kd.tile_name(STEAM_TILE))
+    expect_steam_gone()
+    shell.expect_home_view_restored(session.kd)
+
+
+def _body(session: Session) -> None:
+    _enable_cef_debugging_before_kd_starts_steam(session)
 
     game = SteamGame(session, APPID)
     shell.launch_tile(session.kd, session.pad, STEAM_TILE)
@@ -57,10 +79,14 @@ def _body(session: Session) -> None:
     shell.check_kd_ceded(session.kd)
     shell.check_home_menu_over_game(session.kd, session.pad, game)
 
+    _ask_the_games_window_to_close(session, game, window)
+    _close_the_steam_kd_started(session)
+
 
 SCENARIO = Scenario(
     name='steam_kcd',
-    title='launch Kingdom Come through Steam\'s own UI, driven by the pad KD re-emits',
+    title='launch Kingdom Come through Steam\'s own UI, driven by the pad KD re-emits, '
+          'then close the game and Steam from the Home Menu',
     body=_body,
     requires=(
         require.window_source(),

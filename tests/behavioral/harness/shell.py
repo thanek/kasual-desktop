@@ -50,6 +50,13 @@ def launch_tile(kd: KDClient, pad: VirtualPad, tile_id: str) -> None:
     report('A pressed on the tile', 'PASS', 'KD launches the app')
 
 
+def restore_tile(kd: KDClient, pad: VirtualPad, tile_id: str) -> None:
+    focus_tile(kd, pad, tile_id)
+    pad.confirm()
+    report('A pressed on the running tile', 'PASS', 'KD restores the app')
+    expect_foreground(kd, kd.tile_name(tile_id))
+
+
 # ── where KD is ──────────────────────────────────────────────────────────────
 
 def _nothing_of_kd_above_plain_windows(s: dict) -> bool:
@@ -320,6 +327,12 @@ def toggle_hud(kd: KDClient, pad: VirtualPad) -> None:
         return
     report('the HUD toggle takes effect', 'PASS',
            f'{"on" if was else "off"} → {"off" if was else "on"}')
+
+
+def close_from_open_menu(kd: KDClient, pad: VirtualPad, about: str) -> None:
+    pick_menu_action(kd, pad, CLOSE_APP)
+    expect_confirm(kd, about=about)
+    confirm(kd, pad)
 
 
 def expect_minimized(kd: KDClient) -> None:

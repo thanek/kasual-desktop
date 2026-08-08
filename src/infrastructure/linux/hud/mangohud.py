@@ -53,6 +53,14 @@ _COMMENTED_NO_DISPLAY = re.compile(r"^\s*#\s*no_display\b")
 _DEFAULT_PATH = Path.home() / ".config" / "MangoHud" / "MangoHud.conf"
 
 
+def _hides_the_overlay(line: str) -> bool:
+    return bool(_ACTIVE_NO_DISPLAY.match(line))
+
+
+def _uncommented(line: str) -> str:
+    return re.sub(r"^(\s*)#\s*", r"\1", line)
+
+
 def _carries_hud(environ: Mapping[str, str]) -> bool:
     """Whether a process started with *environ* loads MangoHud's layer."""
     if _DISABLE_VAR in environ:
@@ -87,33 +95,29 @@ class MangoHudControl(HudControl):
         return {_ENABLE_VAR: "1"}
 
     def is_attached(self, pid: int | None) -> bool:
-        """Read from the environment *pid* was started with, not from the libraries
-        it has mapped: a game that has not created its Vulkan device yet has mapped
-        none, and the toggle would flicker while the game starts up."""
+        """The environment, not the mapped libraries: a game yet to create its Vulkan
+        device has mapped none, and the toggle would flicker as it starts up."""
         if pid is None:
             return False
         return _carries_hud(self._environ_of(pid))
 
     def is_enabled(self) -> bool:
-        # Absent config: nothing forces the HUD off, so it counts as enabled.
-        return not any(_ACTIVE_NO_DISPLAY.match(line) for line in self._read())
+        return not any(_hides_the_overlay(line) for line in self._read())
 
     def enable(self) -> None:
         lines = self._read()
-        commented = [
-            "# " + line if _ACTIVE_NO_DISPLAY.match(line) else line
-            for line in lines
-        ]
+        commented = ["# " + line if _hides_the_overlay(line) else line
+                     for line in lines]
         if commented != lines:
             self._write(commented)
 
     def disable(self) -> None:
         lines = self._read()
-        if any(_ACTIVE_NO_DISPLAY.match(line) for line in lines):
-            return  # already disabled
+        if any(_hides_the_overlay(line) for line in lines):
+            return
         for i, line in enumerate(lines):
             if _COMMENTED_NO_DISPLAY.match(line):
-                lines[i] = re.sub(r"^(\s*)#\s*", r"\1", line)  # uncomment in place
+                lines[i] = _uncommented(line)
                 self._write(lines)
                 return
         self._write([*lines, "no_display"])

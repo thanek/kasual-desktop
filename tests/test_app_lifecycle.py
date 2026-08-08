@@ -161,10 +161,9 @@ class TestCurrentApp:
         c.wm.cached_windows.return_value = []
         assert c.lc.current_app() == target
 
-    def test_active_unmanaged_window_reports_it(self):
-        """Steam (foreground) launched a game in its own window — a window that
-        matches no app tile: BTN_MODE should target the game, inheriting Steam's
-        recall trigger."""
+    def test_a_window_steam_put_there_is_reported_instead(self):
+        """Steam is the foreground tile and the game is in its own window: BTN_MODE
+        should target the game, inheriting Steam's recall trigger."""
         c = _make(apps=[_app(command="steam", trigger=Trigger.HOLD_1S)])
         c.fg.set(AppTarget(index=0, app_id="app0", name="Steam"))
         c.wm.cached_windows.return_value = [
@@ -176,6 +175,20 @@ class TestCurrentApp:
         result = c.lc.current_app()
         assert result == WindowTarget(
             window_id="g1", name="Witcher 3", trigger=Trigger.HOLD_1S, pid=200
+        )
+
+    def test_a_pinned_game_under_steam_is_still_the_target(self):
+        """The player has a tile for the game *and* started it from Big Picture: the
+        window matches that other tile, but Steam is what is in front of the menu."""
+        c = _make(apps=[_app(command="steam", trigger=Trigger.HOLD_1S),
+                        _steam_game_app(appid="379430", id="kcd")])
+        c.fg.set(AppTarget(index=0, app_id="app0", name="Steam"))
+        c.wm.cached_windows.return_value = [
+            Window(id="g1", title="Kingdom Come", pid=200, active=True,
+                   fullscreen=True, resource_class="steam_app_379430"),
+        ]
+        assert c.lc.current_app() == WindowTarget(
+            window_id="g1", name="Kingdom Come", trigger=Trigger.HOLD_1S, pid=200
         )
 
     def test_own_window_active_keeps_app_target(self):
@@ -720,7 +733,6 @@ class TestForegroundIsGame:
         assert c.lc.foreground_is_game() is False
 
     def test_steam_spawned_game_window_qualifies(self):
-        # Steam tile in front, game running in its own unmanaged window.
         c = _make(
             apps=[_app(command="steam")],
             is_game_pid={500: True}.get,
@@ -831,8 +843,8 @@ class TestForegroundGamePid:
 
     def test_a_steam_game_tile_answers_with_its_own_window(self):
         """The tile's own process is the `steam://` forwarder, which handed the
-        request to the running client and exited — and the game's window matches
-        the tile, so there is no *unmanaged* window to find it by either."""
+        request to the running client and exited — and the window is the tile's own,
+        so the launcher-spawned rule does not find it either."""
         c = _make(apps=[_steam_game_app(appid="379430", id="kcd")])
         c.am.running_pid.return_value = 100
         c.fg.set(AppTarget(index=0, app_id="kcd", name="KCD", is_game=True))

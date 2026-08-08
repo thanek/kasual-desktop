@@ -7,7 +7,7 @@ from domain.catalog.app import App
 from domain.catalog.target import AddTileTarget, AppTarget, WindowTarget, target_at_index
 from domain.catalog.window import Window
 from domain.catalog.window_rules import (
-    active_unmanaged_window, app_window_present,
+    active_window_not_owned_by, app_window_present,
     external_windows, is_app_running, resolve_recall_trigger,
 )
 from domain.input.vocabulary import Trigger
@@ -136,48 +136,59 @@ class TestIsAppRunning:
         assert is_app_running(5, [], [], lambda i: True) is False
 
 
-class TestActiveUnmanagedWindow:
-    """The active window that matches no configured app — e.g. a Steam game."""
+class TestActiveWindowNotOwnedBy:
+    """What is in front that the foreground app did not put there — a Steam game
+    while Steam is the tile."""
 
-    APPS = [App(name="Steam", command="steam")]
+    STEAM = App(name="Steam", command="steam")
 
-    def test_active_window_matching_no_app(self):
+    def test_a_window_of_something_else(self):
         game = Window(id="g", title="Game", pid=200, active=True, fullscreen=True,
                       resource_class="steam_app_1")
-        assert active_unmanaged_window([game], self.APPS) == game
+        assert active_window_not_owned_by([game], self.STEAM) == game
 
     def test_a_window_that_merely_covers_the_screen_counts(self):
         game = Window(id="g", title="Game", pid=200, active=True, covers_screen=True,
                       resource_class="steam_app_1")
-        assert active_unmanaged_window([game], self.APPS) == game
+        assert active_window_not_owned_by([game], self.STEAM) == game
+
+    def test_a_game_with_a_tile_of_its_own_is_still_not_steams(self):
+        """Whether the player pinned a tile for the game cannot decide what the Home
+        Overlay is about — it was Steam that put this window on the screen either way."""
+        pinned = App(name="Kingdom Come", command="steam",
+                     args=("steam://rungameid/379430",))
+        game = Window(id="g", title="Kingdom Come", pid=200, active=True,
+                      fullscreen=True, resource_class="steam_app_379430")
+        assert active_window_not_owned_by([game], self.STEAM) == game
+        assert active_window_not_owned_by([game], pinned) is None
 
     def test_a_focused_window_that_holds_no_screen_is_not_ours(self):
         """The launched app never took focus and the user's terminal has it. Adopting
         it would let the Home Overlay offer to close the terminal."""
         terminal = Window(id="t", title="xis@host: ~", pid=300, active=True,
                           resource_class="gnome-terminal-server")
-        assert active_unmanaged_window([terminal], self.APPS) is None
+        assert active_window_not_owned_by([terminal], self.STEAM) is None
 
-    def test_active_window_matching_an_app_is_managed(self):
+    def test_the_foregrounds_own_window(self):
         own = Window(id="s", title="Steam", pid=100, active=True, fullscreen=True,
                      resource_class="steam")
-        assert active_unmanaged_window([own], self.APPS) is None
+        assert active_window_not_owned_by([own], self.STEAM) is None
 
     def test_no_active_window(self):
         win = Window(id="g", title="Game", pid=200, active=False, fullscreen=True,
                      resource_class="steam_app_1")
-        assert active_unmanaged_window([win], self.APPS) is None
+        assert active_window_not_owned_by([win], self.STEAM) is None
 
     def test_active_pid_zero_window_is_ignored(self):
         win = Window(id="g", title="Game", pid=0, active=True, fullscreen=True,
                      resource_class="steam_app_1")
-        assert active_unmanaged_window([win], self.APPS) is None
+        assert active_window_not_owned_by([win], self.STEAM) is None
 
     def test_picks_active_among_many(self):
         bg   = Window(id="s", title="Steam", pid=100, active=False, resource_class="steam")
         game = Window(id="g", title="Game", pid=200, active=True, fullscreen=True,
                       resource_class="steam_app_1")
-        assert active_unmanaged_window([bg, game], self.APPS) == game
+        assert active_window_not_owned_by([bg, game], self.STEAM) == game
 
 
 class TestAppWindowPresent:

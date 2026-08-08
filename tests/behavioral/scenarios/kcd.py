@@ -20,18 +20,20 @@ TILE_ID = 'Kingdom Come Deliverance'
 APPID = '379430'
 
 
+def _flip_the_hud_off_and_on_again(session: Session, game: SteamGame) -> None:
+    shell.check_home_menu_over_game(session.kd, session.pad, game)
+    shell.toggle_hud(session.kd, session.pad)
+    shell.open_home_menu(session.kd, session.pad, hold=True)
+    shell.toggle_hud(session.kd, session.pad)
+
+
 def _body(session: Session) -> None:
     game = SteamGame(session, APPID)
 
-    # A cold Steam started by the tile's steam://rungameid opens in Big Picture and
-    # drops the launch; warming it first, off the screen, leaves KD on the Home view
-    # to drive the tile from.
     warm_up_steam()
     shell.expect_home_view(session.kd)
     shell.launch_tile(session.kd, session.pad, TILE_ID)
 
-    # The splash is passive — nobody has to click it — so KD's own state is the
-    # only evidence that it was not buried under the shell.
     if game.wait_plain_window('splash', timeouts.GAME_LAUNCH) is not None:
         shell.check_kd_below(session.kd, 'splash')
 
@@ -41,15 +43,7 @@ def _body(session: Session) -> None:
     game.check_hud_not_overridden(window)
     shell.check_kd_ceded(session.kd)
 
-    # A game carrying the HUD is the only context the toggle exists in, and the menu is
-    # the only way to it — so it is asserted here, where such a game is already running,
-    # rather than in a scenario of its own that would have to compile its shaders again
-    # to ask one question. Picking a card collapses the menu, so flipping it back needs
-    # the hold again: over a game, KD keeps the hold and leaves the click to the game.
-    shell.check_home_menu_over_game(session.kd, session.pad, game)
-    shell.toggle_hud(session.kd, session.pad)
-    shell.open_home_menu(session.kd, session.pad, hold=True)
-    shell.toggle_hud(session.kd, session.pad)
+    _flip_the_hud_off_and_on_again(session, game)
 
 
 SCENARIO = Scenario(

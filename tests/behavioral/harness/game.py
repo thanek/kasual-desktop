@@ -154,6 +154,25 @@ class SteamGame:
                f'minimized={window.get("minimized")} focused={window["focused"]} — '
                'did a KD surface take the focus from it?')
 
+    def expect_gone(self) -> None:
+        self._source.catch_up()
+        if self._fresh(self._source.last_stack()):
+            try:
+                self._source.wait_for(lambda e: not self._fresh(e['stack']),
+                                      timeouts.GAME_EXIT, 'the game to close')
+            except TimeoutError as exc:
+                report('the game closed when asked', 'FAIL', str(exc))
+                return
+        report('the game closed when asked', 'PASS', 'its windows are gone')
+
+        alive = [pid for pid in sorted(self._pids) if pid and not _await_exit(
+            lambda pid=pid: not os.path.isdir(f'/proc/{pid}'), timeouts.EXIT)]
+        if alive:
+            report('the game process ended', 'FAIL',
+                   f'still in /proc: {alive} — the window went, the process did not')
+        else:
+            report('the game process ended', 'PASS')
+
     def check_process(self, window: dict) -> None:
         pid = window['pid']
         if pid and os.path.isdir(f'/proc/{pid}'):
@@ -162,8 +181,6 @@ class SteamGame:
             report('game process alive', 'FAIL', f'pid {pid} not in /proc')
 
     def check_hud_attached(self, window: dict) -> None:
-        """MangoHud's layer is gated on MANGOHUD=1 in the game's own environment:
-        without it nothing can put an overlay on screen, and KD offers no toggle."""
         environ = self._environ_or_warn(window['pid'], 'the HUD is loaded into the game')
         if environ is None:
             return
@@ -200,8 +217,6 @@ class SteamGame:
                '(Steam\'s per-game FPS limit sets this)')
 
     def _environ_or_warn(self, pid: int, check: str) -> dict[str, str] | None:
-        """None with *check* reported as a WARN: a check that cannot read the
-        process asserts nothing either way."""
         environ = process_environ(pid)
         if environ is None:
             report(check, 'WARN', f'could not read the environment of pid {pid}')
@@ -294,9 +309,15 @@ def warm_up_steam() -> None:
            'the client never logged in — launching the tile anyway')
 
 
+def expect_steam_gone() -> None:
+    if _await_exit(_steam_gone, timeouts.EXIT):
+        report('Steam ended when asked', 'PASS', 'no steam or steamwebhelper left')
+        return
+    left = {name: _pids_of(name) for name in STEAM_PROCESSES if _pids_of(name)}
+    report('Steam ended when asked', 'FAIL', f'still running: {left}')
+
+
 def _check_client_carries_hud() -> None:
-    """Said here, where it can still be acted on, rather than as a puzzling HUD
-    failure twenty minutes into the run."""
     pids = _pids_of('steam')
     environ = process_environ(pids[0]) if pids else None
     if environ is None or carries_hud(environ):

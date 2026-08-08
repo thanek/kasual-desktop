@@ -7,7 +7,7 @@ from collections.abc import Callable
 
 from domain.catalog.live_catalog import LiveCatalog
 from domain.catalog.target import AppTarget, Target, WindowTarget
-from domain.catalog.window_rules import active_unmanaged_window, app_window
+from domain.catalog.window_rules import active_window_not_owned_by, app_window
 from domain.lifecycle.process_manager import ProcessManager
 from domain.lifecycle.window_manager import WindowManager
 
@@ -43,14 +43,12 @@ class ForegroundInspector:
         return target
 
     def _active_spawned_window(self, target: AppTarget) -> WindowTarget | None:
-        window = active_unmanaged_window(self._wm.cached_windows(), self._apps)
+        app = self._apps[target.index]
+        window = active_window_not_owned_by(self._wm.cached_windows(), app)
         if window is None:
             return None
-        # The game inherits its launcher's recall trigger, so BTN_MODE behaves the
-        # same whether the launcher or its game is front.
-        app = self._apps[target.index]
         logger.debug(
-            "Recall over %s: active window unmanaged → targeting %r (id=%s)",
+            "Recall over %s: active window is not its own → targeting %r (id=%s)",
             target.name, window.title, window.id,
         )
         return WindowTarget(
@@ -73,10 +71,11 @@ class ForegroundInspector:
             return target.pid or None
         if isinstance(target, AppTarget):
             windows = self._wm.cached_windows()
-            spawned = active_unmanaged_window(windows, self._apps)
+            app = self._apps[target.index]
+            spawned = active_window_not_owned_by(windows, app)
             if spawned is not None:
                 return spawned.pid
-            own = app_window(windows, self._apps[target.index])
+            own = app_window(windows, app)
             if own is not None:
                 return own.pid
             return self._app_manager.running_pid(target.app_id)
@@ -94,10 +93,11 @@ class ForegroundInspector:
                          target.name, target.pid, result)
             return result
         if isinstance(target, AppTarget):
-            if self._apps[target.index].is_game:
+            app = self._apps[target.index]
+            if app.is_game:
                 logger.debug("foreground_is_game: AppTarget %r -> Categories=Game", target.name)
                 return True
-            window = active_unmanaged_window(self._wm.cached_windows(), self._apps)
+            window = active_window_not_owned_by(self._wm.cached_windows(), app)
             if window is not None and window.pid:
                 result = self._is_game_pid(window.pid)
                 logger.debug("foreground_is_game: AppTarget %r, active window %r pid=%s -> %s",
