@@ -9,7 +9,8 @@ from domain.menu.entry import (
 )
 from domain.menu.home import SectionKind, compose_home_sections
 from domain.system.actions import (
-    BRIGHTNESS, HIDE_DESKTOP, NETWORK, NOTIFICATIONS, RESTART, SHUTDOWN, SLEEP, VOLUME,
+    BRIGHTNESS, GAMEPAD_ACCESS, HIDE_DESKTOP, NETWORK, NOTIFICATIONS, RESTART,
+    SHUTDOWN, SLEEP, VOLUME,
 )
 from domain.catalog.target import AppTarget, WindowTarget
 
@@ -139,3 +140,38 @@ class TestAppContext:
         actions = _by_kind(s, SectionKind.ACTIONS)
         assert "Game" in actions.items[0].label
         assert s.cancel_restores == target
+
+
+class TestGamepadAccessEntry:
+    """The entry that reopens the gamepad-access card. Offered only where the pad
+    comes from evdev and there is something to grant — never on Windows."""
+
+    def _actions(self, **kwargs):
+        sections = compose_home_sections(
+            None, FakeHud(), brightness_controllable=True, power_default=SLEEP,
+            **kwargs)
+        return [i.action for i in _by_kind(sections, SectionKind.ACTIONS).items]
+
+    def test_offered_where_access_can_be_checked(self):
+        assert GAMEPAD_ACCESS in self._actions(gamepad_access_checkable=True)
+
+    def test_withheld_where_it_cannot(self):
+        assert GAMEPAD_ACCESS not in self._actions(gamepad_access_checkable=False)
+
+    def test_withheld_by_default(self):
+        assert GAMEPAD_ACCESS not in self._actions()
+
+    def test_it_does_not_displace_the_way_back(self):
+        """Return to Home screen stays last: minimized, it is the only way back."""
+        actions = self._actions(gamepad_access_checkable=True)
+        assert actions[-1] == RETURN_TO_DESKTOP
+        assert actions[-2] == HIDE_DESKTOP
+
+    def test_it_is_not_offered_over_a_running_app(self):
+        """The card is modal and would take the screen from the foreground."""
+        sections = compose_home_sections(
+            AppTarget(index=0, app_id="steam", name="Steam"), FakeHud(),
+            brightness_controllable=True, power_default=SLEEP,
+            gamepad_access_checkable=True)
+        actions = _by_kind(sections, SectionKind.ACTIONS).items
+        assert all(i.action != GAMEPAD_ACCESS for i in actions)

@@ -135,12 +135,14 @@ class HomeMenuContent(QWidget):
         volume: VolumeControl,
         brightness: BrightnessControl,
         power: PowerMenu,
+        gamepad_access_checkable: bool = False,
     ) -> None:
         super().__init__()
         self._feedback = feedback
         self._volume = volume
         self._brightness = brightness
         self._power = power
+        self._gamepad_access_checkable = gamepad_access_checkable
 
         self._zones: list[_Zone] = []
         self._active = 0
@@ -204,6 +206,7 @@ class HomeMenuContent(QWidget):
             # Network / Notifications live on the header when one is present, so
             # don't repeat them in the Actions grid.
             include_status_actions=header is None,
+            gamepad_access_checkable=self._gamepad_access_checkable,
         )
         self._build(sections.sections)
         self._focus_default(foreground, desktop_minimized)

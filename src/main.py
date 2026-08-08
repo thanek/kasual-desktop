@@ -44,6 +44,13 @@ from infrastructure.linux.catalog.app_pinning import DesktopAppPinning
 from infrastructure.linux.catalog.installed_apps import XdgInstalledApps
 from domain.provisioning.provisioning import Provisioning
 from domain.provisioning.add_apps import AppAdder
+from domain.input_access.recipes import all_recipes as input_access_recipes
+from domain.input_access.requirement import GamepadAccess
+from domain.setup.gate import SetupGate
+from domain.setup.readiness import SetupReadiness
+from infrastructure.common.qt.overlays.setup_overlay import QtSetupView
+from infrastructure.linux.input.access import RULE_FILE, LinuxDeviceAccess
+from infrastructure.linux.system_facts import LinuxSystemFacts
 from infrastructure.linux.catalog.app_manager import AppManager
 from infrastructure.linux.proc import parent_pid, is_game_pid
 from infrastructure.linux.log.log_viewer_launcher import LogViewerLauncher
@@ -70,27 +77,46 @@ from infrastructure.common.qt.i18n import install_translations
 logger = logging.getLogger(__name__)
 
 
-def _preflight_gate(app, gamepad, feedback, proceed) -> None:
-    """On GNOME, ensure the helper extension is active before any subsystem starts;
-    everywhere else there is nothing to gate."""
+def _extension_gate(app, gamepad, feedback) -> SetupGate | None:
+    """On GNOME the helper extension carries every window operation, so nothing
+    may start before it answers; everywhere else there is nothing to gate."""
     if COMPOSITOR is not Compositor.GNOME:
-        proceed()
-        return
-    from domain.preflight.extension_gate import ExtensionGate
+        return None
+    from domain.preflight.extension import ENABLE, LOG_OUT, HelperExtension
+    from domain.preflight.extension_recipes import all_recipes
     from infrastructure.gnome.extension import (
         GnomeExtensionActivator, GnomeExtensionProbe,
     )
+    from infrastructure.gnome.helper import EXTENSION_UUID
     from infrastructure.gnome.session import GnomeSessionEnder
-    from infrastructure.common.qt.overlays.preflight_overlay import QtPreflightView
 
-    gate = ExtensionGate(
-        GnomeExtensionProbe(),
-        GnomeExtensionActivator(),
-        QtPreflightView(gamepad, feedback),
-        on_quit=app.quit,
-        session=GnomeSessionEnder(),
+    activator = GnomeExtensionActivator()
+    return SetupGate(
+        SetupReadiness(
+            HelperExtension(GnomeExtensionProbe()),
+            LinuxSystemFacts(),
+            all_recipes(EXTENSION_UUID),
+        ),
+        QtSetupView(gamepad, feedback),
+        remedies={ENABLE: activator.enable,
+                  LOG_OUT: GnomeSessionEnder().log_out},
+        on_abort=app.quit,
     )
-    gate.ensure(proceed)
+
+
+def _gamepad_access_gate(view) -> SetupGate:
+    """Reaching the pad through evdev needs device nodes a desktop session does
+    not open by default, and Kasual Desktop cannot tell that apart from having
+    no controller at all — so it says so instead of looking broken."""
+    rule_source = Path(__file__).parent.parent / "packaging" / RULE_FILE
+    return SetupGate(
+        SetupReadiness(
+            GamepadAccess(LinuxDeviceAccess()),
+            LinuxSystemFacts(),
+            input_access_recipes(str(rule_source)),
+        ),
+        view,
+    )
 
 
 def main() -> None:
@@ -146,6 +172,9 @@ def main() -> None:
     # persists the chosen ones through the same store as onboarding.
     app_adder = AppAdder(XdgInstalledApps(), provisioning)
 
+    gamepad_access_view = QtSetupView(gamepad, feedback)
+    gamepad_access = _gamepad_access_gate(gamepad_access_view)
+
     def start_session() -> DesktopControl:
         """Bring up the Desktop and controller from the (now-provisioned) apps.
 
@@ -191,6 +220,8 @@ def main() -> None:
             parent_of=parent_pid,
             is_game_pid=is_game_pid,
             app_adder=app_adder,
+            setup_gate=gamepad_access,
+            setup_view=gamepad_access_view,
             power_preference=power_preference,
             launch_env=lambda app: hud_launch_env(hud, app),
             deferred_hide_factory=lambda wm_, pm_, on_cede, on_hide:
@@ -261,7 +292,14 @@ def main() -> None:
             provisioning, provisioning_uc, gamepad, feedback,
             start_session_then_offer_background_hint)
 
-    _preflight_gate(app, gamepad, feedback, start)
+    def check_gamepad_access() -> None:
+        gamepad_access.ensure(start)
+
+    extension = _extension_gate(app, gamepad, feedback)
+    if extension is None:
+        check_gamepad_access()
+    else:
+        extension.ensure(check_gamepad_access)
 
     QTimer.singleShot(0, feedback.init)
 

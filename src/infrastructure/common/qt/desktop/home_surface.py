@@ -93,6 +93,7 @@ class HomeSurface(QWidget):
         begin_hints: Callable[[], None],
         set_hints: Callable,
         end_hints: Callable[[], None],
+        gamepad_access_checkable: bool = False,
     ) -> None:
         super().__init__()
         self._gamepad = gamepad
@@ -133,7 +134,8 @@ class HomeSurface(QWidget):
         self._panel.installEventFilter(self)   # its height drives the grab handle
         panel_col = QVBoxLayout(self._panel)
         panel_col.setContentsMargins(28, 22, 28, 22)
-        self._content = HomeMenuContent(feedback, volume, brightness, power)
+        self._content = HomeMenuContent(
+            feedback, volume, brightness, power, gamepad_access_checkable)
         panel_col.addWidget(self._content)
         outer.addWidget(self._panel, alignment=Qt.AlignmentFlag.AlignHCenter)
         outer.addStretch(1)

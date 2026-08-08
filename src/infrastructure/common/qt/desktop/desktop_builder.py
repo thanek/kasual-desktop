@@ -31,6 +31,7 @@ from domain.navigation.tile_mover import TileMover
 from domain.network.control import NetworkControl
 from domain.notifications.center import NotificationCenter
 from domain.provisioning.add_apps import AppAdder
+from domain.setup.gate import SetupGate
 from domain.shared.feedback import Feedback
 from domain.shared.scheduler import Scheduler
 from domain.shell.desktop import Desktop as DesktopCoordinator
@@ -48,6 +49,8 @@ from domain.system.volume import VolumeControl
 from domain.system.brightness import BrightnessControl
 
 from collections.abc import Callable, Mapping
+
+from infrastructure.common.qt.overlays.setup_overlay import QtSetupView
 
 from .desktop import Desktop
 from .dialog_host_controller import DialogHostController
@@ -80,6 +83,8 @@ def build_desktop(
     parent_of: Callable[[int], int | None] | None = None,
     is_game_pid: Callable[[int], bool] = lambda _: False,
     app_adder: AppAdder | None = None,
+    setup_gate: SetupGate | None = None,
+    setup_view: QtSetupView | None = None,
     power_preference: PowerPreference | None = None,
     launch_env: 'Callable[[App], Mapping[str, str]] | None' = None,
 ) -> Desktop:
@@ -119,6 +124,8 @@ def build_desktop(
         surface=surface,
         parent_of=parent_of,
         app_adder=app_adder,
+        setup_gate=setup_gate,
+        setup_view=setup_view,
     )
 
     nav = FocusNavigator(
@@ -213,6 +220,8 @@ def build_desktop(
             begin_hints=lambda: chrome.begin_overlay_hints(),
             set_hints=lambda h: chrome.set_overlay_hints(h),
             end_hints=lambda: chrome.end_overlay_hints(),
+            gamepad_access_checkable=(
+                setup_gate is not None and setup_view is not None),
         )
         home_surface.install_surface()
         power_popover = PowerPopoverController(

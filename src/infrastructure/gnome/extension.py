@@ -15,7 +15,7 @@ import subprocess
 import time
 from pathlib import Path
 
-from domain.preflight.extension_gate import (
+from domain.preflight.extension import (
     ExtensionActivator, ExtensionProbe, ExtensionState,
 )
 from infrastructure.gnome.helper import EXTENSION_UUID, helper_present

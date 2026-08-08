@@ -15,7 +15,7 @@ from PyQt6.QtDBus import (
     QDBusArgument, QDBusConnection, QDBusInterface, QDBusMessage,
 )
 
-from domain.preflight.extension_gate import SessionEnder
+from domain.preflight.extension import SessionEnder
 
 logger = logging.getLogger(__name__)
 

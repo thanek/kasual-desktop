@@ -173,7 +173,19 @@ All are gamepad-operable, so nothing on GNOME requires reaching for a keyboard.
 
 ### Gamepad permissions
 
-Kasual Desktop reads gamepad input directly via `evdev`, which requires access to `/dev/input/*` devices. Without this, the application will not detect any controller.
+Kasual Desktop reads gamepad input directly via `evdev`, which needs two device
+nodes opened to your user:
+
+- **`/dev/input/event*`** — the controller itself, read and grabbed exclusively.
+- **`/dev/uinput`** — the virtual gamepad the grabbed input is re-emitted on, so
+  the app you launch (Steam and friends) still sees a controller.
+
+Both are required. A grab whose virtual pad cannot be created is rolled back, so
+a missing `/dev/uinput` looks exactly like a missing controller.
+
+**Kasual Desktop checks this at startup** and, when either node is closed to you,
+opens a card naming what is missing and the commands that fix it. The same card
+is available at any time from the Home Overlay under **Check gamepad access**.
 
 Add your user to the `input` group:
 
@@ -189,19 +201,26 @@ groups | grep input
 
 > **Installing from a package?** The `.deb`/`.rpm`/`.pkg.tar.zst` packages
 > already ship a udev rule (`/usr/lib/udev/rules.d/99-kasual-desktop.rules`)
-> that grants the active user gamepad access via `uaccess`, and reload udev
-> on install — so nothing of the above is needed when you install from a
-> package. The steps below are only for running from source.
+> that grants the active user gamepad and `/dev/uinput` access via `uaccess`,
+> and reload udev on install — so nothing of the above is needed when you
+> install from a package. The steps below are only for running from source.
 
-Alternatively, you can create a udev rule for a more targeted approach (this is
-essentially what the package installs, restricted to joystick/gamepad devices):
+Alternatively, install the same udev rule the packages ship, for a more
+targeted approach than the `input` group:
 
 ```bash
-sudo tee /etc/udev/rules.d/99-kasual-desktop.rules <<'EOF'
+sudo install -Dm644 packaging/99-kasual-desktop.rules /etc/udev/rules.d/99-kasual-desktop.rules
+sudo udevadm control --reload-rules
+sudo udevadm trigger --subsystem-match=input --subsystem-match=misc
+```
+
+That file grants joystick and gamepad devices only — never your keyboard or
+mouse — and covers `/dev/uinput` as well:
+
+```
 SUBSYSTEM=="input", KERNEL=="event*", ENV{ID_INPUT_JOYSTICK}=="1", GROUP="input", MODE="0660", TAG+="uaccess"
 SUBSYSTEM=="input", KERNEL=="event*", ENV{ID_INPUT_GAMEPAD}=="1", GROUP="input", MODE="0660", TAG+="uaccess"
-EOF
-sudo udevadm control --reload-rules && sudo udevadm trigger --subsystem-match=input
+KERNEL=="uinput", SUBSYSTEM=="misc", GROUP="input", MODE="0660", TAG+="uaccess", OPTIONS+="static_node=uinput"
 ```
 
 ### Installation
