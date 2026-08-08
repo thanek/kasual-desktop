@@ -14,9 +14,10 @@ TILE_WINDOW = 'window'
 
 @dataclass(frozen=True)
 class TileSnapshot:
-    index:  int
-    app_id: str
-    name:   str
+    index:   int
+    app_id:  str
+    name:    str
+    running: bool = False
 
 
 @dataclass(frozen=True)
@@ -61,13 +62,14 @@ class HomeMenuSnapshot:
     open:     bool
     sections: tuple[MenuSectionSnapshot, ...] = ()
 
-    @property
-    def focused(self) -> MenuItemSnapshot | None:
-        for section in self.sections:
-            for item in section.items:
-                if item.focused:
-                    return item
-        return None
+
+@dataclass(frozen=True)
+class TileMenuSnapshot:
+    """The popover a tile opens on X. What it offers depends on the tile's state —
+    a running app can be restored or closed, a stopped one only launched."""
+
+    open:  bool
+    items: tuple[MenuItemSnapshot, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -102,6 +104,7 @@ class ShellSnapshot:
     home_header_mapped: bool
     hint_bar_mapped:    bool
     home_menu:          HomeMenuSnapshot
+    tile_menu:          TileMenuSnapshot
     confirm:            ConfirmSnapshot
     focus:              FocusSnapshot
     tiles:              tuple[TileSnapshot, ...]

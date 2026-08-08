@@ -47,7 +47,7 @@ class _FakeScheduler:
         pass
 
 
-def _make_desktop(mock_gamepad):
+def _make_desktop(mock_gamepad, apps=None):
     """Tworzy Desktop z minimalnym zestawem mocków."""
     wm = MagicMock()
     wm.on_windows_updated = MagicMock()
@@ -57,7 +57,7 @@ def _make_desktop(mock_gamepad):
     from infrastructure.linux.catalog.app_manager import AppManager
     from domain.notifications.center import NotificationCenter
     return build_desktop(
-        apps=[], gamepad=mock_gamepad, window_manager=wm,
+        apps=list(apps or []), gamepad=mock_gamepad, window_manager=wm,
         wallpaper=_NoWallpaper(), feedback=MagicMock(),
         volume=_FakeVolume(), brightness=_FakeBrightness(),
         power=_FakePower(), scheduler=_FakeScheduler(),

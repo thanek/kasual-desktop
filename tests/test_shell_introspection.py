@@ -6,40 +6,9 @@ by the `minimize` behavioral scenario, which reads this very snapshot back.
 
 from unittest.mock import MagicMock, patch
 
-from domain.menu.entry import RETURN_TO_DESKTOP
+from domain.catalog.app import App
 from domain.catalog.window import Window
-from domain.shell.introspection import (
-    HomeMenuSnapshot, MenuItemSnapshot, MenuSectionSnapshot,
-)
-from domain.system.actions import HIDE_DESKTOP
 from test_desktop_lifecycle import _make_desktop
-
-
-def _cards(*focused_action: str) -> HomeMenuSnapshot:
-    return HomeMenuSnapshot(
-        open=True,
-        sections=(
-            MenuSectionSnapshot(
-                kind='actions', columns=1,
-                items=tuple(
-                    MenuItemSnapshot(label=action, action=action,
-                                     focused=action in focused_action)
-                    for action in (HIDE_DESKTOP, RETURN_TO_DESKTOP)
-                ),
-            ),
-        ),
-    )
-
-
-class TestFocusedItem:
-    """Which card the cursor sits on decides what a press of A does, so the harness
-    reads it rather than assuming the menu opened where it always used to."""
-
-    def test_finds_the_focused_card(self):
-        assert _cards(HIDE_DESKTOP).focused.action == HIDE_DESKTOP
-
-    def test_no_focus_is_an_answer(self):
-        assert _cards().focused is None
 
 
 class TestSnapshot:
@@ -47,6 +16,22 @@ class TestSnapshot:
         menu = _make_desktop(mock_gamepad).snapshot().home_menu
         assert not menu.open
         assert menu.sections == ()
+
+    def test_a_closed_tile_popover_offers_nothing(self, mock_gamepad):
+        menu = _make_desktop(mock_gamepad).snapshot().tile_menu
+        assert not menu.open
+        assert menu.items == ()
+
+    def test_a_tile_reports_whether_its_app_is_running(self, mock_gamepad):
+        """What the popover is composed from — Restore/Close against Launch — so a
+        tile that misreads its own state offers the wrong way out."""
+        desktop = _make_desktop(
+            mock_gamepad, apps=[App(name='File Browser', command='files', id='files')])
+
+        assert desktop.snapshot().tiles[0].running is False
+        with patch.object(desktop._tilebar, 'is_tile_running',
+                          side_effect=lambda idx, _windows: idx == 0):
+            assert desktop.snapshot().tiles[0].running is True
 
     def test_the_foreground_app_is_the_one_the_shell_believes_in(self, mock_gamepad):
         """Not the one whose process is alive: the shell's belief is what makes it

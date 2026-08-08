@@ -329,6 +329,87 @@ def toggle_hud(kd: KDClient, pad: VirtualPad) -> None:
            f'{"on" if was else "off"} → {"off" if was else "on"}')
 
 
+# ── a tile's own popover ─────────────────────────────────────────────────────
+
+LAUNCH   = 'launch'
+RESTORE  = 'restore'
+CLOSE    = 'close'
+MOVE     = 'move'
+SETTINGS = 'settings'
+UNPIN    = 'unpin'
+
+
+def expect_tile_running(kd: KDClient, tile_id: str, running: bool = True) -> None:
+    tile = kd.tile(tile_id)
+    if tile['running'] is running:
+        report(f'the {tile_id!r} tile reads as {_running_word(running)}', 'PASS')
+        return
+    report(f'the {tile_id!r} tile reads as {_running_word(running)}', 'FAIL',
+           f'KD says {_running_word(tile["running"])}')
+
+
+def _running_word(running: bool) -> str:
+    return 'running' if running else 'not running'
+
+
+def _focused_tile_item(snapshot: dict) -> dict | None:
+    return next((item for item in snapshot['tile_menu']['items'] if item['focused']),
+                None)
+
+
+def open_tile_menu(kd: KDClient, pad: VirtualPad, tile_id: str) -> None:
+    focus_tile(kd, pad, tile_id)
+    pad.tile_menu()
+    try:
+        kd.wait_until(lambda s: s['tile_menu']['open'], timeouts.HOME_MENU,
+                      f'the popover of the {tile_id!r} tile')
+    except TimeoutError as exc:
+        report('tile menu open', 'FAIL', 'X pressed on the tile, no popover appeared')
+        raise ScenarioAborted('the tile popover never opened') from exc
+    focused = _focused_tile_item(kd.snapshot())
+    report('tile menu open', 'PASS',
+           f'focused on {focused["label"]!r}' if focused else 'nothing focused')
+
+
+def expect_tile_menu_offers(kd: KDClient, actions: tuple[str, ...]) -> None:
+    offered = tuple(item['action'] for item in kd.snapshot()['tile_menu']['items']
+                    if item['action'] != 'separator')
+    if offered != actions:
+        report('the tile menu offers what it should', 'FAIL',
+               f'expected {list(actions)}, found {list(offered)}')
+        return
+    report('the tile menu offers what it should', 'PASS', f'{list(offered)}')
+
+
+def pick_tile_action(kd: KDClient, pad: VirtualPad, action: str) -> None:
+    items = [item['action'] for item in kd.snapshot()['tile_menu']['items']]
+    if action not in items:
+        report(f'picked {action!r} in the tile menu', 'FAIL', f'not offered: {items}')
+        raise ScenarioAborted(f'{action!r} is not in the tile menu')
+
+    for _ in range(len(items) + 1):
+        focused = _focused_tile_item(kd.snapshot())
+        if focused is not None and focused['action'] == action:
+            pad.confirm()
+            report(f'picked {action!r} in the tile menu', 'PASS',
+                   f'A pressed on {focused["label"]!r}')
+            return
+        before = focused['action'] if focused else None
+        pad.down()
+        try:
+            kd.wait_until(
+                lambda s, b=before: (_focused_tile_item(s) or {}).get('action') != b,
+                timeouts.TILE_FOCUS, f'the popover cursor to move off {before!r}')
+        except TimeoutError:
+            report(f'picked {action!r} in the tile menu', 'FAIL',
+                   f'the cursor would not move off {before!r}')
+            raise ScenarioAborted('the tile popover cursor is stuck')
+
+    report(f'picked {action!r} in the tile menu', 'FAIL',
+           f'walked the whole popover without reaching {action!r}')
+    raise ScenarioAborted(f'{action!r} never took the focus')
+
+
 def close_from_open_menu(kd: KDClient, pad: VirtualPad, about: str) -> None:
     pick_menu_action(kd, pad, CLOSE_APP)
     expect_confirm(kd, about=about)

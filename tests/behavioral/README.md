@@ -321,6 +321,10 @@ first draft of this suite "passed" through.
   whose window KD can only *ask* to go, and Steam, whose process group KD started and
   owns. The one scenario that leaves the way a player does — everywhere else the
   teardown's kill is the exit, and proves nothing about KD.
+- **`running_tile`** — tile → File Browser → "Return to Home screen" with it still
+  running → close it from the tile's own popover. The other way out of an app and the
+  other way of ending one: `file_browser` never leaves the app, this one walks away and
+  meets it again as a tile that knows it is running.
 - **`steam_w3`** — the same walk through Steam's UI, but the game stops at the RED Launcher,
   which has to be *used*: a window that maps after KD has ceded and must still be
   reachable by the pad.

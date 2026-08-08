@@ -90,6 +90,9 @@ class VirtualPad:
     def back(self) -> None:
         self.press(e.BTN_EAST)
 
+    def tile_menu(self) -> None:
+        self.press(e.BTN_WEST)
+
     def home(self) -> None:
         """A short press — KD keeps the *hold* for itself over an app that asked for
         HOLD_1S, so this one is the app's (in Steam: its main menu)."""

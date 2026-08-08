@@ -74,6 +74,10 @@ class DialogHostController:
     def tile_popover_open(self) -> bool:
         return self._tile_popover is not None
 
+    @property
+    def active_tile_popover(self) -> 'TilePopoverMenu | None':
+        return self._tile_popover
+
     def cancel(self) -> None:
         """Drop the confirm/settings handles when the overlay group is torn
         down externally (the registry clears the widgets themselves)."""

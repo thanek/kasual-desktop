@@ -106,6 +106,14 @@ class TilePopoverMenu(QWidget):
         self._feedback.play(Cue.POPUP_OPEN)
         QApplication.instance().installEventFilter(self)
 
+    @property
+    def items(self) -> list[MenuItem]:
+        return self._items
+
+    @property
+    def focused_index(self) -> int:
+        return self._cursor.index
+
     def show_above(self, tile: QWidget) -> None:
         """Position and display the popover above *tile*."""
         self._show_anchored(tile, below=False)

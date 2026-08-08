@@ -34,7 +34,7 @@ from domain.shell.home_actions import HomeActions
 from domain.shell.home_chrome import HomeChrome
 from domain.shell.introspection import (
     HEADER, TILES, ConfirmSnapshot, FocusSnapshot, HomeMenuSnapshot, MenuItemSnapshot,
-    MenuSectionSnapshot, ShellSnapshot, TileSnapshot,
+    MenuSectionSnapshot, ShellSnapshot, TileMenuSnapshot, TileSnapshot,
 )
 from domain.shell.open_overlays import OpenOverlays
 from domain.system.desktop_shell import DesktopShell
@@ -270,6 +270,19 @@ class Desktop(QWidget, DesktopView, DesktopShell, DesktopControl, metaclass=Prot
             ),
         )
 
+    def _tile_menu_snapshot(self) -> TileMenuSnapshot:
+        popover = self._dialogs.active_tile_popover if self._dialogs is not None else None
+        if popover is None:
+            return TileMenuSnapshot(open=False)
+        return TileMenuSnapshot(
+            open=True,
+            items=tuple(
+                MenuItemSnapshot(label=item.label, action=item.action,
+                                 focused=(index == popover.focused_index))
+                for index, item in enumerate(popover.items)
+            ),
+        )
+
     def _confirm_snapshot(self) -> ConfirmSnapshot:
         dialog = self._dialogs.active_confirm if self._dialogs is not None else None
         if dialog is None:
@@ -281,8 +294,10 @@ class Desktop(QWidget, DesktopView, DesktopShell, DesktopControl, metaclass=Prot
         )
 
     def snapshot(self) -> ShellSnapshot:
+        windows = self._tilebar.last_windows
         tiles = tuple(
-            TileSnapshot(index=i, app_id=app.id, name=app.name)
+            TileSnapshot(index=i, app_id=app.id, name=app.name,
+                         running=self._tilebar.is_tile_running(i, windows))
             for i, app in enumerate(self._apps)
         )
         on_tiles = self._nav is None or self._nav.in_tiles
@@ -299,6 +314,7 @@ class Desktop(QWidget, DesktopView, DesktopShell, DesktopControl, metaclass=Prot
             ),
             hint_bar_mapped=self._hintbar.isVisible(),
             home_menu=self._home_menu_snapshot(),
+            tile_menu=self._tile_menu_snapshot(),
             confirm=self._confirm_snapshot(),
             focus=FocusSnapshot(
                 zone=TILES if on_tiles else HEADER,
