@@ -12,7 +12,7 @@ BTN_MODE is what recalls the menu from a minimized KD; it is the only way back i
 from tests.behavioral.harness import shell
 from tests.behavioral.harness.session import Scenario, Session
 
-CARDS = (shell.HIDE_DESKTOP, shell.RETURN_TO_DESKTOP)
+CARDS = (shell.GAMEPAD_ACCESS, shell.HIDE_DESKTOP, shell.RETURN_TO_DESKTOP)
 
 
 def _body(session: Session) -> None:

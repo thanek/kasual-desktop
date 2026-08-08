@@ -147,6 +147,7 @@ def check_home_menu_over_game(kd: KDClient, pad: VirtualPad,
 # ── the Home menu ────────────────────────────────────────────────────────────
 
 # The action keys KD reports for its menu cards.
+GAMEPAD_ACCESS    = 'gamepad_access'
 HIDE_DESKTOP      = 'hide_desktop'
 RETURN_TO_DESKTOP = 'return_to_desktop'
 RETURN_TO_APP     = 'return_to_app'
