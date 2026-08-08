@@ -394,9 +394,11 @@ def _steam_gone() -> bool:
 
 
 def _shut_down_steam() -> None:
-    """`steam -shutdown` asks politely, and Big Picture is free to ignore it — it
-    quits from its own power menu. The teardown is not the place to drive that menu,
-    so an ignored request is escalated."""
+    """`steam -shutdown` on a dead Steam starts one: /usr/bin/steam execs the client
+    whatever the argument."""
+    if _steam_gone():
+        print('  steam already gone', flush=True)
+        return
     subprocess.run(['steam', '-shutdown'], stdout=subprocess.DEVNULL,
                    stderr=subprocess.DEVNULL, check=False)
     if _await_exit(_steam_gone, timeouts.EXIT):
