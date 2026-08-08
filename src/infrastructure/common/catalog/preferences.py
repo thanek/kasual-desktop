@@ -10,6 +10,7 @@ import json
 import logging
 from pathlib import Path
 
+from domain.preflight.hud import HudSetupMemory
 from domain.shell.background_hint import BackgroundHintMemory
 from domain.system.actions import POWER_ACTIONS, SLEEP
 from domain.system.power_preference import PowerPreference
@@ -20,6 +21,7 @@ logger = logging.getLogger(__name__)
 
 _POWER_DEFAULT_KEY = "power_default"
 _BACKGROUND_HINT_KEY = "background_hint_shown"
+_HUD_SETUP_KEY = "hud_setup_shown"
 
 
 def _preferences_file() -> Path:
@@ -67,4 +69,14 @@ class DesktopBackgroundHintMemory(BackgroundHintMemory):
     def mark_shown(self) -> None:
         data = _read()
         data[_BACKGROUND_HINT_KEY] = True
+        _write(data)
+
+
+class DesktopHudSetupMemory(HudSetupMemory):
+    def was_ever_shown(self) -> bool:
+        return bool(_read().get(_HUD_SETUP_KEY))
+
+    def mark_shown(self) -> None:
+        data = _read()
+        data[_HUD_SETUP_KEY] = True
         _write(data)

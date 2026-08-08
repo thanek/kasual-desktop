@@ -10,6 +10,11 @@
 
 Only the ``export`` line goes to stdout, so the eval above is safe; everything
 else is on stderr.
+
+The config also comes with Kasual Desktop's HUD setup card marked as seen. No card
+may interrupt a run, and the fix it offers is one the run must not take: MangoHud in
+the session's environment loads it into every app the scenarios launch, the bundled
+File Browser included, where it aborts them. Each scenario arms its own game instead.
 """
 
 from __future__ import annotations
@@ -91,6 +96,9 @@ def main() -> int:
         print(f'seeded {target} with the scenario tiles', file=sys.stderr)
     else:
         print(f'empty {target} — first launch will run onboarding', file=sys.stderr)
+
+    from infrastructure.common.catalog.preferences import DesktopHudSetupMemory
+    DesktopHudSetupMemory().mark_shown()
 
     print(f'export KD_CONFIG_DIR={shlex.quote(str(target))}')
     return 0

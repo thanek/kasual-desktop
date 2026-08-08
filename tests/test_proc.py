@@ -1,13 +1,15 @@
-"""Tests for infrastructure.linux.proc — game detection functions.
+"""Tests for infrastructure.linux.proc — game detection and process readings.
 
 These tests are pure: descends_from_launcher receives injected callables
-instead of real /proc reads; uses_translation_layer has open() mocked out.
+instead of real /proc reads; uses_translation_layer and process_environ have
+open() mocked out.
 """
 
 from unittest.mock import mock_open, patch
 
 from infrastructure.linux.proc import (
-    descends_from_launcher, expand_pid_tree, uses_translation_layer,
+    descends_from_launcher, expand_pid_tree, process_environ,
+    uses_translation_layer,
 )
 
 
@@ -123,3 +125,24 @@ class TestExpandPidTree:
 
     def test_empty_input(self):
         assert expand_pid_tree(set()) == set()
+
+
+class TestProcessEnviron:
+    def _reading(self, raw):
+        with patch("builtins.open", mock_open(read_data=raw)):
+            return process_environ(500)
+
+    def test_parses_nul_separated_entries(self):
+        assert self._reading(b"MANGOHUD=1\0PATH=/usr/bin\0") == {
+            "MANGOHUD": "1", "PATH": "/usr/bin"}
+
+    def test_keeps_values_containing_equals(self):
+        assert self._reading(b"LS_COLORS=di=01;34\0") == {"LS_COLORS": "di=01;34"}
+
+    def test_empty_for_a_process_that_is_gone(self):
+        with patch("builtins.open", side_effect=FileNotFoundError):
+            assert process_environ(500) == {}
+
+    def test_empty_for_a_process_of_another_user(self):
+        with patch("builtins.open", side_effect=PermissionError):
+            assert process_environ(500) == {}

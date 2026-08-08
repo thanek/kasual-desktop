@@ -2,7 +2,8 @@
 
 ``parent_pid`` / ``process_name`` are injected into domain collaborators
 (``TileBar``, ``ForegroundInspector``) that need process-tree information
-but must stay platform-free. The game-detection predicate ``is_game_pid``
+but must stay platform-free; ``process_environ`` reads what a running
+process was started with. The game-detection predicate ``is_game_pid``
 combines two orthogonal signals:
 
   * ``uses_translation_layer`` — reads /proc/<pid>/maps for the Windows→Vulkan
@@ -68,6 +69,18 @@ def process_name(pid: int) -> str | None:
             return f.read().strip()
     except OSError:
         return None
+
+
+def process_environ(pid: int) -> dict[str, str]:
+    """The environment *pid* was started with, or an empty mapping when it cannot
+    be read (the process is gone, or belongs to another user)."""
+    try:
+        with open(f"/proc/{pid}/environ", "rb") as f:
+            raw = f.read()
+    except OSError:
+        return {}
+    entries = (e.decode("utf-8", "replace") for e in raw.split(b"\0") if e)
+    return dict(e.split("=", 1) for e in entries if "=" in e)
 
 
 def expand_pid_tree(root_pids: set[int]) -> set[int]:

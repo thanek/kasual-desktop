@@ -209,7 +209,8 @@ def steam_devtools_client() -> Requirement:
 
 def mangohud_configured() -> Requirement:
     """KD offers the HUD toggle only where a MangoHud config exists, so a scenario
-    asserting the card would otherwise fail against the machine, not against KD."""
+    asserting the card would otherwise fail against the machine, not against KD.
+    Whether the game carries the layer is the run's own to assert."""
     def the_config_exists(_kd: KDClient | None) -> bool:
         from infrastructure.linux.hud.mangohud import MangoHudControl
         return MangoHudControl().is_available()

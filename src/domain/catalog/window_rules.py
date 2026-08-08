@@ -59,6 +59,17 @@ def is_app_running(
     return any(w.matches_app(app) for w in windows)
 
 
+def app_window(windows: Sequence[Window], app: App) -> Window | None:
+    """*app*'s own window — the one holding the screen where several are mapped, a
+    launcher's splash and its game being the usual pair. A Steam game tile matches
+    its ``steam_app_<id>`` window here, where :func:`active_unmanaged_window`
+    never would."""
+    own = [w for w in windows if w.pid and w.matches_app(app)]
+    if not own:
+        return None
+    return next((w for w in own if w.holds_screen), own[0])
+
+
 def active_unmanaged_window(
     windows: Sequence[Window],
     apps:    Sequence[App],
@@ -72,7 +83,7 @@ def active_unmanaged_window(
     front — a terminal the user clicked into — and the Home Overlay would then offer
     to close *that*."""
     active = next((w for w in windows if w.active and w.pid), None)
-    if active is None or not (active.fullscreen or active.covers_screen):
+    if active is None or not active.holds_screen:
         return None
     if any(active.matches_app(app) for app in apps):
         return None

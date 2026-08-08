@@ -120,6 +120,7 @@ class Application:
             on_cancel=on_cancel,
             set_hints=self._desktop.set_overlay_hints,
             desktop_minimized=not self._desktop.is_visible(),
+            foreground_pid=self._app_control.foreground_game_pid(),
         )
         # Swap the standalone hint bar to the overlay-menu controls (and keep it
         # on screen even over a running app). The bar is its own surface, so it

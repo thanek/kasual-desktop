@@ -28,6 +28,25 @@ if TYPE_CHECKING:
     from tests.behavioral.harness.session import Session
 
 
+HUD_ENV = {'MANGOHUD': '1'}
+
+
+def process_environ(pid: int) -> dict[str, str] | None:
+    """The environment *pid* was started with, or None when it cannot be read."""
+    try:
+        with open(f'/proc/{pid}/environ', 'rb') as environ:
+            raw = environ.read()
+    except OSError:
+        return None
+    entries = (e.decode('utf-8', 'replace') for e in raw.split(b'\0') if e)
+    return dict(e.split('=', 1) for e in entries if '=' in e)
+
+
+def carries_hud(environ: dict[str, str]) -> bool:
+    return ('DISABLE_MANGOHUD' not in environ
+            and environ.get('MANGOHUD', '') not in ('', '0'))
+
+
 class SteamGame:
     def __init__(self, session: Session, appid: str) -> None:
         self.app_id = f'steam_app_{appid}'
@@ -142,30 +161,51 @@ class SteamGame:
         else:
             report('game process alive', 'FAIL', f'pid {pid} not in /proc')
 
+    def check_hud_attached(self, window: dict) -> None:
+        """MangoHud's layer is gated on MANGOHUD=1 in the game's own environment:
+        without it nothing can put an overlay on screen, and KD offers no toggle."""
+        environ = self._environ_or_warn(window['pid'], 'the HUD is loaded into the game')
+        if environ is None:
+            return
+        if carries_hud(environ):
+            report('the HUD is loaded into the game', 'PASS',
+                   f'MANGOHUD={environ["MANGOHUD"]} in the game\'s environment')
+            return
+        report('the HUD is loaded into the game', 'FAIL',
+               'no MANGOHUD in the game\'s environment — MangoHud\'s Vulkan layer '
+               'never loaded, so nothing can put the overlay on screen and KD does '
+               'not offer the toggle. Whoever started this game did not carry the '
+               'variable: a Steam client warmed up without it starts every game '
+               'without it.')
+
     def check_hud_not_overridden(self, window: dict) -> None:
         """MANGOHUD_CONFIG in the game's environment overrides MangoHud's config file —
         the very file KD's HUD toggle writes. Steam's per-game FPS limit sets it, and
         the toggle then flips a file nobody reads: it looks like it worked, and nothing
         happens on screen.
         """
-        pid = window['pid']
-        try:
-            with open(f'/proc/{pid}/environ', 'rb') as environ:
-                variables = environ.read().decode('utf-8', 'replace').split('\0')
-        except OSError as exc:
-            report('nothing overrides the HUD config', 'WARN',
-                   f'could not read the environment of pid {pid}: {exc}')
+        environ = self._environ_or_warn(window['pid'],
+                                        'nothing overrides the HUD config')
+        if environ is None:
             return
 
-        override = next((v for v in variables if v.startswith('MANGOHUD_CONFIG=')), None)
+        override = environ.get('MANGOHUD_CONFIG')
         if override is None:
             report('nothing overrides the HUD config', 'PASS',
                    'no MANGOHUD_CONFIG in the game\'s environment')
             return
         report('nothing overrides the HUD config', 'FAIL',
-               f'the game runs with {override} — it shadows MangoHud.conf, so KD\'s '
-               'toggle writes a file the game never reads (Steam\'s per-game FPS limit '
-               'sets this)')
+               f'the game runs with MANGOHUD_CONFIG={override} — it shadows '
+               'MangoHud.conf, so KD\'s toggle writes a file the game never reads '
+               '(Steam\'s per-game FPS limit sets this)')
+
+    def _environ_or_warn(self, pid: int, check: str) -> dict[str, str] | None:
+        """None with *check* reported as a WARN: a check that cannot read the
+        process asserts nothing either way."""
+        environ = process_environ(pid)
+        if environ is None:
+            report(check, 'WARN', f'could not read the environment of pid {pid}')
+        return environ
 
     # ── a launcher that waits to be used ─────────────────────────────────────
 
@@ -225,15 +265,21 @@ def warm_up_steam() -> None:
     an already-running one runs the game. `-silent` keeps it off the screen, so KD holds
     the Home view while it warms.
 
+    The client is given the HUD's environment because it, not the `steam://` forwarder
+    KD spawns, is what starts the game.
+
     Waiting on the *logon* rather than on a process is what makes the run mean what it
     says: steamwebhelper is up within a second, while the client is still on its login
     screen queueing the request for another twenty.
     """
     already_running = not _steam_gone()
     logon = _ConnectionLog(running=already_running)
-    if not already_running:
+    if already_running:
+        _check_client_carries_hud()
+    else:
         subprocess.Popen(['steam', '-silent'], stdout=subprocess.DEVNULL,
-                         stderr=subprocess.DEVNULL, start_new_session=True)
+                         stderr=subprocess.DEVNULL, start_new_session=True,
+                         env={**os.environ, **HUD_ENV})
     deadline = time.monotonic() + timeouts.STEAM_UI
     with progress.waiting('Steam warming up in the background', timeouts.STEAM_UI) as bar:
         while time.monotonic() < deadline:
@@ -246,6 +292,19 @@ def warm_up_steam() -> None:
             time.sleep(0.5)
     report('Steam warmed up in the background', 'WARN',
            'the client never logged in — launching the tile anyway')
+
+
+def _check_client_carries_hud() -> None:
+    """Said here, where it can still be acted on, rather than as a puzzling HUD
+    failure twenty minutes into the run."""
+    pids = _pids_of('steam')
+    environ = process_environ(pids[0]) if pids else None
+    if environ is None or carries_hud(environ):
+        return
+    report('the warm Steam client carries the HUD environment', 'WARN',
+           'this client was started before the run, without MANGOHUD — the games it '
+           'starts load no MangoHud layer, so the HUD checks below will fail. Shut '
+           'Steam down and run again to have the harness start it.')
 
 
 class _ConnectionLog:

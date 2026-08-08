@@ -17,18 +17,30 @@ Overlay opens is reflected without restarting Kasual.
 The config alone never puts the overlay on screen: MangoHud's Vulkan layer is
 *implicit*, gated on ``MANGOHUD=1``, so a game started without that variable loads
 no layer at all and ``no_display`` has nothing to hide — hence ``launch_env``.
+
+That environment reaches only what Kasual Desktop starts: a running Steam takes
+``steam://rungameid/…`` over IPC and starts the game from its own. So
+``is_attached`` asks the game's process, and :class:`MangoHudSession` the
+session — the reading behind the setup card in :mod:`domain.preflight.hud`.
 """
 
 from __future__ import annotations
 
 import logging
+import os
 import re
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from pathlib import Path
 
+from domain.preflight.hud import HudEnvironment
 from domain.system.hud import HudControl
+from infrastructure.linux.proc import process_environ
 
 logger = logging.getLogger(__name__)
+
+_ENABLE_VAR  = "MANGOHUD"
+_DISABLE_VAR = "DISABLE_MANGOHUD"
+_OFF_VALUES  = ("", "0")
 
 # An active (uncommented) ``no_display`` directive, optionally with a value
 # (``no_display`` or ``no_display=1``). A leading ``#`` is not whitespace, so a
@@ -41,15 +53,46 @@ _COMMENTED_NO_DISPLAY = re.compile(r"^\s*#\s*no_display\b")
 _DEFAULT_PATH = Path.home() / ".config" / "MangoHud" / "MangoHud.conf"
 
 
+def _carries_hud(environ: Mapping[str, str]) -> bool:
+    """Whether a process started with *environ* loads MangoHud's layer."""
+    if _DISABLE_VAR in environ:
+        return False
+    return environ.get(_ENABLE_VAR, "") not in _OFF_VALUES
+
+
+class MangoHudSession(HudEnvironment):
+    """Read from Kasual Desktop's own environment: a session hands the same one to
+    every process it starts."""
+
+    def __init__(self, environ: Mapping[str, str] = os.environ) -> None:
+        self._environ = environ
+
+    def carried_by_session(self) -> bool:
+        return _carries_hud(self._environ)
+
+
 class MangoHudControl(HudControl):
-    def __init__(self, config_path: Path = _DEFAULT_PATH) -> None:
+    def __init__(
+        self,
+        config_path: Path = _DEFAULT_PATH,
+        environ_of: Callable[[int], Mapping[str, str]] = process_environ,
+    ) -> None:
         self._path = config_path
+        self._environ_of = environ_of
 
     def is_available(self) -> bool:
         return self._path.is_file()
 
     def launch_env(self) -> Mapping[str, str]:
-        return {"MANGOHUD": "1"}
+        return {_ENABLE_VAR: "1"}
+
+    def is_attached(self, pid: int | None) -> bool:
+        """Read from the environment *pid* was started with, not from the libraries
+        it has mapped: a game that has not created its Vulkan device yet has mapped
+        none, and the toggle would flicker while the game starts up."""
+        if pid is None:
+            return False
+        return _carries_hud(self._environ_of(pid))
 
     def is_enabled(self) -> bool:
         # Absent config: nothing forces the HUD off, so it counts as enabled.

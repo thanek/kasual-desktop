@@ -184,6 +184,7 @@ class HomeMenuContent(QWidget):
         set_hints: Callable | None,
         request_hide: Callable[[], None],
         desktop_minimized: bool = False,
+        foreground_pid: int | None = None,
         header=None,
         on_power_chooser: Callable[[], None] | None = None,
     ) -> None:
@@ -203,6 +204,7 @@ class HomeMenuContent(QWidget):
             brightness_controllable=self._brightness.is_controllable(),
             power_default=self._power.default_key(),
             foreground_is_game=foreground_is_game,
+            foreground_pid=foreground_pid,
             # Network / Notifications live on the header when one is present, so
             # don't repeat them in the Actions grid.
             include_status_actions=header is None,

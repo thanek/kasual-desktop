@@ -18,6 +18,12 @@ class Window:
     desktop_file:   str  = ""   # freedesktop desktopFileName (may include ".desktop")
     resource_class: str  = ""   # X11/Wayland app id
 
+    @property
+    def holds_screen(self) -> bool:
+        """Declared fullscreen, or simply sized to cover the screen — which is how
+        a game that never asked shows up."""
+        return self.fullscreen or self.covers_screen
+
     def matches_app(self, app: App) -> bool:
         """True if this window belongs to *app*, matching the resourceClass or the
         desktopFile basename against the app's identity keys. Both window keys,

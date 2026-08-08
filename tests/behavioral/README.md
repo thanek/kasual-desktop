@@ -308,7 +308,9 @@ first draft of this suite "passed" through.
   so the run reads the question and which way it is aimed before answering it.
 - **`kcd`** — tile → a warmed Steam → the splash → the game → the Home Menu over it,
   where the in-game HUD toggle is exercised (the one place a game is already up to test
-  it against). Launched from the game's own tile.
+  it against). Launched from the game's own tile. The warm-up starts Steam with
+  `MANGOHUD=1`, because it is the running client — not the `steam://` forwarder KD
+  spawns — that starts the game, and a game without the layer gets no toggle at all.
 - **`kcd_cold`** — the same tile, but with Steam **cold**: the `steam://rungameid` URL
   opens Big Picture and drops the launch, so the run pushes the game through Steam's UI
   with the pad, then asserts the game reaches the screen and the Home Menu comes back
@@ -417,9 +419,12 @@ screen, showing nothing:
 The seed holds just the tiles the scenarios touch (plus YouTube), so they are
 present whatever the machine's own catalog looks like, and KD's writes land in the
 temp directory instead of your real config — `config_root()` honours `KD_CONFIG_DIR`
-over `XDG_CONFIG_HOME`. (The steps are also runnable by hand:
-`prepare_config.py` prints the `export KD_CONFIG_DIR=…` line, then `KD_TEST_API=1
-./kasual.sh`.)
+over `XDG_CONFIG_HOME`. The seed also marks KD's HUD setup card as seen, so no card
+interrupts a run: the session deliberately does *not* carry `MANGOHUD`, since that
+would load MangoHud into every app the scenarios launch (it aborts the bundled File
+Browser), and each scenario arms the HUD for its own game instead. (The steps are
+also runnable by hand: `prepare_config.py` prints the `export KD_CONFIG_DIR=…` line,
+then `KD_TEST_API=1 ./kasual.sh`.)
 
 Then, in another terminal, `run` — its arguments pass straight to `run.py`:
 

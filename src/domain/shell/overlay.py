@@ -25,6 +25,7 @@ class SectionedHomeOverlay(Dismissable, Protocol):
         on_cancel: Callable[[], None] | None,
         set_hints: Callable[[Hints], None],
         desktop_minimized: bool = False,
+        foreground_pid: int | None = None,
     ) -> None:
         """``desktop_minimized`` distinguishes the two foreground-less contexts so
         the overlay can pre-focus the right card: on the bare Home screen it

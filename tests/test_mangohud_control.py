@@ -91,6 +91,36 @@ class TestDisable:
         assert path.read_text() == "no_display\n"  # untouched
 
 
+class TestAttachment:
+    """Whether the layer loaded into the game, read from the environment the
+    process was started with."""
+
+    def _attached_to(self, tmp_path, environ, pid=500):
+        control = MangoHudControl(config_path=tmp_path / "MangoHud.conf",
+                                  environ_of=lambda _pid: environ)
+        return control.is_attached(pid)
+
+    def test_attached_when_the_game_carries_the_variable(self, tmp_path):
+        assert self._attached_to(tmp_path, {"MANGOHUD": "1"}) is True
+
+    def test_not_attached_without_it(self, tmp_path):
+        """What a game started by an already-running launcher comes up with."""
+        assert self._attached_to(tmp_path, {"PATH": "/usr/bin"}) is False
+
+    def test_zero_does_not_count(self, tmp_path):
+        assert self._attached_to(tmp_path, {"MANGOHUD": "0"}) is False
+
+    def test_kill_switch_wins(self, tmp_path):
+        assert self._attached_to(
+            tmp_path, {"MANGOHUD": "1", "DISABLE_MANGOHUD": "1"}) is False
+
+    def test_unreadable_process_is_not_attached(self, tmp_path):
+        assert self._attached_to(tmp_path, {}) is False
+
+    def test_no_process_is_not_attached(self, tmp_path):
+        assert self._attached_to(tmp_path, {"MANGOHUD": "1"}, pid=None) is False
+
+
 class TestRoundTrip:
     def test_disable_then_enable_returns_enabled(self, tmp_path):
         control, _ = _control(tmp_path, "fps_limit=60\n")

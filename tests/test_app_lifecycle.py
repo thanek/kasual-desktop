@@ -806,6 +806,52 @@ class TestForegroundIsGame:
         assert c.lc.foreground_is_game() is True
 
 
+class TestForegroundGamePid:
+    """The process the HUD has to be loaded into to reach the screen."""
+
+    def test_idle_has_no_pid(self):
+        assert _make().lc.foreground_game_pid() is None
+
+    def test_window_target_answers_with_its_own_pid(self):
+        c = _make()
+        c.fg.set(WindowTarget(window_id="g1", name="KCD", pid=500))
+        assert c.lc.foreground_game_pid() == 500
+
+    def test_spawned_game_window_wins_over_the_launcher_tile(self):
+        """The tile is the launcher and its process is the launcher's; the game
+        draws from its own, in a window that matches no tile."""
+        c = _make(apps=[_app(command="steam")])
+        c.am.running_pid.return_value = 100
+        c.fg.set(AppTarget(index=0, app_id="app0", name="Steam"))
+        c.wm.cached_windows.return_value = [
+            Window(id="g1", title="KCD", pid=500, active=True, fullscreen=True,
+                   resource_class="kcd"),
+        ]
+        assert c.lc.foreground_game_pid() == 500
+
+    def test_a_steam_game_tile_answers_with_its_own_window(self):
+        """The tile's own process is the `steam://` forwarder, which handed the
+        request to the running client and exited — and the game's window matches
+        the tile, so there is no *unmanaged* window to find it by either."""
+        c = _make(apps=[_steam_game_app(appid="379430", id="kcd")])
+        c.am.running_pid.return_value = 100
+        c.fg.set(AppTarget(index=0, app_id="kcd", name="KCD", is_game=True))
+        c.wm.cached_windows.return_value = [
+            Window(id="g1", title="KCD", pid=500, active=True, fullscreen=True,
+                   resource_class="steam_app_379430"),
+        ]
+        assert c.lc.foreground_game_pid() == 500
+
+    def test_falls_back_to_the_tiles_process(self):
+        """With no window mapped yet there is nothing to read a pid off, and the
+        process Kasual Desktop started is the best it has."""
+        c = _make(apps=[_game_app()])
+        c.am.running_pid.return_value = 321
+        c.fg.set(AppTarget(index=0, app_id="game0", name="Game"))
+        c.wm.cached_windows.return_value = []
+        assert c.lc.foreground_game_pid() == 321
+
+
 class TestDeferredShow:
     def test_restore_arms_show_watcher(self):
         c = _make()

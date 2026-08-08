@@ -73,7 +73,7 @@ from infrastructure.linux.notifications.notifier import FreedesktopNotifier
 from infrastructure.linux.network.network_manager import NMNetworkControl, NMNetworkMonitor
 from domain.notifications.center import NotificationCenter
 from infrastructure.common.catalog.preferences import (
-    DesktopBackgroundHintMemory, DesktopPowerPreference,
+    DesktopBackgroundHintMemory, DesktopHudSetupMemory, DesktopPowerPreference,
 )
 from domain.shell.background_hint import BackgroundHint
 from domain.shell.desktop_control import DesktopControl
@@ -134,6 +134,24 @@ def _layer_shell_gate(view) -> SetupGate | None:
         ),
         view,
     )
+
+
+def _hud_gate(view) -> SetupGate | None:
+    """Non-blocking, and asked at most once; a machine with no MangoHud config has
+    no HUD to lose and is never asked at all."""
+    from domain.preflight.hud import HudInSession
+    from domain.preflight.hud_recipes import all_recipes
+    from infrastructure.linux.hud.mangohud import MangoHudSession
+
+    memory = DesktopHudSetupMemory()
+    if not MangoHudControl().is_available() or memory.was_ever_shown():
+        return None
+    readiness = SetupReadiness(
+        HudInSession(MangoHudSession()), LinuxSystemFacts(), all_recipes())
+    if readiness.is_ready():
+        return None
+    memory.mark_shown()
+    return SetupGate(readiness, view)
 
 
 def _gamepad_access_gate(view) -> SetupGate:
@@ -325,8 +343,15 @@ def main() -> None:
             provisioning, provisioning_uc, gamepad, feedback,
             start_session_then_offer_background_hint)
 
+    def check_hud() -> None:
+        hud_setup = _hud_gate(gamepad_access_view)
+        if hud_setup is None:
+            start()
+        else:
+            hud_setup.ensure(start)
+
     def check_gamepad_access() -> None:
-        gamepad_access.ensure(start)
+        gamepad_access.ensure(check_hud)
 
     def check_layer_shell() -> None:
         layer_shell = _layer_shell_gate(gamepad_access_view)

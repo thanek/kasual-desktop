@@ -83,6 +83,9 @@ class AppLifecycle(AppControl):
     def foreground_pid(self) -> int | None:
         return self._inspector.foreground_pid()
 
+    def foreground_game_pid(self) -> int | None:
+        return self._inspector.foreground_game_pid()
+
     def foreground_is_game(self) -> bool:
         return self._inspector.foreground_is_game()
 

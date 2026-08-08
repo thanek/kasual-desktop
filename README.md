@@ -534,12 +534,15 @@ turn it on or off. The backend differs per platform:
 |---|---|---|
 | Overlay | [MangoHud](https://github.com/flightlessmango/MangoHud) | [RivaTuner Statistics Server](https://www.guru3d.com/page/rivatuner-rtss-overlay/) (MSI Afterburner) |
 | Mechanism | edits `no_display` in `MangoHud.conf` | flips RTSS's runtime OSD-visible flag |
-| Gated on | the config file existing | RTSS running |
+| Gated on | the config file existing, and the layer being loaded in the game | RTSS running |
 
 ### When the toggle appears
 
-Only over a **game** — never on the bare desktop or over ordinary apps. How a
-foreground is recognised as a game differs per platform:
+Only over a **game** — never on the bare desktop or over ordinary apps — and only
+over a game the overlay is actually loaded into. On Linux that means the game's
+own process carries `MANGOHUD=1`: a game started without it renders no overlay
+whatever the config file says, so a toggle over it would flip a state nothing on
+screen reads. How a foreground is recognised as a game differs per platform:
 
 - **Linux** — three signals, any one of which is sufficient:
   1. **Tile category** — the tile declares **`Categories=Game`** in its `.desktop`
@@ -577,9 +580,22 @@ foreground is recognised as a game differs per platform:
   (`X-Kasual-Env=MANGOHUD=0` opts one tile out).
 
   A launcher already running *outside* Kasual Desktop (Steam from your session's
-  autostart) never sees that variable, and its games inherit its environment.
-  Either let Kasual Desktop start the launcher, or set `MANGOHUD=1` session-wide
-  in `~/.config/environment.d/`.
+  autostart) never sees that variable, and its games inherit its environment —
+  including a launcher started by Kasual Desktop earlier and left running, since
+  a `steam://rungameid/…` tile then only hands the request to that client, which
+  starts the game itself. The fix that costs nothing is to **let Kasual Desktop
+  start the launcher**: close Steam and open it from its tile (or pick a game tile
+  with Steam closed), and every game that client starts carries the HUD. Kasual
+  Desktop says so itself, once, on a machine with MangoHud configured but no
+  `MANGOHUD` in its session — the toggle is missing over exactly those games
+  otherwise.
+
+  > Setting `MANGOHUD=1` session-wide in `~/.config/environment.d/` also works, and
+  > is blunter than it looks: MangoHud then loads into **every** Vulkan application
+  > the session starts, games or not. It runs its own sampling threads inside each
+  > one, and a fault in them takes the host application with it — MangoHud
+  > 0.8.3-rc1 aborts the bundled File Browser this way, from its NVIDIA sampler.
+  > Prefer the per-launcher route above.
 
   Note: `MANGOHUD=1` alone only injects into **Vulkan** apps; OpenGL games need
   the `mangohud` wrapper (`LD_PRELOAD`) — e.g. `mangohud %command%` in a game's

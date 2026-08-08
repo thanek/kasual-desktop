@@ -26,6 +26,11 @@ class HudControl(Protocol):
         empty where the HUD hooks running games by itself (RTSS)."""
         return {}
 
+    def is_attached(self, pid: int | None) -> bool:
+        """Whether the HUD is loaded into *pid* — ``launch_env`` reaches only what
+        Kasual Desktop starts itself. True where the HUD hooks games by itself."""
+        return True
+
 
 def hud_launch_env(hud: HudControl, app: App) -> Mapping[str, str]:
     """The HUD's :meth:`launch_env` for *app*, or nothing — only games get it, or
@@ -35,12 +40,15 @@ def hud_launch_env(hud: HudControl, app: App) -> Mapping[str, str]:
     return hud.launch_env()
 
 
-def hud_menu_item(hud: HudControl, foreground_is_game: bool) -> MenuItem | None:
-    """The HUD toggle, or ``None`` when not offered (needs a configured HUD and a
-    game foreground). The label always names what a press will do."""
+def hud_menu_item(hud: HudControl, foreground_is_game: bool,
+                  foreground_pid: int | None) -> MenuItem | None:
+    """The HUD toggle, or ``None`` when a press would have nothing to switch. The
+    label always names what a press will do."""
     if not hud.is_available():
         return None
     if not foreground_is_game:
+        return None
+    if not hud.is_attached(foreground_pid):
         return None
     if hud.is_enabled():
         return MenuItem(translate("Kasual Desktop", "Disable HUD"), TOGGLE_HUD, "fa5s.eye-slash")

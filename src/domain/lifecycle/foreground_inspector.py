@@ -7,7 +7,7 @@ from collections.abc import Callable
 
 from domain.catalog.live_catalog import LiveCatalog
 from domain.catalog.target import AppTarget, Target, WindowTarget
-from domain.catalog.window_rules import active_unmanaged_window
+from domain.catalog.window_rules import active_unmanaged_window, app_window
 from domain.lifecycle.process_manager import ProcessManager
 from domain.lifecycle.window_manager import WindowManager
 
@@ -62,6 +62,23 @@ class ForegroundInspector:
         """OS pid of the foreground app, if one is a running App tile."""
         target = self._foreground.current
         if isinstance(target, AppTarget):
+            return self._app_manager.running_pid(target.app_id)
+        return None
+
+    def foreground_game_pid(self) -> int | None:
+        """The pid the foreground game renders through. A window answers before the
+        tile's process, which a ``steam://`` tile leaves as an exited forwarder."""
+        target = self._foreground.current
+        if isinstance(target, WindowTarget):
+            return target.pid or None
+        if isinstance(target, AppTarget):
+            windows = self._wm.cached_windows()
+            spawned = active_unmanaged_window(windows, self._apps)
+            if spawned is not None:
+                return spawned.pid
+            own = app_window(windows, self._apps[target.index])
+            if own is not None:
+                return own.pid
             return self._app_manager.running_pid(target.app_id)
         return None
 

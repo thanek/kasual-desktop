@@ -16,12 +16,16 @@ from domain.catalog.target import AppTarget, WindowTarget
 
 
 class FakeHud:
-    def __init__(self, available=False, enabled=True):
+    def __init__(self, available=False, enabled=True, attached=True):
         self._available = available
         self._enabled = enabled
+        self._attached = attached
 
     def is_available(self):
         return self._available
+
+    def is_attached(self, pid):
+        return self._attached
 
     def is_enabled(self):
         return self._enabled
@@ -131,6 +135,10 @@ class TestAppContext:
 
     def test_no_hud_section_when_not_a_game(self):
         s = self._app(hud=FakeHud(available=True), game=False)
+        assert all(sec.kind != SectionKind.HUD for sec in s.sections)
+
+    def test_no_hud_section_when_the_game_does_not_carry_the_hud(self):
+        s = self._app(hud=FakeHud(available=True, attached=False), game=True)
         assert all(sec.kind != SectionKind.HUD for sec in s.sections)
 
     def test_window_target_label_and_cancel(self):

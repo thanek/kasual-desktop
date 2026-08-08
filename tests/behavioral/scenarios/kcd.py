@@ -7,7 +7,8 @@ the scenario only has to assert that nothing of KD sits over it.
 
 Steam is warmed up in the background first: a cold Steam started by the tile's URL
 opens in Big Picture and drops the launch, so the tile would prove nothing until the
-client is already up.
+client is already up. The warm client carries the HUD's environment, because it — not
+the `steam://` forwarder KD spawns — is what starts the game.
 """
 
 from tests.behavioral.harness import requirements as require
@@ -36,14 +37,15 @@ def _body(session: Session) -> None:
 
     window = game.wait_fullscreen()
     game.check_process(window)
+    game.check_hud_attached(window)
     game.check_hud_not_overridden(window)
     shell.check_kd_ceded(session.kd)
 
-    # A game is the only context the HUD toggle exists in, and the menu is the only
-    # way to it — so it is asserted here, where a game is already running, rather than
-    # in a scenario of its own that would have to compile its shaders again to ask one
-    # question. Picking a card collapses the menu, so flipping it back needs the hold
-    # again: over a game, KD keeps the hold and leaves the click to the game.
+    # A game carrying the HUD is the only context the toggle exists in, and the menu is
+    # the only way to it — so it is asserted here, where such a game is already running,
+    # rather than in a scenario of its own that would have to compile its shaders again
+    # to ask one question. Picking a card collapses the menu, so flipping it back needs
+    # the hold again: over a game, KD keeps the hold and leaves the click to the game.
     shell.check_home_menu_over_game(session.kd, session.pad, game)
     shell.toggle_hud(session.kd, session.pad)
     shell.open_home_menu(session.kd, session.pad, hold=True)

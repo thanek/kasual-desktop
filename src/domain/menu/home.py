@@ -69,6 +69,7 @@ def compose_home_sections(
     brightness_controllable: bool,
     power_default: str,
     foreground_is_game: bool = False,
+    foreground_pid: int | None = None,
     include_status_actions: bool = True,
     gamepad_access_checkable: bool = False,
 ) -> HomeSections:
@@ -105,7 +106,7 @@ def compose_home_sections(
     ]
     sections = [HomeSection(SectionKind.QUICK, quick),
                 HomeSection(SectionKind.ACTIONS, actions)]
-    hud_item = hud_menu_item(hud, foreground_is_game)
+    hud_item = hud_menu_item(hud, foreground_is_game, foreground_pid)
     if hud_item is not None:
         sections.append(HomeSection(SectionKind.HUD, [hud_item]))
     return HomeSections(sections, cancel_restores=foreground)

@@ -364,6 +364,7 @@ class HomeSurface(QWidget):
         on_cancel: Callable[[], None] | None,
         set_hints: Callable | None,
         desktop_minimized: bool = False,
+        foreground_pid: int | None = None,
     ) -> None:
         """Map the surface straight to the expanded layout over an app / minimized
         Kasual. The controller wires the dispatch (its ``on_action`` handles app
@@ -376,6 +377,7 @@ class HomeSurface(QWidget):
             foreground, foreground_is_game, hud,
             on_action=on_action, on_cancel=on_cancel, set_hints=set_hints,
             request_hide=self.dismiss, desktop_minimized=desktop_minimized,
+            foreground_pid=foreground_pid,
             header=self._header, on_power_chooser=self._on_power_chooser,
         )
         self._deferred_unmap.cancel()
