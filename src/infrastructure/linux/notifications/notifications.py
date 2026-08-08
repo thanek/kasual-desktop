@@ -219,8 +219,8 @@ class FreedesktopNotificationMonitor(QObject, NotificationSource, metaclass=Prot
         if self._proc is not None:
             try:
                 self._proc.terminate()
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug("Terminating the notification monitor failed: %s", exc)
             self._proc = None
 
     # ── Reader thread ────────────────────────────────────────────────────────

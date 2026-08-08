@@ -10,16 +10,17 @@ package, it may reach the widget's internal collaborators without widening
 its public API.
 """
 
+from domain.catalog.app import App
 from domain.catalog.app_pinner import AppPinner
 from domain.catalog.catalog import AppCatalog
 from domain.catalog.live_catalog import LiveCatalog
 from domain.catalog.tile_settings_editor import TileSettingsEditor
 from domain.input.pad_control import PadControl
 from domain.lifecycle.app_lifecycle import AppLifecycle
-from domain.lifecycle.cede_depth import CedeDepth
 from domain.lifecycle.foreground_inspector import ForegroundInspector
-from domain.lifecycle.launch_hide import LaunchHide
-from domain.lifecycle.launch_show import LaunchShow
+from domain.lifecycle.launch_transitions import (
+    CedeDepthFactory, HideFactory, LaunchTransitions, ShowFactory,
+)
 from domain.lifecycle.process_manager import ProcessManager
 from domain.lifecycle.prompts import LocalizedPrompts
 from domain.lifecycle.window_manager import WindowManager
@@ -30,6 +31,7 @@ from domain.navigation.tile_mover import TileMover
 from domain.network.control import NetworkControl
 from domain.notifications.center import NotificationCenter
 from domain.provisioning.add_apps import AppAdder
+from domain.setup.gate import SetupGate
 from domain.shared.feedback import Feedback
 from domain.shared.scheduler import Scheduler
 from domain.shell.desktop import Desktop as DesktopCoordinator
@@ -46,62 +48,15 @@ from domain.system.runner import ActionRunner
 from domain.system.volume import VolumeControl
 from domain.system.brightness import BrightnessControl
 
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
+
+from infrastructure.common.qt.overlays.setup_overlay import QtSetupView
 
 from .desktop import Desktop
 from .dialog_host_controller import DialogHostController
 from .home_surface import HomeSurface
 from .power_popover_controller import PowerPopoverController
 from .surface import DesktopSurface
-
-
-class _ImmediateHide:
-    """Fallback ``LaunchHide``: hides the Desktop immediately, no window-map wait.
-    Used when no ``deferred_hide_factory`` is injected (e.g. tests), keeping
-    this shared builder free of any platform import."""
-
-    def __init__(self, on_hide: Callable[[], None]) -> None:
-        self._on_hide = on_hide
-
-    @property
-    def is_armed(self) -> bool:
-        return False
-
-    def arm(self, app) -> None:
-        self._on_hide()
-
-    def cancel(self) -> None:
-        pass
-
-
-class _NoDeferredShow:
-    """Fallback ``LaunchShow``: never returns early — the Desktop comes back when
-    the app's process exits, as it did before window-driven return existed."""
-
-    @property
-    def is_armed(self) -> bool:
-        return False
-
-    def arm(self, app) -> None:
-        pass
-
-    def cancel(self) -> None:
-        pass
-
-
-class _NoCedeDepth:
-    """Fallback ``CedeDepth``: for surfaces whose cede is a plain unmap (Windows,
-    tests), there is no ceded surface left to sink under the app's windows."""
-
-    @property
-    def is_armed(self) -> bool:
-        return False
-
-    def arm(self, app) -> None:
-        pass
-
-    def cancel(self) -> None:
-        pass
 
 
 def build_desktop(
@@ -122,13 +77,16 @@ def build_desktop(
     settings_store: TileSettingsStore,
     app_pinning: AppPinning,
     surface: DesktopSurface | None = None,
-    deferred_hide_factory: 'Callable[[WindowManager, ProcessManager, Callable[[], None]], LaunchHide] | None' = None,
-    deferred_show_factory: 'Callable[[WindowManager, ProcessManager, Callable[[], None]], LaunchShow] | None' = None,
-    cede_depth_factory: 'Callable[[WindowManager, ProcessManager, Callable[[bool], None]], CedeDepth] | None' = None,
+    deferred_hide_factory: HideFactory | None = None,
+    deferred_show_factory: ShowFactory | None = None,
+    cede_depth_factory: CedeDepthFactory | None = None,
     parent_of: Callable[[int], int | None] | None = None,
     is_game_pid: Callable[[int], bool] = lambda _: False,
     app_adder: AppAdder | None = None,
+    setup_gate: SetupGate | None = None,
+    setup_view: QtSetupView | None = None,
     power_preference: PowerPreference | None = None,
+    launch_env: 'Callable[[App], Mapping[str, str]] | None' = None,
 ) -> Desktop:
     """Build a fully wired Desktop: the view widget plus its domain coordinators.
 
@@ -138,6 +96,9 @@ def build_desktop(
     ``is_game_pid`` is the platform predicate that decides whether a foreground
     pid is a game (gates the in-game HUD toggle). KDE wires ``kde.proc.is_game_pid``
     (graphics-API maps check + launcher ancestry); Windows wires the RTSS signal.
+
+    ``launch_env`` contributes extra environment per launched app (the in-game HUD
+    arms a game at spawn time); the app's own ``X-Kasual-Env`` still wins over it.
 
     ``power_preference`` also gates the power-driven chrome: without it (bare
     test builds) no PowerMenu, Home surface or Power popover is built, and the
@@ -163,6 +124,8 @@ def build_desktop(
         surface=surface,
         parent_of=parent_of,
         app_adder=app_adder,
+        setup_gate=setup_gate,
+        setup_view=setup_view,
     )
 
     nav = FocusNavigator(
@@ -181,33 +144,17 @@ def build_desktop(
         hint_bar=widget._hintbar, restore_hints=nav.render,
     )
 
-    # Hides only once the launched app's window maps. Built by a factory since it
-    # needs collaborators the root can't supply directly; with none, an immediate
-    # hide keeps this shared builder free of any platform import.
-    if deferred_hide_factory is not None:
-        deferred_hide = deferred_hide_factory(
-            window_manager, process_manager,
-            widget.hide_view,     # cede: stay on TOP, Keyboard.NONE
-            widget.withdraw_view,  # hide: truly unmap
-        )
-    else:
-        deferred_hide = _ImmediateHide(widget.hide_view)
-    # Returns the Desktop the moment the app's last window unmaps. Its callback
-    # fires long after ``lifecycle`` below is bound.
-    if deferred_show_factory is not None:
-        deferred_show = deferred_show_factory(
-            window_manager, process_manager, lambda: lifecycle.on_app_windows_gone(),
-        )
-    else:
-        deferred_show = _NoDeferredShow()
-    # Keeps the ceded Desktop under whatever the app puts on screen — a launcher or
-    # a splash would otherwise end up beneath it, unseen and unclickable.
-    if cede_depth_factory is not None:
-        cede_depth = cede_depth_factory(
-            window_manager, process_manager, widget.sink_view,
-        )
-    else:
-        cede_depth = _NoCedeDepth()
+    # on_show fires long after ``lifecycle`` below is bound.
+    transitions = LaunchTransitions.build(
+        window_manager, process_manager,
+        on_cede=widget.hide_view,        # stay on TOP, Keyboard.NONE
+        on_hide=widget.withdraw_view,    # truly unmap
+        on_show=lambda: lifecycle.on_app_windows_gone(),
+        on_sink=widget.sink_view,
+        hide_factory=deferred_hide_factory,
+        show_factory=deferred_show_factory,
+        cede_depth_factory=cede_depth_factory,
+    )
     # Read-only foreground/game introspection, split off the coordinator.
     inspector = ForegroundInspector(
         foreground=widget._foreground,
@@ -225,9 +172,7 @@ def build_desktop(
         app_manager=process_manager,
         apps=live_apps,
         foreground=widget._foreground,
-        deferred_hide=deferred_hide,
-        deferred_show=deferred_show,
-        cede_depth=cede_depth,
+        transitions=transitions,
         tilebar=widget._tilebar,
         pad_handler=widget._handle_pad,
         scheduler=scheduler,
@@ -235,6 +180,7 @@ def build_desktop(
         prompts=LocalizedPrompts(),
         inspector=inspector,
         is_paused=lambda: widget._state.paused,
+        launch_env=launch_env or (lambda _app: {}),
     )
     # Coordinates show/pause/resume of the Desktop surface (the widget = view).
     desktop_coordinator = DesktopCoordinator(
@@ -274,6 +220,8 @@ def build_desktop(
             begin_hints=lambda: chrome.begin_overlay_hints(),
             set_hints=lambda h: chrome.set_overlay_hints(h),
             end_hints=lambda: chrome.end_overlay_hints(),
+            gamepad_access_checkable=(
+                setup_gate is not None and setup_view is not None),
         )
         home_surface.install_surface()
         power_popover = PowerPopoverController(

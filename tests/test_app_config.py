@@ -81,7 +81,7 @@ class TestLoadApps:
         assert a.env == {"MANGOHUD": "1"}
 
     def test_a_bundled_app_gets_its_identity_back(self, apps_root):
-        """A tile written before Kasual's own apps announced an app_id has no
+        """A tile written before Kasual Desktop's own apps announced an app_id has no
         StartupWMClass, and their windows then look foreign to Kasual."""
         _write(apps_root, "files.desktop", (
             "[Desktop Entry]\nType=Application\nName=File Browser\n"

@@ -82,21 +82,19 @@ def _resolve_icon_pixmap(icon_hint: str | None, app_name: str, size: int) -> QPi
 # Row background, scoped to #notifrow so the child labels (transparent) are
 # untouched. Selection just swaps the frame's background + border.
 _ROW_NORMAL = (
-    "#notifrow { background-color: #2e3440; border-radius: 8px;"
+    f"#notifrow {{ background-color: {styles.COLOR_CARD_BG}; border-radius: 8px;"
     " border: 2px solid transparent; }"
 )
 # Unread (new since last viewed): lifted background + a left accent border, so
 # new notifications stand out from already-seen ones even when not selected.
 _ROW_UNREAD = (
-    "#notifrow { background-color: #3b4252; border-radius: 8px;"
-    " border: 2px solid transparent; border-left: 4px solid #88c0d0; }"
+    f"#notifrow {{ background-color: {styles.COLOR_SURFACE_HI}; border-radius: 8px;"
+    f" border: 2px solid transparent; border-left: 4px solid {styles.COLOR_ACCENT}; }}"
 )
 _ROW_SELECTED = (
-    "#notifrow { background-color: #434c5e; border-radius: 8px;"
-    " border: 2px solid #88c0d0; }"
+    f"#notifrow {{ background-color: {styles.COLOR_BTN_BG}; border-radius: 8px;"
+    f" border: 2px solid {styles.COLOR_ACCENT}; }}"
 )
-
-_ACCENT = "#88c0d0"   # unread accent (border + dot)
 
 
 class NotificationsOverlay(BaseOverlay):
@@ -232,7 +230,7 @@ class NotificationsOverlay(BaseOverlay):
         meta_row.setSpacing(8)
         if unread:
             dot = QLabel("●")
-            dot.setStyleSheet(f"font-size: 12px; color: {_ACCENT}; background: transparent;")
+            dot.setStyleSheet(f"font-size: 12px; color: {styles.COLOR_ACCENT}; background: transparent;")
             meta_row.addWidget(dot)
         meta = QLabel(f"{n.app_name}   ·   {relative_age(n.timestamp, now)}")
         meta.setStyleSheet("font-size: 13px; color: #9aa0aa; background: transparent;")

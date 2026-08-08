@@ -24,6 +24,11 @@ class TestDispatch:
         ActionRunner(deps, _auto_confirm).run("hide_desktop")
         deps.desktop.pause.assert_called_once()
 
+    def test_gamepad_access_opens_the_setup_card(self, qapp):
+        deps = _deps()
+        ActionRunner(deps, _auto_confirm).run("gamepad_access")
+        deps.desktop.open_gamepad_access_check.assert_called_once()
+
     def test_sleep_suspends(self, qapp):
         deps = _deps()
         ActionRunner(deps, _auto_confirm).run("sleep")

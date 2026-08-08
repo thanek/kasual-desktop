@@ -31,6 +31,8 @@ class WindowSource(Protocol):
     def wait_for(self, predicate: Callable[[dict], bool], timeout_s: float,
                  description: str) -> dict: ...
 
+    def catch_up(self) -> None: ...
+
     def last_stack(self) -> list[dict]: ...
 
 
@@ -69,6 +71,21 @@ class EventLog:
                     int(min(remaining, 0.2) * 1000),
                 )
 
+    def catch_up(self, quiet_s: float = 0.4, limit_s: float = 3.0) -> None:
+        """The log is only as current as the last turn of the event loop: a step that
+        sleeps or polls KD over HTTP leaves the compositor's signals queued — measured
+        on GNOME, ten at once — so a wait for *nothing* takes delivery before it starts.
+        """
+        deadline = time.monotonic() + limit_s
+        quiet_at = time.monotonic() + quiet_s
+        while time.monotonic() < min(deadline, quiet_at):
+            arrived = len(self.events)
+            QCoreApplication.processEvents(
+                QEventLoop.ProcessEventsFlag.WaitForMoreEvents, 50)
+            if len(self.events) != arrived:
+                quiet_at = time.monotonic() + quiet_s
+        self._cursor = len(self.events)
+
     def last_stack(self) -> list[dict]:
         return self.events[-1]['stack'] if self.events else []
 
@@ -97,7 +114,8 @@ def find(stack: list[dict], app_id: str | None = None,
 
 
 _BACKENDS = {'kde': 'kwin', 'gnome': 'gnome', 'hyprland': 'hyprland', 'sway': 'sway',
-             'cosmic': 'cosmic'}
+             'cosmic': 'cosmic',
+             'labwc': 'foreign-toplevel', 'wayfire': 'foreign-toplevel'}
 
 
 def backend() -> str | None:
@@ -125,6 +143,11 @@ def build_window_source() -> WindowSource:
     if name == 'cosmic':
         from tests.behavioral.harness.sources.cosmic import CosmicWindowSource
         return CosmicWindowSource()
+    if name == 'foreign-toplevel':
+        from tests.behavioral.harness.sources.foreign_toplevel import (
+            ForeignToplevelWindowSource,
+        )
+        return ForeignToplevelWindowSource()
     report('window source', 'INFO',
            'no window backend for this compositor — a scenario that reads windows '
            'will not run here (see tests/behavioral/PORTING.md)')

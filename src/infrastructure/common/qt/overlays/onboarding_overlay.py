@@ -100,7 +100,7 @@ class OnboardingOverlay(BaseOverlay, ProvisioningView, metaclass=ProtocolQtMeta)
         self._title = QLabel(self.tr("Welcome — pick your apps"))
         self._title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._title.setStyleSheet(
-            "font-size: 28px; color: #88c0d0; font-weight: bold;"
+            f"font-size: 28px; color: {styles.COLOR_ACCENT}; font-weight: bold;"
             " background: transparent; padding-bottom: 8px;"
         )
         layout.addWidget(self._title)

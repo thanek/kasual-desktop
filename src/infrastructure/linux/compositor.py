@@ -1,10 +1,11 @@
 """Compositor detection and the backend seam that picks DE-specific adapters.
 
-Kasual's only hard desktop-environment dependencies are window management and
-the wallpaper source. The rest of the stack talks to ports, so a single
+Kasual Desktop's only hard desktop-environment dependencies are window management 
+and the wallpaper source. The rest of the stack talks to ports, so a single
 detection here decides which concrete adapters the composition root wires up.
-An unrecognised compositor degrades to no-op window management rather than
-crashing, so the app still starts (e.g. on labwc) with reduced functionality.
+A compositor that offers neither an IPC CLI nor a toplevel-management protocol
+degrades to no-op window management rather than crashing, so the app still starts
+with reduced functionality.
 """
 
 import enum
@@ -33,7 +34,14 @@ class Compositor(enum.Enum):
     SWAY = "sway"
     HYPRLAND = "hyprland"
     COSMIC = "cosmic"
+    LABWC = "labwc"
+    WAYFIRE = "wayfire"
     UNKNOWN = "unknown"
+
+
+WLROOTS = frozenset({
+    Compositor.SWAY, Compositor.HYPRLAND, Compositor.LABWC, Compositor.WAYFIRE,
+})
 
 
 def _is_socket(path: str) -> bool:
@@ -60,6 +68,15 @@ def _in_hyprland_session() -> bool:
     )
 
 
+def _session_names() -> str:
+    """The session's own names, lowercased. Raspberry Pi OS reports its compositor
+    only inside a composite name (``LXDE-pi-labwc``), so these are matched loosely."""
+    return ":".join((
+        os.environ.get("XDG_CURRENT_DESKTOP", ""),
+        os.environ.get("XDG_SESSION_DESKTOP", ""),
+    )).lower()
+
+
 def detect_compositor() -> Compositor:
     """Identify the running Wayland compositor from session env vars.
 
@@ -76,17 +93,21 @@ def detect_compositor() -> Compositor:
         return Compositor.SWAY
     if _in_hyprland_session():
         return Compositor.HYPRLAND
-    desktop = os.environ.get("XDG_CURRENT_DESKTOP", "").lower()
+    desktop = _session_names()
     if os.environ.get("KDE_FULL_SESSION") or "kde" in desktop:
         return Compositor.KDE
     if "gnome" in desktop:
         return Compositor.GNOME
     if "cosmic" in desktop:
         return Compositor.COSMIC
+    if "labwc" in desktop:
+        return Compositor.LABWC
+    if "wayfire" in desktop:
+        return Compositor.WAYFIRE
     return Compositor.UNKNOWN
 
 
-def layer_shell_available() -> bool:
+def layer_shell_available(compositor: Compositor | None = None) -> bool:
     """Whether Kasual's surfaces can really become wlr-layer-shell surfaces.
 
     Two independent things must hold, and both have bitten: the compositor has to
@@ -96,7 +117,7 @@ def layer_shell_available() -> bool:
     integration when it cannot load leaves every window unmapped, and an anchored
     overlay that waits for the compositor to size it never appears at all.
     """
-    if detect_compositor() is Compositor.GNOME:
+    if (compositor or detect_compositor()) is Compositor.GNOME:
         return False
     from infrastructure.linux.wayland.layer_shell import is_available
     return is_available()
@@ -155,9 +176,9 @@ class NullWindowManager(WindowManager):
         pass
 
 
-def build_window_manager() -> WindowManager:
-    """Construct the WindowManager adapter for the detected compositor."""
-    compositor = detect_compositor()
+def build_window_manager(compositor: Compositor | None = None) -> WindowManager:
+    """Construct the WindowManager adapter for *compositor* (detected if omitted)."""
+    compositor = compositor or detect_compositor()
     if compositor is Compositor.KDE:
         from infrastructure.kde.wm.window_manager import KWinWindowManager
         return KWinWindowManager()
@@ -176,6 +197,9 @@ def build_window_manager() -> WindowManager:
             "GNOME session without the Kasual Helper extension; window switching disabled")
         return NullWindowManager()
     if compositor is Compositor.COSMIC:
+        # cosmic-comp speaks ext-foreign-toplevel-list plus its own cosmic-toplevel
+        # extensions, not wlr-foreign-toplevel-management, so it needs its own
+        # backend rather than the shared wlroots one below.
         from infrastructure.cosmic.wm.window_manager import CosmicWindowManager
         from infrastructure.linux.wayland.client import WaylandError
         try:
@@ -185,6 +209,10 @@ def build_window_manager() -> WindowManager:
                 "COSMIC session without the toplevel protocols (%s); "
                 "window switching disabled", exc)
             return NullWindowManager()
+    from infrastructure.wlroots.wm import foreign_toplevel
+    window_manager = foreign_toplevel.build()
+    if window_manager is not None:
+        return window_manager
     logger.warning(
         "No window-manager backend for compositor %s; window switching disabled",
         compositor.value,
@@ -192,9 +220,9 @@ def build_window_manager() -> WindowManager:
     return NullWindowManager()
 
 
-def build_system_wallpaper() -> SystemWallpaper:
-    """Construct the SystemWallpaper adapter for the detected compositor."""
-    compositor = detect_compositor()
+def build_system_wallpaper(compositor: Compositor | None = None) -> SystemWallpaper:
+    """Construct the SystemWallpaper adapter for *compositor* (detected if omitted)."""
+    compositor = compositor or detect_compositor()
     if compositor is Compositor.KDE:
         from infrastructure.kde.display.wallpaper import KdeSystemWallpaper
         return KdeSystemWallpaper()
@@ -204,18 +232,21 @@ def build_system_wallpaper() -> SystemWallpaper:
     if compositor is Compositor.HYPRLAND:
         from infrastructure.wlroots.display.wallpaper import HyprlandWallpaper
         return HyprlandWallpaper()
+    if compositor is Compositor.WAYFIRE:
+        from infrastructure.wlroots.display.wallpaper import WayfireWallpaper
+        return WayfireWallpaper()
     if compositor is Compositor.GNOME:
         from infrastructure.gnome.display.wallpaper import GnomeSystemWallpaper
         return GnomeSystemWallpaper()
     if compositor is Compositor.COSMIC:
         from infrastructure.cosmic.display.wallpaper import CosmicSystemWallpaper
         return CosmicSystemWallpaper()
-    from infrastructure.linux.display.wallpaper import StaticFileWallpaper
-    return StaticFileWallpaper()
+    from infrastructure.linux.display.wallpaper import PcmanfmWallpaper
+    return PcmanfmWallpaper()
 
 
-def build_screensaver_waker() -> "ScreenSaverWaker":
-    """Construct the gamepad-activity → screensaver wake for the detected compositor.
+def build_screensaver_waker(compositor: Compositor | None = None) -> "ScreenSaverWaker":
+    """Construct the gamepad-activity → screensaver wake for *compositor*.
 
     GNOME's freedesktop ScreenSaver proxy only handles Inhibit, so the poke goes
     through the Kasual Helper extension there; everywhere else the standard
@@ -223,14 +254,14 @@ def build_screensaver_waker() -> "ScreenSaverWaker":
     from infrastructure.linux.display.screensaver import (
         ScreenSaverWaker, simulate_freedesktop_activity,
     )
-    if detect_compositor() is Compositor.GNOME:
+    if (compositor or detect_compositor()) is Compositor.GNOME:
         from infrastructure.gnome.helper import simulate_user_activity
         return ScreenSaverWaker(simulate_user_activity)
     return ScreenSaverWaker(simulate_freedesktop_activity)
 
 
-def build_tray_icon_source() -> "TrayIconFor":
-    """Pick how the tray icon is drawn for the detected compositor.
+def build_tray_icon_source(compositor: Compositor | None = None) -> "TrayIconFor":
+    """Pick how the tray icon is drawn for *compositor* (detected if omitted).
 
     COSMIC's status area renders a StatusNotifierItem's ``IconName`` and ignores a
     pixmap-only item, which is what a Font Awesome glyph amounts to — so there the
@@ -238,17 +269,18 @@ def build_tray_icon_source() -> "TrayIconFor":
     the tooltip. Every other host draws the glyph, colour and all.
     """
     from infrastructure.common.qt.ui.tray import glyph_icon, themed_icon
-    return themed_icon if detect_compositor() is Compositor.COSMIC else glyph_icon
+    is_cosmic = (compositor or detect_compositor()) is Compositor.COSMIC
+    return themed_icon if is_cosmic else glyph_icon
 
 
-def build_desktop_surface() -> "DesktopSurface":
-    """Construct the DesktopSurface adapter for the detected compositor.
+def build_desktop_surface(compositor: Compositor | None = None) -> "DesktopSurface":
+    """Construct the DesktopSurface adapter for *compositor* (detected if omitted).
 
-    Layer-shell compositors (KWin, Sway, Hyprland, cosmic-comp) promote the Desktop
-    to a wlr-layer-shell surface; GNOME (no layer-shell) uses a frameless window
-    that the Kasual Helper extension pins above the foreground app.
+    Layer-shell compositors (KWin, cosmic-comp and every wlroots one) promote the
+    Desktop to a wlr-layer-shell surface; GNOME (no layer-shell) uses a frameless
+    window that the Kasual Helper extension pins above the foreground app.
     """
-    compositor = detect_compositor()
+    compositor = compositor or detect_compositor()
     if compositor is Compositor.GNOME:
         from infrastructure.gnome.helper import helper_present
         if helper_present():
@@ -257,6 +289,4 @@ def build_desktop_surface() -> "DesktopSurface":
     from infrastructure.linux.wayland.surface import LayerShellSurface
     # wlroots keeps layer-shell TOP above every window, so there the Desktop
     # cedes by dropping to the BOTTOM layer; KWin lets a fullscreen app cover TOP.
-    return LayerShellSurface(
-        cede_to_bottom=compositor in (Compositor.HYPRLAND, Compositor.SWAY)
-    )
+    return LayerShellSurface(cede_to_bottom=compositor in WLROOTS)

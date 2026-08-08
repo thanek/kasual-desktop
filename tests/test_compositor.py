@@ -1,8 +1,10 @@
 """Tests for compositor detection and the backend factory seam."""
 
 import socket
+import tempfile
 
-from unittest.mock import patch
+from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -18,6 +20,7 @@ from infrastructure.linux.compositor import (
 _ENV_VARS = (
     "KDE_FULL_SESSION",
     "XDG_CURRENT_DESKTOP",
+    "XDG_SESSION_DESKTOP",
     "SWAYSOCK",
     "HYPRLAND_INSTANCE_SIGNATURE",
 )
@@ -31,8 +34,16 @@ def clean_env(monkeypatch):
 
 
 @pytest.fixture
-def live_sway_socket(clean_env, tmp_path):
-    socket_path = tmp_path / "sway-ipc.sock"
+def short_tmp_path():
+    # AF_UNIX paths cap at ~104 bytes on macOS and pytest's tmp_path alone
+    # already exceeds that, so bind sockets under /tmp instead.
+    with tempfile.TemporaryDirectory(dir="/tmp") as path:
+        yield Path(path)
+
+
+@pytest.fixture
+def live_sway_socket(clean_env, short_tmp_path):
+    socket_path = short_tmp_path / "sway-ipc.sock"
     with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as listener:
         listener.bind(str(socket_path))
         clean_env.setenv("SWAYSOCK", str(socket_path))
@@ -40,13 +51,13 @@ def live_sway_socket(clean_env, tmp_path):
 
 
 @pytest.fixture
-def live_hyprland_socket(clean_env, tmp_path):
+def live_hyprland_socket(clean_env, short_tmp_path):
     signature = "abc123"
-    socket_dir = tmp_path / "hypr" / signature
+    socket_dir = short_tmp_path / "hypr" / signature
     socket_dir.mkdir(parents=True)
     with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as listener:
         listener.bind(str(socket_dir / ".socket.sock"))
-        clean_env.setenv("XDG_RUNTIME_DIR", str(tmp_path))
+        clean_env.setenv("XDG_RUNTIME_DIR", str(short_tmp_path))
         clean_env.setenv("HYPRLAND_INSTANCE_SIGNATURE", signature)
         yield
 
@@ -124,10 +135,34 @@ class TestDetectCompositor:
     def test_unknown_when_nothing_set(self, clean_env):
         assert detect_compositor() is Compositor.UNKNOWN
 
+    def test_labwc_from_raspberry_pi_session_name(self, clean_env):
+        clean_env.setenv("XDG_CURRENT_DESKTOP", "LXDE-pi-labwc")
+        assert detect_compositor() is Compositor.LABWC
+
+    def test_wayfire_from_session_desktop(self, clean_env):
+        clean_env.setenv("XDG_SESSION_DESKTOP", "LXDE-pi-wayfire")
+        assert detect_compositor() is Compositor.WAYFIRE
+
+    def test_labwc_nested_under_kde_is_kde(self, clean_env):
+        # KDE_FULL_SESSION comes from the outer session, and only the outer one
+        # owns the windows Kasual manages.
+        clean_env.setenv("KDE_FULL_SESSION", "true")
+        clean_env.setenv("XDG_SESSION_DESKTOP", "labwc")
+        assert detect_compositor() is Compositor.KDE
+
 
 class TestFactories:
     def test_window_manager_falls_back_to_null(self, clean_env):
-        assert isinstance(build_window_manager(), NullWindowManager)
+        with patch("infrastructure.wlroots.wm.foreign_toplevel.build",
+                   return_value=None):
+            assert isinstance(build_window_manager(), NullWindowManager)
+
+    def test_window_manager_is_foreign_toplevel_on_labwc(self, clean_env):
+        clean_env.setenv("XDG_CURRENT_DESKTOP", "LXDE-pi-labwc")
+        backend = MagicMock()
+        with patch("infrastructure.wlroots.wm.foreign_toplevel.build",
+                   return_value=backend):
+            assert build_window_manager() is backend
 
     def test_window_manager_is_sway_adapter(self, live_sway_socket, qapp):
         from infrastructure.wlroots.wm.sway import SwayWindowManager
@@ -137,12 +172,13 @@ class TestFactories:
         from infrastructure.wlroots.wm.hyprland import HyprlandWindowManager
         assert isinstance(build_window_manager(), HyprlandWindowManager)
 
-    def test_wallpaper_falls_back_to_static_file(self, clean_env, tmp_path):
+    def test_wallpaper_falls_back_to_pcmanfm_then_static_file(self, clean_env, tmp_path):
         clean_env.setenv("XDG_CONFIG_HOME", str(tmp_path))
-        from infrastructure.linux.display.wallpaper import StaticFileWallpaper
+        clean_env.setenv("XDG_CONFIG_DIRS", str(tmp_path / "etc"))
+        from infrastructure.linux.display.wallpaper import PcmanfmWallpaper
         wallpaper = build_system_wallpaper()
-        assert isinstance(wallpaper, StaticFileWallpaper)
-        assert wallpaper.current() is None   # no <config>/wallpaper present
+        assert isinstance(wallpaper, PcmanfmWallpaper)
+        assert wallpaper.current() is None   # neither pcmanfm nor <config>/wallpaper
 
     def test_wallpaper_is_kde_adapter_on_kde(self, clean_env):
         clean_env.setenv("KDE_FULL_SESSION", "true")
@@ -156,6 +192,11 @@ class TestFactories:
     def test_wallpaper_is_hyprland_adapter(self, live_hyprland_socket):
         from infrastructure.wlroots.display.wallpaper import HyprlandWallpaper
         assert isinstance(build_system_wallpaper(), HyprlandWallpaper)
+
+    def test_wallpaper_is_wayfire_adapter(self, clean_env):
+        clean_env.setenv("XDG_CURRENT_DESKTOP", "Wayfire:wlroots")
+        from infrastructure.wlroots.display.wallpaper import WayfireWallpaper
+        assert isinstance(build_system_wallpaper(), WayfireWallpaper)
 
     def test_wallpaper_is_gnome_adapter(self, clean_env):
         clean_env.setenv("XDG_CURRENT_DESKTOP", "GNOME")
@@ -182,14 +223,15 @@ class TestFactories:
         clean_env.setenv("XDG_CURRENT_DESKTOP", "COSMIC")
         from infrastructure.cosmic.wm.window_manager import CosmicWindowManager
         with patch("infrastructure.cosmic.wm.window_manager.CosmicToplevels"), \
-             patch("infrastructure.cosmic.wm.window_manager.QSocketNotifier"):
+             patch("infrastructure.cosmic.wm.window_manager.WaylandClient"):
             assert isinstance(build_window_manager(), CosmicWindowManager)
 
     def test_window_manager_falls_back_to_null_without_the_protocols(self, clean_env):
         clean_env.setenv("XDG_CURRENT_DESKTOP", "COSMIC")
         from infrastructure.linux.wayland.client import WaylandError
         with patch("infrastructure.cosmic.wm.window_manager.CosmicToplevels",
-                   side_effect=WaylandError("no toplevel management")):
+                   side_effect=WaylandError("no toplevel management")), \
+             patch("infrastructure.cosmic.wm.window_manager.WaylandClient"):
             assert isinstance(build_window_manager(), NullWindowManager)
 
     def test_window_manager_falls_back_to_null_without_a_compositor(self, clean_env):
@@ -219,6 +261,23 @@ class TestFactories:
         clean_env.setenv("KDE_FULL_SESSION", "true")
         from infrastructure.linux.wayland.surface import LayerShellSurface
         assert isinstance(build_desktop_surface(), LayerShellSurface)
+
+
+class TestInjectedCompositor:
+    """The composition root detects once and passes the result down; an explicit
+    compositor wins over the session env."""
+
+    def test_factory_uses_the_given_compositor(self, clean_env, qapp):
+        clean_env.setenv("XDG_CURRENT_DESKTOP", "GNOME")
+        from infrastructure.wlroots.wm.sway import SwayWindowManager
+        assert isinstance(build_window_manager(Compositor.SWAY), SwayWindowManager)
+
+    def test_surface_helper_uses_the_given_compositor(self, clean_env):
+        clean_env.setenv("KDE_FULL_SESSION", "true")
+        from infrastructure.common.qt.ui import top_surface
+        with patch.object(top_surface.QGuiApplication, "platformName",
+                          return_value="wayland"):
+            assert top_surface.surface_sized_by_compositor(Compositor.GNOME) is False
 
 
 class TestSurfaceSizing:
@@ -283,6 +342,37 @@ class TestFullscreenTranslucency:
     def test_ordinary_window_is_used_without_a_usable_layershellqt(self, clean_env):
         clean_env.setenv("XDG_CURRENT_DESKTOP", "COSMIC")
         assert self._loses_alpha("wayland", layer_shell=False) is True
+
+
+class TestGnomeOverlayPromotion:
+    """The role an overlay declares carries its keyboard mode: Mutter focuses whatever
+    it maps, and a game that loses the focus minimizes itself off the screen."""
+
+    def _promote(self, keyboard):
+        from infrastructure.common.qt.ui import top_surface
+        widget = MagicMock()
+        widget.windowTitle.return_value = "Kasual Home"
+        with patch.object(top_surface.QGuiApplication, "platformName",
+                          return_value="wayland"), \
+             patch("infrastructure.gnome.helper.helper_present", return_value=True), \
+             patch("infrastructure.gnome.helper.set_surface_role") as role, \
+             patch("infrastructure.gnome.helper.show_overlay") as screen:
+            top_surface.promote_overlay_surface(widget, keyboard=keyboard)
+        return role, screen
+
+    def test_role_carries_the_keyboard_mode(self, clean_env):
+        clean_env.setenv("XDG_CURRENT_DESKTOP", "GNOME")
+        from infrastructure.common.qt.ui.layer_shell import Anchor, Keyboard, Layer
+        role, _ = self._promote(Keyboard.NONE)
+        assert role.call_args.args == (
+            "Kasual Home", Layer.OVERLAY, Anchor.ALL, Keyboard.NONE)
+
+    def test_promoting_does_not_take_the_screen(self, clean_env):
+        """Asking for it would un-cede the Desktop and pull it in front of the app."""
+        clean_env.setenv("XDG_CURRENT_DESKTOP", "GNOME")
+        from infrastructure.common.qt.ui.layer_shell import Keyboard
+        _, screen = self._promote(Keyboard.NONE)
+        screen.assert_not_called()
 
 
 class TestNullWindowManager:

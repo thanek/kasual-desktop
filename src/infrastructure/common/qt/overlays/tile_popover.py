@@ -60,9 +60,9 @@ class TilePopoverMenu(QWidget):
 
         self._card = QWidget()
         self._card.setStyleSheet(
-            "QWidget { background-color: #2e3440;"
+            f"QWidget {{ background-color: {styles.COLOR_CARD_BG};"
             " border-radius: 36px;"
-            " border: 1px solid rgba(255,255,255,18); }"
+            " border: 1px solid rgba(255,255,255,18); }}"
         )
         card_layout = QVBoxLayout(self._card)
         card_layout.setContentsMargins(8, 8, 8, 8)

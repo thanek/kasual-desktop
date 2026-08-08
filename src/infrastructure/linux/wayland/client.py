@@ -1,288 +1,320 @@
-"""A minimal Wayland wire-protocol client.
+"""A minimal Wayland client — a second connection to the compositor.
 
-Some compositors publish window management only as a Wayland protocol — no IPC
-CLI (Sway, Hyprland), no scripting engine (KWin), no extension host (GNOME). No
-Python binding to libwayland is packaged on the distros Kasual targets, so the
-handful of interfaces it needs are spoken directly over the display socket.
+Qt exposes nothing of the connection it holds, so a protocol Qt does not
+implement is spoken over one of our own; the compositor simply sees a second
+client. Implemented here are ``wl_display`` (sync, error, delete_id),
+``wl_registry`` (the globals and ``bind``), and dispatch to whatever proxies bind
+on top. There is no scanner-generated code: every opcode is a named constant
+read off the protocol's XML.
 
-Only what those interfaces use is implemented: requests whose arguments are all
-32-bit words (object ids, new ids, uints) plus the registry's ``bind``, and
-events decoded from a declarative :class:`Interface` table. Anything arriving for
-an unknown object or opcode is skipped, so a newer compositor adding events stays
-harmless.
+Events arrive through a QSocketNotifier, so the connection lives on the Qt event
+loop with no thread and no polling; :meth:`roundtrip` is the one blocking call,
+for wiring up before the loop runs.
 """
 
 from __future__ import annotations
 
+import errno
 import logging
 import os
 import socket
-import struct
 
 from collections.abc import Callable
-from dataclasses import dataclass
+
+from PyQt6.QtCore import QObject, QSocketNotifier
+
+from infrastructure.linux.wayland import wire
 
 logger = logging.getLogger(__name__)
 
-_HEADER = struct.Struct("=IHH")     # object id, then opcode and size packed in one word
-_WORD = struct.Struct("=I")
-_INT = struct.Struct("=i")
+DISPLAY_ID = 1
 
-_DISPLAY_ID = 1
+# wl_display requests / events, and wl_registry's, from wayland.xml.
 _DISPLAY_SYNC = 0
 _DISPLAY_GET_REGISTRY = 1
+_DISPLAY_EVENT_ERROR = 0
+_DISPLAY_EVENT_DELETE_ID = 1
 _REGISTRY_BIND = 0
+_REGISTRY_EVENT_GLOBAL = 0
+_REGISTRY_EVENT_GLOBAL_REMOVE = 1
+
+_ROUNDTRIP_TIMEOUT_S = 2.0
+
+EventHandler = Callable[[int, wire.Reader], None]
+"""Called with an event's opcode and a reader over its arguments."""
 
 
-@dataclass(frozen=True)
-class Event:
-    """One event of an interface. Position in :attr:`Interface.events` is the opcode.
-
-    ``signature`` uses the Wayland type letters this client supports: ``i`` int,
-    ``u`` uint, ``o`` object, ``n`` new id, ``s`` string, ``a`` array. ``creates``
-    names the interface of a server-allocated ``n`` argument, so the connection can
-    route that object's own events without the caller registering it.
-    """
-
-    name: str
-    signature: str = ""
-    creates: str = ""
+class WaylandError(RuntimeError):
+    """The connection could not be established, or the compositor killed it."""
 
 
-@dataclass(frozen=True)
-class Interface:
-    name: str
-    events: tuple[Event, ...] = ()
+class WaylandClient(QObject):
+    """One Wayland connection: object ids, the registry, and event dispatch."""
 
+    def __init__(self, parent: QObject | None = None) -> None:
+        super().__init__(parent)
+        self._socket = _connect()
+        self._buffer = b""
+        self._next_id = DISPLAY_ID + 1
+        self._handlers: dict[int, EventHandler] = {}
+        self._globals: dict[str, tuple[int, int]] = {}   # interface → (name, version)
+        self._by_name: dict[int, tuple[str, int]] = {}   # name → (interface, version)
+        self._notifier: QSocketNotifier | None = None
+        self._closed = False
+        self._on_disconnect: Callable[[], None] | None = None
 
-_WL_DISPLAY = Interface("wl_display", (
-    Event("error", "uus"),
-    Event("delete_id", "u"),
-))
-
-_WL_REGISTRY = Interface("wl_registry", (
-    Event("global", "usu"),
-    Event("global_remove", "u"),
-))
-
-_WL_CALLBACK = Interface("wl_callback", (Event("done", "u"),))
-
-
-def _pad(length: int) -> int:
-    return (length + 3) & ~3
-
-
-def _word(value: int) -> bytes:
-    return _WORD.pack(value & 0xFFFFFFFF)
-
-
-def _string(value: str) -> bytes:
-    raw = value.encode("utf-8") + b"\0"
-    return _WORD.pack(len(raw)) + raw.ljust(_pad(len(raw)), b"\0")
-
-
-def _display_socket() -> socket.socket:
-    """Connect to the compositor the way libwayland does.
-
-    ``WAYLAND_SOCKET`` hands over an already-connected fd (how a compositor spawns
-    a client); otherwise ``WAYLAND_DISPLAY`` names a socket under the runtime dir,
-    or is an absolute path of its own.
-    """
-    inherited = os.environ.get("WAYLAND_SOCKET")
-    if inherited:
-        del os.environ["WAYLAND_SOCKET"]
-        return socket.socket(fileno=int(inherited))
-    display = os.environ.get("WAYLAND_DISPLAY") or "wayland-0"
-    if not os.path.isabs(display):
-        display = os.path.join(os.environ.get("XDG_RUNTIME_DIR", ""), display)
-    sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-    sock.connect(display)
-    return sock
-
-
-class WaylandError(Exception):
-    """The compositor rejected something we sent — always a bug in our encoding."""
-
-
-@dataclass
-class _Global:
-    name: int
-    version: int
-
-
-class WaylandClient:
-    """A connection to the compositor, speaking the interfaces it is told about.
-
-    Construction performs the initial registry roundtrip, so :meth:`bind` sees the
-    full set of globals immediately.
-    """
-
-    def __init__(self, interfaces: tuple[Interface, ...] = ()) -> None:
-        self._interfaces = {
-            i.name: i for i in (_WL_DISPLAY, _WL_REGISTRY, _WL_CALLBACK, *interfaces)
-        }
-        self._interface_of: dict[int, str] = {_DISPLAY_ID: _WL_DISPLAY.name}
-        self._handlers: dict[tuple[str, str], Callable[..., None]] = {}
-        # A list per interface: wl_output and wl_seat are advertised once per device.
-        self._globals: dict[str, list[_Global]] = {}
-        self._next_id = _DISPLAY_ID + 1
-        self._inbox = b""
-        self._sock = _display_socket()
-
-        self.on(_WL_REGISTRY.name, "global", self._remember_global)
-        self.on(_WL_REGISTRY.name, "global_remove", self._forget_global)
-        self.on(_WL_DISPLAY.name, "error", self._on_error)
-        self.on(_WL_DISPLAY.name, "delete_id", self._on_delete_id)
-
-        self._registry = self.new_id(_WL_REGISTRY.name)
-        self.request(_DISPLAY_ID, _DISPLAY_GET_REGISTRY, self._registry)
+        self._handlers[DISPLAY_ID] = self._on_display_event
+        registry = self.allocate_id()
+        self._handlers[registry] = self._on_registry_event
+        self.send(DISPLAY_ID, _DISPLAY_GET_REGISTRY, wire.new_id(registry))
+        self._registry = registry
         self.roundtrip()
 
-    # ── object bookkeeping ─────────────────────────────────────────────────
+    # ── connection ───────────────────────────────────────────────────────────
 
-    def new_id(self, interface: str) -> int:
-        """Reserve a client-side object id for *interface*."""
+    def start(self, on_disconnect: Callable[[], None] | None = None) -> None:
+        """Deliver events through the Qt event loop from here on."""
+        if self._closed or self._notifier is not None:
+            return
+        self._on_disconnect = on_disconnect
+        self._notifier = QSocketNotifier(
+            self._socket.fileno(), QSocketNotifier.Type.Read, self)
+        self._notifier.activated.connect(lambda _fd: self._read_available())
+
+    def close(self) -> None:
+        if self._closed:
+            return
+        self._closed = True
+        if self._notifier is not None:
+            self._notifier.setEnabled(False)
+            self._notifier = None
+        try:
+            self._socket.close()
+        except OSError:
+            pass
+
+    @property
+    def is_closed(self) -> bool:
+        return self._closed
+
+    # ── objects and the registry ─────────────────────────────────────────────
+
+    def allocate_id(self) -> int:
+        """Reserve the next client-side object id. The protocol allows reusing one
+        the compositor has deleted; nothing here needs to, so ids only ever grow."""
         object_id = self._next_id
         self._next_id += 1
-        self._interface_of[object_id] = interface
         return object_id
 
+    def globals(self) -> dict[str, tuple[int, int]]:
+        return dict(self._globals)
+
+    def has_global(self, interface: str) -> bool:
+        return interface in self._globals
+
+    def bind(
+        self,
+        interface: str,
+        version: int,
+        handler: EventHandler | None = None,
+    ) -> int:
+        """Bind *interface* at min(*version*, what the compositor offers).
+
+        Asking for more than the advertised version is a protocol error that
+        kills the connection, so the request is capped instead.
+        """
+        advertised = self._globals.get(interface)
+        if advertised is None:
+            raise WaylandError(f"compositor does not offer {interface}")
+        name, available = advertised
+        object_id = self.allocate_id()
+        if handler is not None:
+            self._handlers[object_id] = handler
+        self.send(
+            self._registry, _REGISTRY_BIND,
+            wire.uint(name),
+            wire.new_id_bind(interface, min(version, available), object_id),
+        )
+        return object_id
+
+    def bind_all(
+        self,
+        interface: str,
+        version: int,
+        handler: Callable[[int], EventHandler] | None = None,
+    ) -> list[int]:
+        """Bind every instance of *interface* the compositor advertises.
+
+        Only a handful of globals ever come in multiples — ``wl_output``, one per
+        monitor — and :meth:`bind` reaches just the last of them. *handler* is
+        called with each new object id to build that object's event handler.
+        """
+        bound = []
+        for name, advertised in self._advertisements(interface):
+            object_id = self.allocate_id()
+            if handler is not None:
+                self._handlers[object_id] = handler(object_id)
+            self.send(
+                self._registry, _REGISTRY_BIND,
+                wire.uint(name),
+                wire.new_id_bind(interface, min(version, advertised), object_id),
+            )
+            bound.append(object_id)
+        return bound
+
+    def _advertisements(self, interface: str) -> list[tuple[int, int]]:
+        return [(name, version)
+                for name, (advertised, version) in self._by_name.items()
+                if advertised == interface]
+
+    def set_handler(self, object_id: int, handler: EventHandler) -> None:
+        """Route events for a server-created object (e.g. a toplevel handle)."""
+        self._handlers[object_id] = handler
+
     def forget(self, object_id: int) -> None:
-        """Drop a destroyed object, so late events for it are ignored."""
-        self._interface_of.pop(object_id, None)
+        self._handlers.pop(object_id, None)
 
-    def on(self, interface: str, event: str, handler: Callable[..., None]) -> None:
-        """Route *event* of *interface* to *handler*, called as ``handler(object_id, *args)``."""
-        self._handlers[(interface, event)] = handler
+    # ── traffic ──────────────────────────────────────────────────────────────
 
-    # ── requests ───────────────────────────────────────────────────────────
-
-    def request(self, object_id: int, opcode: int, *args: int) -> None:
-        """Send a request whose arguments are all 32-bit words."""
-        self._send(object_id, opcode, b"".join(_word(a) for a in args))
-
-    def bind(self, interface: str, version: int) -> int | None:
-        """Bind a global at up to *version*, or None if the compositor lacks it."""
-        bound = self.bind_all(interface, version)
-        return bound[0] if bound else None
-
-    def bind_all(self, interface: str, version: int) -> list[int]:
-        """Bind every advertised instance of *interface* — one per output or seat."""
-        object_ids = []
-        for advertised in self._globals.get(interface, ()):
-            object_id = self.new_id(interface)
-            self._send(self._registry, _REGISTRY_BIND,
-                       _word(advertised.name) + _string(interface)
-                       + _word(min(version, advertised.version)) + _word(object_id))
-            object_ids.append(object_id)
-        return object_ids
-
-    def _send(self, object_id: int, opcode: int, body: bytes) -> None:
-        self._sock.sendall(_HEADER.pack(object_id, opcode, _HEADER.size + len(body)) + body)
-
-    # ── reading ────────────────────────────────────────────────────────────
-
-    def fileno(self) -> int:
-        return self._sock.fileno()
-
-    def dispatch_pending(self) -> None:
-        """Consume and dispatch whatever has already arrived, without blocking."""
-        while True:
-            try:
-                chunk = self._sock.recv(65536, socket.MSG_DONTWAIT)
-            except BlockingIOError:
-                break
-            except OSError as exc:
-                logger.warning("Wayland connection lost: %s", exc)
-                break
-            if not chunk:
-                break
-            self._inbox += chunk
-            self._drain()
+    def send(self, sender: int, opcode: int, *args: bytes) -> None:
+        if self._closed:
+            return
+        try:
+            self._socket.sendall(wire.encode_request(sender, opcode, *args))
+        except OSError as exc:
+            logger.warning("Wayland send failed: %s", exc)
+            self._disconnected()
 
     def roundtrip(self) -> None:
-        """Block until the compositor has handled every request sent so far."""
-        callback = self.new_id(_WL_CALLBACK.name)
+        """Block until the compositor has processed everything sent so far.
+
+        ``wl_display.sync`` replies on a one-shot callback, so its arrival proves
+        every earlier request was handled — which is how the registry's globals
+        are known to be complete.
+        """
+        if self._closed:
+            return
         done = False
 
-        def on_done(_object_id: int, _data: int) -> None:
+        def _on_callback(_opcode: int, _reader: wire.Reader) -> None:
             nonlocal done
             done = True
 
-        self.on(_WL_CALLBACK.name, "done", on_done)
-        self.request(_DISPLAY_ID, _DISPLAY_SYNC, callback)
-        while not done:
-            chunk = self._sock.recv(65536)
-            if not chunk:
-                raise WaylandError("compositor closed the connection")
-            self._inbox += chunk
-            self._drain()
-        self.forget(callback)
+        callback = self.allocate_id()
+        self._handlers[callback] = _on_callback
+        self.send(DISPLAY_ID, _DISPLAY_SYNC, wire.new_id(callback))
 
-    def close(self) -> None:
-        self._sock.close()
+        self._socket.settimeout(_ROUNDTRIP_TIMEOUT_S)
+        try:
+            while not done and not self._closed:
+                if not self._read_once():
+                    break
+        finally:
+            if not self._closed:
+                self._socket.settimeout(None)
+            self._handlers.pop(callback, None)
+        if not done:
+            logger.warning("Wayland roundtrip did not complete")
 
-    def _drain(self) -> None:
-        while len(self._inbox) >= _HEADER.size:
-            object_id, opcode, size = _HEADER.unpack_from(self._inbox)
-            if len(self._inbox) < size:
-                return
-            body = self._inbox[_HEADER.size:size]
-            self._inbox = self._inbox[size:]
-            self._dispatch(object_id, opcode, body)
+    def _read_available(self) -> None:
+        """Drain whatever the notifier woke us for, without blocking."""
+        self._socket.setblocking(False)
+        while self._read_once():
+            pass
 
-    def _dispatch(self, object_id: int, opcode: int, body: bytes) -> None:
-        interface = self._interfaces.get(self._interface_of.get(object_id, ""))
-        if interface is None or opcode >= len(interface.events):
+    def _read_once(self) -> bool:
+        """Read one chunk and dispatch the messages it completes.
+
+        False means nothing more can be read right now — the socket is drained,
+        it timed out, or the connection is gone.
+        """
+        if self._closed:
+            return False
+        try:
+            chunk = self._socket.recv(4096)
+        except (BlockingIOError, TimeoutError):
+            # TimeoutError only while roundtrip() has a timeout set; both mean
+            # "nothing more to read", not a broken connection.
+            return False
+        except OSError as exc:
+            if exc.errno == errno.EINTR:
+                return True
+            logger.warning("Wayland read failed: %s", exc)
+            self._disconnected()
+            return False
+        if not chunk:
+            logger.info("Wayland connection closed by the compositor")
+            self._disconnected()
+            return False
+        self._buffer += chunk
+        messages, self._buffer = wire.iter_messages(self._buffer)
+        for message in messages:
+            if self._closed:
+                return False
+            self._dispatch(message)
+        return True
+
+    def _dispatch(self, message: wire.Message) -> None:
+        handler = self._handlers.get(message.sender)
+        if handler is None:
+            return   # an object we destroyed, or never cared about
+        try:
+            handler(message.opcode, wire.Reader(message.payload))
+        except ValueError as exc:
+            logger.warning("Malformed Wayland event for object %d: %s",
+                           message.sender, exc)
+
+    def _disconnected(self) -> None:
+        if self._closed:
             return
-        event = interface.events[opcode]
-        args = _decode(event.signature, body)
-        if event.creates and args:
-            self._interface_of[args[0]] = event.creates
-        handler = self._handlers.get((interface.name, event.name))
-        if handler is not None:
-            handler(object_id, *args)
+        notify = self._on_disconnect
+        self.close()
+        if notify is not None:
+            notify()
 
-    # ── built-in handlers ──────────────────────────────────────────────────
+    # ── core objects ─────────────────────────────────────────────────────────
 
-    def _remember_global(self, _registry: int, name: int, interface: str,
-                         version: int) -> None:
-        self._globals.setdefault(interface, []).append(_Global(name, version))
+    def _on_display_event(self, opcode: int, reader: wire.Reader) -> None:
+        if opcode == _DISPLAY_EVENT_ERROR:
+            object_id, code = reader.object_id(), reader.uint()
+            logger.error("Wayland protocol error on object %d (code %d): %s",
+                         object_id, code, reader.string())
+            self._disconnected()
+        elif opcode == _DISPLAY_EVENT_DELETE_ID:
+            self.forget(reader.uint())
 
-    def _forget_global(self, _registry: int, name: int) -> None:
-        for advertised in self._globals.values():
-            for entry in list(advertised):
-                if entry.name == name:
-                    advertised.remove(entry)
-
-    def _on_error(self, _display: int, object_id: int, code: int, message: str) -> None:
-        raise WaylandError(f"object {object_id} code {code}: {message}")
-
-    def _on_delete_id(self, _display: int, object_id: int) -> None:
-        self.forget(object_id)
-
-
-def words(raw: bytes) -> tuple[int, ...]:
-    """A Wayland array read as the 32-bit values it carries — how enum arrays such
-    as a toplevel's state or a manager's capabilities are encoded."""
-    return struct.unpack(f"={len(raw) // 4}I", raw[:len(raw) // 4 * 4])
+    def _on_registry_event(self, opcode: int, reader: wire.Reader) -> None:
+        if opcode == _REGISTRY_EVENT_GLOBAL:
+            name, interface, version = reader.uint(), reader.string(), reader.uint()
+            self._globals[interface] = (name, version)
+            self._by_name[name] = (interface, version)
+        elif opcode == _REGISTRY_EVENT_GLOBAL_REMOVE:
+            name = reader.uint()
+            self._by_name.pop(name, None)
+            for interface, (advertised, _version) in list(self._globals.items()):
+                if advertised == name:
+                    del self._globals[interface]
 
 
-def _decode(signature: str, body: bytes) -> list:
-    args: list = []
-    offset = 0
-    for kind in signature:
-        if kind in "sa":
-            length, = _WORD.unpack_from(body, offset)
-            offset += _WORD.size
-            raw = body[offset:offset + length]
-            offset += _pad(length)
-            args.append(raw.decode("utf-8", "replace").rstrip("\0")
-                        if kind == "s" else raw)
-        elif kind == "i":
-            args.append(_INT.unpack_from(body, offset)[0])
-            offset += _INT.size
-        else:
-            args.append(_WORD.unpack_from(body, offset)[0])
-            offset += _WORD.size
-    return args
+def _connect() -> socket.socket:
+    """Connect the way libwayland does: an inherited fd first, then the socket
+    path — absolute display names are used as-is."""
+    inherited = os.environ.get("WAYLAND_SOCKET")
+    if inherited:
+        try:
+            return socket.socket(fileno=int(inherited))
+        except (OSError, ValueError) as exc:
+            raise WaylandError(f"WAYLAND_SOCKET={inherited!r} unusable: {exc}") from exc
+
+    display = os.environ.get("WAYLAND_DISPLAY", "wayland-0")
+    if not os.path.isabs(display):
+        runtime_dir = os.environ.get("XDG_RUNTIME_DIR")
+        if not runtime_dir:
+            raise WaylandError("XDG_RUNTIME_DIR is unset; no Wayland socket to find")
+        display = os.path.join(runtime_dir, display)
+    try:
+        client = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        client.connect(display)
+    except OSError as exc:
+        raise WaylandError(f"cannot connect to {display}: {exc}") from exc
+    return client

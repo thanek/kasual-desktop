@@ -14,7 +14,9 @@ resolved again.
 
 from __future__ import annotations
 
-from PyQt6.QtCore import QObject, QSocketNotifier
+import logging
+
+from PyQt6.QtCore import QObject
 from PyQt6.QtGui import QGuiApplication
 
 from domain.catalog.window import Window
@@ -23,25 +25,38 @@ from infrastructure.cosmic.wm.pids import WindowPidResolver, representative_pid
 from infrastructure.cosmic.wm.toplevels import CosmicToplevels
 from infrastructure.cosmic.wm.xwayland import XWaylandWindows
 from infrastructure.linux.proc import expand_pid_tree
+from infrastructure.linux.wayland.client import WaylandClient
 from infrastructure.linux.wm.base import PollingWindowManager
+
+logger = logging.getLogger(__name__)
 
 
 class CosmicWindowManager(PollingWindowManager):
     """Raises :class:`WaylandError` when the session offers no toplevel management."""
 
-    def __init__(self, parent: QObject | None = None) -> None:
+    def __init__(
+        self, client: WaylandClient | None = None, parent: QObject | None = None,
+    ) -> None:
         super().__init__(parent)
-        self._toplevels = CosmicToplevels(self._request_list_refresh)
+        self._client = client or WaylandClient()
+        try:
+            self._toplevels = CosmicToplevels(
+                self._client, self._request_list_refresh)
+        except Exception:
+            # The connection is ours only when we opened it, but either way a
+            # refused start must not leave a socket behind for the caller to
+            # notice — it has only the exception to go on.
+            self._client.close()
+            raise
         self._xwayland = XWaylandWindows()
         self._pids = WindowPidResolver(self._xwayland)
         self._fullscreen = ForegroundFullscreen(self._xwayland)
         self._candidate_pids: dict[str, frozenset[int]] = {}
-        self._notifier = QSocketNotifier(
-            self._toplevels.fileno(), QSocketNotifier.Type.Read, self)
-        self._notifier.activated.connect(self._on_readable)
+        self._client.start(on_disconnect=self._on_disconnect)
 
-    def _on_readable(self) -> None:
-        self._toplevels.dispatch()
+    def _on_disconnect(self) -> None:
+        logger.warning("Wayland connection lost; the window list stops updating")
+        self.stop_refresh()
 
     def _enum_windows(self) -> list[Window]:
         toplevels = self._toplevels.toplevels()
@@ -116,6 +131,5 @@ class CosmicWindowManager(PollingWindowManager):
                 self.activate_window(window.id)
 
     def close(self) -> None:
-        self._notifier.setEnabled(False)
-        self._toplevels.close()
         super().close()
+        self._client.close()

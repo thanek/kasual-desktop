@@ -10,7 +10,7 @@ import logging
 import wave
 from pathlib import Path
 
-from PyQt6.QtCore import QByteArray, QBuffer, QIODevice
+from PyQt6.QtCore import QByteArray, QBuffer, QIODevice, QTimer
 from PyQt6.QtMultimedia import QAudio, QAudioFormat, QAudioSink
 
 from domain.shared.feedback import Cue, Feedback
@@ -89,16 +89,29 @@ class SoundFeedback(Feedback):
             logger.warning("Unknown sound or no init(): %s", cue)
             return
 
-        self._active[:] = [
-            (s, b) for s, b in self._active
-            if s.state() == QAudio.State.ActiveState
-        ]
-
         fmt, data = entry
         buf = QBuffer()
         buf.setData(QByteArray(data))
         buf.open(QIODevice.OpenModeFlag.ReadOnly)
 
         sink = QAudioSink(fmt)
+        # Refills run on the GUI thread, so a frame longer than the buffer
+        # punches silence into the cue.
+        sink.setBufferSize(len(data))
+        sink.stateChanged.connect(
+            lambda state, played=sink: self._on_state_changed(played, state))
         sink.start(buf)
         self._active.append((sink, buf))
+
+    def _on_state_changed(self, sink: QAudioSink, state: QAudio.State) -> None:
+        if state is QAudio.State.IdleState:
+            self._release(sink)
+
+    def _release(self, sink: QAudioSink) -> None:
+        sink.stop()
+        # Dropping the last reference inside the sink's own signal would delete
+        # it mid-emission.
+        QTimer.singleShot(0, lambda: self._forget(sink))
+
+    def _forget(self, sink: QAudioSink) -> None:
+        self._active[:] = [(s, b) for s, b in self._active if s is not sink]

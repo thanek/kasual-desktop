@@ -7,9 +7,9 @@ the stale bookkeeping and commits a buffer it never painted into: the compositor
 left with a correctly sized, fully transparent texture that no later repaint mends.
 Measured on Mutter: a 100 ms gap comes up blank, a 200 ms gap renders.
 
-Kasual's chrome hides and re-shows within one event-loop turn as the Desktop comes
-back, so on GNOME the unmap is deferred and cancelled when the show arrives. Where
-the compositor drives the surface (wlr-layer-shell) the hide stays immediate.
+Kasual Desktop's chrome hides and re-shows within one event-loop turn as the Desktop 
+comes back, so on GNOME the unmap is deferred and cancelled when the show arrives. 
+Where the compositor drives the surface (wlr-layer-shell) the hide stays immediate.
 """
 
 from PyQt6.QtCore import QTimer

@@ -14,6 +14,11 @@ is running; see `PORTING.md` for how that was arrived at, down to the last produ
 gap it exposed (Sway would not focus a launcher behind a fullscreen window, COSMIC
 left a game in a window it had sized to the whole screen) and closed.
 
+labwc and wayfire (Raspberry Pi OS) have a backend too — the same
+wlr-foreign-toplevel connection the product uses — but no run on real hardware
+yet. It reports no geometry, so there `covers_screen` is always False and only a
+window that declares itself fullscreen counts as holding the screen.
+
 ## Why this exists
 
 The unit suite covers KD's logic (parsing, filtering, command building, factory
@@ -233,12 +238,20 @@ Inside `harness/`:
   behind on someone's desktop. Read-only by design: Steam *could* be driven from here
   (the protocol dispatches input, and `SteamClient` is right there), but then the run
   would prove something about Steam's DOM instead of about KD's re-emitted pad.
+- **Steps against the File Browser** — `file_browser.py`: `FileBrowserClient` reads the
+  bundled browser's own test API (published only under `KD_TEST_API=1`, which it
+  inherits from the KD that launched it) — where it is and what its cursor is on — so
+  "I walked its folders" is a fact, not a guess at an unchanging window title.
 - **The run** — `session.py`: bring-up, teardown, artifact, exit code. A scenario
   body starts with KD already on the Home view and both sources of truth open, and
   may give up anywhere by raising `ScenarioAborted` — the teardown still runs.
 - **Preconditions** — `requirements.py` (see below).
 - **Verdicts** — `report.py` (`PASS`/`FAIL`/`WARN`/`INFO`); every wait in the
   harness is a named constant in `timeouts.py`.
+- **Live progress** — `progress.py`: the wait a step is in, its elapsed seconds and its
+  budget, on one refreshing line — so a long silent wait (Steam coming up, shaders
+  compiling) reads as progress, not a hang. `--notify` also raises a desktop
+  notification for the long ones, the one message that carries past a fullscreen game.
 
 Two sources of truth, deliberately: other applications' windows come from the
 compositor, KD's own layer-shell surfaces come from KD.
@@ -260,13 +273,14 @@ def _body(session: Session) -> None:
     window = game.wait_fullscreen()
     game.check_process(window)
     shell.check_kd_ceded(session.kd)
-    shell.check_home_menu_over_game(session.kd, session.pad)
+    shell.check_home_menu_over_game(session.kd, session.pad, game)
 
 SCENARIO = Scenario(
     name='kcd',
     title='launch Kingdom Come: Deliverance from its tile, recall the Home Menu over it',
     body=_body,
     requires=(
+        require.window_source(),
         require.command('steam'),
         require.manual('Steam is logged in, and Kingdom Come: Deliverance is installed'),
         require.tile(TILE_ID),
@@ -287,8 +301,18 @@ first draft of this suite "passed" through.
   is a failure invisible from inside KD: a Desktop that believes it is minimized while
   its chrome still floats over the DE looks perfectly fine to itself, so the assertions
   are about *absence* — no tiles, no wallpaper, no header, no hint bar, no menu.
-- **`kcd`** — tile → Steam → the splash → the game → the Home Menu over it. The only
-  game scenario still launched from the game's own tile.
+- **`file_browser`** — tile → the bundled File Browser → walk its folders → Home menu
+  → Close → back on the Desktop. The full life of a bundled app, and the one scenario
+  that reads *both* ends of the pad's journey: KD says the press left its hands, the
+  browser's own test API says it arrived. Closing goes through the Home menu's confirm,
+  so the run reads the question and which way it is aimed before answering it.
+- **`kcd`** — tile → a warmed Steam → the splash → the game → the Home Menu over it,
+  where the in-game HUD toggle is exercised (the one place a game is already up to test
+  it against). Launched from the game's own tile.
+- **`kcd_cold`** — the same tile, but with Steam **cold**: the `steam://rungameid` URL
+  opens Big Picture and drops the launch, so the run pushes the game through Steam's UI
+  with the pad, then asserts the game reaches the screen and the Home Menu comes back
+  over it as before.
 - **`steam_kcd`** — tile → Big Picture → Steam's own UI, walked with the pad → the
   game. Proves KD's re-emitted pad reaches a foreign application.
 - **`steam_w3`** — the same walk through Steam's UI, but the game stops at the RED Launcher,
@@ -320,12 +344,20 @@ Every scenario needs:
   packaged, menu-launched instance always is, and which nothing about it betrays
   until you notice it never answers.
 
+`file_browser` needs only a KD tile for `files` that launches the **repo's** copy of
+the browser — the one that publishes the test API (an installed copy under `/usr/share`
+does not).
+
 `kcd` additionally needs:
 
 - Steam installed, **[!]** logged in, with the game installed.
 - A KD tile for the game (`TILE_ID` at the top of the scenario, matched against the
   `.desktop` stem or the displayed name; on a miss the error lists the tiles that
   exist).
+
+`kcd_cold` needs the same tile and game, but with Steam **not running** (the cold start
+is the whole point) and **[!]** the game among Big Picture's recent games — the row the
+push walks when the cold start drops the launch.
 
 `steam_kcd` and `steam_w3` need instead:
 
@@ -460,8 +492,6 @@ And five paid for by `steam_kcd`, every one of them a press that vanished:
   requirements disappear, and so does "is /usr/share current?". (Swapping
   `XDG_CONFIG_HOME` would do it without touching Kasual Desktop, but it takes the
   preferences with it.)
-- A scenario for closing an app *the way a user does* (Home Menu → close → KD
-  returns), kept separate from the launch scenarios on purpose.
 - MangoHud FPS as proof the game actually renders; today a fullscreen window is
   taken as proof enough.
 - **Shader-processing progress, from the same channel `steam_kcd` reads.** Between the

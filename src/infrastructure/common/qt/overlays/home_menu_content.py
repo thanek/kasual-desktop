@@ -12,9 +12,9 @@ from dataclasses import dataclass
 
 import qtawesome as qta
 from PyQt6.QtCore import (
-    Qt, QSize, QPoint, QSignalBlocker, QRunnable, QThreadPool, pyqtSignal,
+    Qt, QSize, QSignalBlocker, QRunnable, QThreadPool, pyqtSignal,
 )
-from PyQt6.QtGui import QPainterPath, QRegion, QCursor
+from PyQt6.QtGui import QPainterPath, QRegion
 from PyQt6.QtWidgets import (
     QWidget, QPushButton, QFrame, QVBoxLayout, QHBoxLayout, QGridLayout,
     QLabel, QSlider,
@@ -34,6 +34,7 @@ from domain.system.hud import HudControl
 from domain.system.power_menu import PowerMenu
 from domain.system.volume import Volume, VolumeControl
 from infrastructure.common.qt.ui import styles
+from infrastructure.common.qt.ui.hover import HoverReporting
 
 logger = logging.getLogger(__name__)
 
@@ -44,35 +45,8 @@ _QUICK_WIDTH = _LIST_WIDTH
 _QUICK_RADIUS = 20
 
 
-def _is_synthetic_enter(widget, event) -> bool:
-    """True if this enterEvent is the synthetic one Qt delivers when a widget maps
-    under a stationary cursor (same global pos as the last leave) rather than a real
-    move — mirrors AppTile, so the panel expanding under a parked pointer doesn't
-    hijack the pre-focused card. Latches the leave position on the widget."""
-    pos = event.globalPosition().toPoint()
-    synthetic = pos == getattr(widget, "_pos_at_leave", None)
-    widget._pos_at_leave = None
-    return synthetic
-
-
-class _RoundedFrame(QFrame):
-    """QFrame that clips its children to a rounded rectangle via setMask (mirrors the
-    border-radius from _quick_row_style) and reports genuine pointer hovers."""
-
-    hovered = pyqtSignal()
-
-    def __init__(self, parent=None) -> None:
-        super().__init__(parent)
-        self._pos_at_leave: QPoint | None = None
-
-    def enterEvent(self, event) -> None:
-        super().enterEvent(event)
-        if not _is_synthetic_enter(self, event):
-            self.hovered.emit()
-
-    def leaveEvent(self, event) -> None:
-        super().leaveEvent(event)
-        self._pos_at_leave = QCursor.pos()
+class _RoundedFrame(HoverReporting, QFrame):
+    """QFrame clipping its children to the _quick_row_style border-radius."""
 
     def resizeEvent(self, event) -> None:
         super().resizeEvent(event)
@@ -81,37 +55,19 @@ class _RoundedFrame(QFrame):
         self.setMask(QRegion(path.toFillPolygon().toPolygon()))
 
 
-class _MenuCard(QPushButton):
-    """A menu action card that reports genuine pointer hovers (mouse parity with the
-    tile bar). enterEvent is overridden at the class level, since PyQt only
-    dispatches Qt virtual events to class methods; the synthetic-enter guard mirrors
-    AppTile."""
-
-    hovered = pyqtSignal()
-
-    def __init__(self, text: str, parent=None) -> None:
-        super().__init__(text, parent)
-        self._pos_at_leave: QPoint | None = None
-
-    def enterEvent(self, event) -> None:
-        super().enterEvent(event)
-        if not _is_synthetic_enter(self, event):
-            self.hovered.emit()
-
-    def leaveEvent(self, event) -> None:
-        super().leaveEvent(event)
-        self._pos_at_leave = QCursor.pos()
+class _MenuCard(HoverReporting, QPushButton):
+    pass
 
 
-_SLIDER_QSS = """
-    QSlider { background: transparent; }
-    QSlider::horizontal { min-height: 24px; }
-    QSlider::groove:horizontal { height: 8px; border-radius: 4px; }
-    QSlider::sub-page:horizontal { background: #88c0d0; border-radius: 4px; }
-    QSlider::add-page:horizontal  { background: #4c566a; border-radius: 4px; }
-    QSlider::handle:horizontal {
+_SLIDER_QSS = f"""
+    QSlider {{ background: transparent; }}
+    QSlider::horizontal {{ min-height: 24px; }}
+    QSlider::groove:horizontal {{ height: 8px; border-radius: 4px; }}
+    QSlider::sub-page:horizontal {{ background: {styles.COLOR_ACCENT}; border-radius: 4px; }}
+    QSlider::add-page:horizontal  {{ background: {styles.COLOR_TRACK}; border-radius: 4px; }}
+    QSlider::handle:horizontal {{
         width: 22px; height: 22px; margin: -7px 0; background: white; border-radius: 11px;
-    }
+    }}
 """
 
 
@@ -179,12 +135,14 @@ class HomeMenuContent(QWidget):
         volume: VolumeControl,
         brightness: BrightnessControl,
         power: PowerMenu,
+        gamepad_access_checkable: bool = False,
     ) -> None:
         super().__init__()
         self._feedback = feedback
         self._volume = volume
         self._brightness = brightness
         self._power = power
+        self._gamepad_access_checkable = gamepad_access_checkable
 
         self._zones: list[_Zone] = []
         self._active = 0
@@ -248,6 +206,7 @@ class HomeMenuContent(QWidget):
             # Network / Notifications live on the header when one is present, so
             # don't repeat them in the Actions grid.
             include_status_actions=header is None,
+            gamepad_access_checkable=self._gamepad_access_checkable,
         )
         self._build(sections.sections)
         self._focus_default(foreground, desktop_minimized)

@@ -1,208 +1,139 @@
-"""Tests for the minimal Wayland wire-protocol client.
-
-A socket pair stands in for the compositor, so the encoder and the event decoder
-are exercised against real bytes rather than a mock.
-"""
-
-from unittest.mock import patch
+"""Tests for the private Wayland connection, against a compositor stand-in
+(``tests/wayland_fake.py``) on a socketpair — no compositor is contacted."""
 
 import pytest
 
-from infrastructure.linux.wayland.client import (
-    Event, Interface, WaylandClient, WaylandError,
-)
-from tests import wayland_wire as wire
+from infrastructure.linux.wayland import wire
+from infrastructure.linux.wayland.client import DISPLAY_ID, WaylandClient, WaylandError
+from wayland_fake import FakeCompositor, pump
 
-_THING = Interface("test_thing", (
-    Event("closed"),
-    Event("named", "s"),
-    Event("counted", "uia"),
-    Event("spawned", "n", creates="test_child"),
-))
-_CHILD = Interface("test_child", (Event("pinged", "u"),))
-
-_CALLBACK_ID = 3     # the client allocates 2 for the registry, then 3 to sync
+_DISPLAY_EVENT_ERROR = 0
+_DISPLAY_EVENT_DELETE_ID = 1
+_SEAT = "wl_seat"
 
 
 @pytest.fixture
-def compositor():
-    fake = wire.FakeCompositor()
+def compositor(monkeypatch):
+    fake = FakeCompositor({_SEAT: 5, "zwlr_foreign_toplevel_manager_v1": 3})
+    fake.install(monkeypatch)
     yield fake
     fake.close()
 
 
-def connect(compositor, *globals_, interfaces=(_THING, _CHILD)) -> WaylandClient:
-    """A client whose opening roundtrip is already answered."""
-    compositor.send(*globals_, wire.callback_done(_CALLBACK_ID))
-    with patch("infrastructure.linux.wayland.client._display_socket",
-               return_value=compositor.client):
-        return WaylandClient(interfaces)
+@pytest.fixture
+def client(compositor, qapp):
+    connection = WaylandClient()
+    yield connection
+    connection.close()
 
 
-class TestHandshake:
-    def test_asks_for_the_registry_and_syncs(self, compositor):
-        connect(compositor)
-        sent = compositor.received()
-        assert sent[0][:2] == (wire.DISPLAY_ID, 1)      # get_registry
-        assert sent[1][:2] == (wire.DISPLAY_ID, 0)      # sync
+class TestConnecting:
+    def test_collects_the_globals_the_compositor_announced(self, client):
+        assert client.globals() == {
+            _SEAT: (1, 5), "zwlr_foreign_toplevel_manager_v1": (2, 3)}
 
-    def test_dead_socket_fails_the_way_the_factory_expects(self, compositor):
-        # build_window_manager() catches (OSError, WaylandError) to degrade to the
-        # null backend; a compositor that is simply not there must land in there.
-        compositor.server.close()
-        with patch("infrastructure.linux.wayland.client._display_socket",
-                   return_value=compositor.client):
-            with pytest.raises((OSError, WaylandError)):
-                WaylandClient(())
+    def test_has_global_answers_for_what_is_missing(self, client):
+        assert client.has_global(_SEAT)
+        assert not client.has_global("wl_shm")
 
-    def test_roundtrip_raises_when_the_compositor_hangs_up(self, compositor):
-        client = connect(compositor)
+    def test_without_a_socket_it_refuses_to_connect(self, monkeypatch):
+        monkeypatch.delenv("WAYLAND_SOCKET", raising=False)
+        monkeypatch.setenv("WAYLAND_DISPLAY", "wayland-does-not-exist")
+        monkeypatch.setenv("XDG_RUNTIME_DIR", "/nonexistent")
+        with pytest.raises(WaylandError):
+            WaylandClient()
+
+    def test_without_a_runtime_dir_it_refuses_to_connect(self, monkeypatch):
+        monkeypatch.delenv("WAYLAND_SOCKET", raising=False)
+        monkeypatch.delenv("XDG_RUNTIME_DIR", raising=False)
+        monkeypatch.setenv("WAYLAND_DISPLAY", "wayland-1")
+        with pytest.raises(WaylandError):
+            WaylandClient()
+
+
+class TestBinding:
+    def test_bind_sends_the_interface_and_returns_its_object_id(self, client, compositor):
+        seat = client.bind(_SEAT, 5)
+        client.roundtrip()
+        assert compositor.bound(_SEAT) == seat
+
+    def test_bind_caps_the_version_at_what_is_advertised(self, client, compositor):
+        client.bind("zwlr_foreign_toplevel_manager_v1", 9)
+        client.roundtrip()
+        request = compositor.requests_to(compositor.registry)[0]
+        reader = wire.Reader(request.payload)
+        reader.uint(), reader.string()
+        assert reader.uint() == 3
+
+    def test_binding_a_missing_interface_is_an_error(self, client):
+        with pytest.raises(WaylandError):
+            client.bind("wl_shm", 1)
+
+
+class TestEvents:
+    def test_dispatches_to_the_object_that_bound_the_handler(self, client, compositor):
+        received = []
+        seat = client.bind(_SEAT, 5, lambda opcode, reader: received.append(opcode))
+        client.start()
+        client.roundtrip()
+
+        compositor.send(seat, 3)
+        assert pump(lambda: received == [3])
+
+    def test_an_event_for_a_forgotten_object_is_ignored(self, client, compositor):
+        received = []
+        seat = client.bind(_SEAT, 5, lambda opcode, reader: received.append(opcode))
+        client.start()
+        client.roundtrip()
+        client.forget(seat)
+
+        compositor.send(seat, 3)
+        assert not pump(lambda: bool(received), timeout_s=0.2)
+
+    def test_delete_id_forgets_the_object(self, client, compositor):
+        received = []
+        seat = client.bind(_SEAT, 5, lambda opcode, reader: received.append(opcode))
+        client.start()
+        client.roundtrip()
+
+        compositor.send(DISPLAY_ID, _DISPLAY_EVENT_DELETE_ID, wire.uint(seat))
+        compositor.send(seat, 3)
+        assert not pump(lambda: bool(received), timeout_s=0.2)
+
+    def test_a_malformed_event_does_not_break_the_connection(self, client, compositor):
+        seat = client.bind(_SEAT, 5, lambda opcode, reader: reader.string())
+        client.start()
+        client.roundtrip()
+
+        compositor.send(seat, 0, wire.uint(1))
+        assert not pump(lambda: client.is_closed, timeout_s=0.2)
+
+
+class TestDisconnecting:
+    def test_a_protocol_error_closes_the_connection(self, client, compositor):
+        lost = []
+        client.start(on_disconnect=lambda: lost.append(True))
+
+        compositor.send(DISPLAY_ID, _DISPLAY_EVENT_ERROR,
+                        wire.object_id(DISPLAY_ID), wire.uint(1),
+                        wire.string("invalid method"))
+        assert pump(lambda: client.is_closed)
+        assert lost == [True]
+
+    def test_the_compositor_hanging_up_closes_the_connection(self, client, compositor):
+        lost = []
+        client.start(on_disconnect=lambda: lost.append(True))
+
         compositor.hang_up()
-        with pytest.raises(WaylandError, match="closed the connection"):
-            client.roundtrip()
+        assert pump(lambda: client.is_closed)
+        assert lost == [True]
 
+    def test_sending_after_close_is_ignored(self, client):
+        client.close()
+        client.send(DISPLAY_ID, 0)
+        assert client.is_closed
 
-class TestBind:
-    def test_binds_an_advertised_global(self, compositor):
-        client = connect(compositor, wire.advertise(7, "test_thing", 4))
-        compositor.received()
-        object_id = client.bind("test_thing", 4)
-
-        _, opcode, body = compositor.received()[0]
-        assert opcode == 0
-        assert body == wire.word(7) + wire.text("test_thing") + wire.word(4) \
-            + wire.word(object_id)
-
-    def test_caps_the_version_to_what_is_advertised(self, compositor):
-        client = connect(compositor, wire.advertise(7, "test_thing", 2))
-        compositor.received()
-        client.bind("test_thing", 9)
-        assert compositor.received()[0][2].endswith(
-            wire.word(2) + wire.word(client._next_id - 1))
-
-    def test_missing_global_binds_to_nothing(self, compositor):
-        client = connect(compositor)
-        assert client.bind("test_thing", 1) is None
-        assert client.bind_all("test_thing", 1) == []
-
-    def test_bind_all_covers_every_advertised_instance(self, compositor):
-        # wl_output is advertised once per monitor, wl_seat once per seat.
-        client = connect(compositor, wire.advertise(7, "test_thing", 1),
-                         wire.advertise(8, "test_thing", 1))
-        compositor.received()
-        assert len(client.bind_all("test_thing", 1)) == 2
-        names = [body[:4] for _, _, body in compositor.received()]
-        assert names == [wire.word(7), wire.word(8)]
-
-    def test_bind_takes_the_first_of_several(self, compositor):
-        client = connect(compositor, wire.advertise(7, "test_thing", 1),
-                         wire.advertise(8, "test_thing", 1))
-        compositor.received()
-        client.bind("test_thing", 1)
-        assert compositor.received()[0][2][:4] == wire.word(7)
-
-    def test_removed_global_can_no_longer_be_bound(self, compositor):
-        client = connect(compositor, wire.advertise(7, "test_thing", 1))
-        compositor.send(wire.message(wire.REGISTRY_ID, 1, wire.word(7)))
-        client.dispatch_pending()
-        assert client.bind("test_thing", 1) is None
-
-
-class TestEventDecoding:
-    def _listen(self, client, interface, event):
-        seen = []
-        client.on(interface, event, lambda *args: seen.append(args))
-        return seen
-
-    def test_decodes_a_string(self, compositor):
-        client = connect(compositor, wire.advertise(7, "test_thing", 1))
-        thing = client.bind("test_thing", 1)
-        seen = self._listen(client, "test_thing", "named")
-        compositor.send(wire.message(thing, 1, wire.text("zażółć gęślą")))
-        client.dispatch_pending()
-        assert seen == [(thing, "zażółć gęślą")]
-
-    def test_decodes_mixed_arguments(self, compositor):
-        client = connect(compositor, wire.advertise(7, "test_thing", 1))
-        thing = client.bind("test_thing", 1)
-        seen = self._listen(client, "test_thing", "counted")
-        compositor.send(wire.message(
-            thing, 2, wire.word(5) + wire.integer(-9) + wire.array([1, 2, 3])))
-        client.dispatch_pending()
-        assert seen[0][1:3] == (5, -9)
-        assert seen[0][3] == wire.array([1, 2, 3])[4:]
-
-    def test_several_messages_in_one_read(self, compositor):
-        client = connect(compositor, wire.advertise(7, "test_thing", 1))
-        thing = client.bind("test_thing", 1)
-        seen = self._listen(client, "test_thing", "named")
-        compositor.send(wire.message(thing, 1, wire.text("one")),
-                        wire.message(thing, 1, wire.text("two")))
-        client.dispatch_pending()
-        assert [s[1] for s in seen] == ["one", "two"]
-
-    def test_unknown_opcode_is_ignored(self, compositor):
-        client = connect(compositor, wire.advertise(7, "test_thing", 1))
-        thing = client.bind("test_thing", 1)
-        seen = self._listen(client, "test_thing", "named")
-        compositor.send(wire.message(thing, 99, b""))
-        client.dispatch_pending()
-        assert seen == []
-
-    def test_events_for_an_unknown_object_are_ignored(self, compositor):
-        client = connect(compositor)
-        seen = self._listen(client, "test_thing", "named")
-        compositor.send(wire.message(4242, 1, wire.text("nobody")))
-        client.dispatch_pending()
-        assert seen == []
-
-
-class TestObjectLifetime:
-    def test_server_created_object_is_adopted_and_routed(self, compositor):
-        client = connect(compositor, wire.advertise(7, "test_thing", 1))
-        thing = client.bind("test_thing", 1)
-        pinged = []
-        client.on("test_child", "pinged", lambda *args: pinged.append(args))
-
-        child_id = 0xFF000000
-        compositor.send(wire.message(thing, 3, wire.word(child_id)),
-                        wire.message(child_id, 0, wire.word(42)))
-        client.dispatch_pending()
-        assert pinged == [(child_id, 42)]
-
-    def test_forgotten_object_stops_being_routed(self, compositor):
-        client = connect(compositor, wire.advertise(7, "test_thing", 1))
-        thing = client.bind("test_thing", 1)
-        seen = []
-        client.on("test_thing", "named", lambda *args: seen.append(args))
-        client.forget(thing)
-        compositor.send(wire.message(thing, 1, wire.text("gone")))
-        client.dispatch_pending()
-        assert seen == []
-
-    def test_delete_id_forgets_the_object(self, compositor):
-        client = connect(compositor, wire.advertise(7, "test_thing", 1))
-        thing = client.bind("test_thing", 1)
-        seen = []
-        client.on("test_thing", "named", lambda *args: seen.append(args))
-        compositor.send(wire.message(wire.DISPLAY_ID, 1, wire.word(thing)),
-                        wire.message(thing, 1, wire.text("gone")))
-        client.dispatch_pending()
-        assert seen == []
-
-
-class TestRequests:
-    def test_words_are_sent_in_order(self, compositor):
-        client = connect(compositor, wire.advertise(7, "test_thing", 1))
-        thing = client.bind("test_thing", 1)
-        compositor.received()
-        client.request(thing, 2, 11, 22, 33)
-        assert compositor.received() == [
-            (thing, 2, wire.word(11) + wire.word(22) + wire.word(33))]
-
-    def test_protocol_error_is_raised(self, compositor):
-        client = connect(compositor)
-        compositor.send(wire.message(
-            wire.DISPLAY_ID, 0, wire.word(7) + wire.word(3) + wire.text("bad object")))
-        with pytest.raises(WaylandError, match="bad object"):
-            client.dispatch_pending()
+    def test_close_is_idempotent(self, client):
+        client.close()
+        client.close()
+        assert client.is_closed

@@ -18,6 +18,7 @@ from domain.navigation.bar_views import HintBarView
 from domain.navigation.hints import Button, Direction, Hints
 from domain.shared.i18n import translate
 from infrastructure.common.qt._meta import ProtocolQtMeta
+from infrastructure.common.qt.ui import styles
 from infrastructure.common.qt.ui.deferred_unmap import DeferredUnmap
 from infrastructure.common.qt.ui.layer_shell import Anchor, Keyboard, Layer
 from infrastructure.common.qt.ui.top_surface import (
@@ -29,6 +30,7 @@ from infrastructure.common.qt.overlays.home_menu_content import CARD_WIDTH
 GLYPH_SIZE = 26      # diameter of a button glyph / height of a direction arrow
 ICON_PX    = 15      # inner icon size for icon-based glyphs (home / start / arrows)
 BAR_HEIGHT = 60      # the rounded bar itself
+BAR_RADIUS = 30      # half of BAR_HEIGHT: fully rounded ends
 SURFACE_H  = BAR_HEIGHT + GNOME_PANEL_CLEARANCE
 
 # Direction → Font Awesome arrow glyph.
@@ -87,9 +89,8 @@ class HintBar(QWidget, HintBarView, metaclass=ProtocolQtMeta):
         bar.setFixedWidth(CARD_WIDTH)
         bar.setStyleSheet(
             "#hintbar {"
-            "  background-color: rgba(46, 52, 64, 204);"  # transparency test: 20%
-            "  border-radius: 30px;"
-            "}"
+            + styles.pill_background(top=BAR_RADIUS, bottom=BAR_RADIUS)
+            + "}"
         )
         outer.addStretch(1)   # absorbs any surplus surface height above the bar
         outer.addWidget(bar, alignment=Qt.AlignmentFlag.AlignHCenter)
@@ -263,7 +264,7 @@ class HintBar(QWidget, HintBarView, metaclass=ProtocolQtMeta):
         lbl.setFixedSize(GLYPH_SIZE + 12, GLYPH_SIZE)
         lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         lbl.setStyleSheet(
-            f"background-color: #3b4252; color: white;"
+            f"background-color: {styles.COLOR_SURFACE_HI}; color: white;"
             f" border-radius: {GLYPH_SIZE // 2}px;"
             "  font-weight: bold; font-size: 12px;"
         )
@@ -285,7 +286,7 @@ class HintBar(QWidget, HintBarView, metaclass=ProtocolQtMeta):
         lbl.setFixedSize(GLYPH_SIZE, GLYPH_SIZE)
         lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         lbl.setStyleSheet(
-            f"background-color: #3b4252; border-radius: {GLYPH_SIZE // 2}px;"
+            f"background-color: {styles.COLOR_SURFACE_HI}; border-radius: {GLYPH_SIZE // 2}px;"
         )
         lbl.setPixmap(qta.icon(glyph, color="white").pixmap(QSize(ICON_PX, ICON_PX)))
         return lbl

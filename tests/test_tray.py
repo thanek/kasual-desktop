@@ -80,7 +80,10 @@ class TestMenu:
 class TestSourceSelection:
     def _source_for(self, desktop, monkeypatch):
         from infrastructure.linux.compositor import build_tray_icon_source
-        for var in ("KDE_FULL_SESSION", "SWAYSOCK", "HYPRLAND_INSTANCE_SIGNATURE"):
+        # XDG_SESSION_DESKTOP counts as a session name too, so a run on one of
+        # these desktops would otherwise answer for itself rather than the case.
+        for var in ("KDE_FULL_SESSION", "XDG_SESSION_DESKTOP", "SWAYSOCK",
+                    "HYPRLAND_INSTANCE_SIGNATURE"):
             monkeypatch.delenv(var, raising=False)
         monkeypatch.setenv("XDG_CURRENT_DESKTOP", desktop)
         return build_tray_icon_source()

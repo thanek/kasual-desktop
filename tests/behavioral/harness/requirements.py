@@ -17,7 +17,7 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 
 from tests.behavioral.harness import kd_client
-from tests.behavioral.harness.kd_client import KDClient
+from tests.behavioral.harness.kd_client import KasualDesktopUnavailable, KDClient
 from tests.behavioral.harness.report import ScenarioAborted, report
 
 
@@ -57,6 +57,24 @@ def tile(tile_id: str, description: str | None = None) -> Requirement:
         description or f'Kasual Desktop has a tile for {tile_id!r}',
         kd_has_the_tile,
         needs_kd=True,
+    )
+
+
+def tiles(at_least: int) -> Requirement:
+    def kd_has_enough_tiles(kd: KDClient | None) -> bool:
+        if kd is None:
+            return False
+        try:
+            return len(kd.snapshot()['tiles']) >= at_least
+        except KasualDesktopUnavailable:
+            return False
+
+    return Requirement(
+        f'Kasual Desktop has at least {at_least} tiles, so the cursor has somewhere '
+        f'to move',
+        kd_has_enough_tiles,
+        needs_kd=True,
+        remedy=f'add tiles until there are {at_least}, and run again',
     )
 
 
@@ -133,6 +151,26 @@ def kd_test_api() -> Requirement:
         remedy='the running Kasual Desktop was started without the test API, or it '
                'predates the API this harness expects — quit it and start: '
                'KD_TEST_API=1 ./kasual.sh',
+    )
+
+
+def kd_idle() -> Requirement:
+    """An app KD still believes is running changes what the pad does: over a game
+    BTN_MODE follows its hold-to-recall policy, so a short press opens nothing."""
+    def nothing_in_front(kd: KDClient | None) -> bool:
+        if kd is None:
+            return False
+        try:
+            return kd.snapshot()['foreground'] is None
+        except KasualDesktopUnavailable:
+            return False
+
+    return Requirement(
+        'Kasual Desktop has no app in the foreground',
+        nothing_in_front,
+        needs_kd=True,
+        remedy='KD still has an app in front — wait for it to notice the app is gone, '
+               'or restart KD, and run again',
     )
 
 
@@ -256,6 +294,7 @@ BASE: tuple[Requirement, ...] = (
     writable('/dev/uinput',
              '/dev/uinput is writable (the `input` group, or a udev rule)'),
     no_physical_gamepad(),
+    kd_idle(),
 )
 
 

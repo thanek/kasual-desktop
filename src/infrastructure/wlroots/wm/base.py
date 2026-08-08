@@ -1,9 +1,11 @@
-"""Shared skeleton for window managers driven by a compositor's JSON IPC CLI.
+"""Shared skeletons for the wlroots window managers.
 
 Sway (``swaymsg``) and Hyprland (``hyprctl``) both expose the window list and the
-control operations over a JSON-speaking CLI, so this narrows the snapshot-based
-:class:`PollingWindowManager` to that transport; each subclass supplies only the
-CLI vocabulary and the window mapping.
+control operations over a JSON-speaking CLI, so :class:`WlrootsWindowManager`
+narrows the snapshot-based :class:`PollingWindowManager` to that transport; each
+subclass supplies only the CLI vocabulary and the window mapping. Compositors
+here without such a CLI (labwc, wayfire) build on the plain
+:class:`PollingWindowManager` and speak Wayland instead.
 """
 
 from __future__ import annotations
@@ -20,8 +22,9 @@ _CLI_TIMEOUT_S = 2.0
 
 
 class WlrootsWindowManager(PollingWindowManager):
-    """Polling window manager over a compositor CLI. Subclasses implement
-    ``_enum_windows`` and the imperative operations in that compositor's IPC."""
+    """Polling window manager over a compositor's JSON IPC CLI. Subclasses
+    implement ``_enum_windows`` and the imperative operations in that
+    compositor's IPC."""
 
     def _run(self, args: list[str]) -> None:
         """Fire-and-forget CLI command; failures degrade to a logged warning."""

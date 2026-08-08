@@ -14,6 +14,7 @@ the overlays themselves shared across platforms.
 """
 
 import logging
+from typing import TYPE_CHECKING
 
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QGuiApplication
@@ -21,24 +22,50 @@ from PyQt6.QtWidgets import QWidget
 
 from .layer_shell import Anchor, Keyboard, Layer
 
+if TYPE_CHECKING:
+    from infrastructure.linux.compositor import Compositor
+
 logger = logging.getLogger(__name__)
 
 HOME_EDGE_MARGIN      = 10
 GNOME_PANEL_CLEARANCE = 32
 
 
-def home_chrome_edge_margin() -> int:
+def _wayland_compositor(compositor: "Compositor | None" = None) -> "Compositor | None":
+    """The compositor in play, or None when this is not a Wayland session."""
+    if QGuiApplication.platformName() != "wayland":
+        return None
+    if compositor is not None:
+        return compositor
+    from infrastructure.linux.compositor import detect_compositor
+    return detect_compositor()
+
+
+def _on_gnome(compositor: "Compositor | None" = None) -> bool:
+    resolved = _wayland_compositor(compositor)
+    if resolved is None:
+        return False
+    from infrastructure.linux.compositor import Compositor
+    return resolved is Compositor.GNOME
+
+
+def _on_layer_shell(compositor: "Compositor | None" = None) -> bool:
+    """Whether this session really puts our overlays on wlr-layer-shell — which
+    needs both a compositor that implements it and a loadable Qt6 LayerShellQt."""
+    resolved = _wayland_compositor(compositor)
+    if resolved is None:
+        return False
+    from infrastructure.linux.compositor import layer_shell_available
+    return layer_shell_available(resolved)
+
+
+def home_chrome_edge_margin(compositor: "Compositor | None" = None) -> int:
     """The gap the Home header (top) and hint bar (bottom) keep from the screen
     edge — widened on GNOME to clear its unstackable top panel."""
-    if QGuiApplication.platformName() != "wayland":
-        return HOME_EDGE_MARGIN
-    from infrastructure.linux.compositor import Compositor, detect_compositor
-    if detect_compositor() is Compositor.GNOME:
-        return GNOME_PANEL_CLEARANCE
-    return HOME_EDGE_MARGIN
+    return GNOME_PANEL_CLEARANCE if _on_gnome(compositor) else HOME_EDGE_MARGIN
 
 
-def surface_sized_by_compositor() -> bool:
+def surface_sized_by_compositor(compositor: "Compositor | None" = None) -> bool:
     """Whether the windowing system gives an anchored overlay its geometry.
 
     wlr-layer-shell sizes a surface from its anchors before it is ever mapped.
@@ -46,13 +73,10 @@ def surface_sized_by_compositor() -> bool:
     the fact leaves the client with a buffer it never repaints — and an overlay
     that is sized by neither side never appears, which is what a Wayland session
     without a usable LayerShellQt would otherwise produce."""
-    if QGuiApplication.platformName() != "wayland":
-        return False
-    from infrastructure.linux.compositor import layer_shell_available
-    return layer_shell_available()
+    return _on_layer_shell(compositor)
 
 
-def fullscreen_loses_translucency() -> bool:
+def fullscreen_loses_translucency(compositor: "Compositor | None" = None) -> bool:
     """Whether a fullscreen surface is composited over opaque black.
 
     Mutter blends a fullscreen window onto black and drops its alpha channel, so a
@@ -65,10 +89,8 @@ def fullscreen_loses_translucency() -> bool:
     on the scanout plane with nothing behind it to blend. A layer-shell overlay is
     sized by its anchors and never asks, so it keeps its alpha; wherever layer-shell
     is unavailable the screen-sized window is the safe shape."""
-    if QGuiApplication.platformName() != "wayland":
-        return False
-    from infrastructure.linux.compositor import layer_shell_available
-    return not layer_shell_available()
+    resolved = _wayland_compositor(compositor)
+    return resolved is not None and not _on_layer_shell(resolved)
 
 
 def promote_overlay_surface(
@@ -78,22 +100,20 @@ def promote_overlay_surface(
     anchors: Anchor = Anchor.ALL,
     exclusive_zone: int = -1,
     keyboard: Keyboard = Keyboard.NONE,
+    compositor: "Compositor | None" = None,
 ) -> None:
     """Lift *widget* above everything using the platform's mechanism. Call before
     the widget is shown."""
     platform = QGuiApplication.platformName()
     if platform == "wayland":
-        from infrastructure.linux.compositor import Compositor, detect_compositor
-        if detect_compositor() is Compositor.GNOME:
+        if _on_gnome(compositor):
             # Mutter has no layer-shell; the Kasual Helper extension pins Kasual's
             # surfaces above the foreground app (a plain frameless top-level here)
-            # and applies the layer/anchors itself, keyed by the window title.
-            from infrastructure.gnome.helper import (
-                helper_present, set_surface_role, show_overlay,
-            )
+            # and applies the layer/anchors/keyboard mode itself, keyed by the window
+            # title. Asking for the screen here would take it from the app underneath.
+            from infrastructure.gnome.helper import helper_present, set_surface_role
             if helper_present():
-                set_surface_role(widget.windowTitle(), layer, anchors)
-                show_overlay()
+                set_surface_role(widget.windowTitle(), layer, anchors, keyboard)
             return
         # The LayerShellQt binding is the Wayland adapter; imported lazily so this
         # shared dispatcher carries no eager dependency on it (the enums above are

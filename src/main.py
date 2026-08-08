@@ -5,7 +5,7 @@ import sys
 from pathlib import Path
 
 from infrastructure.linux.compositor import (
-    Compositor, build_desktop_surface, build_screensaver_waker,
+    WLROOTS, Compositor, build_desktop_surface, build_screensaver_waker,
     build_system_wallpaper, build_tray_icon_source, build_window_manager,
     detect_compositor, layer_shell_available,
 )
@@ -15,9 +15,11 @@ from infrastructure.linux.compositor import (
 # Naming an integration Qt cannot load is not a soft failure: the Wayland plugin
 # then has none at all and every window stays unmapped, so Kasual runs, logs
 # nothing obviously wrong, and is invisible.
-os.environ.setdefault("QT_QPA_PLATFORM", "wayland")
-_layer_shell = layer_shell_available()
-if _layer_shell:
+COMPOSITOR = detect_compositor()
+# Not merely "not GNOME": naming an integration this Qt cannot load leaves the
+# Wayland plugin with none at all, and every window then stays unmapped.
+LAYER_SHELL = layer_shell_available(COMPOSITOR)
+if LAYER_SHELL:
     os.environ.setdefault("QT_WAYLAND_SHELL_INTEGRATION", "layer-shell")
 
 from PyQt6.QtCore import QTimer
@@ -47,6 +49,13 @@ from infrastructure.linux.catalog.app_pinning import DesktopAppPinning
 from infrastructure.linux.catalog.installed_apps import XdgInstalledApps
 from domain.provisioning.provisioning import Provisioning
 from domain.provisioning.add_apps import AppAdder
+from domain.input_access.recipes import all_recipes as input_access_recipes
+from domain.input_access.requirement import GamepadAccess
+from domain.setup.gate import SetupGate
+from domain.setup.readiness import SetupReadiness
+from infrastructure.common.qt.overlays.setup_overlay import QtSetupView
+from infrastructure.linux.input.access import RULE_FILE, LinuxDeviceAccess
+from infrastructure.linux.system_facts import LinuxSystemFacts
 from infrastructure.linux.catalog.app_manager import AppManager
 from infrastructure.linux.proc import parent_pid, is_game_pid
 from infrastructure.linux.log.log_viewer_launcher import LogViewerLauncher
@@ -58,45 +67,88 @@ from infrastructure.linux.display.screensaver import (
 )
 from infrastructure.common.qt.scheduler import QtScheduler
 from infrastructure.linux.hud.mangohud import MangoHudControl
+from domain.system.hud import hud_launch_env
 from infrastructure.linux.notifications.notifications import FreedesktopNotificationMonitor
+from infrastructure.linux.notifications.notifier import FreedesktopNotifier
 from infrastructure.linux.network.network_manager import NMNetworkControl, NMNetworkMonitor
 from domain.notifications.center import NotificationCenter
-from infrastructure.common.catalog.preferences import DesktopPowerPreference
+from infrastructure.common.catalog.preferences import (
+    DesktopBackgroundHintMemory, DesktopPowerPreference,
+)
+from domain.shell.background_hint import BackgroundHint
+from domain.shell.desktop_control import DesktopControl
 from infrastructure.common.qt.i18n import install_translations
 
 logger = logging.getLogger(__name__)
 
 
-def _preflight_gate(app, gamepad, feedback, proceed) -> None:
-    """Ensure the session can actually put Kasual on screen, before any subsystem
-    starts. On GNOME that is the helper extension; on every other Wayland session it
-    is wlr-layer-shell, without which nothing can place its own surfaces."""
-    from infrastructure.common.qt.overlays.preflight_overlay import QtPreflightView
+def _extension_gate(app, gamepad, feedback) -> SetupGate | None:
+    """On GNOME the helper extension carries every window operation, so nothing
+    may start before it answers; everywhere else there is nothing to gate."""
+    if COMPOSITOR is not Compositor.GNOME:
+        return None
+    from domain.preflight.extension import ENABLE, LOG_OUT, HelperExtension
+    from domain.preflight.extension_recipes import all_recipes
+    from infrastructure.gnome.extension import (
+        GnomeExtensionActivator, GnomeExtensionProbe,
+    )
+    from infrastructure.gnome.helper import EXTENSION_UUID
+    from infrastructure.gnome.session import GnomeSessionEnder
 
-    if detect_compositor() is Compositor.GNOME:
-        from domain.preflight.extension_gate import ExtensionGate
-        from infrastructure.gnome.extension import (
-            GnomeExtensionActivator, GnomeExtensionProbe,
-        )
-        ExtensionGate(
-            GnomeExtensionProbe(),
-            GnomeExtensionActivator(),
-            QtPreflightView(gamepad, feedback),
-            on_quit=app.quit,
-        ).ensure(proceed)
-        return
+    activator = GnomeExtensionActivator()
+    return SetupGate(
+        SetupReadiness(
+            HelperExtension(GnomeExtensionProbe()),
+            LinuxSystemFacts(),
+            all_recipes(EXTENSION_UUID),
+        ),
+        QtSetupView(gamepad, feedback),
+        remedies={ENABLE: activator.enable,
+                  LOG_OUT: GnomeSessionEnder().log_out},
+        on_abort=app.quit,
+    )
 
-    # X11 and the offscreen platform place windows for their clients, so only a
-    # Wayland session has anything to be missing here.
+
+def _layer_shell_gate(view) -> SetupGate | None:
+    """Without wlr-layer-shell nothing can place its own surfaces, and the
+    interface arrives scattered instead of anchored. Non-blocking: Qt binds its
+    shell integration at startup, so no card could turn green in this session —
+    it says what happened and what to do before the next one.
+
+    X11 and the offscreen platform place windows for their clients, and GNOME's
+    helper extension does the same job, so only the rest has anything to miss.
+    """
+    if LAYER_SHELL or COMPOSITOR is Compositor.GNOME:
+        return None
     if QGuiApplication.platformName() != "wayland":
-        proceed()
-        return
-    from domain.preflight.surface_gate import SurfaceGate
-    SurfaceGate(
-        layer_shell_available,
-        QtPreflightView(gamepad, feedback),
-        on_quit=app.quit,
-    ).ensure(proceed)
+        return None
+    from domain.preflight.layer_shell import LayerShellSurfaces
+    from domain.preflight.layer_shell_recipes import all_recipes
+    from infrastructure.linux.wayland.layer_shell_probe import QtLayerShellProbe
+
+    return SetupGate(
+        SetupReadiness(
+            LayerShellSurfaces(QtLayerShellProbe()),
+            LinuxSystemFacts(),
+            all_recipes(),
+        ),
+        view,
+    )
+
+
+def _gamepad_access_gate(view) -> SetupGate:
+    """Reaching the pad through evdev needs device nodes a desktop session does
+    not open by default, and Kasual Desktop cannot tell that apart from having
+    no controller at all — so it says so instead of looking broken."""
+    rule_source = Path(__file__).parent.parent / "packaging" / RULE_FILE
+    return SetupGate(
+        SetupReadiness(
+            GamepadAccess(LinuxDeviceAccess()),
+            LinuxSystemFacts(),
+            input_access_recipes(str(rule_source)),
+        ),
+        view,
+    )
 
 
 def main() -> None:
@@ -108,12 +160,7 @@ def main() -> None:
     log_file = setup_logging(Path.home() / ".local" / "cache" / "kasual")
     version = get_version()
     logger.info("Running Kasual Desktop %s", version)
-    logger.info("Detected compositor: %s", detect_compositor().value)
-    if not _layer_shell and detect_compositor() is not Compositor.GNOME:
-        logger.warning(
-            "LayerShellQt for Qt6 is unavailable — the Desktop runs as an ordinary "
-            "window and cannot cover a fullscreen app. Install the Qt6 build of "
-            "layer-shell-qt (Debian/Ubuntu package the Qt5 one only).")
+    logger.info("Detected compositor: %s", COMPOSITOR.value)
 
     app = QApplication(sys.argv)
     app.setApplicationName("Kasual Desktop")
@@ -125,7 +172,11 @@ def main() -> None:
 
     CursorAutoHide(app)
 
-    guard = SingleInstanceGuard(log_file.parent)
+    # Before the single-instance check — its notification is a second instance's
+    # only visible string.
+    install_translations(app, str(Path(__file__).parent.parent / "locale"))
+
+    guard = SingleInstanceGuard(log_file.parent, FreedesktopNotifier())
     if not guard.try_lock():
         sys.exit(0)
     app.aboutToQuit.connect(guard.release)
@@ -134,10 +185,8 @@ def main() -> None:
     # substitute (see icons.install_fontawesome5). Before any icon is built.
     install_fontawesome5()
 
-    install_translations(app, str(Path(__file__).parent.parent / "locale"))
-
     gamepad = GamepadWatcher()
-    screensaver_waker = build_screensaver_waker()
+    screensaver_waker = build_screensaver_waker(COMPOSITOR)
     gamepad.on_activity(screensaver_waker.poke)
     feedback = SoundFeedback()
 
@@ -155,7 +204,10 @@ def main() -> None:
     # persists the chosen ones through the same store as onboarding.
     app_adder = AppAdder(XdgInstalledApps(), provisioning)
 
-    def start_session() -> None:
+    gamepad_access_view = QtSetupView(gamepad, feedback)
+    gamepad_access = _gamepad_access_gate(gamepad_access_view)
+
+    def start_session() -> DesktopControl:
         """Bring up the Desktop and controller from the (now-provisioned) apps.
 
         Deferred behind onboarding via a callback continuation rather than a
@@ -163,7 +215,7 @@ def main() -> None:
         apps = load_apps()
         logger.info("Loaded %d apps", len(apps))
 
-        wm = build_window_manager()
+        wm = build_window_manager(COMPOSITOR)
         # One PowerControl shared by the Desktop's action runner and the Application.
         power = SystemdPowerControl()
 
@@ -184,9 +236,11 @@ def main() -> None:
 
         volume = PactlVolumeControl()
         brightness = select_brightness_control()
+        # Ahead of the controller below: launching a game already needs it.
+        hud = MangoHudControl()
         desktop = build_desktop(
             apps=apps, gamepad=gamepad, window_manager=wm,
-            wallpaper=build_system_wallpaper(), feedback=feedback,
+            wallpaper=build_system_wallpaper(COMPOSITOR), feedback=feedback,
             volume=volume, brightness=brightness,
             power=power, scheduler=QtScheduler(),
             process_manager=AppManager(), notifications=notification_center,
@@ -194,15 +248,17 @@ def main() -> None:
             order_store=DesktopTileOrderStore(),
             settings_store=DesktopTileSettingsStore(),
             app_pinning=DesktopAppPinning(),
-            surface=build_desktop_surface(),
+            surface=build_desktop_surface(COMPOSITOR),
             parent_of=parent_pid,
             is_game_pid=is_game_pid,
             app_adder=app_adder,
+            setup_gate=gamepad_access,
+            setup_view=gamepad_access_view,
             power_preference=power_preference,
+            launch_env=lambda app: hud_launch_env(hud, app),
             deferred_hide_factory=lambda wm_, pm_, on_cede, on_hide:
                 DeferredHide(wm_, pm_, on_cede=on_cede, on_hide=on_hide,
-                             always_cede=detect_compositor()
-                             in (Compositor.HYPRLAND, Compositor.SWAY)),
+                             always_cede=COMPOSITOR in WLROOTS),
             deferred_show_factory=lambda wm_, pm_, on_show:
                 DeferredShow(wm_, pm_, on_show=on_show),
             cede_depth_factory=lambda wm_, pm_, on_sink:
@@ -236,7 +292,6 @@ def main() -> None:
             icon_for=build_tray_icon_source(),
         )
 
-        hud = MangoHudControl()
         controller = build_controller(
             gamepad=gamepad, desktop=desktop, tray=tray, wm=wm,
             power=power, hud=hud,
@@ -254,12 +309,37 @@ def main() -> None:
         defer_start(app, notification_monitor)
         app.aboutToQuit.connect(controller.shutdown)
         app.aboutToQuit.connect(log_viewer.close)
+        return desktop
+
+    def start_session_then_offer_background_hint() -> None:
+        desktop = start_session()
+        BackgroundHint(
+            notifier=FreedesktopNotifier(),
+            memory=DesktopBackgroundHintMemory(),
+            desktop=desktop,
+            scheduler=QtScheduler(),
+        ).offer()
 
     def start() -> None:
         run_onboarding_or_start(
-            provisioning, provisioning_uc, gamepad, feedback, start_session)
+            provisioning, provisioning_uc, gamepad, feedback,
+            start_session_then_offer_background_hint)
 
-    _preflight_gate(app, gamepad, feedback, start)
+    def check_gamepad_access() -> None:
+        gamepad_access.ensure(start)
+
+    def check_layer_shell() -> None:
+        layer_shell = _layer_shell_gate(gamepad_access_view)
+        if layer_shell is None:
+            check_gamepad_access()
+        else:
+            layer_shell.ensure(check_gamepad_access)
+
+    extension = _extension_gate(app, gamepad, feedback)
+    if extension is None:
+        check_layer_shell()
+    else:
+        extension.ensure(check_layer_shell)
 
     QTimer.singleShot(0, feedback.init)
 

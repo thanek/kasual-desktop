@@ -25,7 +25,7 @@ class ToggleSwitch(QAbstractButton):
         parent=None,
         width: int = 64,
         height: int = 30,
-        off_color: str = "#4c566a",
+        off_color: str = styles.COLOR_TRACK,
         knob_color: str = styles.COLOR_TEXT,
         # Deeper Nord frost blue: coherent with KD yet distinct from the accent
         # used to highlight the focused row, so the switch stays visible on it.

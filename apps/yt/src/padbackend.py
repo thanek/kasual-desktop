@@ -257,19 +257,44 @@ else:
             self.ry_info = None
             self.ly_info = None
 
+    def _is_gamepad(device: InputDevice) -> bool:
+        try:
+            caps = device.capabilities()
+            keys = caps.get(ecodes.EV_KEY, [])
+            has_buttons = any(b in keys for b in (
+                ecodes.BTN_SOUTH, ecodes.BTN_EAST, ecodes.BTN_NORTH,
+                ecodes.BTN_WEST, ecodes.BTN_START, ecodes.BTN_SELECT,
+            ))
+            has_hat = any(ax in caps.get(ecodes.EV_ABS, [])
+                          for ax in (ecodes.ABS_HAT0X, ecodes.ABS_HAT0Y))
+            # KEY_A rules out keyboards that also carry media/gamepad buttons.
+            return (has_buttons or has_hat) and ecodes.KEY_A not in keys
+        except Exception:
+            return False
+
+    def _first_matching(accepts) -> _EvdevPad | None:
+        for path in list_devices():
+            try:
+                d = InputDevice(path)
+            except Exception:
+                continue
+            if accepts(d):
+                return _EvdevPad(d)
+            d.close()
+        return None
+
     def find_pad(names: list[str], timeout: float = 10.0) -> _EvdevPad:
-        """Wait for an evdev device with one of *names*, max *timeout* seconds."""
+        """Wait for an evdev device with one of *names*, max *timeout* seconds,
+        then take any device that looks like a gamepad."""
         deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
-            for path in list_devices():
-                try:
-                    d = InputDevice(path)
-                    if d.name in names:
-                        return _EvdevPad(d)
-                    d.close()
-                except Exception:
-                    pass
+            pad = _first_matching(lambda d: d.name in names)
+            if pad is not None:
+                return pad
             time.sleep(0.2)
+        pad = _first_matching(_is_gamepad)
+        if pad is not None:
+            return pad
         raise RuntimeError(f"Pad not found among: {names}")
 
     class PadListener(threading.Thread):

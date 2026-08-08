@@ -1,39 +1,91 @@
-"""Tests for the single-instance lock.
+"""Tests for SingleInstanceGuard, on a real QLockFile — a mocked `getLockInfo()`
+is exactly the thing that broke.
 
-Refusing a second instance is the *quiet* path — it must not be the crashing one.
-PyQt6's ``QLockFile.getLockInfo`` answers ``(ok, pid, hostname, appname)``, and
-reading it as anything else turns "already running" into a traceback at startup.
+PyQt6 answers `(ok, pid, hostname, appname)`; unpacking it as anything else turns
+"already running" into a traceback at startup, so the refusal path is asserted on
+the real thing.
 """
+
+import logging
+import os
 
 import pytest
 
 from infrastructure.common.single_instance import SingleInstanceGuard
 
 
+class FakeNotifier:
+    def __init__(self):
+        self.shown = []
+
+    def notify(self, summary, body=""):
+        self.shown.append((summary, body))
+
+
 @pytest.fixture
-def lock_dir(tmp_path):
-    return tmp_path
+def guards(tmp_path):
+    first, second = SingleInstanceGuard(tmp_path), SingleInstanceGuard(tmp_path)
+    yield first, second
+    first.release()
+    second.release()
 
 
-class TestSingleInstanceGuard:
-    def test_first_instance_takes_the_lock(self, lock_dir):
-        assert SingleInstanceGuard(lock_dir).try_lock() is True
+def test_second_instance_is_refused_without_raising(guards, caplog):
+    first, second = guards
+    assert first.try_lock() is True
 
-    def test_second_instance_is_refused_without_raising(self, lock_dir):
-        first = SingleInstanceGuard(lock_dir)
-        assert first.try_lock() is True
-        assert SingleInstanceGuard(lock_dir).try_lock() is False
+    with caplog.at_level(logging.WARNING):
+        assert second.try_lock() is False
 
-    def test_the_refusal_names_the_holder(self, lock_dir, caplog):
-        holder = SingleInstanceGuard(lock_dir)   # held: QLockFile unlocks on GC
-        holder.try_lock()
-        with caplog.at_level("WARNING"):
-            SingleInstanceGuard(lock_dir).try_lock()
-        assert "already running" in caplog.text
-        assert "PID" in caplog.text
+    assert "already running" in caplog.text
+    assert str(os.getpid()) in caplog.text
 
-    def test_releasing_lets_the_next_instance_in(self, lock_dir):
-        first = SingleInstanceGuard(lock_dir)
-        first.try_lock()
+
+def test_lock_is_reusable_after_release(guards):
+    first, second = guards
+    assert first.try_lock() is True
+    first.release()
+
+    assert second.try_lock() is True
+
+
+def test_second_instance_tells_the_user_on_screen(tmp_path):
+    notifier = FakeNotifier()
+    first = SingleInstanceGuard(tmp_path)
+    second = SingleInstanceGuard(tmp_path, notifier)
+    assert first.try_lock() is True
+
+    try:
+        assert second.try_lock() is False
+    finally:
         first.release()
-        assert SingleInstanceGuard(lock_dir).try_lock() is True
+
+    (summary, body), = notifier.shown
+    assert "Kasual Desktop" in summary
+    assert str(os.getpid()) in body
+
+
+def test_the_holder_of_the_lock_is_not_notified(tmp_path):
+    notifier = FakeNotifier()
+    guard = SingleInstanceGuard(tmp_path, notifier)
+
+    assert guard.try_lock() is True
+    guard.release()
+
+    assert notifier.shown == []
+
+
+def test_unwritable_lock_dir_reports_the_real_reason(tmp_path, caplog):
+    lock_dir = tmp_path / "readonly"
+    lock_dir.mkdir()
+    lock_dir.chmod(0o500)
+    guard = SingleInstanceGuard(lock_dir)
+
+    try:
+        with caplog.at_level(logging.ERROR):
+            assert guard.try_lock() is False
+    finally:
+        lock_dir.chmod(0o700)
+
+    assert "already running" not in caplog.text
+    assert "Cannot acquire" in caplog.text

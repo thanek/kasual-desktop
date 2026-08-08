@@ -11,4 +11,7 @@ class QtScheduler(Scheduler):
     """Implements `ports.Scheduler` using Qt's single-shot timer."""
 
     def call_later(self, delay_ms: int, callback: Callable[[], None]) -> None:
-        QTimer.singleShot(delay_ms, callback)
+        def keep_callback_alive_until_it_runs() -> None:
+            callback()
+
+        QTimer.singleShot(delay_ms, keep_callback_alive_until_it_runs)

@@ -8,13 +8,16 @@ from domain.menu.entry import CLOSE_APP, POWER, RETURN_TO_APP, RETURN_TO_DESKTOP
 from domain.menu.item import MenuItem
 from domain.shared.text import truncate
 from domain.system.actions import (
-    ACTIONS, BRIGHTNESS, HIDE_DESKTOP, NETWORK, NOTIFICATIONS, POWER_ACTIONS, VOLUME,
+    ACTIONS, BRIGHTNESS, GAMEPAD_ACCESS, HIDE_DESKTOP, NETWORK, NOTIFICATIONS,
+    POWER_ACTIONS, VOLUME,
 )
 from domain.system.hud import HudControl, hud_menu_item
 from domain.shared.i18n import translate
 
 
 def _return_to_desktop_item() -> MenuItem:
+    """Offered on the Home screen too: when Kasual Desktop is minimized this is
+    the only way back, and it merely re-raises when it is already on screen."""
     return MenuItem(translate("Kasual Desktop", "Return to Home screen"), RETURN_TO_DESKTOP, "fa5s.home")
 
 
@@ -67,21 +70,24 @@ def compose_home_sections(
     power_default: str,
     foreground_is_game: bool = False,
     include_status_actions: bool = True,
+    gamepad_access_checkable: bool = False,
 ) -> HomeSections:
     """Brightness is offered only when the backlight is controllable;
     ``include_status_actions`` drops Power / Network / Notifications from the grid
-    when a status header already carries them, so they aren't offered twice."""
+    when a status header already carries them, so they aren't offered twice;
+    ``gamepad_access_checkable`` is false where the pad does not come from evdev
+    and there is nothing to grant."""
     quick = [_action_item(VOLUME)]
     if brightness_controllable:
         quick.append(_action_item(BRIGHTNESS))
 
     if foreground is None:
-        # "Return to Home screen" stays here: when Kasual is minimized it is the
-        # only way back. Harmless when already on screen (just re-raises).
         actions = []
         if include_status_actions:
             actions += [_power_card(power_default),
                         _action_item(NETWORK), _action_item(NOTIFICATIONS)]
+        if gamepad_access_checkable:
+            actions.append(_action_item(GAMEPAD_ACCESS))
         actions += [_action_item(HIDE_DESKTOP), _return_to_desktop_item()]
         return HomeSections(
             sections=[HomeSection(SectionKind.QUICK, quick),

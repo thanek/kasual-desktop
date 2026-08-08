@@ -13,6 +13,7 @@ from unittest.mock import MagicMock
 from domain.input.vocabulary import Trigger
 from domain.lifecycle.app_lifecycle import AppLifecycle, _FORWARDER_CEDE_GRACE_MS
 from domain.lifecycle.foreground_inspector import ForegroundInspector
+from domain.lifecycle.launch_transitions import LaunchTransitions
 from domain.catalog.app import App
 from domain.shell.foreground import ForegroundState
 from domain.catalog.target import AppTarget, WindowTarget
@@ -91,7 +92,7 @@ def _steam_game_app(appid="292030", trigger=Trigger.CLICK, id="witcher3"):
                args=(f"steam://rungameid/{appid}",), recall_menu_trigger=trigger)
 
 
-def _make(apps=None, visible=False, is_game_pid=None, paused=False):
+def _make(apps=None, visible=False, is_game_pid=None, paused=False, launch_env=None):
     view = FakeView(visible=visible)
     gamepad = MagicMock()
     gamepad.top_handler.return_value = None
@@ -101,6 +102,7 @@ def _make(apps=None, visible=False, is_game_pid=None, paused=False):
     foreground = ForegroundState()
     deferred_hide = MagicMock()
     deferred_show = MagicMock()
+    deferred_show.has_seen_window = False   # as a launch arms it: nothing drawn yet
     cede_depth = MagicMock()
     tilebar = MagicMock()
     tilebar.is_closing.return_value = False
@@ -125,9 +127,8 @@ def _make(apps=None, visible=False, is_game_pid=None, paused=False):
         app_manager=app_manager,
         apps=apps,
         foreground=foreground,
-        deferred_hide=deferred_hide,
-        deferred_show=deferred_show,
-        cede_depth=cede_depth,
+        transitions=LaunchTransitions(
+            hide=deferred_hide, show=deferred_show, cede_depth=cede_depth),
         tilebar=tilebar,
         pad_handler=pad,
         scheduler=scheduler,
@@ -135,6 +136,7 @@ def _make(apps=None, visible=False, is_game_pid=None, paused=False):
         prompts=prompts,
         inspector=inspector,
         is_paused=lambda: paused,
+        launch_env=launch_env if launch_env is not None else (lambda _app: {}),
     )
     return SimpleNamespace(
         lc=lc, view=view, gamepad=gamepad, wm=wm, am=app_manager,
@@ -251,6 +253,27 @@ class TestOnTileActivated:
         c.gamepad.pop_handler.assert_called_once_with(c.pad)
         c.dh.arm.assert_called_once_with(app)
         c.ds.arm.assert_called_once_with(app)
+
+    def test_launch_env_contributed_by_the_context(self):
+        c = _make(launch_env=lambda app: {"MANGOHUD": "1"})
+        c.am.is_running.return_value = False
+        c.am.launch.return_value = True
+        c.lc.on_tile_activated(AppTarget(index=0, app_id="app0", name="App"))
+        app = c.apps[0]
+        c.am.launch.assert_called_once_with(
+            app.id, app.command, app.args, {"MANGOHUD": "1"}
+        )
+
+    def test_app_env_wins_over_the_context(self):
+        apps = [App(name="App", command="prog", id="app0", env={"MANGOHUD": "0"})]
+        c = _make(apps=apps, launch_env=lambda app: {"MANGOHUD": "1", "EXTRA": "x"})
+        c.am.is_running.return_value = False
+        c.am.launch.return_value = True
+        c.lc.on_tile_activated(AppTarget(index=0, app_id="app0", name="App"))
+        app = c.apps[0]
+        c.am.launch.assert_called_once_with(
+            app.id, app.command, app.args, {"MANGOHUD": "0", "EXTRA": "x"}
+        )
 
     def test_failed_launch_does_not_arm_hide(self):
         c = _make()
@@ -470,6 +493,17 @@ class TestOnAppFinished:
         assert c.view.shown == 0
         assert c.scheduler.calls[-1][0] == _FORWARDER_CEDE_GRACE_MS
 
+    def test_steam_client_quitting_after_the_game_is_not_a_handoff_watcher_armed(self):
+        """The same exit with the watcher still armed — it can miss its shot, and the
+        game having been up is what says the launch is over."""
+        c = _make(apps=[_steam_game_app(appid="292030", id="witcher3")], visible=False)
+        c.ds.has_seen_window = True                 # the game was on the screen
+        c.fg.set(AppTarget(index=0, app_id="witcher3", name="Witcher 3"))
+        c.wm.cached_windows.return_value = []       # and is gone now
+        c.lc.on_app_finished("witcher3")
+        assert c.fg.is_idle()
+        assert c.view.shown == 1
+
     def test_steam_client_quitting_after_the_game_is_not_a_handoff(self):
         """A cold-started game tile *is* the Steam client, so its process outlives the
         game and ends when Steam quits. The window watcher has long since returned the
@@ -482,16 +516,12 @@ class TestOnAppFinished:
         assert c.fg.is_idle()
         assert c.view.shown == 1
 
-    def test_game_that_showed_a_window_returns_on_exit_though_watchers_rearmed(self):
-        """A game whose window mapped and then closed has finished: its exit returns the
-        Desktop and drops the foreground, even though ceding to it re-armed the watchers
-        that would otherwise read it as a forwarder still handing off."""
+    def test_game_that_showed_a_window_arms_no_forwarder_grace_on_exit(self):
+        """A game whose window mapped and then closed has finished, so its exit must
+        not schedule the grace that waits for a window still to come."""
         c = _make(apps=[_steam_game_app(appid="292030", id="witcher3")], visible=False)
+        c.ds.has_seen_window = True
         c.fg.set(AppTarget(index=0, app_id="witcher3", name="Witcher 3"))
-        c.wm.cached_windows.return_value = [
-            Window(id="w1", title="Witcher 3", pid=999, resource_class="steam_app_292030"),
-        ]
-        c.lc.note_launch_windowed()
         c.wm.cached_windows.return_value = []
         c.lc.on_app_finished("witcher3")
         assert c.fg.is_idle()

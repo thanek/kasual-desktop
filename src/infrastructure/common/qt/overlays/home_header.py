@@ -22,8 +22,8 @@ Both roles ultimately open the same Network / Notifications overlay, so a single
 import qtawesome as qta
 from collections.abc import Callable
 
-from PyQt6.QtCore import Qt, QSize, QTimer, QLocale, QPoint, QRectF, QEvent, pyqtSignal
-from PyQt6.QtGui import QCursor, QColor, QPainter
+from PyQt6.QtCore import Qt, QSize, QTimer, QLocale, QRectF, QEvent, pyqtSignal
+from PyQt6.QtGui import QCursor, QColor, QPainter, QPixmap
 from datetime import datetime
 from PyQt6.QtWidgets import QWidget, QHBoxLayout, QLabel, QPushButton
 
@@ -31,6 +31,8 @@ from domain.menu.item import MenuItem
 from domain.menu.entry import POWER
 from domain.system.actions import ACTIONS, NETWORK, NOTIFICATIONS
 from domain.shared.i18n import translate
+from infrastructure.common.qt.ui import styles
+from infrastructure.common.qt.ui.hover import HoverReporting
 
 HEADER_H = 80    # matches the old top bar / hint bar height
 _BTN     = 56
@@ -43,7 +45,15 @@ _POWER_GLYPH = "fa5s.power-off"
 # The whole header wears it too (its resting background), so bar and buttons read
 # as one family.
 _FOCUS_FILL   = "rgba(136, 192, 208, 60)"
-_FOCUS_BORDER = "#88c0d0"
+_FOCUS_BORDER = styles.COLOR_ACCENT
+
+_BADGE_SIZE     = 18
+_BADGE_GLYPH    = "fa5s.chevron-down"
+_BADGE_INK      = "white"
+_BADGE_INK_SEL  = styles.COLOR_BG_DARK
+# _FOCUS_FILL flattened onto the header: a translucent fill is invisible while
+# the button behind it is unselected.
+_BADGE_FILL     = "#43555f"
 
 # The grab handle: a wide-but-thin pull at the bottom of the pill (mouse path
 # into the menu). Its hit target is generous; only the centred bar is drawn.
@@ -68,6 +78,11 @@ class _GrabHandle(QWidget):
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self._prominent = False
         self._focused = False
+
+    def pin_to(self, bottom_edge: int) -> None:
+        """Centre on the current parent, riding *bottom_edge* in its coordinates."""
+        self.move((self.parentWidget().width() - self.width()) // 2,
+                  bottom_edge - self.height() - _HANDLE_BOTTOM_INSET)
 
     def set_prominent(self, prominent: bool) -> None:
         if prominent == self._prominent:
@@ -112,6 +127,11 @@ class _GrabHandle(QWidget):
         super().mouseReleaseEvent(event)
 
 
+def _header_style(docked: bool) -> str:
+    bottom = 0 if docked else styles.PILL_RADIUS
+    return "#homeheader {" + styles.pill_background(bottom=bottom) + "}"
+
+
 def _btn_style(selected: bool) -> str:
     if selected:
         return (f"background-color: {_FOCUS_FILL}; border: 2px solid {_FOCUS_BORDER};"
@@ -119,39 +139,22 @@ def _btn_style(selected: bool) -> str:
     return f"background: transparent; border: 2px solid transparent; border-radius: {_BTN // 2}px;"
 
 
-class _HeaderButton(QPushButton):
-    """Header action button that reports genuine pointer hovers.
+def _badge_style(selected: bool) -> str:
+    fill = _FOCUS_BORDER if selected else _BADGE_FILL
+    return f"background-color: {fill}; border: none; border-radius: {_BADGE_SIZE // 2}px;"
 
-    ``enterEvent`` must be overridden at the class level: PyQt dispatches Qt
-    virtual events to class methods, not to attributes assigned per instance, so
-    the highlight can follow the mouse only from here. Mirrors :class:`AppTile`'s
-    synthetic-enter guard, so an overlay hiding over a parked cursor doesn't yank
-    the header highlight to the button under it.
-    """
 
-    hovered       = pyqtSignal()
+def _badge_pixmap(selected: bool) -> QPixmap:
+    ink = _BADGE_INK_SEL if selected else _BADGE_INK
+    return qta.icon(_BADGE_GLYPH, color=ink).pixmap(QSize(10, 10))
+
+
+class _HeaderButton(HoverReporting, QPushButton):
     right_clicked = pyqtSignal()
 
-    def __init__(self, parent: QWidget | None = None) -> None:
-        super().__init__(parent)
-        self._pos_at_leave: QPoint | None = None
-
-    def enterEvent(self, event) -> None:
-        super().enterEvent(event)
-        pos = event.globalPosition().toPoint()
-        synthetic = pos == self._pos_at_leave
-        self._pos_at_leave = None
-        if not synthetic:
-            self.hovered.emit()
-
-    def leaveEvent(self, event) -> None:
-        super().leaveEvent(event)
-        self._pos_at_leave = QCursor.pos()
-
     def mousePressEvent(self, event) -> None:
-        # Right-click opens the button's dropdown (the Power chooser), mirroring a
-        # right-click on a tile opening its popover. The host decides which buttons
-        # actually have a menu.
+        # Right-click opens the button's dropdown; the host decides which
+        # buttons have one.
         if event.button() == Qt.MouseButton.RightButton:
             self.right_clicked.emit()
         else:
@@ -181,12 +184,8 @@ class HomeHeader(QWidget):
         # honour it (unlike the plain-QWidget bars elsewhere) — without this the
         # header renders fully transparent over the wallpaper.
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
-        self.setStyleSheet(
-            "#homeheader {"
-            "  background-color: rgba(46, 52, 64, 204);"  # transparency test: 20%
-            "  border-radius: 40px;"
-            "}"
-        )
+        self._docked = False
+        self.setStyleSheet(_header_style(False))
         row = QHBoxLayout(self)
         row.setContentsMargins(24, 0, 16, 0)
 
@@ -232,13 +231,9 @@ class HomeHeader(QWidget):
         # opposite the notification count badge so the two never collide.
         self._power_badge = QLabel(self._power_btn)
         self._power_badge.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._power_badge.setPixmap(
-            qta.icon("fa5s.chevron-down", color="white").pixmap(QSize(10, 10)))
-        self._power_badge.setStyleSheet(
-            "background-color: #2e3440; border: 1px solid white; border-radius: 9px;")
-        self._power_badge.setFixedSize(18, 18)
-        self._power_badge.move(_BTN - 20, _BTN - 20)
-        self._power_badge.raise_()
+        self._power_badge.setFixedSize(_BADGE_SIZE, _BADGE_SIZE)
+        self._power_badge.move(_BTN - _BADGE_SIZE - 2, _BTN - _BADGE_SIZE - 2)
+        self._style_power_badge(selected=False)
 
         self._buttons = [self._net_btn, self._notif_btn, self._power_btn]
 
@@ -255,9 +250,9 @@ class HomeHeader(QWidget):
 
     def resizeEvent(self, event) -> None:
         super().resizeEvent(event)
-        self._handle.move((self.width() - self._handle.width()) // 2,
-                          self.height() - self._handle.height() - _HANDLE_BOTTOM_INSET)
-        self._handle.raise_()
+        if self._handle.parentWidget() is self:   # not while the surface has it
+            self._handle.pin_to(self.height())
+            self._handle.raise_()
 
     def eventFilter(self, obj, event) -> bool:
         # Re-evaluate on the next tick: the header gets no Leave when the pointer
@@ -280,11 +275,24 @@ class HomeHeader(QWidget):
         btn.setStyleSheet(_btn_style(False))
         return btn
 
-    def set_menu_open(self, open_: bool) -> None:
-        """Lights the grab handle in the focused look while the Home menu it
-        toggles is showing, so the handle reads as "pressed" for as long as the
-        menu it opened stays up."""
-        self._handle.set_focused(open_)
+    def _style_power_badge(self, *, selected: bool) -> None:
+        self._power_badge.setStyleSheet(_badge_style(selected))
+        self._power_badge.setPixmap(_badge_pixmap(selected))
+        self._power_badge.raise_()
+
+    def set_docked(self, docked: bool) -> None:
+        """Docked: the Home menu panel stands on the bottom edge. The corners they
+        share are square and the handle, which the host re-pins to that panel, wears
+        the accent."""
+        if docked == self._docked:
+            return
+        self._docked = docked
+        self.setStyleSheet(_header_style(docked))
+        self._handle.set_focused(docked)
+
+    def grab_handle(self) -> _GrabHandle:
+        """The pull that toggles the Home menu. The host re-pins it while docked."""
+        return self._handle
 
     def power_button(self) -> QPushButton:
         """The Power button, so the host can anchor the chooser popover below it."""
@@ -324,6 +332,7 @@ class HomeHeader(QWidget):
         self._selected = index
         for i, btn in enumerate(self._buttons):
             btn.setStyleSheet(_btn_style(i == index))
+        self._style_power_badge(selected=index == _NAV_KEYS.index(POWER))
 
     def trigger(self, index: int) -> None:
         if 0 <= index < len(_NAV_KEYS):

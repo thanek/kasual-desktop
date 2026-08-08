@@ -8,12 +8,16 @@ appear in KWin's stacking order.
 from __future__ import annotations
 
 import time
+from typing import TYPE_CHECKING
 
 from tests.behavioral.harness import timeouts
 from tests.behavioral.harness.kd_client import KasualDesktopUnavailable, KDClient
 from tests.behavioral.harness.navigation import focus_tile
 from tests.behavioral.harness.report import ScenarioAborted, report
 from tests.behavioral.harness.virtual_pad import VirtualPad
+
+if TYPE_CHECKING:
+    from tests.behavioral.harness.game import SteamGame
 
 
 # ── bring-up ─────────────────────────────────────────────────────────────────
@@ -124,7 +128,8 @@ def expect_foreground(kd: KDClient, app: str) -> None:
     report('KD has the launched app in front', 'PASS', repr(app))
 
 
-def check_home_menu_over_game(kd: KDClient, pad: VirtualPad) -> None:
+def check_home_menu_over_game(kd: KDClient, pad: VirtualPad,
+                              game: SteamGame) -> None:
     time.sleep(5)   # let the engine settle past the launcher
     pad.hold_home(1.2)
     try:
@@ -136,11 +141,13 @@ def check_home_menu_over_game(kd: KDClient, pad: VirtualPad) -> None:
                'Home held for 1.2 s, menu never opened')
         return
     report('Home Menu above the game', 'PASS', 'overlay-layer surface mapped')
+    game.check_still_on_screen('Home menu')
 
 
 # ── the Home menu ────────────────────────────────────────────────────────────
 
 # The action keys KD reports for its menu cards.
+GAMEPAD_ACCESS    = 'gamepad_access'
 HIDE_DESKTOP      = 'hide_desktop'
 RETURN_TO_DESKTOP = 'return_to_desktop'
 RETURN_TO_APP     = 'return_to_app'

@@ -16,4 +16,5 @@ GAME_LAUNCH     = 90.0    # a warm Steam turning a launch into the game's first 
 GAME_FULLSCREEN = 300.0   # shader compilation lives here
 CEDE            = 15.0    # KD getting off the screen
 HOME_MENU       = 10.0    # the Home hold opening the menu over the game
+STILL_ON_SCREEN = 4.0     # the game watched for leaving the screen under the menu
 EXIT            = 30.0    # a process, or KD, going away on the way out

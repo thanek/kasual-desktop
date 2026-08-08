@@ -8,6 +8,7 @@ from PyQt6.QtWidgets import QSystemTrayIcon, QMenu
 
 from domain.shell.session_collaborators import ConnectionIndicator
 from domain.shared.i18n import translate
+from infrastructure.common.qt.ui import styles
 
 TrayIconFor = Callable[[bool], QIcon]
 
@@ -16,7 +17,9 @@ _THEME_ICON = "input-gaming"
 
 def glyph_icon(connected: bool) -> QIcon:
     """The Font Awesome gamepad, tinted by connection state."""
-    return qta.icon("fa5s.gamepad", color="#88c0d0" if connected else "#555555")
+    return qta.icon(
+        "fa5s.gamepad", color=styles.COLOR_ACCENT if connected else "#555555",
+    )
 
 
 def themed_icon(connected: bool) -> QIcon:

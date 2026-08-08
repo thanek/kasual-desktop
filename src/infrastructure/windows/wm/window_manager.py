@@ -33,8 +33,8 @@ def _get_window_text(hwnd: int) -> str:
             buffer = ctypes.create_unicode_buffer(length + 1)
             user32.GetWindowTextW(hwnd, buffer, length + 1)
             return buffer.value
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("GetWindowText(%s) failed: %s", hwnd, exc)
     return ""
 
 
@@ -106,8 +106,8 @@ def _get_exe_path(pid: int) -> str | None:
                     return buffer.value
             finally:
                 kernel32.CloseHandle(handle)
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("QueryFullProcessImageName(%s) failed: %s", pid, exc)
     return None
 
 
@@ -137,8 +137,8 @@ def _resolve_uwp_pid(hwnd: int, host_pid: int) -> int | None:
 
     try:
         ctypes.windll.user32.EnumChildWindows(int(hwnd), EnumChildProc(_cb), 0)
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("EnumChildWindows(%s) failed: %s", hwnd, exc)
     return found[0]
 
 

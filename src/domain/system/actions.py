@@ -17,6 +17,7 @@ SLEEP         = "sleep"
 RESTART       = "restart"
 SHUTDOWN      = "shutdown"
 HIDE_DESKTOP  = "hide_desktop"
+GAMEPAD_ACCESS = "gamepad_access"
 
 # First is the out-of-the-box default.
 POWER_ACTIONS = (SLEEP, RESTART, SHUTDOWN)
@@ -88,5 +89,9 @@ ACTIONS: dict[str, SystemAction] = {
     HIDE_DESKTOP: SystemAction(
         lambda d: d.desktop.pause(),
         translate("Kasual Desktop", "Minimize Kasual Desktop"), "fa5s.window-minimize", "#d580ff",
+    ),
+    GAMEPAD_ACCESS: SystemAction(
+        lambda d: d.desktop.open_gamepad_access_check(),
+        translate("Kasual Desktop", "Check gamepad access"), "fa5s.gamepad", "#8fbcbb",
     ),
 }

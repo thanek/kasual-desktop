@@ -10,6 +10,7 @@ from domain.input.vocabulary import Event
 from domain.input.pad_control import PadControl
 from domain.navigation import hints as home_hints
 from infrastructure.common.qt.overlays.info_dialog import InfoDialog
+from infrastructure.common.qt.overlays.setup_overlay import QtSetupView
 from infrastructure.common.qt.overlays.notifications_overlay import NotificationsOverlay
 from infrastructure.common.qt.overlays.network_overlay import NetworkOverlay
 from domain.notifications.center import NotificationCenter
@@ -25,6 +26,7 @@ from domain.menu.dispatcher import TileMenuDispatcher
 from domain.navigation.focus_navigator import FocusNavigator
 from domain.navigation.tile_mover import TileMover
 from domain.provisioning.add_apps import AppAdder
+from domain.setup.gate import SetupGate
 from domain.shared.feedback import Feedback
 from domain.shell.desktop_view import DesktopView
 from domain.shell.desktop_control import DesktopControl
@@ -42,6 +44,7 @@ from infrastructure.common.qt.ui.nav_key_map import nav_key_map
 from infrastructure.common.qt.ui.screen_watcher import ScreenWatcher
 from .app_add_controller import AppAddController
 from .dialog_host_controller import DialogHostController
+from .setup_check_controller import SetupCheckController
 from .hint_bar import HintBar
 from .home_surface import HomeSurface
 from .power_popover_controller import PowerPopoverController
@@ -79,6 +82,8 @@ class Desktop(QWidget, DesktopView, DesktopShell, DesktopControl, metaclass=Prot
         surface: DesktopSurface | None = None,
         parent_of: 'Callable[[int], int | None] | None' = None,
         app_adder: AppAdder | None = None,
+        setup_gate: SetupGate | None = None,
+        setup_view: QtSetupView | None = None,
     ):
         super().__init__()
         self._apps        = apps
@@ -142,8 +147,11 @@ class Desktop(QWidget, DesktopView, DesktopShell, DesktopControl, metaclass=Prot
         self._hintbar = HintBar()
         self._hintbar.install_surface()
 
-        # The [＋] add-app flow lives in its own controller; the tile bar's
-        # add-requested signal drives it directly.
+        self._gamepad_access = SetupCheckController(
+            setup_gate, setup_view, self._overlays, self._hintbar,
+            restore_hints=lambda: self._nav.render() if self._nav else None,
+        )
+
         self._app_add = AppAddController(
             self._apps, self._app_adder, self._gamepad, self._feedback,
             self._tilebar, self._overlays, self._hintbar,
@@ -221,7 +229,6 @@ class Desktop(QWidget, DesktopView, DesktopShell, DesktopControl, metaclass=Prot
         # disappearance rebuilds nothing and the deferred return would never finish.
         self._wm.on_windows_updated(lambda _w: self._lifecycle.check_pending_return())
         self._wm.on_windows_updated(lambda _w: self._lifecycle.check_awaited_launch())
-        self._wm.on_windows_updated(lambda _w: self._lifecycle.note_launch_windowed())
         self._app_manager.on_finished(
             lambda e: self._lifecycle.on_app_finished(e.app_id))
         self._app_manager.on_launch_failed(
@@ -335,6 +342,7 @@ class Desktop(QWidget, DesktopView, DesktopShell, DesktopControl, metaclass=Prot
         self._overlays.cancel()
         self._dialogs.cancel()
         self._app_add.cancel()
+        self._gamepad_access.cancel()
         if self._tile_mover is not None:
             self._tile_mover.cancel()
 
@@ -588,6 +596,9 @@ class Desktop(QWidget, DesktopView, DesktopShell, DesktopControl, metaclass=Prot
         )
         self._dialogs.present(overlay)
         self._hintbar.show_hints(home_hints.NETWORK)
+
+    def open_gamepad_access_check(self) -> None:
+        self._gamepad_access.show()
 
     def open_notifications_overlay(self) -> None:
         self._chrome.open_notifications()

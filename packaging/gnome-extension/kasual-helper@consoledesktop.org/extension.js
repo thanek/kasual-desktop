@@ -41,6 +41,7 @@ const IFACE = `
       <arg type="s" direction="in" name="title"/>
       <arg type="i" direction="in" name="layer"/>
       <arg type="i" direction="in" name="anchors"/>
+      <arg type="i" direction="in" name="keyboard"/>
     </method>
     <method name="ActivateSurface">
       <arg type="s" direction="in" name="title"/>
@@ -72,6 +73,10 @@ const IFACE = `
 const ANCHOR_TOP = 1, ANCHOR_BOTTOM = 2, ANCHOR_LEFT = 4, ANCHOR_RIGHT = 8;
 const DEFAULT_LAYER = 3;
 const OVERLAY_LAYER = 3;
+const KEYBOARD_NONE = 0;
+
+const FOCUS_RETRY_MS = 100;
+const FOCUS_ATTEMPTS = 20;
 
 // Mutter moved the unredirect toggle from Meta to global.compositor across 45–50.
 function unredirectApi() {
@@ -111,6 +116,22 @@ function lowerWindow(w) {
         w.lower_with_transients(global.get_current_time());
     else if (typeof w.lower === 'function')
         w.lower();
+}
+
+let loggedNoSetType = false;
+
+// Measured on Mutter 50: a DOCK window is not focused as it maps, a NORMAL one is.
+function denyFocus(win) {
+    if (win.get_window_type() === Meta.WindowType.DOCK)
+        return;
+    if (typeof win.set_type !== 'function') {
+        if (!loggedNoSetType) {
+            loggedNoSetType = true;
+            console.log(`${TAG} Meta.Window.set_type is missing: overlays will take the focus`);
+        }
+        return;
+    }
+    win.set_type(Meta.WindowType.DOCK);
 }
 
 function mappedWindows() {
@@ -172,6 +193,8 @@ class Helper {
         this._anchorPending = new Set();
         this._restacking = false;
         this._pendingFocus = null;
+        this._focusSourceId = 0;
+        this._focusAttempts = 0;
         this._windowSignals = new Map();
         this._realGetRunning = null;
 
@@ -191,11 +214,12 @@ class Helper {
     }
 
     destroy() {
-        for (const id of [this._syncSourceId, this._anchorSourceId])
+        for (const id of [this._syncSourceId, this._anchorSourceId, this._focusSourceId])
             if (id)
                 GLib.source_remove(id);
         this._syncSourceId = 0;
         this._anchorSourceId = 0;
+        this._focusSourceId = 0;
         global.display.disconnect(this._windowCreatedId);
         this._restoreReadyBanner();
         global.display.disconnect(this._focusId);
@@ -222,14 +246,18 @@ class Helper {
         // Only Kasual's own windows matter here; a terminal's spinner retitling
         // itself ten times a second must not restack the session.
         const syncIfOurs = () => {
-            if (this._isOurs(win))
+            if (this._isOurs(win)) {
+                // Not on the idle sync: Mutter focuses the window as it maps, next.
+                this._applyFocusPolicy(win);
                 this._scheduleSync();
+            }
         };
         this._windowSignals.set(win, [
             // An XWayland window (every Steam game) is created before its WM_CLASS
             // arrives: this, not window-created, is where it becomes identifiable.
             win.connect('notify::wm-class', () => {
                 this._suppressScanoutForOurs(win);
+                this._applyFocusPolicy(win);
                 this._scheduleSync();
                 this._emitWindows('class');
             }),
@@ -253,6 +281,7 @@ class Helper {
             this._emitWindows('removed');
         }));
         this._suppressScanoutForOurs(win);
+        this._applyFocusPolicy(win);
         this._scheduleSync();
         this._emitWindows('added');
     }
@@ -338,6 +367,12 @@ class Helper {
         return this._isOurs(win) ? this._roles.get(win.get_title()) : undefined;
     }
 
+    _applyFocusPolicy(win) {
+        const role = this._roleOf(win);
+        if (role && role.keyboard === KEYBOARD_NONE)
+            denyFocus(win);
+    }
+
     // Wayland gives placement to the compositor and size to the client, so only
     // the position is ours: resizing here would hand Qt a buffer it never repaints.
     _applyAnchor(win) {
@@ -410,8 +445,10 @@ class Helper {
                 w.unmake_above();
         this._pinned = new Set(wanted);
 
-        for (const w of wanted)
+        for (const w of wanted) {
             this._applyAnchor(w);
+            this._applyFocusPolicy(w);
+        }
 
         // Desktop above ordinary windows, below every fullscreen app. make_above
         // would lift the fullscreen Desktop to the TOP layer over the app (Mutter
@@ -431,7 +468,8 @@ class Helper {
             // Only an overlay needs the app redirected; the ceded Desktop is happy
             // to stay under a scanned-out game.
             this._setUnredirectSuppressed(overlays.length > 0);
-            this._setRestackGuard(false);
+            // A game that keeps the focus restacks itself; the overlays must go back up.
+            this._setRestackGuard(overlays.length > 0);
             return;
         }
 
@@ -500,7 +538,8 @@ class Helper {
     }
 
     // Layer, not map order, decides: the Desktop must stay below the overlays even
-    // when it is re-shown — and so re-mapped — after them.
+    // when it is re-shown — and so re-mapped — after them. Ceded, only the overlays:
+    // raising the Desktop there would bury the game.
     _reassertStacking() {
         if (this._restacking)
             return;
@@ -509,10 +548,12 @@ class Helper {
             return;
 
         const layerOf = w => this._roleOf(w)?.layer ?? DEFAULT_LAYER;
-        const ordered = ours
+        const ordered = (this._ceded ? ours.filter(w => this._isOverlay(w)) : ours)
             .map((w, depth) => ({w, depth}))
             .sort((a, b) => layerOf(a.w) - layerOf(b.w) || a.depth - b.depth)
             .map(({w}) => w);
+        if (!ordered.length)
+            return;
 
         // Raising emits 'restacked', so without a fixpoint every pass feeds the next.
         const all = stackedBottomToTop(mappedWindows());
@@ -566,6 +607,7 @@ class Helper {
             unredirect: unredirectApi(),
             raise: (typeof Meta.Window.prototype.raise_and_make_recent === 'function')
                 ? 'raise_and_make_recent' : 'raise',
+            setType: typeof Meta.Window.prototype.set_type === 'function',
         });
     }
 
@@ -575,6 +617,7 @@ class Helper {
         return JSON.stringify({
             appClass: this._appClass,
             pendingFocus: this._pendingFocus,
+            focusAttempts: this._focusAttempts,
             pinned: this._pinned.size,
             unredirect: this._unredirectApi,
             monitor: rect(global.display.get_monitor_geometry(primary)),
@@ -592,12 +635,12 @@ class Helper {
                     title: w.get_title() || '',
                     pid: w.get_pid(),
                     layer: w.get_layer(),
+                    type: w.get_window_type(),
                     above: w.is_above(),
                     fullscreen: w.is_fullscreen(),
                     minimized: w.minimized,
                     hidden: w.is_hidden(),
                     showing: w.showing_on_its_workspace(),
-                    csd: w.is_client_decorated(),
                     focus: w.has_focus(),
                     frame: rect(w.get_frame_rect()),
                     // What Mutter actually has to paint, and whether it paints it.
@@ -679,8 +722,11 @@ class Helper {
                 w.minimize();
     }
 
-    SetSurfaceRole(title, layer, anchors) {
-        this._roles.set(title, {layer, anchors});
+    SetSurfaceRole(title, layer, anchors, keyboard) {
+        this._roles.set(title, {layer, anchors, keyboard});
+        for (const win of this._ourWindows())
+            if (win.get_title() === title)
+                this._applyFocusPolicy(win);
         this._scheduleSync();
     }
 
@@ -689,19 +735,51 @@ class Helper {
     // The call lands before Qt has mapped the window, so it may have to wait.
     ActivateSurface(title) {
         this._pendingFocus = title;
+        this._focusAttempts = 0;
         this._focusPending();
     }
 
     _focusPending() {
         if (!this._pendingFocus)
             return;
+        if (this._tryFocusPending())
+            this._forgetPendingFocus();
+        else
+            this._retryFocusPending();
+    }
+
+    _tryFocusPending() {
         const win = this._ourWindows().find(w => w.get_title() === this._pendingFocus);
         if (!win)
-            return;
-        this._pendingFocus = null;
+            return false;
         win.unminimize();
         win.activate(activationTime());
         this._reassertStacking();
+        return win.has_focus();
+    }
+
+    // Mutter hands out no focus while the surface is still being mapped, so the
+    // first attempt lands too early and the request has to outlive it.
+    _retryFocusPending() {
+        if (this._focusSourceId)
+            return;
+        if (++this._focusAttempts >= FOCUS_ATTEMPTS) {
+            this._forgetPendingFocus();
+            return;
+        }
+        this._focusSourceId = GLib.timeout_add(
+            GLib.PRIORITY_DEFAULT, FOCUS_RETRY_MS, () => {
+                this._focusSourceId = 0;
+                this._focusPending();
+                return GLib.SOURCE_REMOVE;
+            });
+    }
+
+    _forgetPendingFocus() {
+        if (this._focusSourceId)
+            GLib.source_remove(this._focusSourceId);
+        this._focusSourceId = 0;
+        this._pendingFocus = null;
     }
 
     // Focus is asked for by name (above): activating every pinned window here
@@ -718,7 +796,7 @@ class Helper {
     // still-drawn Desktop with no DE flash.
     CedeOverlay(wmClass) {
         if (this._appClass === wmClass) {
-            this._pendingFocus = null;
+            this._forgetPendingFocus();
             this._ceded = true;
             this._sync();
         }
@@ -765,7 +843,7 @@ class Helper {
     // The class stays registered: an OSD mapped later, over a game, must pin too.
     HideOverlay(wmClass) {
         if (this._appClass === wmClass) {
-            this._pendingFocus = null;
+            this._forgetPendingFocus();
             this._showRequested = false;
             this._ceded = false;
             this._sync();

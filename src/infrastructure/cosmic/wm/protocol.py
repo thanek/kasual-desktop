@@ -1,7 +1,7 @@
 """Wire vocabulary of the toplevel protocols cosmic-comp implements.
 
-Opcodes are positional in the protocol XML, so the event tuples below must keep
-their declaration order:
+Opcodes are positional in the protocol XML, so every constant below is the
+declaration index of its request or event:
 
 * ``ext-foreign-toplevel-list-v1`` (wayland-protocols staging) — the window list,
   with title, app_id and a session-stable identifier.
@@ -15,8 +15,6 @@ their declaration order:
 from __future__ import annotations
 
 import enum
-
-from infrastructure.linux.wayland.client import Event, Interface
 
 FOREIGN_LIST = "ext_foreign_toplevel_list_v1"
 FOREIGN_HANDLE = "ext_foreign_toplevel_handle_v1"
@@ -39,6 +37,23 @@ MANAGER_UNSET_MINIMIZED = 6
 HANDLE_DESTROY = 0
 FOREIGN_HANDLE_DESTROY = 0
 
+# ext_foreign_toplevel_list_v1 events
+LIST_EVENT_TOPLEVEL = 0
+LIST_EVENT_FINISHED = 1
+
+# ext_foreign_toplevel_handle_v1 events
+FOREIGN_EVENT_CLOSED = 0
+FOREIGN_EVENT_DONE = 1
+FOREIGN_EVENT_TITLE = 2
+FOREIGN_EVENT_APP_ID = 3
+FOREIGN_EVENT_IDENTIFIER = 4
+
+# zcosmic_toplevel_handle_v1 events. Only `state` is read; the rest are named so
+# the dispatch below reads as the protocol does.
+HANDLE_EVENT_CLOSED = 0
+HANDLE_EVENT_DONE = 1
+HANDLE_EVENT_STATE = 8
+
 
 class State(enum.IntEnum):
     MAXIMIZED = 0
@@ -46,41 +61,3 @@ class State(enum.IntEnum):
     ACTIVATED = 2
     FULLSCREEN = 3
     STICKY = 4
-
-
-INTERFACES = (
-    Interface(FOREIGN_LIST, (
-        Event("toplevel", "n", creates=FOREIGN_HANDLE),
-        Event("finished"),
-    )),
-    Interface(FOREIGN_HANDLE, (
-        Event("closed"),
-        Event("done"),
-        Event("title", "s"),
-        Event("app_id", "s"),
-        Event("identifier", "s"),
-    )),
-    Interface(INFO, (
-        Event("toplevel", "n", creates=HANDLE),
-        Event("finished"),
-        Event("done"),
-    )),
-    Interface(HANDLE, (
-        Event("closed"),
-        Event("done"),
-        Event("title", "s"),
-        Event("app_id", "s"),
-        Event("output_enter", "o"),
-        Event("output_leave", "o"),
-        Event("workspace_enter", "o"),
-        Event("workspace_leave", "o"),
-        Event("state", "a"),
-        Event("geometry", "oiiii"),
-        Event("ext_workspace_enter", "o"),
-        Event("ext_workspace_leave", "o"),
-    )),
-    Interface(MANAGER, (
-        Event("capabilities", "a"),
-    )),
-    Interface(SEAT, ()),
-)

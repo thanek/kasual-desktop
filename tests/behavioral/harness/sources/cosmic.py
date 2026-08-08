@@ -24,35 +24,27 @@ from __future__ import annotations
 import logging
 import os
 
-from PyQt6.QtCore import QObject, QSocketNotifier
+from PyQt6.QtCore import QObject
 
 from infrastructure.cosmic.wm import protocol
 from infrastructure.cosmic.wm.pids import WindowPidResolver
 from infrastructure.cosmic.wm.toplevels import Toplevel
-from infrastructure.linux.wayland.client import (
-    Event, Interface, WaylandClient, words,
-)
+from infrastructure.linux.wayland import wire
+from infrastructure.linux.wayland.client import WaylandClient, WaylandError
 from tests.behavioral.harness.window_source import EventLog
 
 logger = logging.getLogger(__name__)
 
 _OUTPUT = 'wl_output'
 _XDG_OUTPUT_MANAGER = 'zxdg_output_manager_v1'
-_XDG_OUTPUT = 'zxdg_output_v1'
 
 _XDG_OUTPUT_MANAGER_GET = 1
 
-_INTERFACES = protocol.INTERFACES + (
-    Interface(_OUTPUT, ()),
-    Interface(_XDG_OUTPUT_MANAGER, ()),
-    Interface(_XDG_OUTPUT, (
-        Event('logical_position', 'ii'),
-        Event('logical_size', 'ii'),
-        Event('done'),
-        Event('name', 's'),
-        Event('description', 's'),
-    )),
-)
+# zcosmic_toplevel_handle_v1 carries the rectangle the adapter does without.
+_HANDLE_EVENT_GEOMETRY = 9
+
+# zxdg_output_v1 events.
+_XDG_OUTPUT_EVENT_LOGICAL_SIZE = 1
 
 
 class CosmicWindowSource(QObject, EventLog):
@@ -69,25 +61,22 @@ class CosmicWindowSource(QObject, EventLog):
         self._our_pid = os.getpid()
         self._pids = WindowPidResolver()
         self._client: WaylandClient | None = None
-        self._notifier: QSocketNotifier | None = None
         self._list: int | None = None
         self._info: int | None = None
 
     def start(self, timeout_s: float) -> None:
-        self._client = WaylandClient(_INTERFACES)
-        self._list = self._client.bind(protocol.FOREIGN_LIST,
-                                       protocol.FOREIGN_LIST_VERSION)
-        self._info = self._client.bind(protocol.INFO, protocol.INFO_VERSION)
-        if self._list is None or self._info is None:
+        self._client = WaylandClient()
+        try:
+            self._list = self._client.bind(
+                protocol.FOREIGN_LIST, protocol.FOREIGN_LIST_VERSION,
+                self._on_list_event)
+            self._info = self._client.bind(protocol.INFO, protocol.INFO_VERSION)
+        except WaylandError as exc:
             raise RuntimeError(
                 'this compositor announces no COSMIC toplevel protocols — '
-                'ext_foreign_toplevel_list_v1 and zcosmic_toplevel_info_v1')
-        self._subscribe()
+                'ext_foreign_toplevel_list_v1 and zcosmic_toplevel_info_v1') from exc
         self._watch_outputs()
-
-        self._notifier = QSocketNotifier(
-            self._client.fileno(), QSocketNotifier.Type.Read, self)
-        self._notifier.activated.connect(self._drain)
+        self._client.start()
 
         # Two: the first brings the toplevels, whose cosmic handles are requested
         # while it is being dispatched; their state and geometry follow in the second.
@@ -96,62 +85,78 @@ class CosmicWindowSource(QObject, EventLog):
         self._snapshot('init')
 
     def stop(self) -> None:
-        if self._notifier is not None:
-            self._notifier.setEnabled(False)
-            self._notifier = None
         if self._client is not None:
             self._client.close()
             self._client = None
 
     # ── protocol ───────────────────────────────────────────────────────────
 
-    def _subscribe(self) -> None:
-        client = self._client
-        client.on(protocol.FOREIGN_LIST, 'toplevel', self._on_toplevel)
-        client.on(protocol.FOREIGN_HANDLE, 'identifier', self._on_identifier)
-        client.on(protocol.FOREIGN_HANDLE, 'title', self._on_title)
-        client.on(protocol.FOREIGN_HANDLE, 'app_id', self._on_app_id)
-        client.on(protocol.FOREIGN_HANDLE, 'done', lambda _o: self._snapshot('done'))
-        client.on(protocol.FOREIGN_HANDLE, 'closed', self._on_closed)
-        client.on(protocol.HANDLE, 'state', self._on_state)
-        client.on(protocol.HANDLE, 'geometry', self._on_geometry)
-        client.on(_XDG_OUTPUT, 'logical_size', self._on_logical_size)
-
     def _watch_outputs(self) -> None:
-        manager = self._client.bind(_XDG_OUTPUT_MANAGER, 3)
-        if manager is None:
+        if not self._client.has_global(_XDG_OUTPUT_MANAGER):
             logger.warning('no zxdg_output_manager_v1 — covers_screen stays False')
             return
+        manager = self._client.bind(_XDG_OUTPUT_MANAGER, 3)
         for output in self._client.bind_all(_OUTPUT, 4):
-            xdg_output = self._client.new_id(_XDG_OUTPUT)
-            self._client.request(manager, _XDG_OUTPUT_MANAGER_GET, xdg_output, output)
+            xdg_output = self._client.allocate_id()
+            self._client.set_handler(
+                xdg_output,
+                lambda op, rd, xdg=xdg_output: self._on_xdg_output_event(xdg, op, rd))
+            self._client.send(manager, _XDG_OUTPUT_MANAGER_GET,
+                              wire.new_id(xdg_output), wire.object_id(output))
             self._output_of_xdg[xdg_output] = output
 
-    def _drain(self) -> None:
-        self._client.dispatch_pending()
-
-    def _on_toplevel(self, _list: int, foreign: int) -> None:
+    def _on_list_event(self, opcode: int, reader: wire.Reader) -> None:
+        if opcode != protocol.LIST_EVENT_TOPLEVEL:
+            return
+        foreign = reader.new_id()
         self._toplevels[foreign] = Toplevel()
-        handle = self._client.new_id(protocol.HANDLE)
-        self._client.request(self._info, protocol.INFO_GET_COSMIC_TOPLEVEL,
-                             handle, foreign)
+        self._client.set_handler(
+            foreign, lambda op, rd: self._on_foreign_event(foreign, op, rd))
+
+        handle = self._client.allocate_id()
+        self._client.set_handler(
+            handle, lambda op, rd: self._on_handle_event(handle, op, rd))
+        self._client.send(self._info, protocol.INFO_GET_COSMIC_TOPLEVEL,
+                          wire.new_id(handle), wire.object_id(foreign))
         self._handle_of[foreign] = handle
         self._foreign_of[handle] = foreign
 
-    def _on_identifier(self, foreign: int, identifier: str) -> None:
-        self._toplevels[foreign].identifier = identifier
+    def _on_foreign_event(self, foreign: int, opcode: int, reader: wire.Reader) -> None:
+        toplevel = self._toplevels.get(foreign)
+        if toplevel is None:
+            return
+        if opcode == protocol.FOREIGN_EVENT_IDENTIFIER:
+            toplevel.identifier = reader.string()
+        elif opcode == protocol.FOREIGN_EVENT_TITLE:
+            toplevel.title = reader.string()
+        elif opcode == protocol.FOREIGN_EVENT_APP_ID:
+            toplevel.app_id = reader.string()
+        elif opcode == protocol.FOREIGN_EVENT_DONE:
+            self._snapshot('done')
+        elif opcode == protocol.FOREIGN_EVENT_CLOSED:
+            self._on_closed(foreign)
 
-    def _on_title(self, foreign: int, title: str) -> None:
-        self._toplevels[foreign].title = title
+    def _on_handle_event(self, handle: int, opcode: int, reader: wire.Reader) -> None:
+        if opcode == protocol.HANDLE_EVENT_STATE:
+            self._on_state(handle, reader.uint_array())
+        elif opcode == _HANDLE_EVENT_GEOMETRY:
+            self._on_geometry(
+                handle, reader.object_id(),
+                reader.int32(), reader.int32(), reader.int32(), reader.int32())
 
-    def _on_app_id(self, foreign: int, app_id: str) -> None:
-        self._toplevels[foreign].app_id = app_id
+    def _on_xdg_output_event(
+            self, xdg_output: int, opcode: int, reader: wire.Reader) -> None:
+        if opcode != _XDG_OUTPUT_EVENT_LOGICAL_SIZE:
+            return
+        output = self._output_of_xdg.get(xdg_output)
+        if output is not None:
+            self._output_size[output] = (reader.int32(), reader.int32())
 
-    def _on_state(self, handle: int, raw: bytes) -> None:
+    def _on_state(self, handle: int, raw: list[int]) -> None:
         toplevel = self._toplevels.get(self._foreign_of.get(handle, -1))
         if toplevel is None:
             return
-        states = set(words(raw))
+        states = set(raw)
         toplevel.activated = protocol.State.ACTIVATED in states
         toplevel.fullscreen = protocol.State.FULLSCREEN in states
         toplevel.minimized = protocol.State.MINIMIZED in states
@@ -165,11 +170,6 @@ class CosmicWindowSource(QObject, EventLog):
         self._geometry[foreign] = (x, y, width, height)
         self._covers[foreign] = self._fills(output, width, height)
         self._snapshot('geometry')
-
-    def _on_logical_size(self, xdg_output: int, width: int, height: int) -> None:
-        output = self._output_of_xdg.get(xdg_output)
-        if output is not None:
-            self._output_size[output] = (width, height)
 
     def _on_closed(self, foreign: int) -> None:
         handle = self._handle_of.pop(foreign, None)

@@ -124,8 +124,8 @@ class BaseAppManager(QObject, ProcessManager, metaclass=ProtocolQtMeta):
             logger.warning("Force killing app %s", app_id)
             try:
                 self._force_kill_proc(proc)
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug("Force kill of %s failed: %s", app_id, exc)
 
     def _monitor(self, proc: Proc) -> None:
         self._wait_for_exit(proc)

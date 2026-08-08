@@ -4,11 +4,12 @@ Kasual Desktop is an interactive, graphical "launcher/desktop" interface, design
 
 It runs on two platforms from a single shared core:
 
-- **Linux / Wayland (KDE Plasma 6, Sway, Hyprland, COSMIC, GNOME)** — renders its
-  UI as overlays above applications (including fullscreen games). KDE is the
-  original target; Sway and Hyprland are driven through their native IPC; COSMIC
-  through its Wayland toplevel protocols; GNOME is served by a bundled Shell
-  extension. See [Supported compositors](#-supported-compositors).
+- **Linux / Wayland (KDE Plasma 6, Sway, Hyprland, COSMIC, GNOME, labwc,
+  wayfire)** — renders its UI as overlays above applications (including
+  fullscreen games). KDE is the original target; Sway and Hyprland are driven
+  through their native IPC; GNOME is served by a bundled Shell extension; COSMIC,
+  labwc and wayfire through the Wayland toplevel protocols their taskbars use.
+  See [Supported compositors](#-supported-compositors).
 - **Windows 10/11** — a newer port that runs the *same* UI as a desktop surface,
   currently a development build run from source.
 
@@ -44,11 +45,12 @@ adapters**:
   cross-platform config, reused on both platforms via a `DesktopSurface` seam.
 - `src/infrastructure/linux/` — DE-independent Linux adapters (audio, network,
   brightness, freedesktop notifications, the generic `wayland/` layer-shell
-  surface, `/proc`, and compositor detection).
+  surface and Wayland protocol client, `/proc`, and compositor detection).
 - `src/infrastructure/kde/` — KDE Plasma adapters (KWin window management, Plasma
   wallpaper).
-- `src/infrastructure/wlroots/` — Sway and Hyprland adapters (window management
-  and wallpaper via each compositor's native IPC).
+- `src/infrastructure/wlroots/` — wlroots adapters: Sway and Hyprland through
+  each compositor's native IPC, labwc and wayfire through
+  `wlr-foreign-toplevel-management`, plus their wallpaper sources.
 - `src/infrastructure/cosmic/` — COSMIC adapters (window management over the
   compositor's toplevel Wayland protocols, cosmic-config wallpaper).
 - `src/infrastructure/gnome/` — GNOME adapters (window management and overlay
@@ -90,7 +92,9 @@ DE-independent.
 | **Hyprland** | Full | `hyprctl` | swww, hyprpaper, or HyDE's current-wallpaper file — whichever answers first | Minimize is emulated via a dedicated special workspace. |
 | **COSMIC (cosmic-comp)** | Full | `ext-foreign-toplevel-list` + `cosmic-toplevel-info`/`-management` (Wayland) | cosmic-config `com.system76.CosmicBackground` (slideshow directories understood) | The only backend with a real minimize. No IPC CLI, and no fullscreen among the compositor's management requests — a game that takes the screen without asking for fullscreen (Proton does) is given it over X11, as are its PIDs, which no toplevel protocol carries. |
 | **GNOME 45+ (Mutter)** | Full | Kasual Helper extension (D-Bus) | `gsettings` background (dark variant and slideshow XML understood) | Requires the [Kasual Helper extension](#gnome-the-kasual-helper-extension); Mutter has no `wlr-layer-shell`. |
-| Other wlroots (e.g. labwc) | Partial | none (no-op) | `<config>/wallpaper` static file | Starts and renders, but window switching is unavailable. |
+| **labwc**, **wayfire** (Raspberry Pi OS) | Untested on hardware | `wlr-foreign-toplevel-management` | pcmanfm's desktop profile, else `<config>/wallpaper` | Neither has an IPC CLI, so Kasual Desktop speaks the protocol itself. See [Raspberry Pi OS](#-raspberry-pi-os). |
+| **LXQt** | Partial | `wlr-foreign-toplevel-management`, where the session's compositor offers it | pcmanfm-qt's desktop profile, else `<config>/wallpaper` | Tested on LXQt Wayland (Miriway). |
+| Other wlroots (e.g. river) | Partial | `wlr-foreign-toplevel-management`, where offered | pcmanfm/pcmanfm-qt's desktop profile, else `<config>/wallpaper` static file | Falls back to no window switching if the compositor does not offer the protocol. |
 
 The backends are exercised end-to-end on live sessions by the
 [behavioral suite](tests/behavioral/README.md) — including launching real games
@@ -112,20 +116,23 @@ Desktop's frameless surfaces stacked above a fullscreen game — including
 suppressing Mutter's direct scanout, which would otherwise hide any overlay drawn
 over the game.
 
-`./install.sh` installs and enables it for the current user; the packages ship it
-system-wide, where each user enables it once:
+`./install.sh` installs it for the current user; the packages ship it system-wide.
+Either way it lands on disk after the running GNOME Shell built its extension
+list, and Wayland offers no way to reload the Shell — so **log out and back in
+first**, then enable it once per user:
 
 ```bash
 gnome-extensions enable kasual-helper@consoledesktop.org
 ```
 
-GNOME Shell cannot be reloaded on Wayland, so **log out and back in** afterwards.
+Until that re-login, `gnome-extensions` reports the extension does not exist.
 
 Because window management depends on it, Kasual Desktop checks the extension on
 GNOME **before starting anything else**. If it is installed but disabled, a dialog
-offers to enable it right there; if it is missing, the dialog shows the command
-above and waits for a **Retry**. Both are gamepad-operable, so nothing on GNOME
-requires reaching for a keyboard.
+offers to enable it right there. If it is on disk but this session never loaded
+it, the dialog offers **Log out** — the only remedy, one button press away. If it
+is missing outright, the dialog shows the command above and waits for a **Retry**.
+All are gamepad-operable, so nothing on GNOME requires reaching for a keyboard.
 
 ## 🚀 Getting Started
 
@@ -166,11 +173,13 @@ requires reaching for a keyboard.
   > while Plasma 6's installs `.so.6`.
   >
   > Without it Kasual Desktop cannot place its own surfaces — Wayland lets no client
-  > position its windows — so it stops at a preflight screen rather than coming up
-  > scattered. Build [layer-shell-qt](https://invent.kde.org/plasma/layer-shell-qt)
+  > position its windows — so it opens a setup card naming what is missing rather
+  > than coming up scattered without explanation. The card can be dismissed; Qt binds
+  > its shell integration at startup, so the fix only takes effect on the next run.
+  > Build [layer-shell-qt](https://invent.kde.org/plasma/layer-shell-qt)
   > (the 5.27 series for Qt 6.4, `-DQT_MAJOR_VERSION=6`; 6.x needs Qt 6.6+). This
-  > affects every layer-shell backend (KWin, Sway, Hyprland, COSMIC) on those
-  > distributions, not just one.
+  > affects every layer-shell backend (KWin, Sway, Hyprland, COSMIC, labwc, wayfire)
+  > on those distributions, not just one.
 
   Other distros: install the equivalent of `python3-pyqt6` (incl. its
   `QtMultimedia` and `QtWebEngine` modules), `python3-qtawesome`, `python3-evdev`,
@@ -185,7 +194,19 @@ requires reaching for a keyboard.
 
 ### Gamepad permissions
 
-Kasual Desktop reads gamepad input directly via `evdev`, which requires access to `/dev/input/*` devices. Without this, the application will not detect any controller.
+Kasual Desktop reads gamepad input directly via `evdev`, which needs two device
+nodes opened to your user:
+
+- **`/dev/input/event*`** — the controller itself, read and grabbed exclusively.
+- **`/dev/uinput`** — the virtual gamepad the grabbed input is re-emitted on, so
+  the app you launch (Steam and friends) still sees a controller.
+
+Both are required. A grab whose virtual pad cannot be created is rolled back, so
+a missing `/dev/uinput` looks exactly like a missing controller.
+
+**Kasual Desktop checks this at startup** and, when either node is closed to you,
+opens a card naming what is missing and the commands that fix it. The same card
+is available at any time from the Home Overlay under **Check gamepad access**.
 
 Add your user to the `input` group:
 
@@ -201,19 +222,26 @@ groups | grep input
 
 > **Installing from a package?** The `.deb`/`.rpm`/`.pkg.tar.zst` packages
 > already ship a udev rule (`/usr/lib/udev/rules.d/99-kasual-desktop.rules`)
-> that grants the active user gamepad access via `uaccess`, and reload udev
-> on install — so nothing of the above is needed when you install from a
-> package. The steps below are only for running from source.
+> that grants the active user gamepad and `/dev/uinput` access via `uaccess`,
+> and reload udev on install — so nothing of the above is needed when you
+> install from a package. The steps below are only for running from source.
 
-Alternatively, you can create a udev rule for a more targeted approach (this is
-essentially what the package installs, restricted to joystick/gamepad devices):
+Alternatively, install the same udev rule the packages ship, for a more
+targeted approach than the `input` group:
 
 ```bash
-sudo tee /etc/udev/rules.d/99-kasual-desktop.rules <<'EOF'
+sudo install -Dm644 packaging/99-kasual-desktop.rules /etc/udev/rules.d/99-kasual-desktop.rules
+sudo udevadm control --reload-rules
+sudo udevadm trigger --subsystem-match=input --subsystem-match=misc
+```
+
+That file grants joystick and gamepad devices only — never your keyboard or
+mouse — and covers `/dev/uinput` as well:
+
+```
 SUBSYSTEM=="input", KERNEL=="event*", ENV{ID_INPUT_JOYSTICK}=="1", GROUP="input", MODE="0660", TAG+="uaccess"
 SUBSYSTEM=="input", KERNEL=="event*", ENV{ID_INPUT_GAMEPAD}=="1", GROUP="input", MODE="0660", TAG+="uaccess"
-EOF
-sudo udevadm control --reload-rules && sudo udevadm trigger --subsystem-match=input
+KERNEL=="uinput", SUBSYSTEM=="misc", GROUP="input", MODE="0660", TAG+="uaccess", OPTIONS+="static_node=uinput"
 ```
 
 ### Installation
@@ -317,6 +345,52 @@ etc. are *runtime* deps, not required to build).
 
 Publishing a GitHub Release triggers `.github/workflows/release.yml`, which runs
 `make all` on a clean runner and attaches the resulting packages to the release.
+
+## 🍓 Raspberry Pi OS
+
+Raspberry Pi OS draws its desktop on **labwc** (**wayfire** before the 2024
+switch), both of them wlroots compositors — so Kasual Desktop's layer-shell
+surfaces work there as they do on Sway. Neither has an IPC CLI, though, so the
+window list and the switching come from the `wlr-foreign-toplevel-management`
+protocol, which Kasual Desktop speaks over a Wayland connection of its own. That
+is the same protocol the `wf-panel-pi` taskbar is built on.
+
+**Written for the Pi but not yet run on one** — the code is complete and unit
+tested, the hardware pass is still outstanding. Start with the probe, which says
+in one command whether this compositor can be driven at all:
+
+```bash
+python3 tools/spike_foreign_toplevel.py
+```
+
+It prints the compositor's globals and then every window it reports, with the pid
+Kasual Desktop resolves for it.
+
+Install the same Debian packages as any other Debian/Ubuntu host (see
+[Prerequisites](#prerequisites)); all of them are built for arm64:
+
+```bash
+sudo apt install python3-pyqt6 python3-pyqt6.sip python3-pyqt6.qtmultimedia \
+    python3-pyqt6.qtwebengine python3-qtawesome python3-evdev python3-xlib \
+    layer-shell-qt qt6-wayland brightnessctl
+```
+
+What to expect on a Pi:
+
+- **A window's process is a guess.** The protocol names windows (`app_id`) but
+  never says whose process they are, so Kasual Desktop matches the app id against
+  `/proc`. A window it cannot attribute still gets a tile; what it loses is being
+  minimized when you leave the app it belongs to.
+- **The wallpaper comes from the Raspberry Pi desktop** — the `wallpaper=` of
+  pcmanfm's profile — else from `<config>/wallpaper` like anywhere else.
+- **No MangoHud**, so the in-game HUD toggle stays hidden.
+- **QtWebEngine is heavy on a Pi.** The bundled YouTube app runs, but expect a Pi
+  5 for anything comfortable.
+- **The screensaver is not held off.** The Raspberry Pi session runs no
+  `org.freedesktop.ScreenSaver` service, so the inhibition Kasual Desktop takes
+  everywhere else does nothing here.
+- **Older models are out.** Kasual Desktop needs Wayland; a Pi running the X11
+  session is not supported.
 
 ---
 
@@ -495,14 +569,21 @@ foreground is recognised as a game differs per platform:
 - **A MangoHud config file at `~/.config/MangoHud/MangoHud.conf`.** Its presence
   gates the whole feature — with no file, the toggle never appears (an empty
   file is enough). This is the file Kasual Desktop edits to show/hide the HUD.
-- **MangoHud actually injected into your games**, via any of:
-  - a global `MANGOHUD=1` in your environment (covers Vulkan games),
-  - `mangohud %command%` in a game's **Steam** launch options,
-  - the **Heroic**/**Lutris** "MangoHud" wrapper toggle,
-  - or per-tile `X-Kasual-Env=MANGOHUD=1` in the app's `.desktop`.
+- **MangoHud actually injected into your games** — Kasual Desktop does this for
+  you. Any tile declaring **`Categories=Game`** is launched with `MANGOHUD=1` (the
+  variable MangoHud's implicit Vulkan layer gates itself on), and a launcher tile
+  passes it down to every game it starts. Only game tiles get it, or an ordinary
+  Vulkan app would get the HUD too; a tile's own `X-Kasual-Env` overrides it
+  (`X-Kasual-Env=MANGOHUD=0` opts one tile out).
+
+  A launcher already running *outside* Kasual Desktop (Steam from your session's
+  autostart) never sees that variable, and its games inherit its environment.
+  Either let Kasual Desktop start the launcher, or set `MANGOHUD=1` session-wide
+  in `~/.config/environment.d/`.
 
   Note: `MANGOHUD=1` alone only injects into **Vulkan** apps; OpenGL games need
-  the `mangohud` wrapper (`LD_PRELOAD`).
+  the `mangohud` wrapper (`LD_PRELOAD`) — e.g. `mangohud %command%` in a game's
+  Steam launch options, or the Heroic/Lutris "MangoHud" wrapper toggle.
 
 **How toggling works** — the toggle comments/uncomments the `no_display` line in
 `~/.config/MangoHud/MangoHud.conf`. MangoHud watches this file (via `inotify`)

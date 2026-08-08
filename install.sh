@@ -11,19 +11,19 @@ DEB_DEPS=(
     layer-shell-qt qt6-wayland brightnessctl
 )
 # Dev-only (not shipped in the package): the test stack.
-DEB_DEV_DEPS=(python3-pytest python3-pytestqt python3-pytest-subtests)
+DEB_DEV_DEPS=(python3-pytest python3-pytestqt python3-pytest-subtests python3-websocket)
 
 RPM_DEPS=(
-    python3 python3-pyqt6 python3-pyqt6-webengine python3-qtawesome
+    python3 python3-pyqt6 python3-pyqt6-webengine python3-QtAwesome
     python3-evdev python3-xlib layer-shell-qt qt6-qtwayland brightnessctl
 )
-RPM_DEV_DEPS=(python3-pytest python3-pytest-qt python3-pytest-subtests)
+RPM_DEV_DEPS=(python3-pytest python3-pytest-qt python3-pytest-subtests python3-websocket-client)
 
 ARCH_DEPS=(
     python python-pyqt6 python-pyqt6-webengine python-qtawesome
     python-evdev python-xlib layer-shell-qt qt6-wayland brightnessctl
 )
-ARCH_DEV_DEPS=(python-pytest python-pytest-qt python-pytest-subtests)
+ARCH_DEV_DEPS=(python-pytest python-pytest-qt python-pytest-subtests python-websocket-client)
 
 if command -v apt-get >/dev/null 2>&1; then
     echo "==> Installing system dependencies (apt)"
@@ -49,9 +49,9 @@ if [[ "${XDG_CURRENT_DESKTOP:-}" == *[Gg][Nn][Oo][Mm][Ee]* ]]; then
     echo "==> Installing the GNOME Shell helper extension into $EXT_DIR"
     mkdir -p "$EXT_DIR"
     cp "$(dirname "$0")/packaging/gnome-extension/$EXT_UUID"/* "$EXT_DIR/"
-    gnome-extensions enable "$EXT_UUID" 2>/dev/null ||
-        echo "    Enable it after the next login: gnome-extensions enable $EXT_UUID"
-    echo "    Log out and back in (Wayland cannot reload the Shell) to activate it."
+    if ! gnome-extensions enable "$EXT_UUID" 2>/dev/null; then
+        echo "    LOG OUT and back in, then: gnome-extensions enable $EXT_UUID"
+    fi
 fi
 
 echo "==> Done. Run: ./kasual.sh"

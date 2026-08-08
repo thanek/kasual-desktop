@@ -377,8 +377,8 @@ class KWinWindowManager(QObject, WindowManager, metaclass=ProtocolQtMeta):
         else:
             try:
                 os.unlink(path)
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug("Script cleanup failed (%s): %s", path, exc)
 
     def _on_windows_changed(self, _pid: str) -> None:
         self._changed_debounce.start()
@@ -407,8 +407,8 @@ class KWinWindowManager(QObject, WindowManager, metaclass=ProtocolQtMeta):
             self._host.clear_callbacks()
             try:
                 os.unlink(path)
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug("Script cleanup failed (%s): %s", path, exc)
 
     def _on_windows(self, windows: list[dict], script_path: str, plugin: str) -> None:
         self._loading = False
@@ -466,8 +466,8 @@ class KWinWindowManager(QObject, WindowManager, metaclass=ProtocolQtMeta):
     def _cleanup_script(self, path: str, plugin: str) -> None:
         try:
             os.unlink(path)
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("Script cleanup failed (%s): %s", path, exc)
         self._scripting.call('unloadScript', plugin)
 
     def _run_fire_and_forget(self, script: str, tag: str) -> None:
@@ -482,5 +482,5 @@ class KWinWindowManager(QObject, WindowManager, metaclass=ProtocolQtMeta):
         else:
             try:
                 os.unlink(path)
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug("Script cleanup failed (%s): %s", path, exc)

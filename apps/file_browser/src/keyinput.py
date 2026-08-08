@@ -126,7 +126,12 @@ else:
     from evdev import UInput
     from evdev import ecodes as e
 
-    _ui = UInput()
+    VIRTUAL_KEYBOARD_NAME = "kasual-vkbd"
+
+    # Named so a key remapper can be told to ignore it: those grab every
+    # keyboard-like device and replay its keys through their own virtual one, and a
+    # grab landing between our press and its release delivers the key twice.
+    _ui = UInput(name=VIRTUAL_KEYBOARD_NAME)
 
     class Key:
         """Re-export of the Linux ecodes.KEY_* constants the apps use."""
