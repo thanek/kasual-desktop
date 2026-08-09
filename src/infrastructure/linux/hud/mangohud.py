@@ -12,7 +12,7 @@ format:
   - **disable** → uncomment an existing ``no_display`` line, or append one.
 
 Reads happen live on each call, so creating or deleting the file between Home
-Overlay opens is reflected without restarting Kasual.
+Overlay opens is reflected without restarting Kasual Desktop.
 
 The config alone never puts the overlay on screen: MangoHud's Vulkan layer is
 *implicit*, gated on ``MANGOHUD=1``, so a game started without that variable loads
@@ -27,7 +27,6 @@ session — the reading behind the setup card in :mod:`domain.preflight.hud`.
 from __future__ import annotations
 
 import logging
-import os
 import re
 from collections.abc import Callable, Mapping
 from pathlib import Path
@@ -35,6 +34,7 @@ from pathlib import Path
 from domain.preflight.hud import HudEnvironment
 from domain.system.hud import HudControl
 from infrastructure.linux.proc import process_environ
+from infrastructure.linux.session_env import session_environ
 
 logger = logging.getLogger(__name__)
 
@@ -69,14 +69,16 @@ def _carries_hud(environ: Mapping[str, str]) -> bool:
 
 
 class MangoHudSession(HudEnvironment):
-    """Read from Kasual Desktop's own environment: a session hands the same one to
-    every process it starts."""
+    """The session's environment as it stands, not Kasual Desktop's own snapshot of
+    it: the setup card's step moves the one and cannot move the other."""
 
-    def __init__(self, environ: Mapping[str, str] = os.environ) -> None:
+    def __init__(
+        self, environ: Callable[[], Mapping[str, str]] = session_environ,
+    ) -> None:
         self._environ = environ
 
     def carried_by_session(self) -> bool:
-        return _carries_hud(self._environ)
+        return _carries_hud(self._environ())
 
 
 class MangoHudControl(HudControl):

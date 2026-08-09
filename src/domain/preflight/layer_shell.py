@@ -76,7 +76,9 @@ class LayerShellSurfaces(Requirement):
     def _status(state: LayerShellState) -> StatusLine:
         if state is LayerShellState.READY:
             return StatusLine(
-                translate("Kasual Desktop", "The compositor sizes Kasual's surfaces"),
+                translate(
+                    "Kasual Desktop",
+                    "The compositor sizes Kasual Desktop's surfaces"),
                 met=True,
             )
         scattered = translate(

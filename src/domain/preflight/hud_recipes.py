@@ -11,12 +11,14 @@ after the composition root installs the translator.
 """
 
 from domain.preflight.hud import NO_SESSION_HUD
-from domain.setup.plan import GOAL_REACHED, PATH, Check, Recipe, Step
+from domain.setup.plan import GOAL_REACHED, Recipe, Step
 from domain.shared.i18n import translate
 
 CONFIG_FILE = "~/.config/environment.d/50-kasual-mangohud.conf"
+RELOAD_SESSION = "systemctl --user daemon-reload"
 
-_WRITTEN = Check(PATH, CONFIG_FILE)
+_WRITE_AND_RELOAD = ("mkdir -p ~/.config/environment.d && "
+                     f"echo MANGOHUD=1 > {CONFIG_FILE} && {RELOAD_SESSION}")
 
 
 def all_recipes() -> tuple[Recipe, ...]:
@@ -56,12 +58,13 @@ def _session_step() -> Step:
             "everything else with, so this reaches every game whoever starts it — "
             "and every other Vulkan application too, which is the cost. MangoHud "
             "runs inside each process it attaches to, and a fault in it takes that "
-            "application down. Log out and back in afterwards: a session's "
-            "environment is built when it starts.",
+            "application down. The command loads the file into the session as well; "
+            "a launcher already running keeps the environment it started with and "
+            "hands that one to its games, so restart it. To undo all this, delete "
+            "the file and reload the session the same way.",
         ),
-        check=_WRITTEN,
-        command=("mkdir -p ~/.config/environment.d && "
-                 f"echo MANGOHUD=1 > {CONFIG_FILE}"),
+        check=GOAL_REACHED,
+        command=_WRITE_AND_RELOAD,
     )
 
 

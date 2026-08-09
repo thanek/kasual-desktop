@@ -594,8 +594,25 @@ screen reads. How a foreground is recognised as a game differs per platform:
   > is blunter than it looks: MangoHud then loads into **every** Vulkan application
   > the session starts, games or not. It runs its own sampling threads inside each
   > one, and a fault in them takes the host application with it — MangoHud
-  > 0.8.3-rc1 aborts the bundled File Browser this way, from its NVIDIA sampler.
-  > Prefer the per-launcher route above.
+  > 0.8.3-rc1 aborts the bundled File Browser this way, from its NVIDIA sampler,
+  > and any other Vulkan application on that stack is fair game. Prefer the
+  > per-launcher route above.
+  >
+  > A `blacklist` entry in `MangoHud.conf` does **not** buy those applications
+  > out: MangoHud starts its NVIDIA sampler thread before it consults the
+  > blacklist, so the layer unwinds with the sampler already running and the
+  > application dies on the same path. Entries do work for applications with no
+  > Vulkan path (`gnome-calculator` survives), which makes the setting look
+  > effective when it is not.
+  >
+  > **To undo it**, delete the file — Kasual Desktop's setup card writes
+  > `~/.config/environment.d/50-kasual-mangohud.conf` — and run `systemctl --user
+  > daemon-reload`. Logging out is not enough on its own: the user manager
+  > survives a logout while any other session of yours is open (a tty counts), and
+  > a manager that keeps running never re-reads `environment.d`. Nor does
+  > `systemctl --user unset-environment MANGOHUD`, which exits 0 without touching
+  > the block the generators own. Processes already running keep the environment
+  > they started with in every case, so restart your launcher afterwards.
 
   Note: `MANGOHUD=1` alone only injects into **Vulkan** apps; OpenGL games need
   the `mangohud` wrapper (`LD_PRELOAD`) — e.g. `mangohud %command%` in a game's

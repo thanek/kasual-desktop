@@ -356,12 +356,12 @@
         <translation>Return to Home screen</translation>
     </message>
     <message>
-        <location filename="../src/domain/menu/home.py" line="100" />
+        <location filename="../src/domain/menu/home.py" line="101" />
         <source>Return to {0}</source>
         <translation>Return to {0}</translation>
     </message>
     <message>
-        <location filename="../src/domain/menu/home.py" line="102" />
+        <location filename="../src/domain/menu/home.py" line="103" />
         <source>Close {0}</source>
         <translation>Close {0}</translation>
     </message>
@@ -503,6 +503,136 @@
         <translation>The extension is part of Kasual Desktop, not a third-party add-on: it is what carries out the window operations Mutter offers no protocol for.</translation>
     </message>
     <message>
+        <location filename="../src/domain/preflight/hud.py" line="44" />
+        <source>The performance HUD reaches only some games</source>
+        <translation>The performance HUD reaches only some games</translation>
+    </message>
+    <message>
+        <location filename="../src/domain/preflight/hud.py" line="46" />
+        <source>Kasual Desktop has no recipe for reaching the rest of this system's games. The ones it starts itself still get the HUD; the ones a running launcher starts do not.</source>
+        <translation>Kasual Desktop has no recipe for reaching the rest of this system's games. The ones it starts itself still get the HUD; the ones a running launcher starts do not.</translation>
+    </message>
+    <message>
+        <location filename="../src/domain/preflight/hud.py" line="65" />
+        <source>Every game in this session can show the HUD</source>
+        <translation>Every game in this session can show the HUD</translation>
+    </message>
+    <message>
+        <location filename="../src/domain/preflight/hud.py" line="72" />
+        <source>Only games Kasual Desktop starts get the HUD</source>
+        <translation>Only games Kasual Desktop starts get the HUD</translation>
+    </message>
+    <message>
+        <location filename="../src/domain/preflight/hud.py" line="74" />
+        <source>MangoHud draws over a game only when that game was started with MANGOHUD=1 in its environment. Kasual Desktop passes it to what it launches — but a launcher that is already running takes the request over and starts the game itself, from its own environment, and the HUD never loads. Over such a game the Home Menu offers no HUD toggle, because there would be nothing on screen for it to switch.</source>
+        <translation>MangoHud draws over a game only when that game was started with MANGOHUD=1 in its environment. Kasual Desktop passes it to what it launches — but a launcher that is already running takes the request over and starts the game itself, from its own environment, and the HUD never loads. Over such a game the Home Menu offers no HUD toggle, because there would be nothing on screen for it to switch.</translation>
+    </message>
+    <message>
+        <location filename="../src/domain/preflight/hud_recipes.py" line="37" />
+        <source>Let Kasual Desktop start your launcher</source>
+        <translation>Let Kasual Desktop start your launcher</translation>
+    </message>
+    <message>
+        <location filename="../src/domain/preflight/hud_recipes.py" line="39" />
+        <source>Close Steam (or Heroic, or Lutris) and start it from its tile, or pick a game tile with the launcher closed. A launcher Kasual Desktop starts is given the HUD, and hands it to every game it goes on to start — while one that was already running starts them from its own environment, without it. Nothing to install, nothing to undo.</source>
+        <translation>Close Steam (or Heroic, or Lutris) and start it from its tile, or pick a game tile with the launcher closed. A launcher Kasual Desktop starts is given the HUD, and hands it to every game it goes on to start — while one that was already running starts them from its own environment, without it. Nothing to install, nothing to undo.</translation>
+    </message>
+    <message>
+        <location filename="../src/domain/preflight/hud_recipes.py" line="53" />
+        <source>Or hand the whole session to MangoHud</source>
+        <translation>Or hand the whole session to MangoHud</translation>
+    </message>
+    <message>
+        <location filename="../src/domain/preflight/hud_recipes.py" line="55" />
+        <source>Files in ~/.config/environment.d hold what a desktop session starts everything else with, so this reaches every game whoever starts it — and every other Vulkan application too, which is the cost. MangoHud runs inside each process it attaches to, and a fault in it takes that application down. The command loads the file into the session as well; a launcher already running keeps the environment it started with and hands that one to its games, so restart it. To undo all this, delete the file and reload the session the same way.</source>
+        <translation>Files in ~/.config/environment.d hold what a desktop session starts everything else with, so this reaches every game whoever starts it — and every other Vulkan application too, which is the cost. MangoHud runs inside each process it attaches to, and a fault in it takes that application down. The command loads the file into the session as well; a launcher already running keeps the environment it started with and hands that one to its games, so restart it. To undo all this, delete the file and reload the session the same way.</translation>
+    </message>
+    <message>
+        <location filename="../src/domain/preflight/hud_recipes.py" line="72" />
+        <source>Either way this leaves the HUD loaded, not shown: whether it is on screen stays MangoHud's own setting, and the Home Menu's toggle over a game.</source>
+        <translation>Either way this leaves the HUD loaded, not shown: whether it is on screen stays MangoHud's own setting, and the Home Menu's toggle over a game.</translation>
+    </message>
+    <message>
+        <location filename="../src/domain/preflight/layer_shell.py" line="56" />
+        <source>Kasual Desktop cannot place its own windows</source>
+        <translation>Kasual Desktop cannot place its own windows</translation>
+    </message>
+    <message>
+        <location filename="../src/domain/preflight/layer_shell.py" line="58" />
+        <source>Kasual Desktop has no recipe for installing LayerShellQt on this system. It will run, but its interface arrives scattered across the screen instead of anchored to it.</source>
+        <translation>Kasual Desktop has no recipe for installing LayerShellQt on this system. It will run, but its interface arrives scattered across the screen instead of anchored to it.</translation>
+    </message>
+    <message>
+        <location filename="../src/domain/preflight/layer_shell.py" line="79" />
+        <source>The compositor sizes Kasual Desktop's surfaces</source>
+        <translation>The compositor sizes Kasual Desktop's surfaces</translation>
+    </message>
+    <message>
+        <location filename="../src/domain/preflight/layer_shell.py" line="84" />
+        <source>Wayland lets no application position its own windows, so Kasual Desktop asks the compositor to anchor them through wlr-layer-shell. Without it the Desktop, the Home header and the hint bar land wherever the compositor happens to put them.</source>
+        <translation>Wayland lets no application position its own windows, so Kasual Desktop asks the compositor to anchor them through wlr-layer-shell. Without it the Desktop, the Home header and the hint bar land wherever the compositor happens to put them.</translation>
+    </message>
+    <message>
+        <location filename="../src/domain/preflight/layer_shell.py" line="93" />
+        <source>This Qt has no layer-shell integration</source>
+        <translation>This Qt has no layer-shell integration</translation>
+    </message>
+    <message>
+        <location filename="../src/domain/preflight/layer_shell.py" line="95" />
+        <source>The integration plugin is version-locked to the Qt it was built for, and none is installed for this one.</source>
+        <translation>The integration plugin is version-locked to the Qt it was built for, and none is installed for this one.</translation>
+    </message>
+    <message>
+        <location filename="../src/domain/preflight/layer_shell.py" line="102" />
+        <source>LayerShellQt itself is missing</source>
+        <translation>LayerShellQt itself is missing</translation>
+    </message>
+    <message>
+        <location filename="../src/domain/preflight/layer_shell.py" line="104" />
+        <source>The Qt integration plugin is in place, but the LayerShellQt library it calls into is not.</source>
+        <translation>The Qt integration plugin is in place, but the LayerShellQt library it calls into is not.</translation>
+    </message>
+    <message>
+        <location filename="../src/domain/preflight/layer_shell_recipes.py" line="47" />
+        <source>Build LayerShellQt against Qt 6</source>
+        <translation>Build LayerShellQt against Qt 6</translation>
+    </message>
+    <message>
+        <location filename="../src/domain/preflight/layer_shell_recipes.py" line="49" />
+        <source>This distribution packages layer-shell-qt for Qt 5 only, and the plugin has to match the Qt that PyQt6 runs on. Build the 5.27 series with -DQT_MAJOR_VERSION=6 for Qt 6.4; the 6.x series needs Qt 6.6 or newer. The soname is no guide — it tracks LayerShellQt's own version, not Qt's.</source>
+        <translation>This distribution packages layer-shell-qt for Qt 5 only, and the plugin has to match the Qt that PyQt6 runs on. Build the 5.27 series with -DQT_MAJOR_VERSION=6 for Qt 6.4; the 6.x series needs Qt 6.6 or newer. The soname is no guide — it tracks LayerShellQt's own version, not Qt's.</translation>
+    </message>
+    <message>
+        <location filename="../src/domain/preflight/layer_shell_recipes.py" line="76" />
+        <source>Install LayerShellQt for Qt 6</source>
+        <translation>Install LayerShellQt for Qt 6</translation>
+    </message>
+    <message>
+        <location filename="../src/domain/preflight/layer_shell_recipes.py" line="94" />
+        <source>The package is called layer-shell-qt. It must be the Qt 6 build: the shell-integration plugin is version-locked to the Qt that PyQt6 runs on, and a Qt 5 one is invisible to this process.</source>
+        <translation>The package is called layer-shell-qt. It must be the Qt 6 build: the shell-integration plugin is version-locked to the Qt that PyQt6 runs on, and a Qt 5 one is invisible to this process.</translation>
+    </message>
+    <message>
+        <location filename="../src/domain/preflight/layer_shell_recipes.py" line="103" />
+        <source>Qt's side of the integration is already installed; what is missing is libLayerShellQtInterface, which ships in the same layer-shell-qt package.</source>
+        <translation>Qt's side of the integration is already installed; what is missing is libLayerShellQtInterface, which ships in the same layer-shell-qt package.</translation>
+    </message>
+    <message>
+        <location filename="../src/domain/preflight/layer_shell_recipes.py" line="112" />
+        <source>Restart Kasual Desktop</source>
+        <translation>Restart Kasual Desktop</translation>
+    </message>
+    <message>
+        <location filename="../src/domain/preflight/layer_shell_recipes.py" line="113" />
+        <source>Qt chooses its shell integration once, when the application starts, so this session keeps running without it however the installation goes.</source>
+        <translation>Qt chooses its shell integration once, when the application starts, so this session keeps running without it however the installation goes.</translation>
+    </message>
+    <message>
+        <location filename="../src/domain/preflight/layer_shell_recipes.py" line="124" />
+        <source>This affects every layer-shell compositor Kasual Desktop supports — KWin, Sway, Hyprland, cosmic-comp, labwc and wayfire — not just this one. GNOME is the exception: there the bundled Shell extension does the same job.</source>
+        <translation>This affects every layer-shell compositor Kasual Desktop supports — KWin, Sway, Hyprland, cosmic-comp, labwc and wayfire — not just this one. GNOME is the exception: there the bundled Shell extension does the same job.</translation>
+    </message>
+    <message>
         <location filename="../src/domain/shell/background_hint.py" line="48" />
         <source>Kasual Desktop is running in the background</source>
         <translation>Kasual Desktop is running in the background</translation>
@@ -568,12 +698,12 @@
         <translation>Check gamepad access</translation>
     </message>
     <message>
-        <location filename="../src/domain/system/hud.py" line="46" />
+        <location filename="../src/domain/system/hud.py" line="54" />
         <source>Disable HUD</source>
         <translation>Disable HUD</translation>
     </message>
     <message>
-        <location filename="../src/domain/system/hud.py" line="47" />
+        <location filename="../src/domain/system/hud.py" line="55" />
         <source>Enable HUD</source>
         <translation>Enable HUD</translation>
     </message>
@@ -598,7 +728,7 @@
         <translation>Check again</translation>
     </message>
     <message>
-        <location filename="../src/infrastructure/common/qt/ui/tray.py" line="43" />
+        <location filename="../src/infrastructure/common/qt/ui/tray.py" line="68" />
         <location filename="../src/infrastructure/common/qt/overlays/setup_overlay.py" line="191" />
         <source>Quit</source>
         <translation>Quit</translation>
@@ -624,19 +754,29 @@
         <translation>Copy to clipboard</translation>
     </message>
     <message>
-        <location filename="../src/infrastructure/common/qt/ui/tray.py" line="36" />
+        <location filename="../src/infrastructure/common/qt/ui/tray.py" line="61" />
         <source>Show Desktop</source>
         <translation>Show Desktop</translation>
     </message>
     <message>
-        <location filename="../src/infrastructure/common/qt/ui/tray.py" line="38" />
+        <location filename="../src/infrastructure/common/qt/ui/tray.py" line="63" />
         <source>Logs</source>
         <translation>Logs</translation>
     </message>
     <message>
-        <location filename="../src/infrastructure/common/qt/ui/tray.py" line="40" />
+        <location filename="../src/infrastructure/common/qt/ui/tray.py" line="65" />
         <source>About…</source>
         <translation>About…</translation>
+    </message>
+    <message>
+        <location filename="../src/infrastructure/common/qt/ui/tray.py" line="89" />
+        <source>gamepad connected</source>
+        <translation>gamepad connected</translation>
+    </message>
+    <message>
+        <location filename="../src/infrastructure/common/qt/ui/tray.py" line="90" />
+        <source>no gamepad</source>
+        <translation>no gamepad</translation>
     </message>
     <message>
         <location filename="../src/infrastructure/common/single_instance.py" line="59" />
