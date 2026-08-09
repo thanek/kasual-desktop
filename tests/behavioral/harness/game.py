@@ -47,6 +47,22 @@ def carries_hud(environ: dict[str, str]) -> bool:
             and environ.get('MANGOHUD', '') not in ('', '0'))
 
 
+_REMAP_BLINK_S = 2.0
+
+
+class _GoneForGood:
+    def __init__(self) -> None:
+        self._missing_since: float | None = None
+
+    def settled(self, missing: bool) -> bool:
+        if not missing:
+            self._missing_since = None
+            return False
+        if self._missing_since is None:
+            self._missing_since = time.monotonic()
+        return time.monotonic() - self._missing_since >= _REMAP_BLINK_S
+
+
 class SteamGame:
     def __init__(self, session: Session, appid: str) -> None:
         self.app_id = f'steam_app_{appid}'
@@ -224,26 +240,22 @@ class SteamGame:
 
     # ── a launcher that waits to be used ─────────────────────────────────────
 
-    def activate_launcher(self, what: str, max_presses: int = 3,
+    def activate_launcher(self, what: str, launcher: dict, max_presses: int = 3,
                           settle_s: float = 25.0) -> None:
-        """Press A until the launcher hands over to the game.
-
-        How many presses that takes belongs to the launcher, not to KD: its sidebar
-        may want one before the Play button does. Pressing stops the moment the game
-        goes fullscreen — further presses would land inside it.
-        """
         presses = 0
         next_press = 0.0
-        deadline = time.monotonic() + timeouts.GAME_FULLSCREEN
+        gone = _GoneForGood()
+        deadline = time.monotonic() + timeouts.HANDOVER
         with progress.waiting(f'the {what} handing over to the game',
-                              timeouts.GAME_FULLSCREEN) as bar:
+                              timeouts.HANDOVER) as bar:
             while time.monotonic() < deadline:
                 stack = self._source.last_stack()
-                if self._windows(stack, fullscreen=True):
+                launcher_up = self._launcher_up(stack, launcher)
+                game_has_the_screen = bool(self._windows(stack, fullscreen=True))
+                if game_has_the_screen or gone.settled(not launcher_up):
                     report(f'"Play" activated on the {what}', 'PASS',
                            f'{presses} press(es) of A')
                     return
-                launcher_up = bool(self._windows(stack, fullscreen=False))
                 if launcher_up and presses < max_presses and time.monotonic() >= next_press:
                     self._pad.confirm()
                     presses += 1
@@ -253,8 +265,12 @@ class SteamGame:
                 time.sleep(0.2)
 
         report(f'"Play" activated on the {what}', 'FAIL',
-               f'{presses} press(es) of A, the game never went fullscreen')
+               f'{presses} press(es) of A, the {what} is still on the screen')
         raise ScenarioAborted(f'the {what} never handed over to the game')
+
+    def _launcher_up(self, stack: list[dict], launcher: dict) -> bool:
+        return any(w['pid'] == launcher['pid']
+                   for w in find(stack, app_id=self.app_id))
 
     # ── teardown ─────────────────────────────────────────────────────────────
 

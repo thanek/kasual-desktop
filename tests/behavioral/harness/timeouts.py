@@ -12,6 +12,7 @@ STEAM_UI        = 120.0   # Steam starting up, up to its Big Picture page
 STEAM_INTRO     = 8.0     # Big Picture's intro animation, which swallows a press
 STEAM_PAGE      = 20.0    # a page of Steam's UI animating in, and settling its focus
 LAUNCHER        = 180.0   # Steam starting up, then the splash / launcher
+HANDOVER        = 120.0   # the presses a launcher is given, and its window going
 GAME_LAUNCH     = 90.0    # a warm Steam turning a launch into the game's first window; none by now means the request was dropped
 GAME_FULLSCREEN = 300.0   # shader compilation lives here
 GAME_EXIT       = 60.0    # a game shutting its engine down after KD asked its window to close
