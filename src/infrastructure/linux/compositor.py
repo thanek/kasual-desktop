@@ -43,6 +43,10 @@ WLROOTS = frozenset({
     Compositor.SWAY, Compositor.HYPRLAND, Compositor.LABWC, Compositor.WAYFIRE,
 })
 
+# wlroots keeps layer-shell TOP above every window; cosmic-comp 1.5.0 dies on an
+# unmap. Either way the Desktop must stay mapped.
+CEDE_BY_SINKING = WLROOTS | {Compositor.COSMIC}
+
 
 def _is_socket(path: str) -> bool:
     try:
@@ -287,6 +291,4 @@ def build_desktop_surface(compositor: Compositor | None = None) -> "DesktopSurfa
             from infrastructure.gnome.qt.surface import GnomeSurface
             return GnomeSurface()
     from infrastructure.linux.wayland.surface import LayerShellSurface
-    # wlroots keeps layer-shell TOP above every window, so there the Desktop
-    # cedes by dropping to the BOTTOM layer; KWin lets a fullscreen app cover TOP.
-    return LayerShellSurface(cede_to_bottom=compositor in WLROOTS)
+    return LayerShellSurface(cede_to_bottom=compositor in CEDE_BY_SINKING)

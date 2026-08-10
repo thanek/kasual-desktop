@@ -39,7 +39,7 @@ from domain.system.hud import HudControl
 from domain.system.power_menu import PowerMenu
 from domain.system.volume import VolumeControl
 from infrastructure.common.qt.ui import styles
-from infrastructure.common.qt.ui.deferred_unmap import DeferredUnmap
+from infrastructure.common.qt.ui.surface_hiding import SurfaceHiding
 from infrastructure.common.qt.ui.layer_shell import Anchor, Keyboard, Layer
 from infrastructure.common.qt.ui.top_surface import (
     GNOME_PANEL_CLEARANCE, home_chrome_edge_margin,
@@ -59,6 +59,7 @@ MORPH_MS    = 180   # collapse↔expand animation duration
 # KWin never sees a resize/remap to animate. Budgeted with the panel clearance so
 # it never clips whatever the actual top gap turns out to be.
 SURFACE_H   = GNOME_PANEL_CLEARANCE + HEADER_H + CONTENT_H + GNOME_PANEL_CLEARANCE
+_ANCHORS    = Anchor.TOP | Anchor.LEFT | Anchor.RIGHT
 
 
 class _NullHud(HudControl):
@@ -114,7 +115,7 @@ class HomeSurface(QWidget):
         # Mouse input is scoped by mask, not WA_TransparentForMouseEvents (which
         # would empty the Wayland input region entirely) — see _refresh_input_region.
         self._input_open_hold = False
-        self._deferred_unmap = DeferredUnmap(self)
+        self._hiding = SurfaceHiding(self, _ANCHORS)
 
         outer = QVBoxLayout(self)
         outer.setContentsMargins(16, home_chrome_edge_margin(), 16, GNOME_PANEL_CLEARANCE)
@@ -248,7 +249,7 @@ class HomeSurface(QWidget):
         promote_overlay_surface(
             self,
             layer=Layer.OVERLAY,
-            anchors=Anchor.TOP | Anchor.LEFT | Anchor.RIGHT,
+            anchors=_ANCHORS,
             exclusive_zone=0,
             keyboard=Keyboard.NONE,
         )
@@ -265,10 +266,13 @@ class HomeSurface(QWidget):
             self.setGeometry(g.x(), g.y(), g.width(), SURFACE_H)
 
     def hide(self) -> None:
-        self._deferred_unmap.hide()
+        self._hiding.hide()
+
+    def is_on_screen(self) -> bool:
+        return self.isVisible() and not self._hiding.is_hidden
 
     def show_collapsed(self) -> None:
-        self._deferred_unmap.cancel()
+        self._hiding.unhide()
         self.position_at_top()
         self.show()
         self.raise_()
@@ -380,7 +384,7 @@ class HomeSurface(QWidget):
             foreground_pid=foreground_pid,
             header=self._header, on_power_chooser=self._on_power_chooser,
         )
-        self._deferred_unmap.cancel()
+        self._hiding.unhide()
         self.position_at_top()
         self.show()
         self.raise_()

@@ -307,12 +307,12 @@ class Desktop(QWidget, DesktopView, DesktopShell, DesktopControl, metaclass=Prot
         )
         return ShellSnapshot(
             desktop_visible=self._surface.is_visible(),
-            desktop_mapped=self.isVisible(),
+            desktop_mapped=self._surface.is_on_screen(),
             desktop_sunk=self._surface.is_sunk(),
             home_header_mapped=(
-                self._home_surface is not None and self._home_surface.isVisible()
+                self._home_surface is not None and self._home_surface.is_on_screen()
             ),
-            hint_bar_mapped=self._hintbar.isVisible(),
+            hint_bar_mapped=self._hintbar.is_on_screen(),
             home_menu=self._home_menu_snapshot(),
             tile_menu=self._tile_menu_snapshot(),
             confirm=self._confirm_snapshot(),

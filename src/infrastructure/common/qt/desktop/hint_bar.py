@@ -19,7 +19,7 @@ from domain.navigation.hints import Button, Direction, Hints
 from domain.shared.i18n import translate
 from infrastructure.common.qt._meta import ProtocolQtMeta
 from infrastructure.common.qt.ui import styles
-from infrastructure.common.qt.ui.deferred_unmap import DeferredUnmap
+from infrastructure.common.qt.ui.surface_hiding import SurfaceHiding
 from infrastructure.common.qt.ui.layer_shell import Anchor, Keyboard, Layer
 from infrastructure.common.qt.ui.top_surface import (
     GNOME_PANEL_CLEARANCE, home_chrome_edge_margin,
@@ -32,6 +32,7 @@ ICON_PX    = 15      # inner icon size for icon-based glyphs (home / start / arr
 BAR_HEIGHT = 60      # the rounded bar itself
 BAR_RADIUS = 30      # half of BAR_HEIGHT: fully rounded ends
 SURFACE_H  = BAR_HEIGHT + GNOME_PANEL_CLEARANCE
+_ANCHORS   = Anchor.BOTTOM | Anchor.LEFT | Anchor.RIGHT
 
 # Direction → Font Awesome arrow glyph.
 _ARROWS = {
@@ -77,7 +78,7 @@ class HintBar(QWidget, HintBarView, metaclass=ProtocolQtMeta):
         self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
         self.setStyleSheet("background: transparent;")
         self.setFixedHeight(SURFACE_H)
-        self._deferred_unmap = DeferredUnmap(self)
+        self._hiding = SurfaceHiding(self, _ANCHORS)
 
         outer = QVBoxLayout(self)
         outer.setContentsMargins(16, 0, 16, home_chrome_edge_margin())
@@ -111,7 +112,7 @@ class HintBar(QWidget, HintBarView, metaclass=ProtocolQtMeta):
         promote_overlay_surface(
             self,
             layer=Layer.OVERLAY,
-            anchors=Anchor.BOTTOM | Anchor.LEFT | Anchor.RIGHT,
+            anchors=_ANCHORS,
             # -1 (not 0): anchor to the true bottom edge rather than let the
             # compositor shove us up to clear another panel's exclusive zone.
             exclusive_zone=-1,
@@ -129,10 +130,13 @@ class HintBar(QWidget, HintBarView, metaclass=ProtocolQtMeta):
         super().showEvent(event)
 
     def hide(self) -> None:
-        self._deferred_unmap.hide()
+        self._hiding.hide()
+
+    def is_on_screen(self) -> bool:
+        return self.isVisible() and not self._hiding.is_hidden
 
     def show_at_bottom(self) -> None:
-        self._deferred_unmap.cancel()
+        self._hiding.unhide()
         self.position_at_bottom()
         self.show()
         self.raise_()

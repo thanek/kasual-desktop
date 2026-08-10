@@ -9,6 +9,8 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from infrastructure.linux.compositor import (
+    CEDE_BY_SINKING,
+    WLROOTS,
     Compositor,
     NullWindowManager,
     build_desktop_surface,
@@ -261,6 +263,21 @@ class TestFactories:
         clean_env.setenv("KDE_FULL_SESSION", "true")
         from infrastructure.linux.wayland.surface import LayerShellSurface
         assert isinstance(build_desktop_surface(), LayerShellSurface)
+
+
+class TestCedeBySinking:
+    """Which compositors get a Desktop that never unmaps to cede the screen."""
+
+    @pytest.mark.parametrize("compositor", sorted(WLROOTS, key=lambda c: c.value))
+    def test_wlroots_cedes_by_sinking(self, compositor):
+        assert compositor in CEDE_BY_SINKING
+
+    def test_cosmic_cedes_by_sinking(self):
+        """cosmic-comp 1.5.0 drops the connection when a layer surface unmaps."""
+        assert Compositor.COSMIC in CEDE_BY_SINKING
+
+    def test_kde_still_cedes_by_staying_on_top(self):
+        assert Compositor.KDE not in CEDE_BY_SINKING
 
 
 class TestInjectedCompositor:

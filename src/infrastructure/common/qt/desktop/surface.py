@@ -55,6 +55,10 @@ class DesktopSurface(Protocol):
         windows (see ``sink``). False where ceding unmaps the surface."""
         ...
 
+    def is_on_screen(self) -> bool:
+        """Whether the surface is on the screen at all — true while merely ceded."""
+        ...
+
     def on_reactivate(self, callback: Callable[[], None]) -> None:
         """Register the callback the surface invokes when the platform decides the
         Desktop should return to the foreground (e.g. the app it ceded focus to has
@@ -98,6 +102,9 @@ class PlainSurface:
 
     def is_sunk(self) -> bool:
         return False
+
+    def is_on_screen(self) -> bool:
+        return self.is_visible()   # ceding unmaps here
 
     def on_reactivate(self, callback: Callable[[], None]) -> None:
         pass

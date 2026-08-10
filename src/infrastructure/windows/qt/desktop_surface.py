@@ -72,6 +72,9 @@ class WindowsDesktopSurface:
     def is_visible(self) -> bool:
         return self._widget.isVisible() if self._widget is not None else False
 
+    def is_on_screen(self) -> bool:
+        return self.is_visible()   # ceding unmaps here
+
     def is_sunk(self) -> bool:
         return False
 

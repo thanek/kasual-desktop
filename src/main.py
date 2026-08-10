@@ -5,7 +5,7 @@ import sys
 from pathlib import Path
 
 from infrastructure.linux.compositor import (
-    WLROOTS, Compositor, build_desktop_surface, build_screensaver_waker,
+    CEDE_BY_SINKING, Compositor, build_desktop_surface, build_screensaver_waker,
     build_system_wallpaper, build_tray_icon_source, build_window_manager,
     detect_compositor, layer_shell_available,
 )
@@ -276,7 +276,7 @@ def main() -> None:
             launch_env=lambda app: hud_launch_env(hud, app),
             deferred_hide_factory=lambda wm_, pm_, on_cede, on_hide:
                 DeferredHide(wm_, pm_, on_cede=on_cede, on_hide=on_hide,
-                             always_cede=COMPOSITOR in WLROOTS),
+                             always_cede=COMPOSITOR in CEDE_BY_SINKING),
             deferred_show_factory=lambda wm_, pm_, on_show:
                 DeferredShow(wm_, pm_, on_show=on_show),
             cede_depth_factory=lambda wm_, pm_, on_sink:

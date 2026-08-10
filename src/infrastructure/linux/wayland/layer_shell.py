@@ -42,6 +42,11 @@ _SYM_LAYER   = "_ZN12LayerShellQt6Window8setLayerENS0_5LayerE"
 _SYM_ANCHORS = "_ZN12LayerShellQt6Window10setAnchorsE6QFlagsINS0_6AnchorEE"
 _SYM_EXCL    = "_ZN12LayerShellQt6Window16setExclusiveZoneEi"
 _SYM_KBD     = "_ZN12LayerShellQt6Window24setKeyboardInteractivityENS0_21KeyboardInteractivityE"
+_SYM_SIZE    = "_ZN12LayerShellQt6Window14setDesiredSizeERK5QSize"
+
+
+class _QSize(ctypes.Structure):
+    _fields_ = [("width", ctypes.c_int), ("height", ctypes.c_int)]
 
 
 _lib = None  # CDLL once bound, False once known-unavailable, None untried
@@ -76,6 +81,9 @@ def _bind(lib):
         # QFlags<Anchor> and the enums are all int-sized across the ABI.
         fn.argtypes = [ctypes.c_void_p, ctypes.c_int]
         setattr(lib, attr, fn)
+    lib._ls_size = getattr(lib, _SYM_SIZE)
+    lib._ls_size.restype = None
+    lib._ls_size.argtypes = [ctypes.c_void_p, ctypes.POINTER(_QSize)]
     return lib
 
 
@@ -173,4 +181,24 @@ def set_layer(widget: QWidget, layer: Layer) -> bool:
         return False
     lib, ls_window = got
     lib._ls_layer(ls_window, int(layer))
+    return True
+
+
+def set_anchors(widget: QWidget, anchors: Anchor) -> bool:
+    """Re-anchor an already-promoted surface."""
+    got = _ls_handle(widget)
+    if got is None:
+        return False
+    lib, ls_window = got
+    lib._ls_anchors(ls_window, int(anchors))
+    return True
+
+
+def set_size(widget: QWidget, width: int, height: int) -> bool:
+    """Ask for a surface size; an axis of 0 defers to the window's own."""
+    got = _ls_handle(widget)
+    if got is None:
+        return False
+    lib, ls_window = got
+    lib._ls_size(ls_window, ctypes.byref(_QSize(width, height)))
     return True

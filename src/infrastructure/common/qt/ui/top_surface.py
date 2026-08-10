@@ -93,6 +93,16 @@ def fullscreen_loses_translucency(compositor: "Compositor | None" = None) -> boo
     return resolved is not None and not _on_layer_shell(resolved)
 
 
+def unmap_drops_the_connection(compositor: "Compositor | None" = None) -> bool:
+    """Whether unmapping a layer surface costs us the connection — cosmic-comp 1.5.0
+    kills the client for the commit Qt sends after destroying the layer role."""
+    resolved = _wayland_compositor(compositor)
+    if resolved is None or not _on_layer_shell(resolved):
+        return False
+    from infrastructure.linux.compositor import Compositor
+    return resolved is Compositor.COSMIC
+
+
 def promote_overlay_surface(
     widget: QWidget,
     *,

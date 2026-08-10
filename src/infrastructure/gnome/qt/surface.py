@@ -70,6 +70,9 @@ class GnomeSurface:
     def is_visible(self) -> bool:
         return self._in_front and self._widget.isVisible()
 
+    def is_on_screen(self) -> bool:
+        return self._widget.isVisible()
+
     def is_sunk(self) -> bool:
         return not self._in_front and self._widget.isVisible() and helper.is_sunk()
 

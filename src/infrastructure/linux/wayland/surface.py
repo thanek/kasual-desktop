@@ -11,6 +11,7 @@ from collections.abc import Callable
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QWidget
 
+from infrastructure.common.qt.ui.surface_hiding import SurfaceHiding
 from infrastructure.linux.wayland.layer_shell import (
     Anchor, Keyboard, Layer, make_layer_surface, set_keyboard, set_layer,
 )
@@ -33,8 +34,9 @@ class LayerShellSurface:
       ceding already drops the surface to the BOTTOM layer, under the app (``sink``
       has nothing left to do), and ``show_fullscreen`` restores it to TOP.
 
-    ``is_visible`` is logical — "the Desktop owns input" — not Qt's mapped-state.
-    ``hide`` (pause / minimize to tray) still truly unmaps.
+    ``is_visible`` is logical — "the Desktop owns input" — not Qt's mapped-state;
+    ``is_on_screen`` is the weaker question. ``hide`` (pause / minimize to tray)
+    leaves the screen by whichever route the compositor survives.
 
     Off Wayland (X11, offscreen tests) :func:`make_layer_surface` is a safe no-op,
     leaving an ordinary frameless top-level window; ``drop_below`` then degrades
@@ -43,6 +45,7 @@ class LayerShellSurface:
 
     def __init__(self, *, cede_to_bottom: bool = False) -> None:
         self._widget: QWidget | None = None
+        self._hiding: SurfaceHiding | None = None
         self._layered  = False
         self._in_front = False
         self._sunk     = False
@@ -58,8 +61,10 @@ class LayerShellSurface:
             exclusive_zone=-1,
             keyboard=Keyboard.ON_DEMAND,
         )
+        self._hiding = SurfaceHiding(widget, Anchor.ALL)
 
     def show_fullscreen(self) -> None:
+        self._hiding.unhide()
         if self._layered:
             # Unconditional: the surface may have been sunk to BOTTOM under a
             # launcher, and a Desktop returning under the app's windows is no return.
@@ -73,7 +78,7 @@ class LayerShellSurface:
     def hide(self) -> None:
         self._in_front = False
         self._sunk     = False
-        self._widget.hide()
+        self._hiding.hide()
 
     def drop_below(self) -> None:
         self._in_front = False
@@ -84,7 +89,7 @@ class LayerShellSurface:
             self._widget.update()
             self._sunk = self._cede_to_bottom
         else:
-            self._widget.hide()
+            self._hiding.hide()
             self._sunk = False
 
     def sink(self, under_windows: bool) -> None:
@@ -104,6 +109,9 @@ class LayerShellSurface:
 
     def is_sunk(self) -> bool:
         return self._sunk
+
+    def is_on_screen(self) -> bool:
+        return self._widget.isVisible() and not self._hiding.is_hidden
 
     def on_reactivate(self, callback: Callable[[], None]) -> None:
         pass   # Linux drives reactivation from the widget's changeEvent instead
