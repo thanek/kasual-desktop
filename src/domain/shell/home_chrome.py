@@ -11,7 +11,7 @@ from typing import Protocol
 from domain.navigation import hints as nav_hints
 from domain.navigation.hints import Hints
 from domain.network import view as network_view
-from domain.network.status import NetworkStatus
+from domain.network.status import NetworkKind, NetworkStatus
 from domain.notifications.center import NotificationCenter
 from domain.system.actions import ACTIONS
 from domain.system.power_preference import PowerPreference
@@ -88,6 +88,7 @@ class HomeChrome:
         self._power_preference = power_preference
         self._overlay_owns_hints = False
         self._network_status = NetworkStatus.offline()
+        self._last_network_link: NetworkKind | None = None
 
     # ── Hint-bar ownership ───────────────────────────────────────────────────
 
@@ -170,12 +171,18 @@ class HomeChrome:
 
     def update_network_status(self, status: NetworkStatus) -> None:
         self._network_status = status
-        self._header.set_network_icon(network_view.icon_for(status.kind))
+        if status.online:
+            self._last_network_link = status.kind
+        self._header.set_network_icon(self.network_icon)
 
     @property
     def network_status(self) -> NetworkStatus:
         """The last observed status, for the network overlay to present."""
         return self._network_status
+
+    @property
+    def network_icon(self) -> str:
+        return network_view.icon_for(self._network_status, self._last_network_link)
 
     def refresh_notification_badge(self) -> None:
         self._header.set_notification_badge(self._notifications.unread_count)

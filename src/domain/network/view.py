@@ -7,12 +7,18 @@ from domain.network.status import NetworkKind, NetworkStatus
 from domain.shared.text import truncate
 from domain.shared.i18n import translate
 
-_ICONS = {
+_ONLINE_ICONS = {
     NetworkKind.WIFI:     "fa5s.wifi",
     NetworkKind.ETHERNET: "fa5s.network-wired",
-    NetworkKind.OFFLINE:  "mdi.wifi-off",
     NetworkKind.UNKNOWN:  "fa5s.globe",
 }
+
+_OFFLINE_ICONS = {
+    NetworkKind.WIFI:     "mdi.wifi-off",
+    NetworkKind.ETHERNET: "mdi.lan-disconnect",
+}
+
+_OFFLINE_FALLBACK_ICON = "mdi6.web-off"
 
 _KIND_LABELS = {
     NetworkKind.WIFI:     "Wi-Fi",
@@ -21,9 +27,10 @@ _KIND_LABELS = {
 }
 
 
-def icon_for(kind: NetworkKind) -> str:
-    """The top-bar glyph for *kind* (falls back to the offline icon)."""
-    return _ICONS.get(kind, _ICONS[NetworkKind.OFFLINE])
+def icon_for(status: NetworkStatus, last_link: NetworkKind | None) -> str:
+    if status.online:
+        return _ONLINE_ICONS[status.kind]
+    return _OFFLINE_ICONS.get(last_link, _OFFLINE_FALLBACK_ICON)
 
 
 def title() -> str:

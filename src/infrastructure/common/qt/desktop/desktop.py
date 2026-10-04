@@ -607,8 +607,8 @@ class Desktop(QWidget, DesktopView, DesktopShell, DesktopControl, metaclass=Prot
 
     def open_network_overlay(self) -> None:
         overlay = NetworkOverlay(
-            self._gamepad, self._chrome.network_status, self._network_control,
-            self._feedback, parent=self, dim=False,
+            self._gamepad, self._chrome.network_status, self._chrome.network_icon,
+            self._network_control, self._feedback, parent=self, dim=False,
         )
         self._dialogs.present(overlay)
         self._hintbar.show_hints(home_hints.NETWORK)

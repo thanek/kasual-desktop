@@ -5,11 +5,20 @@ from domain.network.view import connect_button, icon_for, info_lines, title
 
 
 class TestIconFor:
-    def test_each_kind_has_an_icon(self):
-        assert icon_for(NetworkKind.WIFI) == "fa5s.wifi"
-        assert icon_for(NetworkKind.ETHERNET) == "fa5s.network-wired"
-        assert icon_for(NetworkKind.OFFLINE) == "mdi.wifi-off"
-        assert icon_for(NetworkKind.UNKNOWN) == "fa5s.globe"
+    def test_online_icon_follows_the_kind(self):
+        assert icon_for(NetworkStatus(NetworkKind.WIFI), None) == "fa5s.wifi"
+        assert icon_for(NetworkStatus(NetworkKind.ETHERNET), None) == "fa5s.network-wired"
+        assert icon_for(NetworkStatus(NetworkKind.UNKNOWN), None) == "fa5s.globe"
+
+    def test_offline_icon_follows_the_last_link(self):
+        offline = NetworkStatus.offline()
+        assert icon_for(offline, NetworkKind.WIFI) == "mdi.wifi-off"
+        assert icon_for(offline, NetworkKind.ETHERNET) == "mdi.lan-disconnect"
+
+    def test_offline_icon_is_generic_without_a_known_link(self):
+        offline = NetworkStatus.offline()
+        assert icon_for(offline, None) == "mdi6.web-off"
+        assert icon_for(offline, NetworkKind.UNKNOWN) == "mdi6.web-off"
 
 
 class TestInfoLines:

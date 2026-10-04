@@ -13,7 +13,8 @@ def _overlay(mock_gamepad, status, *, can_reconnect=False, control=None):
         control = MagicMock()
         control.can_reconnect.return_value = can_reconnect
     return NetworkOverlay(
-        gamepad=mock_gamepad, status=status, control=control, feedback=MagicMock()
+        gamepad=mock_gamepad, status=status, icon="fa5s.wifi", control=control,
+        feedback=MagicMock(),
     )
 
 

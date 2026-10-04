@@ -234,6 +234,20 @@ class TestHeaderStatus:
         assert chrome.network_status is status
         assert len(header.network_icons) == 1
 
+    def test_offline_icon_remembers_the_last_link(self):
+        header = FakeHeader()
+        chrome, _ = _chrome(header=header)
+        chrome.update_network_status(NetworkStatus(kind=NetworkKind.ETHERNET))
+        chrome.update_network_status(NetworkStatus.offline())
+        assert header.network_icons[-1] == "mdi.lan-disconnect"
+        assert chrome.network_icon == "mdi.lan-disconnect"
+
+    def test_offline_icon_is_generic_before_any_link(self):
+        header = FakeHeader()
+        chrome, _ = _chrome(header=header)
+        chrome.update_network_status(NetworkStatus.offline())
+        assert header.network_icons == ["mdi6.web-off"]
+
     def test_badge_mirrors_unread_count(self):
         header = FakeHeader()
         center = NotificationCenter()

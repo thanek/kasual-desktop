@@ -34,6 +34,7 @@ class NetworkOverlay(BaseOverlay):
         self,
         gamepad: PadControl,
         status: NetworkStatus,
+        icon: str,
         control: NetworkControl,
         feedback: Feedback,
         parent: QWidget | None = None,
@@ -55,7 +56,7 @@ class NetworkOverlay(BaseOverlay):
         # Title — icon reflects the current kind.
         title_row = QHBoxLayout()
         icon_lbl = QLabel()
-        icon_lbl.setPixmap(qta.icon(view.icon_for(status.kind), color="white").pixmap(30, 30))
+        icon_lbl.setPixmap(qta.icon(icon, color="white").pixmap(30, 30))
         icon_lbl.setStyleSheet("background: transparent;")
         title = QLabel(view.title())
         title.setStyleSheet("font-size: 24px; color: white; background: transparent;")
