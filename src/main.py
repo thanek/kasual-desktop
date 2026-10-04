@@ -60,6 +60,8 @@ from infrastructure.linux.catalog.app_manager import AppManager
 from infrastructure.linux.proc import parent_pid, is_game_pid
 from infrastructure.linux.log.log_viewer_launcher import LogViewerLauncher
 from infrastructure.linux.power.power import SystemdPowerControl
+from infrastructure.linux.audio.media_hw_probes import disable_media_hw_probes
+from domain.system.silenced_power import SilencedPowerControl
 from infrastructure.linux.audio.volume import PactlVolumeControl
 from infrastructure.linux.display.brightness import select_brightness_control
 from infrastructure.linux.display.screensaver import (
@@ -180,6 +182,7 @@ def main() -> None:
     logger.info("Running Kasual Desktop %s", version)
     logger.info("Detected compositor: %s", COMPOSITOR.value)
 
+    disable_media_hw_probes()
     app = QApplication(sys.argv)
     app.setApplicationName("Kasual Desktop")
     # Deterministic Wayland app_id: the wm_class the GNOME Helper extension pins by,
@@ -235,7 +238,7 @@ def main() -> None:
 
         wm = build_window_manager(COMPOSITOR)
         # One PowerControl shared by the Desktop's action runner and the Application.
-        power = SystemdPowerControl()
+        power = SilencedPowerControl(SystemdPowerControl(), feedback, QtScheduler())
 
         # One persisted power-default preference is the single source of truth
         # shared by the Home Overlay's Power split-button and the top bar's

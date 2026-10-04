@@ -103,6 +103,14 @@ class SoundFeedback(Feedback):
         sink.start(buf)
         self._active.append((sink, buf))
 
+    def silence(self) -> None:
+        for sink, _ in self._active:
+            self._close_without_draining(sink)
+
+    def _close_without_draining(self, sink: QAudioSink) -> None:
+        sink.reset()
+        self._release(sink)
+
     def _on_state_changed(self, sink: QAudioSink, state: QAudio.State) -> None:
         if state is QAudio.State.IdleState:
             self._release(sink)
