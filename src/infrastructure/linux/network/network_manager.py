@@ -155,8 +155,7 @@ class NMNetworkMonitor(_NmDbusMixin, QObject, NetworkMonitor, metaclass=Protocol
         ap = self._path(device, _WIFI_IFACE, "ActiveAccessPoint")
         if not ap or ap == "/":
             return fallback_name, None
-        strength = self._get(ap, _AP_IFACE, "Strength")
-        signal = int(strength) if strength is not None else None
+        signal = self._strength(self._get(ap, _AP_IFACE, "Strength"))
         ssid = self._ssid(self._get(ap, _AP_IFACE, "Ssid"))
         return (ssid or fallback_name), signal
 
@@ -165,6 +164,12 @@ class NMNetworkMonitor(_NmDbusMixin, QObject, NetworkMonitor, metaclass=Protocol
     def _str(self, path: str, iface: str, prop: str) -> str:
         value = self._get(path, iface, prop)
         return str(value) if value is not None else ""
+
+    @staticmethod
+    def _strength(raw) -> int | None:
+        if isinstance(raw, (bytes, bytearray)):
+            return raw[0] if raw else None
+        return int(raw) if raw is not None else None
 
     @staticmethod
     def _ssid(raw) -> str:
