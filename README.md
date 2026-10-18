@@ -231,8 +231,9 @@ targeted approach than the `input` group:
 
 ```bash
 sudo install -Dm644 packaging/99-kasual-desktop.rules /etc/udev/rules.d/99-kasual-desktop.rules
+sudo install -Dm644 packaging/61-kasual-desktop-sunshine.rules /etc/udev/rules.d/61-kasual-desktop-sunshine.rules
 sudo udevadm control --reload-rules
-sudo udevadm trigger --subsystem-match=input --subsystem-match=misc
+sudo udevadm trigger --subsystem-match=input --subsystem-match=misc --subsystem-match=hidraw
 ```
 
 That file grants joystick and gamepad devices only — never your keyboard or
@@ -243,6 +244,11 @@ SUBSYSTEM=="input", KERNEL=="event*", ENV{ID_INPUT_JOYSTICK}=="1", GROUP="input"
 SUBSYSTEM=="input", KERNEL=="event*", ENV{ID_INPUT_GAMEPAD}=="1", GROUP="input", MODE="0660", TAG+="uaccess"
 KERNEL=="uinput", SUBSYSTEM=="misc", GROUP="input", MODE="0660", TAG+="uaccess", OPTIONS+="static_node=uinput"
 ```
+
+`61-kasual-desktop-sunshine.rules` matters only when streaming through Sunshine:
+its virtual pad also exposes a hidraw node that Steam reads directly, past Kasual
+Desktop's grab, so Steam would react to Home overlay navigation too. The rule
+makes that node root-only, leaving Steam the grabbed pad's `kasual-vpad`.
 
 ### Installation
 

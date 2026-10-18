@@ -25,8 +25,9 @@ contents:
     dst: /usr
     type: tree
 
-# Reload udev after install/upgrade so the bundled gamepad access rule
-# (packaging/99-kasual-desktop.rules) applies without a reboot. The same
+# Reload udev after install/upgrade so the bundled gamepad access rules
+# (packaging/99-kasual-desktop.rules, packaging/61-kasual-desktop-sunshine.rules)
+# apply without a reboot. The same
 # script runs as %post (rpm), postinst (deb) and post_install (Arch); pacman
 # additionally needs post_upgrade to reload on upgrades (the shared postinstall
 # runs on install for all three formats, but on upgrade only for deb/rpm).

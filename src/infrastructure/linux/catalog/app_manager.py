@@ -9,7 +9,7 @@ from PyQt6.QtCore import QObject
 
 from domain.lifecycle.app_events import AppLaunchFailed
 from infrastructure.common.lifecycle.base_app_manager import BaseAppManager
-from infrastructure.linux.audio.media_hw_probes import restore_media_hw_probes
+from infrastructure.linux.audio.qt_multimedia_env import drop_qt_multimedia_overrides
 
 logger = logging.getLogger(__name__)
 
@@ -62,7 +62,7 @@ class AppManager(BaseAppManager):
         # A Qt child inheriting our layer-shell integration would respect panel
         # struts instead of going truly full-screen, leaving cut-off bars.
         proc_env.pop("QT_WAYLAND_SHELL_INTEGRATION", None)
-        restore_media_hw_probes(proc_env)
+        drop_qt_multimedia_overrides(proc_env)
 
     def _terminate_proc(self, proc: subprocess.Popen) -> None:
         logger.info("SIGTERM to process group of pid %d", proc.pid)

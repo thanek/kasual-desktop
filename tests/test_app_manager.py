@@ -149,14 +149,16 @@ class TestLaunch:
         assert env["FOO"] == "bar"
         assert "QT_WAYLAND_SHELL_INTEGRATION" not in env
 
-    def test_media_hw_probe_ban_does_not_leak_into_launched_apps(self, qapp, monkeypatch):
+    def test_qt_multimedia_overrides_do_not_leak_into_launched_apps(self, qapp, monkeypatch):
         monkeypatch.setenv("QT_FFMPEG_DECODING_HW_DEVICE_TYPES", "")
         monkeypatch.setenv("QT_FFMPEG_ENCODING_HW_DEVICE_TYPES", "")
+        monkeypatch.setenv("QT_AUDIO_BACKEND", "pulseaudio")
         am = _make_manager()
         popen, _ = self._launch(am)
         env = popen.call_args.kwargs["env"]
         assert "QT_FFMPEG_DECODING_HW_DEVICE_TYPES" not in env
         assert "QT_FFMPEG_ENCODING_HW_DEVICE_TYPES" not in env
+        assert "QT_AUDIO_BACKEND" not in env
 
     def test_args_converted_to_strings(self, qapp):
         am = _make_manager()

@@ -1,7 +1,7 @@
 #!/bin/bash
 # Installed launcher (/usr/bin/kasual-desktop). Mirrors the dev kasual.sh but
 # points at the packaged tree under /usr/share/kasual-desktop. Runs against the
-# system PyQt6 + KDE layer-shell plugin.
+# system PyQt6.
 INSTALL_ROOT=/usr/share/kasual-desktop
 
 # --provisioning: re-trigger first-run onboarding by removing the marker.
@@ -16,4 +16,49 @@ fi
 # the user site is safe. The shell integration is chosen per compositor by main.py.
 export PYTHONNOUSERSITE=1
 export QT_QPA_PLATFORM=wayland
-exec python3 "$INSTALL_ROOT/src/main.py"
+
+CRASH_SIGNALS=" ILL ABRT BUS FPE SEGV "
+MIN_UPTIME_WORTH_A_RESTART_S=30
+stopping=0
+desktop=
+
+forward_to_desktop() {
+    stopping=1
+    [ -n "$desktop" ] && kill -"$1" "$desktop" 2>/dev/null
+}
+trap 'forward_to_desktop TERM' TERM
+trap 'forward_to_desktop INT' INT
+trap 'forward_to_desktop HUP' HUP
+
+run_desktop() {
+    python3 "$INSTALL_ROOT/src/main.py" &
+    desktop=$!
+    local status
+    while :; do
+        wait "$desktop"
+        status=$?
+        kill -0 "$desktop" 2>/dev/null || return "$status"
+    done
+}
+
+crash_signal_of() {
+    local status=$1
+    (( status > 128 )) || return 1
+    local name
+    name=$(kill -l $(( status - 128 )) 2>/dev/null) || return 1
+    [[ "$CRASH_SIGNALS" == *" $name "* ]] || return 1
+    echo "$name"
+}
+
+while :; do
+    started=$SECONDS
+    run_desktop
+    status=$?
+    (( stopping )) && exit "$status"
+    signal=$(crash_signal_of "$status") || exit "$status"
+    if (( SECONDS - started < MIN_UPTIME_WORTH_A_RESTART_S )); then
+        echo "Kasual Desktop crashed (SIG$signal) within ${MIN_UPTIME_WORTH_A_RESTART_S}s of starting — not restarting" >&2
+        exit "$status"
+    fi
+    echo "Kasual Desktop crashed (SIG$signal) — restarting" >&2
+done

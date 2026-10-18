@@ -1,0 +1,14 @@
+# Sunshine (libvirtualhid) emulates the streamed gamepad over UHID, so besides
+# the evdev node Kasual Desktop grabs it also exposes a hidraw node, which
+# 60-sunshine.rules opens to the seat user and the `input` group. Steam reads
+# that hidraw node directly, bypassing the exclusive grab: every move made in
+# the Home overlay reaches Steam as well. Sunshine itself drives the pad through
+# /dev/uhid and never needs its hidraw node, so this rule takes it back to
+# root-only. Steam then falls back to the grabbed evdev node and hears the pad
+# only through kasual-vpad, as with a locally connected controller.
+#
+# Must sort after 60-sunshine.rules / 60-steam-input.rules and before
+# 73-seat-late.rules, which turns the uaccess tag into the user's ACL.
+
+SUBSYSTEM=="hidraw", KERNEL=="hidraw*", IMPORT{parent}="HID_*"
+SUBSYSTEM=="hidraw", KERNEL=="hidraw*", ENV{HID_PHYS}=="libvirtualhid/uhid/*", GROUP="root", MODE="0600", TAG-="uaccess"

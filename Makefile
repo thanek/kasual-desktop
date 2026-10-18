@@ -54,6 +54,8 @@ stage:
 	install -Dm644 packaging/kasual-desktop.png      $(STAGE)/usr/share/icons/hicolor/256x256/apps/kasual-desktop.png
 	# evdev gamepad access — vendor udev rule, reloaded at install by postinstall.sh.
 	install -Dm644 packaging/99-kasual-desktop.rules $(STAGE)/usr/lib/udev/rules.d/99-kasual-desktop.rules
+	# Keeps Steam off Sunshine's virtual-pad hidraw node, which bypasses the grab.
+	install -Dm644 packaging/61-kasual-desktop-sunshine.rules $(STAGE)/usr/lib/udev/rules.d/61-kasual-desktop-sunshine.rules
 	# GNOME Shell companion extension; inert on other compositors, and each user
 	# still has to `gnome-extensions enable $(EXT_UUID)`.
 	install -Dm644 packaging/gnome-extension/$(EXT_UUID)/metadata.json $(EXTROOT)/metadata.json

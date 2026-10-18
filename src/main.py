@@ -60,7 +60,7 @@ from infrastructure.linux.catalog.app_manager import AppManager
 from infrastructure.linux.proc import parent_pid, is_game_pid
 from infrastructure.linux.log.log_viewer_launcher import LogViewerLauncher
 from infrastructure.linux.power.power import SystemdPowerControl
-from infrastructure.linux.audio.media_hw_probes import disable_media_hw_probes
+from infrastructure.linux.audio.qt_multimedia_env import apply_qt_multimedia_overrides
 from domain.system.silenced_power import SilencedPowerControl
 from infrastructure.linux.audio.volume import PactlVolumeControl
 from infrastructure.linux.display.brightness import select_brightness_control
@@ -182,7 +182,7 @@ def main() -> None:
     logger.info("Running Kasual Desktop %s", version)
     logger.info("Detected compositor: %s", COMPOSITOR.value)
 
-    disable_media_hw_probes()
+    apply_qt_multimedia_overrides()
     app = QApplication(sys.argv)
     app.setApplicationName("Kasual Desktop")
     # Deterministic Wayland app_id: the wm_class the GNOME Helper extension pins by,
