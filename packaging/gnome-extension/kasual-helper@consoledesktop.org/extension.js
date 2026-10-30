@@ -298,6 +298,8 @@ class Helper {
             win.connect('notify::fullscreen', () => {
                 if (this._isOurs(win))
                     this._moveToTargetMonitor(win);
+                else if (win.is_fullscreen())
+                    this._bringToKasual(win);
                 this._scheduleSync();
                 this._emitWindows('fullscreen');
             }),
