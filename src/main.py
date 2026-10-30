@@ -63,6 +63,7 @@ from infrastructure.linux.log.log_viewer_launcher import LogViewerLauncher
 from infrastructure.linux.power.power import SystemdPowerControl
 from infrastructure.linux.audio.qt_multimedia_env import apply_qt_multimedia_overrides
 from domain.system.silenced_power import SilencedPowerControl
+from infrastructure.linux.audio.outputs import PactlAudioOutputs
 from infrastructure.linux.audio.volume import PactlVolumeControl
 from infrastructure.linux.display.brightness import select_brightness_control
 from infrastructure.linux.display.screensaver import (
@@ -276,6 +277,7 @@ def main() -> None:
             process_manager=AppManager(), notifications=notification_center,
             network_control=NMNetworkControl(),
             displays=display_selection,
+            audio_outputs=PactlAudioOutputs(),
             order_store=DesktopTileOrderStore(),
             settings_store=DesktopTileSettingsStore(),
             app_pinning=DesktopAppPinning(),

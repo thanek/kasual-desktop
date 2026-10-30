@@ -1,18 +1,12 @@
 """The screens offered to the user to pick from, as every picker presents them."""
 
-from dataclasses import dataclass
 from typing import Protocol
 
 from domain.display.display import SYSTEM_DECIDES, Display
+from domain.shared.choice import Choice, connection_aware_label
 from domain.shared.i18n import translate
 
-
-@dataclass(frozen=True)
-class ScreenChoice:
-    label: str
-    display_id: str | None
-    pickable: bool
-    chosen: bool
+ScreenChoice = Choice[str | None]
 
 
 class ScreenOptions(Protocol):
@@ -31,7 +25,7 @@ def screen_choices(displays: ScreenOptions) -> list[ScreenChoice]:
 
 
 def _choice_of(display: Display, chosen: str | None) -> ScreenChoice:
-    label = display.label if display.connected else (
-        translate("Kasual Desktop", "{0} (not connected)").format(display.label))
-    return ScreenChoice(label, display.id, pickable=display.connected,
-                        chosen=display.id == chosen)
+    return ScreenChoice(
+        connection_aware_label(display.label, display.connected), display.id,
+        pickable=display.connected, chosen=display.id == chosen,
+    )

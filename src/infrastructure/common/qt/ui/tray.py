@@ -103,7 +103,7 @@ class SystemTray(ConnectionIndicator):
         action.setEnabled(choice.pickable)
         self._screen_choices.addAction(action)
         action.triggered.connect(
-            lambda _checked, display_id=choice.display_id: self._choose_screen(display_id))
+            lambda _checked, display_id=choice.value: self._choose_screen(display_id))
 
     def _choose_screen(self, display_id: str | None) -> None:
         self._displays.choose(display_id)

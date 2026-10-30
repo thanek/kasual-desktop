@@ -20,6 +20,7 @@ from PyQt6.QtWidgets import (
     QLabel, QSlider,
 )
 
+from domain.audio.output import AudioOutputs, active_output_label
 from domain.input.vocabulary import Event
 from domain.catalog.target import Target
 from domain.menu.entry import POWER, RETURN_TO_APP, RETURN_TO_DESKTOP
@@ -128,6 +129,7 @@ class HomeMenuContent(QWidget):
     # (build generation, row index, action, fetched value) — the generation
     # guards against a value arriving after the menu has since been rebuilt.
     _value_ready = pyqtSignal(int, int, str, object)
+    _output_name_ready = pyqtSignal(int, object)
 
     def __init__(
         self,
@@ -135,11 +137,15 @@ class HomeMenuContent(QWidget):
         volume: VolumeControl,
         brightness: BrightnessControl,
         power: PowerMenu,
+        audio_outputs: AudioOutputs,
         gamepad_access_checkable: bool = False,
     ) -> None:
         super().__init__()
         self._feedback = feedback
         self._volume = volume
+        self._audio_outputs = audio_outputs
+        self._last_output_name: str | None = None
+        self._output_name: QLabel | None = None
         self._brightness = brightness
         self._power = power
         self._gamepad_access_checkable = gamepad_access_checkable
@@ -153,6 +159,7 @@ class HomeMenuContent(QWidget):
         self._last_values: dict[str, BoundedValue] = {}
         self._build_gen = 0
         self._value_ready.connect(self._on_value_ready)
+        self._output_name_ready.connect(self._on_output_name_ready)
         self._on_action: Callable[[MenuItem], None] | None = None
         self._on_cancel: Callable[[], None] | None = None
         self._set_hints: Callable | None = None
@@ -287,7 +294,10 @@ class HomeMenuContent(QWidget):
             slider.setStyleSheet(_SLIDER_QSS)
             slider.valueChanged.connect(
                 lambda raw, zi=zone_index, ci=row_i: self._on_slider(zi, ci, raw))
-            rl.addWidget(slider, 1)
+            if item.action == VOLUME:
+                rl.addLayout(self._with_output_name_below(slider), 1)
+            else:
+                rl.addWidget(slider, 1)
             vlabel = QLabel(f"{value.value}%")
             vlabel.setFixedWidth(52)
             vlabel.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
@@ -328,6 +338,37 @@ class HomeMenuContent(QWidget):
         container.setFixedWidth(_LIST_WIDTH)
         self._zones_layout.addWidget(container, alignment=Qt.AlignmentFlag.AlignHCenter)
         return _Zone(section.kind, section.items, cards, columns=1)
+
+    def _with_output_name_below(self, slider: QSlider) -> QVBoxLayout:
+        column = QVBoxLayout()
+        column.setContentsMargins(0, 0, 0, 0)
+        column.setSpacing(2)
+        column.addWidget(slider)
+        self._output_name = QLabel()
+        self._output_name.setStyleSheet(
+            "color: #9aa0aa; font-size: 14px; background: transparent;")
+        self._show_output_name(self._last_output_name)
+        column.addWidget(self._output_name)
+        self._fetch_output_name_async()
+        return column
+
+    def _fetch_output_name_async(self) -> None:
+        gen = self._build_gen
+
+        def work() -> None:
+            self._output_name_ready.emit(gen, active_output_label(self._audio_outputs))
+
+        QThreadPool.globalInstance().start(QRunnable.create(work))
+
+    def _on_output_name_ready(self, gen: int, name: str | None) -> None:
+        if gen != self._build_gen or self._output_name is None:
+            return
+        self._last_output_name = name
+        self._show_output_name(name)
+
+    def _show_output_name(self, name: str | None) -> None:
+        self._output_name.setText(name or "")
+        self._output_name.setVisible(name is not None)
 
     def _control_for(self, action: str):
         return self._volume if action == VOLUME else self._brightness

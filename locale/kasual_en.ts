@@ -242,14 +242,9 @@
 </context><context>
     <name>Kasual Desktop</name>
     <message>
-        <location filename="../src/domain/display/choices.py" line="26" />
+        <location filename="../src/domain/display/choices.py" line="20" />
         <source>Chosen by the system</source>
         <translation>Chosen by the system</translation>
-    </message>
-    <message>
-        <location filename="../src/domain/display/choices.py" line="35" />
-        <source>{0} (not connected)</source>
-        <translation>{0} (not connected)</translation>
     </message>
     <message>
         <location filename="../src/domain/display/relaunch.py" line="26" />
@@ -655,6 +650,11 @@
         <translation>This affects every layer-shell compositor Kasual Desktop supports — KWin, Sway, Hyprland, cosmic-comp, labwc and wayfire — not just this one. GNOME is the exception: there the bundled Shell extension does the same job.</translation>
     </message>
     <message>
+        <location filename="../src/domain/shared/choice.py" line="22" />
+        <source>{0} (not connected)</source>
+        <translation>{0} (not connected)</translation>
+    </message>
+    <message>
         <location filename="../src/domain/shell/background_hint.py" line="48" />
         <source>Kasual Desktop is running in the background</source>
         <translation>Kasual Desktop is running in the background</translation>
@@ -710,7 +710,7 @@
         <translation>Notifications</translation>
     </message>
     <message>
-        <location filename="../src/infrastructure/common/qt/overlays/configuration_overlay.py" line="89" />
+        <location filename="../src/infrastructure/common/qt/overlays/configuration_overlay.py" line="119" />
         <location filename="../src/domain/system/actions.py" line="88" />
         <source>Configuration</source>
         <translation>Configuration</translation>
@@ -737,9 +737,14 @@
     </message>
     <message>
         <location filename="../src/infrastructure/common/qt/ui/tray.py" line="68" />
-        <location filename="../src/infrastructure/common/qt/overlays/configuration_overlay.py" line="72" />
+        <location filename="../src/infrastructure/common/qt/overlays/configuration_overlay.py" line="97" />
         <source>Screen</source>
         <translation>Screen</translation>
+    </message>
+    <message>
+        <location filename="../src/infrastructure/common/qt/overlays/configuration_overlay.py" line="104" />
+        <source>Audio output</source>
+        <translation>Audio output</translation>
     </message>
     <message>
         <location filename="../src/infrastructure/common/qt/overlays/home_header.py" line="368" />

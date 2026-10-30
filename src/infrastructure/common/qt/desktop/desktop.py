@@ -14,6 +14,7 @@ from infrastructure.common.qt.overlays.setup_overlay import QtSetupView
 from infrastructure.common.qt.overlays.notifications_overlay import NotificationsOverlay
 from infrastructure.common.qt.overlays.network_overlay import NetworkOverlay
 from infrastructure.common.qt.overlays.configuration_overlay import ConfigurationOverlay
+from domain.audio.output import AudioOutputs
 from domain.display.selection import DisplaySelection
 from domain.notifications.center import NotificationCenter
 from domain.network.control import NetworkControl
@@ -82,6 +83,7 @@ class Desktop(QWidget, DesktopView, DesktopShell, DesktopControl, metaclass=Prot
         notifications: NotificationCenter,
         network_control: NetworkControl,
         displays: DisplaySelection,
+        audio_outputs: AudioOutputs,
         overlays: OpenOverlays,
         surface: DesktopSurface | None = None,
         parent_of: 'Callable[[int], int | None] | None' = None,
@@ -99,6 +101,7 @@ class Desktop(QWidget, DesktopView, DesktopShell, DesktopControl, metaclass=Prot
         self._notifications = notifications
         self._network_control = network_control
         self._displays = displays
+        self._audio_outputs = audio_outputs
         # System-action overlays (volume/brightness/…) and the dialog/popover
         # handles (confirm, tile settings, tile popover) are tracked as a group
         # in this shared registry.
@@ -614,7 +617,8 @@ class Desktop(QWidget, DesktopView, DesktopShell, DesktopControl, metaclass=Prot
 
     def open_configuration_overlay(self) -> None:
         overlay = ConfigurationOverlay(
-            self._gamepad, self._displays, self._feedback, parent=self, dim=False,
+            self._gamepad, self._displays, self._audio_outputs, self._feedback,
+            parent=self, dim=False,
         )
         self._dialogs.present(overlay)
         self._hintbar.show_hints(home_hints.CONFIGURATION)

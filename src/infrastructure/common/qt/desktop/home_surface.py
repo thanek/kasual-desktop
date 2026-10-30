@@ -29,6 +29,7 @@ from PyQt6.QtCore import (
 from PyQt6.QtGui import QPainter, QRegion
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QGraphicsOpacityEffect
 
+from domain.audio.output import AudioOutputs
 from domain.catalog.target import Target
 from domain.input.pad_control import PadControl
 from domain.menu.item import MenuItem
@@ -88,6 +89,7 @@ class HomeSurface(QWidget):
         volume: VolumeControl,
         brightness: BrightnessControl,
         power: PowerMenu,
+        audio_outputs: AudioOutputs,
         header: HomeHeader,
         *,
         on_action: Callable[[MenuItem], None],
@@ -137,7 +139,7 @@ class HomeSurface(QWidget):
         panel_col = QVBoxLayout(self._panel)
         panel_col.setContentsMargins(28, 22, 28, 22)
         self._content = HomeMenuContent(
-            feedback, volume, brightness, power, gamepad_access_checkable)
+            feedback, volume, brightness, power, audio_outputs, gamepad_access_checkable)
         panel_col.addWidget(self._content)
         outer.addWidget(self._panel, alignment=Qt.AlignmentFlag.AlignHCenter)
         outer.addStretch(1)

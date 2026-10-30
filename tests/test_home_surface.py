@@ -13,6 +13,7 @@ import pytest
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QApplication
 
+from domain.audio.output import AudioOutput
 from domain.catalog.target import AppTarget
 from domain.input.vocabulary import Event
 from domain.menu.entry import POWER, RETURN_TO_APP, RETURN_TO_DESKTOP
@@ -60,6 +61,21 @@ class FakeBrightness:
         return self._controllable
 
 
+class FakeAudioOutputs:
+    def __init__(self, outputs=(), active=None):
+        self._outputs = list(outputs)
+        self._active = active
+
+    def available(self):
+        return self._outputs
+
+    def active(self):
+        return self._active
+
+    def activate(self, output_id):
+        self._active = output_id
+
+
 class FakePowerMenu:
     def __init__(self):
         self.activated = 0
@@ -104,14 +120,15 @@ class Spy:
         self.hints.append(False)
 
 
-def _surface(qapp, gamepad=None, spy=None):
+def _surface(qapp, gamepad=None, spy=None, audio_outputs=None):
     from infrastructure.common.qt.overlays.home_header import HomeHeader
     from infrastructure.common.qt.overlays.home_menu_content import CARD_WIDTH
     spy = spy or Spy()
     header = HomeHeader(spy.on_header_activate, CARD_WIDTH)
     surface = HomeSurface(
         gamepad or MagicMock(), MagicMock(),
-        FakeVolume(), FakeBrightness(), FakePowerMenu(), header,
+        FakeVolume(), FakeBrightness(), FakePowerMenu(),
+        audio_outputs or FakeAudioOutputs(), header,
         on_action=spy.on_action,
         on_power_chooser=spy.on_power_chooser,
         begin_hints=spy.begin_hints,
@@ -702,3 +719,26 @@ class TestGrabHandleDocking:
         assert handle._focused is True
         surface._settle_collapsed()
         assert handle._focused is False
+
+
+class TestActiveAudioOutput:
+    SPEAKERS = AudioOutput("usb:speaker", "Speakers – USB Audio")
+
+    def _output_name(self, qapp, qtbot, audio_outputs):
+        surface, _ = _surface(qapp, audio_outputs=audio_outputs)
+        surface.expand()
+        label = surface._content._output_name
+        qtbot.waitUntil(lambda: surface._content._last_output_name is not None
+                        or audio_outputs.active() is None, timeout=1000)
+        qapp.processEvents()
+        return label
+
+    def test_names_the_active_output_under_the_volume_slider(self, qapp, qtbot):
+        label = self._output_name(
+            qapp, qtbot, FakeAudioOutputs([self.SPEAKERS], active="usb:speaker"))
+        assert label.text() == "Speakers – USB Audio"
+        assert not label.isHidden()
+
+    def test_hides_the_name_when_no_output_is_known(self, qapp, qtbot):
+        label = self._output_name(qapp, qtbot, FakeAudioOutputs())
+        assert label.isHidden()

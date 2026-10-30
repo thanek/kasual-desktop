@@ -83,6 +83,7 @@ def main():
 
     # ── System adapters ─────────────────────────────────────────────────────
     from infrastructure.windows.power.power import WindowsPowerControl
+    from infrastructure.windows.audio.outputs import NoAudioOutputs
     from infrastructure.windows.audio.volume import WindowsVolumeControl
     from infrastructure.windows.display.brightness import WindowsBrightnessControl
     from infrastructure.windows.network.network import WindowsNetworkProbe, WindowsNetworkControl
@@ -154,6 +155,7 @@ def main():
             notifications=notification_center,
             network_control=WindowsNetworkControl(),
             displays=display_selection,
+            audio_outputs=NoAudioOutputs(),
             order_store=DesktopTileOrderStore(),
             settings_store=DesktopTileSettingsStore(),
             app_pinning=WindowsAppPinning(),

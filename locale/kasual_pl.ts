@@ -241,14 +241,9 @@
 </context><context>
     <name>Kasual Desktop</name>
     <message>
-        <location filename="../src/domain/display/choices.py" line="26" />
+        <location filename="../src/domain/display/choices.py" line="20" />
         <source>Chosen by the system</source>
         <translation>Wybrany przez system</translation>
-    </message>
-    <message>
-        <location filename="../src/domain/display/choices.py" line="35" />
-        <source>{0} (not connected)</source>
-        <translation>{0} (niepodłączony)</translation>
     </message>
     <message>
         <location filename="../src/domain/display/relaunch.py" line="26" />
@@ -654,6 +649,11 @@
         <translation>Dotyczy to każdego kompozytora z layer-shell obsługiwanego przez Kasual Desktop — KWin, Sway, Hyprland, cosmic-comp, labwc i wayfire — nie tylko tego. Wyjątkiem jest GNOME: tam tę samą pracę wykonuje dołączone rozszerzenie Shella.</translation>
     </message>
     <message>
+        <location filename="../src/domain/shared/choice.py" line="22" />
+        <source>{0} (not connected)</source>
+        <translation>{0} (niepodłączony)</translation>
+    </message>
+    <message>
         <location filename="../src/domain/shell/background_hint.py" line="48" />
         <source>Kasual Desktop is running in the background</source>
         <translation>Kasual Desktop działa w tle</translation>
@@ -709,7 +709,7 @@
         <translation>Powiadomienia</translation>
     </message>
     <message>
-        <location filename="../src/infrastructure/common/qt/overlays/configuration_overlay.py" line="89" />
+        <location filename="../src/infrastructure/common/qt/overlays/configuration_overlay.py" line="119" />
         <location filename="../src/domain/system/actions.py" line="88" />
         <source>Configuration</source>
         <translation>Konfiguracja</translation>
@@ -736,9 +736,14 @@
     </message>
     <message>
         <location filename="../src/infrastructure/common/qt/ui/tray.py" line="68" />
-        <location filename="../src/infrastructure/common/qt/overlays/configuration_overlay.py" line="72" />
+        <location filename="../src/infrastructure/common/qt/overlays/configuration_overlay.py" line="97" />
         <source>Screen</source>
         <translation>Ekran</translation>
+    </message>
+    <message>
+        <location filename="../src/infrastructure/common/qt/overlays/configuration_overlay.py" line="104" />
+        <source>Audio output</source>
+        <translation>Wyjście audio</translation>
     </message>
     <message>
         <location filename="../src/infrastructure/common/qt/overlays/home_header.py" line="368" />

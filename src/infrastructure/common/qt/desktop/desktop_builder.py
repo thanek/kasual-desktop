@@ -16,6 +16,7 @@ from domain.catalog.catalog import AppCatalog
 from domain.catalog.live_catalog import LiveCatalog
 from domain.catalog.tile_settings_editor import TileSettingsEditor
 from domain.input.pad_control import PadControl
+from domain.audio.output import AudioOutputs
 from domain.display.selection import DisplaySelection
 from domain.lifecycle.app_lifecycle import AppLifecycle
 from domain.lifecycle.foreground_inspector import ForegroundInspector
@@ -75,6 +76,7 @@ def build_desktop(
     notifications: NotificationCenter,
     network_control: NetworkControl,
     displays: DisplaySelection,
+    audio_outputs: AudioOutputs,
     order_store: TileOrderStore,
     settings_store: TileSettingsStore,
     app_pinning: AppPinning,
@@ -123,6 +125,7 @@ def build_desktop(
         notifications=notifications,
         network_control=network_control,
         displays=displays,
+        audio_outputs=audio_outputs,
         overlays=overlays,
         surface=surface,
         parent_of=parent_of,
@@ -216,7 +219,7 @@ def build_desktop(
     home_actions = HomeActions(action_runner, power_menu)
     if power_menu is not None:
         home_surface = HomeSurface(
-            gamepad, feedback, volume, brightness, power_menu,
+            gamepad, feedback, volume, brightness, power_menu, audio_outputs,
             widget._home_header,
             on_action=home_actions.menu_pick,
             on_power_chooser=lambda: power_popover.open_header_chooser(),
