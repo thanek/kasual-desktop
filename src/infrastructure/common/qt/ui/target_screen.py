@@ -36,5 +36,10 @@ def put_on(widget: QWidget, screen: QScreen | None) -> None:
         window.setScreen(screen)
 
 
+def narrower_than_target_screen(widget: QWidget) -> bool:
+    screen = target_screen()
+    return screen is not None and widget.width() < screen.geometry().width()
+
+
 def placed_surfaces() -> list[QWidget]:
     return [widget for widget in _placed if not sip.isdeleted(widget)]

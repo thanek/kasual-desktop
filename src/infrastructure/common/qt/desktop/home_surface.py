@@ -40,7 +40,7 @@ from domain.system.power_menu import PowerMenu
 from domain.system.volume import VolumeControl
 from infrastructure.common.qt.ui import styles
 from infrastructure.common.qt.ui.surface_hiding import SurfaceHiding
-from infrastructure.common.qt.ui.target_screen import target_screen
+from infrastructure.common.qt.ui.target_screen import narrower_than_target_screen, target_screen
 from infrastructure.common.qt.ui.layer_shell import Anchor, Keyboard, Layer
 from infrastructure.common.qt.ui.top_surface import (
     GNOME_PANEL_CLEARANCE, home_chrome_edge_margin,
@@ -194,13 +194,19 @@ class HomeSurface(QWidget):
     def resizeEvent(self, event) -> None:
         super().resizeEvent(event)
         self._refresh_input_region()
+        self._keep_handle_on_the_pill()
+        if narrower_than_target_screen(self):
+            QTimer.singleShot(0, self.position_at_top)
 
     def eventFilter(self, obj, event) -> bool:
         if obj is self._panel and event.type() == QEvent.Type.Resize:
-            handle = self._header.grab_handle()
-            if handle.parentWidget() is self:
-                handle.pin_to(self._pill_bottom())
+            self._keep_handle_on_the_pill()
         return super().eventFilter(obj, event)
+
+    def _keep_handle_on_the_pill(self) -> None:
+        handle = self._header.grab_handle()
+        if handle.parentWidget() is self:
+            handle.pin_to(self._pill_bottom())
 
     def _refresh_input_region(self) -> None:
         """Scope the pointer input region to the interactive area: header-only
@@ -264,6 +270,7 @@ class HomeSurface(QWidget):
         screen = target_screen()
         if screen is not None:
             g = screen.geometry()
+            self.setFixedWidth(g.width())
             self.setGeometry(g.x(), g.y(), g.width(), SURFACE_H)
 
     def hide(self) -> None:

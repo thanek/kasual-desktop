@@ -138,6 +138,29 @@ function denyFocus(win) {
     win.set_type(Meta.WindowType.DOCK);
 }
 
+const DEEPEST_LAUNCH_CHAIN = 64;
+
+function parentPid(pid) {
+    try {
+        const [, bytes] = GLib.file_get_contents(`/proc/${pid}/stat`);
+        const stat = new TextDecoder().decode(bytes);
+        const stateAndParent = stat.slice(stat.lastIndexOf(')') + 2).split(' ');
+        return parseInt(stateAndParent[1]) || 0;
+    } catch (e) {
+        return 0;
+    }
+}
+
+function descendsFrom(pid, ancestor) {
+    let current = pid;
+    for (let depth = 0; depth < DEEPEST_LAUNCH_CHAIN && current > 1; depth++) {
+        if (current === ancestor)
+            return true;
+        current = parentPid(current);
+    }
+    return false;
+}
+
 function mappedWindows() {
     return global.get_window_actors()
         .map(a => a.meta_window)
@@ -206,7 +229,10 @@ class Helper {
 
         this._hideFromAppLists();
         this._windowCreatedId = global.display.connect(
-            'window-created', (_d, win) => this._trackWindow(win));
+            'window-created', (_d, win) => {
+                this._trackWindow(win);
+                this._bringToKasualOnceShown(win);
+            });
         this._suppressReadyBannerForOwnWindows();
         // A ceded Desktop's depth follows the focus (see _focusIsOrdinaryWindow).
         this._focusId = global.display.connect('notify::focus-window', () => {
@@ -412,12 +438,38 @@ class Helper {
     }
 
     _monitorKasualLivesOn(win) {
+        const kasualMonitor = this._kasualMonitor();
+        return kasualMonitor !== NO_MONITOR ? kasualMonitor : win.get_monitor();
+    }
+
+    _launchedByKasual(win) {
+        const kasual = this._ourWindows()[0];
+        return !!kasual && descendsFrom(win.get_pid(), kasual.get_pid());
+    }
+
+    _kasualMonitor() {
         const chosen = this._chosenMonitor();
         if (chosen !== NO_MONITOR)
             return chosen;
         const desktopMonitorStillExists = this._desktopMonitor !== NO_MONITOR
             && this._desktopMonitor < global.display.get_n_monitors();
-        return desktopMonitorStillExists ? this._desktopMonitor : win.get_monitor();
+        return desktopMonitorStillExists ? this._desktopMonitor : NO_MONITOR;
+    }
+
+    _bringToKasualOnceShown(win) {
+        const shownId = win.connect('shown', () => {
+            win.disconnect(shownId);
+            this._bringToKasual(win);
+        });
+    }
+
+    _bringToKasual(win) {
+        const launchedApp = !this._isOurs(win)
+            && win.get_window_type() === Meta.WindowType.NORMAL
+            && this._launchedByKasual(win);
+        const kasualMonitor = this._kasualMonitor();
+        if (launchedApp && kasualMonitor !== NO_MONITOR && win.get_monitor() !== kasualMonitor)
+            win.move_to_monitor(kasualMonitor);
     }
 
     _gatherAroundDesktop(desktop) {

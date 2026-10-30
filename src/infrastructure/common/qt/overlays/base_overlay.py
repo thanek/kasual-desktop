@@ -3,7 +3,7 @@
 import logging
 from collections.abc import Callable
 
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtWidgets import QWidget
 
 from domain.input.pad_control import PadControl
@@ -11,7 +11,7 @@ from domain.shared.feedback import Cue, Feedback
 from infrastructure.common.qt.ui import styles
 from infrastructure.common.qt.ui.layer_shell import Layer, Anchor, Keyboard
 from infrastructure.common.qt.ui.surface_hiding import SurfaceHiding
-from infrastructure.common.qt.ui.target_screen import target_screen
+from infrastructure.common.qt.ui.target_screen import narrower_than_target_screen, target_screen
 from infrastructure.common.qt.ui.top_surface import (
     fullscreen_loses_translucency, promote_overlay_surface,
 )
@@ -97,13 +97,22 @@ class BaseOverlay(QWidget):
         if not fullscreen_loses_translucency():
             self.showFullScreen()
             return
-        screen = self.screen() or target_screen()
+        self._fill_target_screen()
+        self.show()
+
+    def _fill_target_screen(self) -> None:
+        screen = target_screen()
         if screen is not None:
             # Fixed, or Mutter maximizes a screen-filling window into the work area
             # and a maximized window is denied the layer that keeps it above the
             # fullscreen Desktop.
             self.setFixedSize(screen.geometry().size())
-        self.show()
+            self.resize(screen.geometry().size())
+
+    def resizeEvent(self, event) -> None:
+        super().resizeEvent(event)
+        if fullscreen_loses_translucency() and narrower_than_target_screen(self):
+            QTimer.singleShot(0, self._fill_target_screen)
 
     def pause(self) -> None:
         """Temporarily hide the overlay (e.g. when the Desktop is minimized)."""
