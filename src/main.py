@@ -275,6 +275,7 @@ def main() -> None:
             power=power, scheduler=QtScheduler(),
             process_manager=AppManager(), notifications=notification_center,
             network_control=NMNetworkControl(),
+            displays=display_selection,
             order_store=DesktopTileOrderStore(),
             settings_store=DesktopTileSettingsStore(),
             app_pinning=DesktopAppPinning(),

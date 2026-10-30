@@ -167,9 +167,10 @@
         <translation>Pokaż/ukryj menu</translation>
     </message>
     <message>
-        <location filename="../src/domain/navigation/hints.py" line="228" />
-        <location filename="../src/domain/navigation/hints.py" line="215" />
-        <location filename="../src/domain/navigation/hints.py" line="204" />
+        <location filename="../src/domain/navigation/hints.py" line="237" />
+        <location filename="../src/domain/navigation/hints.py" line="224" />
+        <location filename="../src/domain/navigation/hints.py" line="213" />
+        <location filename="../src/domain/navigation/hints.py" line="188" />
         <location filename="../src/domain/navigation/hints.py" line="179" />
         <location filename="../src/domain/navigation/hints.py" line="170" />
         <location filename="../src/domain/navigation/hints.py" line="161" />
@@ -203,7 +204,7 @@
         <translation>Anuluj</translation>
     </message>
     <message>
-        <location filename="../src/domain/navigation/hints.py" line="229" />
+        <location filename="../src/domain/navigation/hints.py" line="238" />
         <location filename="../src/domain/navigation/hints.py" line="114" />
         <source>Options</source>
         <translation>Opcje</translation>
@@ -220,10 +221,11 @@
         <translation>Zamknij menu</translation>
     </message>
     <message>
-        <location filename="../src/domain/navigation/hints.py" line="230" />
-        <location filename="../src/domain/navigation/hints.py" line="216" />
-        <location filename="../src/domain/navigation/hints.py" line="205" />
-        <location filename="../src/domain/navigation/hints.py" line="191" />
+        <location filename="../src/domain/navigation/hints.py" line="239" />
+        <location filename="../src/domain/navigation/hints.py" line="225" />
+        <location filename="../src/domain/navigation/hints.py" line="214" />
+        <location filename="../src/domain/navigation/hints.py" line="200" />
+        <location filename="../src/domain/navigation/hints.py" line="189" />
         <location filename="../src/domain/navigation/hints.py" line="180" />
         <location filename="../src/domain/navigation/hints.py" line="171" />
         <source>Close</source>
@@ -238,6 +240,16 @@
     </message>
 </context><context>
     <name>Kasual Desktop</name>
+    <message>
+        <location filename="../src/domain/display/choices.py" line="26" />
+        <source>Chosen by the system</source>
+        <translation>Wybrany przez system</translation>
+    </message>
+    <message>
+        <location filename="../src/domain/display/choices.py" line="35" />
+        <source>{0} (not connected)</source>
+        <translation>{0} (niepodłączony)</translation>
+    </message>
     <message>
         <location filename="../src/domain/display/relaunch.py" line="26" />
         <source>Kasual Desktop will restart</source>
@@ -365,17 +377,17 @@
         <translation>Wróć do ekranu głównego</translation>
     </message>
     <message>
-        <location filename="../src/domain/menu/home.py" line="101" />
+        <location filename="../src/domain/menu/home.py" line="102" />
         <source>Return to {0}</source>
         <translation>Powrót do {0}</translation>
     </message>
     <message>
-        <location filename="../src/domain/menu/home.py" line="103" />
+        <location filename="../src/domain/menu/home.py" line="104" />
         <source>Close {0}</source>
         <translation>Zamknij {0}</translation>
     </message>
     <message>
-        <location filename="../src/domain/system/actions.py" line="87" />
+        <location filename="../src/domain/system/actions.py" line="92" />
         <location filename="../src/domain/network/view.py" line="54" />
         <location filename="../src/domain/network/view.py" line="37" />
         <source>Network</source>
@@ -652,57 +664,63 @@
         <translation>Zobaczysz pełny pulpit, gdy włączysz pada albo użyjesz ikony w zasobniku systemowym</translation>
     </message>
     <message>
-        <location filename="../src/domain/system/actions.py" line="56" />
+        <location filename="../src/domain/system/actions.py" line="57" />
         <source>Volume</source>
         <translation>Głośność</translation>
     </message>
     <message>
-        <location filename="../src/domain/system/actions.py" line="61" />
+        <location filename="../src/domain/system/actions.py" line="62" />
         <source>Brightness</source>
         <translation>Jasność</translation>
     </message>
     <message>
-        <location filename="../src/domain/system/actions.py" line="65" />
+        <location filename="../src/domain/system/actions.py" line="66" />
         <source>Sleep</source>
         <translation>Uśpij system</translation>
     </message>
     <message>
-        <location filename="../src/domain/system/actions.py" line="67" />
+        <location filename="../src/domain/system/actions.py" line="68" />
         <source>Are you sure you want to sleep?</source>
         <translation>Czy na pewno chcesz uśpić system?</translation>
     </message>
     <message>
-        <location filename="../src/domain/system/actions.py" line="71" />
+        <location filename="../src/domain/system/actions.py" line="72" />
         <source>Restart</source>
         <translation>Zrestartuj komputer</translation>
     </message>
     <message>
-        <location filename="../src/domain/system/actions.py" line="73" />
+        <location filename="../src/domain/system/actions.py" line="74" />
         <source>Are you sure you want to restart?</source>
         <translation>Czy na pewno chcesz zrestartować komputer?</translation>
     </message>
     <message>
-        <location filename="../src/domain/system/actions.py" line="77" />
+        <location filename="../src/domain/system/actions.py" line="78" />
         <source>Shut Down</source>
         <translation>Zamknij system</translation>
     </message>
     <message>
-        <location filename="../src/domain/system/actions.py" line="79" />
+        <location filename="../src/domain/system/actions.py" line="80" />
         <source>Are you sure you want to shut down?</source>
         <translation>Czy na pewno chcesz wyłączyć komputer?</translation>
     </message>
     <message>
-        <location filename="../src/domain/system/actions.py" line="83" />
+        <location filename="../src/domain/system/actions.py" line="84" />
         <source>Notifications</source>
         <translation>Powiadomienia</translation>
     </message>
     <message>
-        <location filename="../src/domain/system/actions.py" line="91" />
+        <location filename="../src/infrastructure/common/qt/overlays/configuration_overlay.py" line="89" />
+        <location filename="../src/domain/system/actions.py" line="88" />
+        <source>Configuration</source>
+        <translation>Konfiguracja</translation>
+    </message>
+    <message>
+        <location filename="../src/domain/system/actions.py" line="96" />
         <source>Minimize Kasual Desktop</source>
         <translation>Minimalizuj Kasual Desktop</translation>
     </message>
     <message>
-        <location filename="../src/domain/system/actions.py" line="95" />
+        <location filename="../src/domain/system/actions.py" line="100" />
         <source>Check gamepad access</source>
         <translation>Sprawdź dostęp do pada</translation>
     </message>
@@ -717,7 +735,13 @@
         <translation>Włącz HUD</translation>
     </message>
     <message>
-        <location filename="../src/infrastructure/common/qt/overlays/home_header.py" line="366" />
+        <location filename="../src/infrastructure/common/qt/ui/tray.py" line="68" />
+        <location filename="../src/infrastructure/common/qt/overlays/configuration_overlay.py" line="72" />
+        <source>Screen</source>
+        <translation>Ekran</translation>
+    </message>
+    <message>
+        <location filename="../src/infrastructure/common/qt/overlays/home_header.py" line="368" />
         <source>Power</source>
         <translation>Zasilanie</translation>
     </message>
@@ -768,11 +792,6 @@
         <translation>Pokaż pulpit</translation>
     </message>
     <message>
-        <location filename="../src/infrastructure/common/qt/ui/tray.py" line="68" />
-        <source>Screen</source>
-        <translation>Ekran</translation>
-    </message>
-    <message>
         <location filename="../src/infrastructure/common/qt/ui/tray.py" line="73" />
         <source>Logs</source>
         <translation>Logi</translation>
@@ -783,22 +802,12 @@
         <translation>O programie…</translation>
     </message>
     <message>
-        <location filename="../src/infrastructure/common/qt/ui/tray.py" line="95" />
-        <source>Chosen by the system</source>
-        <translation>Wybrany przez system</translation>
-    </message>
-    <message>
-        <location filename="../src/infrastructure/common/qt/ui/tray.py" line="99" />
-        <source>{0} (not connected)</source>
-        <translation>{0} (niepodłączony)</translation>
-    </message>
-    <message>
-        <location filename="../src/infrastructure/common/qt/ui/tray.py" line="125" />
+        <location filename="../src/infrastructure/common/qt/ui/tray.py" line="120" />
         <source>gamepad connected</source>
         <translation>pad podłączony</translation>
     </message>
     <message>
-        <location filename="../src/infrastructure/common/qt/ui/tray.py" line="126" />
+        <location filename="../src/infrastructure/common/qt/ui/tray.py" line="121" />
         <source>no gamepad</source>
         <translation>brak pada</translation>
     </message>

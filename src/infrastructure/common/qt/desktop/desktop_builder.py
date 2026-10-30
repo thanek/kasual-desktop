@@ -16,6 +16,7 @@ from domain.catalog.catalog import AppCatalog
 from domain.catalog.live_catalog import LiveCatalog
 from domain.catalog.tile_settings_editor import TileSettingsEditor
 from domain.input.pad_control import PadControl
+from domain.display.selection import DisplaySelection
 from domain.lifecycle.app_lifecycle import AppLifecycle
 from domain.lifecycle.foreground_inspector import ForegroundInspector
 from domain.lifecycle.launch_transitions import (
@@ -73,6 +74,7 @@ def build_desktop(
     process_manager: ProcessManager,
     notifications: NotificationCenter,
     network_control: NetworkControl,
+    displays: DisplaySelection,
     order_store: TileOrderStore,
     settings_store: TileSettingsStore,
     app_pinning: AppPinning,
@@ -120,6 +122,7 @@ def build_desktop(
         process_manager=process_manager,
         notifications=notifications,
         network_control=network_control,
+        displays=displays,
         overlays=overlays,
         surface=surface,
         parent_of=parent_of,

@@ -9,7 +9,7 @@ from domain.menu.entry import (
 )
 from domain.menu.home import SectionKind, compose_home_sections
 from domain.system.actions import (
-    BRIGHTNESS, GAMEPAD_ACCESS, HIDE_DESKTOP, NETWORK, NOTIFICATIONS, RESTART,
+    BRIGHTNESS, CONFIGURATION, GAMEPAD_ACCESS, HIDE_DESKTOP, NETWORK, NOTIFICATIONS, RESTART,
     SHUTDOWN, SLEEP, VOLUME,
 )
 from domain.catalog.target import AppTarget, WindowTarget
@@ -64,7 +64,7 @@ class TestDesktopContext:
     def test_actions_lead_with_power_then_system_grid(self):
         actions = _by_kind(_desktop(), SectionKind.ACTIONS)
         assert [i.action for i in actions.items] == [
-            POWER, NETWORK, NOTIFICATIONS, HIDE_DESKTOP, RETURN_TO_DESKTOP,
+            POWER, CONFIGURATION, NETWORK, NOTIFICATIONS, HIDE_DESKTOP, RETURN_TO_DESKTOP,
         ]
 
     def test_return_to_home_present_so_minimized_kd_can_be_restored(self):

@@ -9,6 +9,7 @@ from domain.shared.i18n import translate
 from domain.system.desktop_shell import DesktopShell
 from domain.system.power_control import PowerControl
 
+CONFIGURATION = "configuration"
 NETWORK       = "network"
 NOTIFICATIONS = "notifications"
 VOLUME        = "volume"
@@ -81,6 +82,10 @@ ACTIONS: dict[str, SystemAction] = {
     NOTIFICATIONS: SystemAction(
         lambda d: d.desktop.open_notifications_overlay(),
         translate("Kasual Desktop", "Notifications"), "fa5s.bell", "#ebcb8b",
+    ),
+    CONFIGURATION: SystemAction(
+        lambda d: d.desktop.open_configuration_overlay(),
+        translate("Kasual Desktop", "Configuration"), "fa5s.cog", "#88c0d0",
     ),
     NETWORK: SystemAction(
         lambda d: d.desktop.open_network_overlay(),

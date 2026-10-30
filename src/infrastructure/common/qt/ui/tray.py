@@ -4,10 +4,10 @@ from collections.abc import Callable
 
 import qtawesome as qta
 from PyQt6.QtCore import QTimer
-from PyQt6.QtGui import QAction, QActionGroup, QGuiApplication, QIcon
+from PyQt6.QtGui import QActionGroup, QGuiApplication, QIcon
 from PyQt6.QtWidgets import QSystemTrayIcon, QMenu
 
-from domain.display.display import SYSTEM_DECIDES
+from domain.display.choices import ScreenChoice, screen_choices
 from domain.display.selection import DisplaySelection
 from domain.shell.session_collaborators import ConnectionIndicator
 from domain.shared.i18n import translate
@@ -90,25 +90,20 @@ class SystemTray(ConnectionIndicator):
 
     def _list_screens(self, *_screen_change) -> None:
         self._screens.clear()
-        chosen = self._displays.chosen()
-        self._add_screen_choice(
-            translate("Kasual Desktop", "Chosen by the system"), SYSTEM_DECIDES, chosen)
+        leave_it_to_the_system, *screens = screen_choices(self._displays)
+        self._add_screen_choice(leave_it_to_the_system)
         self._screens.addSeparator()
-        for display in self._displays.options():
-            label = display.label if display.connected else (
-                translate("Kasual Desktop", "{0} (not connected)").format(display.label))
-            action = self._add_screen_choice(label, display.id, chosen)
-            action.setEnabled(display.connected)
+        for choice in screens:
+            self._add_screen_choice(choice)
 
-    def _add_screen_choice(
-        self, label: str, display_id: str | None, chosen: str | None,
-    ) -> QAction:
-        action = self._screens.addAction(label)
+    def _add_screen_choice(self, choice: ScreenChoice) -> None:
+        action = self._screens.addAction(choice.label)
         action.setCheckable(True)
-        action.setChecked(display_id == chosen)
+        action.setChecked(choice.chosen)
+        action.setEnabled(choice.pickable)
         self._screen_choices.addAction(action)
-        action.triggered.connect(lambda _checked, choice=display_id: self._choose_screen(choice))
-        return action
+        action.triggered.connect(
+            lambda _checked, display_id=choice.display_id: self._choose_screen(display_id))
 
     def _choose_screen(self, display_id: str | None) -> None:
         self._displays.choose(display_id)

@@ -241,7 +241,7 @@ class TestDispatch:
                 break
             content.handle_pad(Event.UP)
         zone = content.zones[content.active]
-        zone.index = 0   # Network — first of the header's nav items
+        zone.index = 0   # Configuration — first of the header's nav items
         content.sync_hints()
         assert spy.pushed_hints[-1] is nav_hints.OVERLAY_HEADER
 
@@ -364,17 +364,17 @@ class TestHeaderAsTopBar:
         nav.handle_pad(Event.SELECT)
         assert activated == [POWER]
 
-    def test_select_in_header_opens_network(self, qapp):
+    def test_right_from_power_wraps_to_configuration(self, qapp):
         nav, _header, activated = self._nav_with_header()
-        nav.handle_pad(Event.UP)         # into the header (Power, index 2)
-        nav.handle_pad(Event.RIGHT)      # Power → Network (wraps to index 0)
+        nav.handle_pad(Event.UP)
+        nav.handle_pad(Event.RIGHT)
         nav.handle_pad(Event.SELECT)
-        assert activated == ["network"]
+        assert activated == ["configuration"]
 
     def test_left_then_select_opens_notifications(self, qapp):
         nav, _header, activated = self._nav_with_header()
-        nav.handle_pad(Event.UP)         # into the header (Power, index 2)
-        nav.handle_pad(Event.LEFT)       # Power → Notifications (index 1)
+        nav.handle_pad(Event.UP)         # into the header (Power, index 3)
+        nav.handle_pad(Event.LEFT)       # Power → Notifications (index 2)
         nav.handle_pad(Event.SELECT)
         assert activated == ["notifications"]
 

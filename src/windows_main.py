@@ -153,6 +153,7 @@ def main():
             process_manager=process_manager,
             notifications=notification_center,
             network_control=WindowsNetworkControl(),
+            displays=display_selection,
             order_store=DesktopTileOrderStore(),
             settings_store=DesktopTileSettingsStore(),
             app_pinning=WindowsAppPinning(),

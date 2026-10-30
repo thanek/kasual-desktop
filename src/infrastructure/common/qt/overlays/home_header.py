@@ -1,10 +1,9 @@
 """HomeHeader — the navigable status header that replaces the top bar.
 
 The collapsed chrome of the Home view and the top row of the expanded Home menu,
-in one widget: a clock + date readout (status) plus two focusable buttons,
-Network and Notifications (the top bar's old action buttons that stayed at the
-top; Power moved into the menu's split-button). The notification badge rides the
-bell button.
+in one widget: a clock + date readout (status) plus focusable buttons,
+Configuration, Network, Notifications and Power. The notification badge rides
+the bell button.
 
 It is navigable in two alternating roles, never both at once:
 
@@ -15,8 +14,9 @@ It is navigable in two alternating roles, never both at once:
     (``nav_items``): "up" from the menu's top section flows into it, and a
     selection dispatches through the menu's ``on_action`` instead.
 
-Both roles ultimately open the same Network / Notifications overlay, so a single
-``on_activate(action)`` callback backs the FocusNavigator's ``trigger`` path.
+Both roles ultimately open the same Configuration / Network / Notifications
+overlay, so a single ``on_activate(action)`` callback backs the FocusNavigator's
+``trigger`` path.
 """
 
 import qtawesome as qta
@@ -29,7 +29,7 @@ from PyQt6.QtWidgets import QWidget, QHBoxLayout, QLabel, QPushButton
 
 from domain.menu.item import MenuItem
 from domain.menu.entry import POWER
-from domain.system.actions import ACTIONS, NETWORK, NOTIFICATIONS
+from domain.system.actions import ACTIONS, CONFIGURATION, NETWORK, NOTIFICATIONS
 from domain.shared.i18n import translate
 from infrastructure.common.qt.ui import styles
 from infrastructure.common.qt.ui.hover import HoverReporting
@@ -38,7 +38,7 @@ HEADER_H = 80    # matches the old top bar / hint bar height
 _BTN     = 56
 # Far right is Power: a chooser for the default sleep/restart/shutdown action.
 # It carries the abstract POWER key; the host opens the dropdown.
-_NAV_KEYS  = (NETWORK, NOTIFICATIONS, POWER)
+_NAV_KEYS  = (CONFIGURATION, NETWORK, NOTIFICATIONS, POWER)
 _POWER_GLYPH = "fa5s.power-off"
 
 # The focused-button look — a light translucent fill behind a thin accent border.
@@ -162,7 +162,7 @@ class _HeaderButton(HoverReporting, QPushButton):
 
 
 class HomeHeader(QWidget):
-    """Clock + date + focusable Network / Notifications buttons (a TopBarView)."""
+    """Clock + date + focusable header buttons (a TopBarView)."""
 
     # Mouse parity with the tile bar: hover moves the highlight onto a button,
     # a click activates it. Both carry the button index; the Desktop routes them
@@ -200,6 +200,9 @@ class HomeHeader(QWidget):
 
         row.addStretch(1)
 
+        self._config_btn = self._make_button(ACTIONS[CONFIGURATION].icon)
+        row.addWidget(self._config_btn)
+        row.addSpacing(8)
         self._net_btn = self._make_button("fa5s.question")
         row.addWidget(self._net_btn)
         row.addSpacing(8)
@@ -211,7 +214,8 @@ class HomeHeader(QWidget):
         self._power_btn = self._make_button(_POWER_GLYPH)
         row.addWidget(self._power_btn)
 
-        for i, btn in enumerate((self._net_btn, self._notif_btn, self._power_btn)):
+        self._buttons = [self._config_btn, self._net_btn, self._notif_btn, self._power_btn]
+        for i, btn in enumerate(self._buttons):
             btn.hovered.connect(lambda i=i: self.button_hovered.emit(i))
             btn.clicked.connect(lambda _, i=i: self.button_activated.emit(i))
             btn.right_clicked.connect(lambda i=i: self.button_context_menu.emit(i))
@@ -234,8 +238,6 @@ class HomeHeader(QWidget):
         self._power_badge.setFixedSize(_BADGE_SIZE, _BADGE_SIZE)
         self._power_badge.move(_BTN - _BADGE_SIZE - 2, _BTN - _BADGE_SIZE - 2)
         self._style_power_badge(selected=False)
-
-        self._buttons = [self._net_btn, self._notif_btn, self._power_btn]
 
         self._handle = _GrabHandle(self)
         self._handle.clicked.connect(self.toggle_requested)
@@ -325,7 +327,7 @@ class HomeHeader(QWidget):
     @property
     def default_index(self) -> int:
         """Entering the header lands on Power (the primary action), not the
-        left-most Network button."""
+        left-most Configuration button."""
         return _NAV_KEYS.index(POWER)
 
     def set_selected(self, index: int | None) -> None:
@@ -354,8 +356,8 @@ class HomeHeader(QWidget):
 
     def nav_items(self) -> list[MenuItem]:
         """The header buttons as menu items, so the expanded menu can navigate into
-        the header as its zone 0 and act on a selection (Network / Notifications
-        dispatch; Power opens the chooser)."""
+        the header as its zone 0 and act on a selection (Power opens the chooser;
+        the rest dispatch)."""
         return [self._nav_item(key) for key in _NAV_KEYS]
 
     @staticmethod

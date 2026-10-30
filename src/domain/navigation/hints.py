@@ -172,6 +172,15 @@ NOTIFICATIONS = Hints(
     ),
 )
 
+CONFIGURATION = Hints(
+    directions=(Direction.UP, Direction.DOWN),
+    overlay=_HOME_MENU,
+    actions=(
+        ButtonHint(Button.A, translate("HintBar", "Select")),
+        ButtonHint(Button.B, translate("HintBar", "Close")),
+    ),
+)
+
 NETWORK = Hints(
     directions=(),
     overlay=_HOME_MENU,
