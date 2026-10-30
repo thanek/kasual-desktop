@@ -103,7 +103,6 @@ def run_onboarding_or_start(
 
 
 def follow_chosen_display(app: QApplication, placement: DisplayPlacement) -> DisplaySelection:
-    """Aim every surface at the chosen screen — before the first one is built."""
     selection = DisplaySelection(DesktopDisplayPreference(), QtDisplays(), placement)
     selection.settle()
     ScreenWatcher(selection.follow_screen_changes, parent=app)

@@ -25,7 +25,6 @@ def target_screen() -> QScreen | None:
 
 
 def place_on_target_screen(widget: QWidget) -> None:
-    """Call before the widget's first show; it is then moved along with the rest."""
     _placed.add(widget)
     put_on(widget, target_screen())
 

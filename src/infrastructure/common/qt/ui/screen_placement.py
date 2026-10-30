@@ -20,11 +20,11 @@ def _label(screen: QScreen) -> str:
 
 
 class ScreenPlacement(DisplayPlacement):
-    def aim_at(self, display_id: str | None) -> None:
+    def aim_new_surfaces_at(self, display_id: str | None) -> None:
         target_screen.aim_at(display_id)
 
-    def move_to(self, display_id: str | None) -> None:
-        self.aim_at(display_id)
+    def move_shown_surfaces_to(self, display_id: str | None) -> None:
+        self.aim_new_surfaces_at(display_id)
         screen = target_screen.target_screen()
         if screen is None:
             return
@@ -39,8 +39,6 @@ class ScreenPlacement(DisplayPlacement):
 
 
 class RemappingPlacement(ScreenPlacement):
-    """A layer surface is bound to its output when it maps, so it maps again."""
-
     def _carry(self, surface: QWidget, screen: QScreen) -> None:
         was_shown = surface.isVisible()
         was_active = surface.isActiveWindow()
@@ -54,8 +52,6 @@ class RemappingPlacement(ScreenPlacement):
 
 
 class RepositioningPlacement(ScreenPlacement):
-    """An ordinary top-level moves; a fullscreen one is fullscreened again there."""
-
     def _carry(self, surface: QWidget, screen: QScreen) -> None:
         refullscreen = surface.isVisible() and surface.isFullScreen()
         offset = surface.pos() - surface.screen().geometry().topLeft()
@@ -71,8 +67,8 @@ class RelaunchingPlacement(ScreenPlacement):
     def __init__(self, relaunch: AnnouncedRelaunch) -> None:
         self._relaunch = relaunch
 
-    def move_to(self, display_id: str | None) -> None:
-        self.aim_at(display_id)
+    def move_shown_surfaces_to(self, display_id: str | None) -> None:
+        self.aim_new_surfaces_at(display_id)
         self._relaunch.relaunch_onto_another_screen()
 
     def moves_live(self) -> bool:

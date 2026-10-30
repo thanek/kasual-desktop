@@ -42,7 +42,7 @@ class DisplaySelection:
 
     def settle(self) -> None:
         self._applied = self.target()
-        self._placement.aim_at(self._applied)
+        self._placement.aim_new_surfaces_at(self._applied)
 
     def choose(self, display_id: str | None) -> None:
         self._preference.set_preferred(display_id)
@@ -56,4 +56,4 @@ class DisplaySelection:
 
     def _move_to_target(self) -> None:
         self._applied = self.target()
-        self._placement.move_to(self._applied)
+        self._placement.move_shown_surfaces_to(self._applied)

@@ -10,8 +10,8 @@ from infrastructure.gnome import helper
 
 
 class GnomePlacement(ScreenPlacement):
-    def aim_at(self, display_id: str | None) -> None:
-        super().aim_at(display_id)
+    def aim_new_surfaces_at(self, display_id: str | None) -> None:
+        super().aim_new_surfaces_at(display_id)
         helper.set_target_monitor(display_id)
 
     def _carry(self, surface: QWidget, screen: QScreen) -> None:

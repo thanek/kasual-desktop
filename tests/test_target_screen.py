@@ -54,7 +54,7 @@ def test_every_connected_screen_is_offered():
 
 def test_moving_aims_new_surfaces_at_the_screen():
     screen = QGuiApplication.screens()[-1]
-    RepositioningPlacement().move_to(screen.name())
+    RepositioningPlacement().move_shown_surfaces_to(screen.name())
     assert target_screen.target_screen() is screen
 
 
@@ -69,11 +69,11 @@ class FakeRelaunch:
 def test_a_desktop_that_cannot_move_live_relaunches():
     relaunch = FakeRelaunch()
     placement = RelaunchingPlacement(relaunch)
-    placement.move_to("HDMI-A-1")
+    placement.move_shown_surfaces_to("HDMI-A-1")
     assert (placement.moves_live(), relaunch.relaunches) == (False, 1)
 
 
 def test_aiming_alone_never_relaunches():
     relaunch = FakeRelaunch()
-    RelaunchingPlacement(relaunch).aim_at("HDMI-A-1")
+    RelaunchingPlacement(relaunch).aim_new_surfaces_at("HDMI-A-1")
     assert relaunch.relaunches == 0

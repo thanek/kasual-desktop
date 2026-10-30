@@ -24,11 +24,7 @@ class DisplayPreference(Protocol):
 
 
 class DisplayPlacement(Protocol):
-    def aim_at(self, display_id: str | None) -> None:
-        """Surfaces opened from now on go to *display_id*; shown ones stay put."""
-
-    def move_to(self, display_id: str | None) -> None:
-        """Shown surfaces go to *display_id* too — live, or through a relaunch
-        where this desktop cannot move them."""
+    def aim_new_surfaces_at(self, display_id: str | None) -> None: ...
+    def move_shown_surfaces_to(self, display_id: str | None) -> None: ...
 
     def moves_live(self) -> bool: ...

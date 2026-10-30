@@ -30,10 +30,10 @@ class FakePlacement:
         self.aimed = []
         self.moved = []
 
-    def aim_at(self, display_id):
+    def aim_new_surfaces_at(self, display_id):
         self.aimed.append(display_id)
 
-    def move_to(self, display_id):
+    def move_shown_surfaces_to(self, display_id):
         self.moved.append(display_id)
 
     def moves_live(self):

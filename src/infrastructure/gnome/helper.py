@@ -121,8 +121,6 @@ def is_sunk() -> bool:
 
 
 def set_target_monitor(connector: str | None) -> None:
-    """Have the extension keep Kasual Desktop's windows on the monitor at *connector*,
-    or, with None, wherever Mutter puts them."""
     reply = call("SetTargetMonitor", connector or "")
     if connector and not _succeeded(reply):
         logger.warning("Kasual Helper cannot move Kasual Desktop to another screen "

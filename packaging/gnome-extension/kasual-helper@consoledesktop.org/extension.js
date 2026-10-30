@@ -75,6 +75,7 @@ const IFACE = `
 // The layer-shell vocabulary Kasual speaks (infrastructure/common/qt/ui/layer_shell.py).
 const ANCHOR_TOP = 1, ANCHOR_BOTTOM = 2, ANCHOR_LEFT = 4, ANCHOR_RIGHT = 8;
 const DEFAULT_LAYER = 3;
+const NO_MONITOR = -1;
 const OVERLAY_LAYER = 3;
 const KEYBOARD_NONE = 0;
 
@@ -189,6 +190,7 @@ class Helper {
         this._virtualPointer = null;
         this._roles = new Map();
         this._targetConnector = '';
+        this._desktopMonitor = NO_MONITOR;
         this._pinned = new Set();
         this._unredirectApi = null;
         this._restackedId = 0;
@@ -383,11 +385,14 @@ class Helper {
     // the position is ours: resizing here would hand Qt a buffer it never repaints.
     _applyAnchor(win) {
         const role = this._roleOf(win);
-        if (!role || !role.anchors || win.is_fullscreen())
+        if (!role || !role.anchors)
             return;
+        if (win.is_fullscreen()) {
+            this._gatherAroundDesktop(win);
+            return;
+        }
 
-        const target = this._targetMonitor();
-        const index = target >= 0 ? target : win.get_monitor();
+        const index = this._monitorKasualLivesOn(win);
         const monitor = global.display.get_monitor_geometry(
             index >= 0 ? index : global.display.get_primary_monitor());
         const frame = win.get_frame_rect();
@@ -406,21 +411,38 @@ class Helper {
             win.move_frame(true, x, y);
     }
 
-    // -1 when no monitor was chosen, or the chosen one is not connected.
-    _targetMonitor() {
+    _monitorKasualLivesOn(win) {
+        const chosen = this._chosenMonitor();
+        if (chosen !== NO_MONITOR)
+            return chosen;
+        const desktopMonitorStillExists = this._desktopMonitor !== NO_MONITOR
+            && this._desktopMonitor < global.display.get_n_monitors();
+        return desktopMonitorStillExists ? this._desktopMonitor : win.get_monitor();
+    }
+
+    _gatherAroundDesktop(desktop) {
+        const index = desktop.get_monitor();
+        if (index === NO_MONITOR || index === this._desktopMonitor)
+            return;
+        this._desktopMonitor = index;
+        for (const w of this._ourWindows())
+            if (w !== desktop)
+                this._scheduleAnchor(w);
+    }
+
+    _chosenMonitor() {
         if (!this._targetConnector)
-            return -1;
+            return NO_MONITOR;
         return global.backend.get_monitor_manager()
             .get_monitor_for_connector(this._targetConnector);
     }
 
-    // Anchored windows are placed by _applyAnchor; a fullscreen one has to move.
     _moveToTargetMonitor(win) {
-        const target = this._targetMonitor();
-        if (target < 0 || win.get_monitor() === target)
+        const chosen = this._chosenMonitor();
+        if (chosen === NO_MONITOR || win.get_monitor() === chosen)
             return;
         if (win.is_fullscreen())
-            win.move_to_monitor(target);
+            win.move_to_monitor(chosen);
         else
             this._scheduleAnchor(win);
     }
@@ -653,7 +675,8 @@ class Helper {
                 .get_active_workspace().get_work_area_for_monitor(primary)),
             roles: [...this._roles].map(([title, r]) => ({title, ...r})),
             targetConnector: this._targetConnector,
-            targetMonitor: this._targetMonitor(),
+            targetMonitor: this._chosenMonitor(),
+            desktopMonitor: this._desktopMonitor,
             // Bottom-to-top, the order that decides what covers what.
             stack: stackedBottomToTop(mappedWindows()).map((w, depth) => {
                 const actor = w.get_compositor_private();
