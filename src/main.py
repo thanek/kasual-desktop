@@ -5,7 +5,8 @@ import sys
 from pathlib import Path
 
 from infrastructure.linux.compositor import (
-    CEDE_BY_SINKING, Compositor, build_desktop_surface, build_screensaver_waker,
+    CEDE_BY_SINKING, Compositor, build_desktop_surface, build_display_placement,
+    build_screensaver_waker,
     build_system_wallpaper, build_tray_icon_source, build_window_manager,
     detect_compositor, layer_shell_available,
 )
@@ -28,7 +29,7 @@ from PyQt6.QtWidgets import QApplication
 
 from version import get_version, test_api_enabled
 from session import (
-    build_controller, build_tray, defer_start,
+    build_controller, build_tray, defer_start, follow_chosen_display,
     run_onboarding_or_start, setup_logging, wire_notification_badge,
 )
 from infrastructure.common.audio.feedback import SoundFeedback
@@ -80,6 +81,8 @@ from infrastructure.common.catalog.preferences import (
 from domain.shell.background_hint import BackgroundHint
 from domain.shell.desktop_control import DesktopControl
 from infrastructure.common.qt.i18n import install_translations
+from infrastructure.linux.session_restart import ExecSessionRestart
+from domain.display.relaunch import AnnouncedRelaunch
 
 logger = logging.getLogger(__name__)
 
@@ -206,6 +209,12 @@ def main() -> None:
     # substitute (see icons.install_fontawesome5). Before any icon is built.
     install_fontawesome5()
 
+    session_restart = ExecSessionRestart(app)
+    display_selection = follow_chosen_display(app, build_display_placement(
+        AnnouncedRelaunch(FreedesktopNotifier(), QtScheduler(), session_restart),
+        COMPOSITOR,
+    ))
+
     gamepad = GamepadWatcher()
     screensaver_waker = build_screensaver_waker(COMPOSITOR)
     gamepad.on_activity(screensaver_waker.poke)
@@ -309,8 +318,8 @@ def main() -> None:
         )
         tray = build_tray(
             feedback=feedback, desktop=desktop, log_viewer=log_viewer,
-            version=version, gamepad=gamepad, quit_fn=app.quit,
-            icon_for=build_tray_icon_source(),
+            version=version, gamepad=gamepad, displays=display_selection,
+            quit_fn=app.quit, icon_for=build_tray_icon_source(),
         )
 
         controller = build_controller(
@@ -371,7 +380,9 @@ def main() -> None:
 
     QTimer.singleShot(0, feedback.init)
 
-    sys.exit(app.exec())
+    exit_code = app.exec()
+    session_restart.replace_process_if_requested()
+    sys.exit(exit_code)
 
 
 if __name__ == "__main__":

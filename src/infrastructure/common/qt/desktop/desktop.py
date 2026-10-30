@@ -42,6 +42,7 @@ from domain.shell.wallpaper import SystemWallpaper
 from infrastructure.common.qt._meta import ProtocolQtMeta
 from infrastructure.common.qt.ui.nav_key_map import nav_key_map
 from infrastructure.common.qt.ui.screen_watcher import ScreenWatcher
+from infrastructure.common.qt.ui.target_screen import place_on_target_screen
 from .app_add_controller import AppAddController
 from .dialog_host_controller import DialogHostController
 from .setup_check_controller import SetupCheckController
@@ -117,6 +118,7 @@ class Desktop(QWidget, DesktopView, DesktopShell, DesktopControl, metaclass=Prot
         # On Wayland this promotes the widget to a layer-shell TOP surface (above
         # DE panels; the Home Overlay still renders above it).
         self._surface.install(self)
+        place_on_target_screen(self)
 
         main = QVBoxLayout(self)
         main.setContentsMargins(0, 0, 0, 0)
@@ -185,6 +187,7 @@ class Desktop(QWidget, DesktopView, DesktopShell, DesktopControl, metaclass=Prot
         self._wm.on_windows_updated(self._tilebar.update_windows)
 
         self._screen_watcher = ScreenWatcher(self.sync_screen, parent=self)
+        self._screen_watcher.follow(self.windowHandle())
 
         # Desktop is not shown at startup — build_desktop wires it via attach(),
         # then it is revealed on the connected_changed(True) signal.

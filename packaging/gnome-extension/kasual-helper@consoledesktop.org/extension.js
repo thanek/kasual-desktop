@@ -43,6 +43,9 @@ const IFACE = `
       <arg type="i" direction="in" name="anchors"/>
       <arg type="i" direction="in" name="keyboard"/>
     </method>
+    <method name="SetTargetMonitor">
+      <arg type="s" direction="in" name="connector"/>
+    </method>
     <method name="ActivateSurface">
       <arg type="s" direction="in" name="title"/>
     </method>
@@ -185,6 +188,7 @@ class Helper {
         this._windowWatch = false;
         this._virtualPointer = null;
         this._roles = new Map();
+        this._targetConnector = '';
         this._pinned = new Set();
         this._unredirectApi = null;
         this._restackedId = 0;
@@ -264,6 +268,8 @@ class Helper {
             win.connect('notify::title', syncIfOurs),
             // Fullscreen toggles change what must sit over a ceded Desktop.
             win.connect('notify::fullscreen', () => {
+                if (this._isOurs(win))
+                    this._moveToTargetMonitor(win);
                 this._scheduleSync();
                 this._emitWindows('fullscreen');
             }),
@@ -380,7 +386,8 @@ class Helper {
         if (!role || !role.anchors || win.is_fullscreen())
             return;
 
-        const index = win.get_monitor();
+        const target = this._targetMonitor();
+        const index = target >= 0 ? target : win.get_monitor();
         const monitor = global.display.get_monitor_geometry(
             index >= 0 ? index : global.display.get_primary_monitor());
         const frame = win.get_frame_rect();
@@ -397,6 +404,25 @@ class Helper {
         // area — exactly the struts wlr-layer-shell's exclusive_zone=-1 ignores.
         if (frame.x !== x || frame.y !== y)
             win.move_frame(true, x, y);
+    }
+
+    // -1 when no monitor was chosen, or the chosen one is not connected.
+    _targetMonitor() {
+        if (!this._targetConnector)
+            return -1;
+        return global.backend.get_monitor_manager()
+            .get_monitor_for_connector(this._targetConnector);
+    }
+
+    // Anchored windows are placed by _applyAnchor; a fullscreen one has to move.
+    _moveToTargetMonitor(win) {
+        const target = this._targetMonitor();
+        if (target < 0 || win.get_monitor() === target)
+            return;
+        if (win.is_fullscreen())
+            win.move_to_monitor(target);
+        else
+            this._scheduleAnchor(win);
     }
 
     // A frame rect read straight from 'size-changed' can still be the size we
@@ -626,6 +652,8 @@ class Helper {
             workArea: rect(global.workspace_manager
                 .get_active_workspace().get_work_area_for_monitor(primary)),
             roles: [...this._roles].map(([title, r]) => ({title, ...r})),
+            targetConnector: this._targetConnector,
+            targetMonitor: this._targetMonitor(),
             // Bottom-to-top, the order that decides what covers what.
             stack: stackedBottomToTop(mappedWindows()).map((w, depth) => {
                 const actor = w.get_compositor_private();
@@ -728,6 +756,12 @@ class Helper {
             if (win.get_title() === title)
                 this._applyFocusPolicy(win);
         this._scheduleSync();
+    }
+
+    SetTargetMonitor(connector) {
+        this._targetConnector = connector;
+        for (const win of this._ourWindows())
+            this._moveToTargetMonitor(win);
     }
 
     // Qt cannot activate its own window without a Wayland token, and Kasual is

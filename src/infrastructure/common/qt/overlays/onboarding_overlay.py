@@ -18,7 +18,7 @@ from PyQt6.QtCore import Qt, QSize
 from PyQt6.QtGui import QIcon, QKeyEvent
 from PyQt6.QtWidgets import (
     QWidget, QPushButton, QVBoxLayout, QLabel, QSizePolicy,
-    QScrollArea, QFrame, QApplication,
+    QScrollArea, QFrame,
 )
 
 from domain.input.pad_control import PadControl
@@ -31,6 +31,7 @@ from domain.shared.feedback import Cue, Feedback
 from infrastructure.common.qt._meta import ProtocolQtMeta
 from infrastructure.common.qt.ui import styles
 from infrastructure.common.qt.ui.layer_shell import Keyboard
+from infrastructure.common.qt.ui.target_screen import target_screen
 from infrastructure.common.qt.ui.toggle_switch import ToggleSwitch
 from .base_overlay import BaseOverlay
 
@@ -162,7 +163,7 @@ class OnboardingOverlay(BaseOverlay, ProvisioningView, metaclass=ProtocolQtMeta)
         Confirm sits below the scroll, so it is not counted here."""
         n = max(1, len(self._rows))
         content = n * 62 + (n - 1) * 8
-        screen = QApplication.primaryScreen()
+        screen = target_screen()
         cap = int(screen.availableGeometry().height() * 0.55) if screen else 560
         self._scroll.setFixedHeight(min(content, cap))
 

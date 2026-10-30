@@ -1,4 +1,5 @@
-"""Drive a relayout on display-configuration changes.
+"""Drive a relayout on display-configuration changes, and when a followed window
+moves to another screen.
 
 Qt emits these signals application-wide regardless of whether the Desktop is
 mapped, so a resolution change made while it is minimized is caught here — a poll
@@ -8,7 +9,7 @@ would only catch it after the surface is already back on screen the wrong size.
 from collections.abc import Callable
 
 from PyQt6.QtCore import QObject, QTimer
-from PyQt6.QtGui import QGuiApplication, QScreen
+from PyQt6.QtGui import QGuiApplication, QScreen, QWindow
 
 # Several signals fire for a single reconfiguration (primary swap + geometry +
 # DPI); coalesce them into one relayout.
@@ -31,6 +32,9 @@ class ScreenWatcher(QObject):
         app.screenAdded.connect(self._on_screens_changed)
         app.screenRemoved.connect(self._on_screens_changed)
         self._bind_screens()
+
+    def follow(self, window: QWindow) -> None:
+        window.screenChanged.connect(self._schedule)
 
     def _on_screens_changed(self, _screen: QScreen) -> None:
         self._bind_screens()

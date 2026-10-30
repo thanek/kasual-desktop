@@ -239,6 +239,16 @@
 </context><context>
     <name>Kasual Desktop</name>
     <message>
+        <location filename="../src/domain/display/relaunch.py" line="26" />
+        <source>Kasual Desktop will restart</source>
+        <translation>Kasual Desktop uruchomi się ponownie</translation>
+    </message>
+    <message>
+        <location filename="../src/domain/display/relaunch.py" line="27" />
+        <source>Moving to another screen needs a restart on this desktop</source>
+        <translation>Przeniesienie na inny ekran wymaga na tym pulpicie ponownego uruchomienia</translation>
+    </message>
+    <message>
         <location filename="../src/domain/input_access/recipes.py" line="50" />
         <source>Join the input group</source>
         <translation>Dołącz do grupy input</translation>
@@ -366,53 +376,53 @@
     </message>
     <message>
         <location filename="../src/domain/system/actions.py" line="87" />
-        <location filename="../src/domain/network/view.py" line="47" />
-        <location filename="../src/domain/network/view.py" line="30" />
+        <location filename="../src/domain/network/view.py" line="54" />
+        <location filename="../src/domain/network/view.py" line="37" />
         <source>Network</source>
         <translation>Sieć</translation>
     </message>
     <message>
-        <location filename="../src/domain/network/view.py" line="38" />
+        <location filename="../src/domain/network/view.py" line="45" />
         <source>Status</source>
         <translation>Status</translation>
     </message>
     <message>
-        <location filename="../src/domain/network/view.py" line="39" />
+        <location filename="../src/domain/network/view.py" line="46" />
         <source>Not connected</source>
         <translation>Nie połączono</translation>
     </message>
     <message>
-        <location filename="../src/domain/network/view.py" line="43" />
+        <location filename="../src/domain/network/view.py" line="50" />
         <source>Type</source>
         <translation>Typ</translation>
     </message>
     <message>
-        <location filename="../src/domain/network/view.py" line="48" />
+        <location filename="../src/domain/network/view.py" line="55" />
         <source>Connection</source>
         <translation>Połączenie</translation>
     </message>
     <message>
-        <location filename="../src/domain/network/view.py" line="51" />
+        <location filename="../src/domain/network/view.py" line="58" />
         <source>Signal</source>
         <translation>Sygnał</translation>
     </message>
     <message>
-        <location filename="../src/domain/network/view.py" line="53" />
+        <location filename="../src/domain/network/view.py" line="60" />
         <source>IP address</source>
         <translation>Adres IP</translation>
     </message>
     <message>
-        <location filename="../src/domain/network/view.py" line="55" />
+        <location filename="../src/domain/network/view.py" line="62" />
         <source>Interface</source>
         <translation>Interfejs</translation>
     </message>
     <message>
-        <location filename="../src/domain/network/view.py" line="74" />
+        <location filename="../src/domain/network/view.py" line="81" />
         <source>Disconnect</source>
         <translation>Rozłącz</translation>
     </message>
     <message>
-        <location filename="../src/domain/network/view.py" line="77" />
+        <location filename="../src/domain/network/view.py" line="84" />
         <source>Connect</source>
         <translation>Podłącz</translation>
     </message>
@@ -722,58 +732,73 @@
         <translation>Brak powiadomień</translation>
     </message>
     <message>
-        <location filename="../src/infrastructure/common/qt/overlays/setup_overlay.py" line="184" />
+        <location filename="../src/infrastructure/common/qt/overlays/setup_overlay.py" line="185" />
         <source>Check again</source>
         <translation>Sprawdź ponownie</translation>
     </message>
     <message>
-        <location filename="../src/infrastructure/common/qt/ui/tray.py" line="68" />
-        <location filename="../src/infrastructure/common/qt/overlays/setup_overlay.py" line="191" />
+        <location filename="../src/infrastructure/common/qt/ui/tray.py" line="78" />
+        <location filename="../src/infrastructure/common/qt/overlays/setup_overlay.py" line="192" />
         <source>Quit</source>
         <translation>Zamknij</translation>
     </message>
     <message>
-        <location filename="../src/infrastructure/common/qt/overlays/setup_overlay.py" line="192" />
+        <location filename="../src/infrastructure/common/qt/overlays/setup_overlay.py" line="193" />
         <source>Continue</source>
         <translation>Kontynuuj</translation>
     </message>
     <message>
-        <location filename="../src/infrastructure/common/qt/overlays/setup_overlay.py" line="245" />
+        <location filename="../src/infrastructure/common/qt/overlays/setup_overlay.py" line="246" />
         <source>Work through these steps in a terminal, then check again.</source>
         <translation>Wykonaj te kroki w terminalu, a potem sprawdź ponownie.</translation>
     </message>
     <message>
-        <location filename="../src/infrastructure/common/qt/overlays/setup_overlay.py" line="249" />
+        <location filename="../src/infrastructure/common/qt/overlays/setup_overlay.py" line="250" />
         <source>Work through these steps in a terminal, then check again. You can also continue now and come back later.</source>
         <translation>Wykonaj te kroki w terminalu, a potem sprawdź ponownie. Możesz też kontynuować teraz i wrócić do tego później.</translation>
     </message>
     <message>
-        <location filename="../src/infrastructure/common/qt/overlays/setup_overlay.py" line="354" />
+        <location filename="../src/infrastructure/common/qt/overlays/setup_overlay.py" line="355" />
         <source>Copy to clipboard</source>
         <translation>Kopiuj do schowka</translation>
     </message>
     <message>
-        <location filename="../src/infrastructure/common/qt/ui/tray.py" line="61" />
+        <location filename="../src/infrastructure/common/qt/ui/tray.py" line="66" />
         <source>Show Desktop</source>
         <translation>Pokaż pulpit</translation>
     </message>
     <message>
-        <location filename="../src/infrastructure/common/qt/ui/tray.py" line="63" />
+        <location filename="../src/infrastructure/common/qt/ui/tray.py" line="68" />
+        <source>Screen</source>
+        <translation>Ekran</translation>
+    </message>
+    <message>
+        <location filename="../src/infrastructure/common/qt/ui/tray.py" line="73" />
         <source>Logs</source>
         <translation>Logi</translation>
     </message>
     <message>
-        <location filename="../src/infrastructure/common/qt/ui/tray.py" line="65" />
+        <location filename="../src/infrastructure/common/qt/ui/tray.py" line="75" />
         <source>About…</source>
         <translation>O programie…</translation>
     </message>
     <message>
-        <location filename="../src/infrastructure/common/qt/ui/tray.py" line="89" />
+        <location filename="../src/infrastructure/common/qt/ui/tray.py" line="95" />
+        <source>Chosen by the system</source>
+        <translation>Wybrany przez system</translation>
+    </message>
+    <message>
+        <location filename="../src/infrastructure/common/qt/ui/tray.py" line="99" />
+        <source>{0} (not connected)</source>
+        <translation>{0} (niepodłączony)</translation>
+    </message>
+    <message>
+        <location filename="../src/infrastructure/common/qt/ui/tray.py" line="125" />
         <source>gamepad connected</source>
         <translation>pad podłączony</translation>
     </message>
     <message>
-        <location filename="../src/infrastructure/common/qt/ui/tray.py" line="90" />
+        <location filename="../src/infrastructure/common/qt/ui/tray.py" line="126" />
         <source>no gamepad</source>
         <translation>brak pada</translation>
     </message>
@@ -843,12 +868,12 @@ Włączyć je teraz?</translation>
 </context><context>
     <name>OnboardingOverlay</name>
     <message>
-        <location filename="../src/infrastructure/common/qt/overlays/onboarding_overlay.py" line="100" />
+        <location filename="../src/infrastructure/common/qt/overlays/onboarding_overlay.py" line="101" />
         <source>Welcome — pick your apps</source>
         <translation>Witaj - wybierz aplikacje, z którymi wystartujesz</translation>
     </message>
     <message>
-        <location filename="../src/infrastructure/common/qt/overlays/onboarding_overlay.py" line="128" />
+        <location filename="../src/infrastructure/common/qt/overlays/onboarding_overlay.py" line="129" />
         <source>Confirm</source>
         <translation>Potwierdź</translation>
     </message>

@@ -21,6 +21,8 @@ from domain.lifecycle.window_manager import WindowManager
 from domain.shell.wallpaper import SystemWallpaper
 
 if TYPE_CHECKING:
+    from domain.display.display import DisplayPlacement
+    from domain.display.relaunch import AnnouncedRelaunch
     from infrastructure.common.qt.desktop.surface import DesktopSurface
     from infrastructure.common.qt.ui.tray import TrayIconFor
     from infrastructure.linux.display.screensaver import ScreenSaverWaker
@@ -292,3 +294,29 @@ def build_desktop_surface(compositor: Compositor | None = None) -> "DesktopSurfa
             return GnomeSurface()
     from infrastructure.linux.wayland.surface import LayerShellSurface
     return LayerShellSurface(cede_to_bottom=compositor in CEDE_BY_SINKING)
+
+
+def build_display_placement(
+    relaunch: "AnnouncedRelaunch", compositor: Compositor | None = None,
+) -> "DisplayPlacement":
+    """Pick how shown surfaces reach another screen for *compositor*.
+
+    A layer surface is bound to its output when it maps, so it moves by mapping
+    again — except on cosmic-comp, where an unmap costs the connection and only a
+    restart moves it. Mutter places windows itself, which the Kasual Helper does.
+    """
+    from infrastructure.common.qt.ui import screen_placement
+    from infrastructure.common.qt.ui.top_surface import (
+        surface_sized_by_compositor, unmap_drops_the_connection,
+    )
+    compositor = compositor or detect_compositor()
+    if compositor is Compositor.GNOME:
+        from infrastructure.gnome.helper import helper_present
+        if helper_present():
+            from infrastructure.gnome.qt.placement import GnomePlacement
+            return GnomePlacement()
+    if unmap_drops_the_connection(compositor):
+        return screen_placement.RelaunchingPlacement(relaunch)
+    if surface_sized_by_compositor(compositor):
+        return screen_placement.RemappingPlacement()
+    return screen_placement.RepositioningPlacement()

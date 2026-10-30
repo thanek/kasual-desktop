@@ -2,14 +2,14 @@
 
 Small user choices that aren't part of the app catalog (whose ``.desktop`` files
 are handled in :mod:`app_config`) live in a single JSON file under the same
-cross-platform config root. Currently just the default power action; the store is
-a plain key→value JSON so further scalars can join it without a new file each.
+cross-platform config root, as plain key→value JSON.
 """
 
 import json
 import logging
 from pathlib import Path
 
+from domain.display.display import DisplayPreference
 from domain.preflight.hud import HudSetupMemory
 from domain.shell.background_hint import BackgroundHintMemory
 from domain.system.actions import POWER_ACTIONS, SLEEP
@@ -22,6 +22,7 @@ logger = logging.getLogger(__name__)
 _POWER_DEFAULT_KEY = "power_default"
 _BACKGROUND_HINT_KEY = "background_hint_shown"
 _HUD_SETUP_KEY = "hud_setup_shown"
+_DISPLAY_KEY = "display"
 
 
 def _preferences_file() -> Path:
@@ -79,4 +80,18 @@ class DesktopHudSetupMemory(HudSetupMemory):
     def mark_shown(self) -> None:
         data = _read()
         data[_HUD_SETUP_KEY] = True
+        _write(data)
+
+
+class DesktopDisplayPreference(DisplayPreference):
+    def preferred(self) -> str | None:
+        value = _read().get(_DISPLAY_KEY)
+        return value if isinstance(value, str) and value else None
+
+    def set_preferred(self, display_id: str | None) -> None:
+        data = _read()
+        if display_id is None:
+            data.pop(_DISPLAY_KEY, None)
+        else:
+            data[_DISPLAY_KEY] = display_id
         _write(data)

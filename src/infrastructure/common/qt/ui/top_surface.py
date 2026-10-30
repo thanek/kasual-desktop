@@ -21,6 +21,7 @@ from PyQt6.QtGui import QGuiApplication
 from PyQt6.QtWidgets import QWidget
 
 from .layer_shell import Anchor, Keyboard, Layer
+from .target_screen import place_on_target_screen
 
 if TYPE_CHECKING:
     from infrastructure.linux.compositor import Compositor
@@ -114,6 +115,18 @@ def promote_overlay_surface(
 ) -> None:
     """Lift *widget* above everything using the platform's mechanism. Call before
     the widget is shown."""
+    _lift_above_everything(widget, layer, anchors, exclusive_zone, keyboard, compositor)
+    place_on_target_screen(widget)
+
+
+def _lift_above_everything(
+    widget: QWidget,
+    layer: Layer,
+    anchors: Anchor,
+    exclusive_zone: int,
+    keyboard: Keyboard,
+    compositor: "Compositor | None",
+) -> None:
     platform = QGuiApplication.platformName()
     if platform == "wayland":
         if _on_gnome(compositor):

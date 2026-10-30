@@ -9,18 +9,37 @@ from unittest.mock import patch
 
 import pytest
 
+from domain.display.display import SYSTEM_DECIDES, Display
 from infrastructure.common.qt.ui.tray import SystemTray, glyph_icon, themed_icon
+
+
+class FakeDisplays:
+    def __init__(self, options=(), chosen=SYSTEM_DECIDES):
+        self._options = list(options)
+        self._chosen = chosen
+        self.choices = []
+
+    def options(self):
+        return self._options
+
+    def chosen(self):
+        return self._chosen
+
+    def choose(self, display_id):
+        self.choices.append(display_id)
+        self._chosen = display_id
 
 
 @pytest.fixture
 def tray(qapp):
-    def build(icon_for=glyph_icon):
+    def build(icon_for=glyph_icon, displays=None):
         recorded = {'shown': 0, 'quit': 0}
         tray = SystemTray(
             on_show=lambda: recorded.__setitem__('shown', recorded['shown'] + 1),
             on_logs=lambda: None,
             on_about=lambda: None,
             on_quit=lambda: recorded.__setitem__('quit', recorded['quit'] + 1),
+            displays=displays or FakeDisplays(),
             icon_for=icon_for,
         )
         return tray, recorded
@@ -66,15 +85,54 @@ class TestTooltip:
 
 
 class TestMenu:
-    def test_offers_the_four_actions(self, tray):
+    def test_offers_the_four_actions_and_the_screen_menu(self, tray):
         widget, _ = tray()
         labels = [a.text() for a in widget._menu.actions() if not a.isSeparator()]
-        assert len(labels) == 4
+        assert len(labels) == 5
 
     def test_quit_action_is_wired(self, tray):
         widget, recorded = tray()
         [a for a in widget._menu.actions() if not a.isSeparator()][-1].trigger()
         assert recorded['quit'] == 1
+
+
+class TestScreenMenu:
+    MONITORS = [Display("DP-1", "Dell (DP-1)"), Display("HDMI-A-1", "LG TV (HDMI-A-1)")]
+
+    def _choices(self, widget):
+        return [a for a in widget._screens.actions() if not a.isSeparator()]
+
+    def test_offers_the_system_first_then_every_screen(self, tray):
+        widget, _ = tray(displays=FakeDisplays(self.MONITORS))
+        labels = [a.text() for a in self._choices(widget)]
+        assert labels[1:] == ["Dell (DP-1)", "LG TV (HDMI-A-1)"]
+
+    def test_marks_the_system_while_nothing_was_chosen(self, tray):
+        widget, _ = tray(displays=FakeDisplays(self.MONITORS))
+        assert [a.isChecked() for a in self._choices(widget)] == [True, False, False]
+
+    def test_marks_the_chosen_screen(self, tray):
+        widget, _ = tray(displays=FakeDisplays(self.MONITORS, chosen="HDMI-A-1"))
+        assert [a.isChecked() for a in self._choices(widget)] == [False, False, True]
+
+    def test_picking_a_screen_chooses_it(self, tray):
+        displays = FakeDisplays(self.MONITORS)
+        widget, _ = tray(displays=displays)
+        self._choices(widget)[1].trigger()
+        assert displays.choices == ["DP-1"]
+
+    def test_picking_the_system_chooses_no_screen(self, tray):
+        displays = FakeDisplays(self.MONITORS, chosen="DP-1")
+        widget, _ = tray(displays=displays)
+        self._choices(widget)[0].trigger()
+        assert displays.choices == [SYSTEM_DECIDES]
+
+    def test_a_remembered_absent_screen_shows_but_cannot_be_picked(self, tray):
+        absent = Display("DP-3", "DP-3", connected=False)
+        widget, _ = tray(displays=FakeDisplays([*self.MONITORS, absent], chosen="DP-3"))
+        last = self._choices(widget)[-1]
+        assert (last.isChecked(), last.isEnabled()) == (True, False)
+        assert "DP-3" in last.text()
 
 
 class TestSourceSelection:

@@ -4,7 +4,6 @@ import logging
 from collections.abc import Callable
 
 from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QGuiApplication
 from PyQt6.QtWidgets import QWidget
 
 from domain.input.pad_control import PadControl
@@ -12,6 +11,7 @@ from domain.shared.feedback import Cue, Feedback
 from infrastructure.common.qt.ui import styles
 from infrastructure.common.qt.ui.layer_shell import Layer, Anchor, Keyboard
 from infrastructure.common.qt.ui.surface_hiding import SurfaceHiding
+from infrastructure.common.qt.ui.target_screen import target_screen
 from infrastructure.common.qt.ui.top_surface import (
     fullscreen_loses_translucency, promote_overlay_surface,
 )
@@ -97,7 +97,7 @@ class BaseOverlay(QWidget):
         if not fullscreen_loses_translucency():
             self.showFullScreen()
             return
-        screen = self.screen() or QGuiApplication.primaryScreen()
+        screen = self.screen() or target_screen()
         if screen is not None:
             # Fixed, or Mutter maximizes a screen-filling window into the work area
             # and a maximized window is denied the layer that keeps it above the

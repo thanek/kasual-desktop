@@ -6,7 +6,7 @@ import pytest
 
 from domain.system.actions import SLEEP, RESTART, SHUTDOWN
 from infrastructure.common.catalog.preferences import (
-    DesktopBackgroundHintMemory, DesktopPowerPreference,
+    DesktopBackgroundHintMemory, DesktopDisplayPreference, DesktopPowerPreference,
 )
 
 
@@ -72,3 +72,26 @@ class TestBackgroundHintMemory:
         DesktopBackgroundHintMemory().mark_shown()
         data = json.loads((cfg / "preferences.json").read_text())
         assert data == {"power_default": RESTART, "background_hint_shown": True}
+
+
+class TestDisplayPreference:
+    def test_the_system_decides_when_unset(self, cfg):
+        assert DesktopDisplayPreference().preferred() is None
+
+    def test_persists_and_reads_back(self, cfg):
+        DesktopDisplayPreference().set_preferred("HDMI-A-1")
+        assert DesktopDisplayPreference().preferred() == "HDMI-A-1"
+
+    def test_clearing_returns_the_choice_to_the_system(self, cfg):
+        DesktopDisplayPreference().set_preferred("HDMI-A-1")
+        DesktopDisplayPreference().set_preferred(None)
+        assert DesktopDisplayPreference().preferred() is None
+
+    def test_keeps_the_other_preferences(self, cfg):
+        DesktopPowerPreference().set_default(SHUTDOWN)
+        DesktopDisplayPreference().set_preferred("DP-1")
+        assert DesktopPowerPreference().default() == SHUTDOWN
+
+    def test_ignores_a_value_that_names_no_screen(self, cfg):
+        (cfg / "preferences.json").write_text(json.dumps({"display": 3}))
+        assert DesktopDisplayPreference().preferred() is None

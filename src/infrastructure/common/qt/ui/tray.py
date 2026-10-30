@@ -3,9 +3,12 @@
 from collections.abc import Callable
 
 import qtawesome as qta
-from PyQt6.QtGui import QIcon
+from PyQt6.QtCore import QTimer
+from PyQt6.QtGui import QAction, QActionGroup, QGuiApplication, QIcon
 from PyQt6.QtWidgets import QSystemTrayIcon, QMenu
 
+from domain.display.display import SYSTEM_DECIDES
+from domain.display.selection import DisplaySelection
 from domain.shell.session_collaborators import ConnectionIndicator
 from domain.shared.i18n import translate
 from infrastructure.common.qt.ui import styles
@@ -43,6 +46,7 @@ class SystemTray(ConnectionIndicator):
         on_logs:  Callable[[], None],
         on_about: Callable[[], None],
         on_quit:  Callable[[], None],
+        displays: DisplaySelection,
         icon_for: TrayIconFor = glyph_icon,
     ) -> None:
         # Held as attributes: a Qt connection keeps only a weak ref to a bound
@@ -52,6 +56,7 @@ class SystemTray(ConnectionIndicator):
         self._on_logs  = on_logs
         self._on_about = on_about
         self._on_quit  = on_quit
+        self._displays = displays
 
         self._icon_for = icon_for
         self._tray = QSystemTrayIcon(icon_for(False))
@@ -60,6 +65,11 @@ class SystemTray(ConnectionIndicator):
         menu = QMenu()
         show_action = menu.addAction(translate("Kasual Desktop", "Show Desktop"))
         show_action.triggered.connect(self._on_show)
+        self._screens = menu.addMenu(translate("Kasual Desktop", "Screen"))
+        self._screen_choices = QActionGroup(self._screens)
+        self._list_screens()
+        QGuiApplication.instance().screenAdded.connect(self._list_screens)
+        QGuiApplication.instance().screenRemoved.connect(self._list_screens)
         logs_action = menu.addAction(translate("Kasual Desktop", "Logs"))
         logs_action.triggered.connect(self._on_logs)
         about_action = menu.addAction(translate("Kasual Desktop", "About…"))
@@ -77,6 +87,32 @@ class SystemTray(ConnectionIndicator):
             else None
         )
         self._tray.show()
+
+    def _list_screens(self, *_screen_change) -> None:
+        self._screens.clear()
+        chosen = self._displays.chosen()
+        self._add_screen_choice(
+            translate("Kasual Desktop", "Chosen by the system"), SYSTEM_DECIDES, chosen)
+        self._screens.addSeparator()
+        for display in self._displays.options():
+            label = display.label if display.connected else (
+                translate("Kasual Desktop", "{0} (not connected)").format(display.label))
+            action = self._add_screen_choice(label, display.id, chosen)
+            action.setEnabled(display.connected)
+
+    def _add_screen_choice(
+        self, label: str, display_id: str | None, chosen: str | None,
+    ) -> QAction:
+        action = self._screens.addAction(label)
+        action.setCheckable(True)
+        action.setChecked(display_id == chosen)
+        self._screen_choices.addAction(action)
+        action.triggered.connect(lambda _checked, choice=display_id: self._choose_screen(choice))
+        return action
+
+    def _choose_screen(self, display_id: str | None) -> None:
+        self._displays.choose(display_id)
+        QTimer.singleShot(0, self._list_screens)
 
     def set_connected(self, connected: bool) -> None:
         """Updates the icon based on the gamepad connection state."""

@@ -6,7 +6,7 @@ from collections.abc import Callable, Sequence
 
 from PyQt6.QtCore import Qt, QPoint, QTimer, QEasingCurve, QPropertyAnimation, pyqtSignal
 from PyQt6.QtGui import QCursor
-from PyQt6.QtWidgets import QWidget, QHBoxLayout, QScrollArea, QApplication
+from PyQt6.QtWidgets import QWidget, QHBoxLayout, QScrollArea
 
 from domain.catalog.live_catalog import LiveCatalog
 from domain.catalog.target import AddTileTarget, AppTarget, Target, target_at_index
@@ -16,6 +16,7 @@ from domain.lifecycle.process_manager import ProcessManager
 from domain.shell.introspection import TILE_ADD, TILE_APP, TILE_WINDOW
 from infrastructure.common.qt._meta import ProtocolQtMeta
 from infrastructure.common.qt.ui import styles
+from infrastructure.common.qt.ui.target_screen import target_screen
 from domain.lifecycle.tile_bar_view import TileBarView
 from domain.navigation.bar_views import TileFocusView, TileReorderView
 from .app_tile import AddTile, AppTile, TILE_H, TILE_SEL_H
@@ -96,7 +97,7 @@ class TileBar(QScrollArea, TileBarView, TileFocusView, TileReorderView, metaclas
         container.setStyleSheet("background: transparent;")
         self._tile_layout = QHBoxLayout(container)
         # Half-screen padding on each side so any tile can be scrolled to center.
-        screen_half = QApplication.primaryScreen().size().width() // 2
+        screen_half = target_screen().size().width() // 2
         self._tile_layout.setContentsMargins(screen_half, 50, screen_half, 50)
         self._tile_layout.setSpacing(24)
 
@@ -327,7 +328,7 @@ class TileBar(QScrollArea, TileBarView, TileFocusView, TileReorderView, metaclas
         return self._tiles.index(tile)
 
     def sync_screen_metrics(self) -> None:
-        screen_half = QApplication.primaryScreen().size().width() // 2
+        screen_half = target_screen().size().width() // 2
         left, top, right, bottom = self._tile_layout.getContentsMargins()
         if left == screen_half:
             return

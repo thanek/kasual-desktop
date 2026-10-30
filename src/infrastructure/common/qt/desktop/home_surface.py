@@ -26,7 +26,7 @@ from PyQt6.QtCore import (
     Qt, QEvent, QRect, QTimer, QPropertyAnimation, QParallelAnimationGroup,
     QEasingCurve, pyqtSignal,
 )
-from PyQt6.QtGui import QGuiApplication, QPainter, QRegion
+from PyQt6.QtGui import QPainter, QRegion
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QGraphicsOpacityEffect
 
 from domain.catalog.target import Target
@@ -40,6 +40,7 @@ from domain.system.power_menu import PowerMenu
 from domain.system.volume import VolumeControl
 from infrastructure.common.qt.ui import styles
 from infrastructure.common.qt.ui.surface_hiding import SurfaceHiding
+from infrastructure.common.qt.ui.target_screen import target_screen
 from infrastructure.common.qt.ui.layer_shell import Anchor, Keyboard, Layer
 from infrastructure.common.qt.ui.top_surface import (
     GNOME_PANEL_CLEARANCE, home_chrome_edge_margin,
@@ -255,12 +256,12 @@ class HomeSurface(QWidget):
         )
 
     def position_at_top(self) -> None:
-        """Size the surface to the top strip of the primary screen. Skipped where
+        """Size the surface to the top strip of the target screen. Skipped where
         layer-shell anchors already do it; on GNOME the position is ignored (Mutter
         places top-levels) but the width must be ours, set before the first map."""
         if surface_sized_by_compositor():
             return
-        screen = QGuiApplication.primaryScreen()
+        screen = target_screen()
         if screen is not None:
             g = screen.geometry()
             self.setGeometry(g.x(), g.y(), g.width(), SURFACE_H)

@@ -2,7 +2,7 @@
 
 Each platform builds its own OS-specific adapters, then hands them to these
 helpers for the wiring that is identical either way — logging setup, the
-provisioning branch, tray/controller assembly, and the deferred-start/
+provisioning branch, display choice, tray/controller assembly, and the deferred-start/
 stop-on-quit pattern used by the notification and network monitors. Kept here
 rather than duplicated so a fix made for one platform can't silently miss the
 other.
@@ -18,11 +18,16 @@ from PyQt6.QtCore import QTimer
 from PyQt6.QtWidgets import QApplication
 
 from application import Application
+from domain.display.display import DisplayPlacement
+from domain.display.selection import DisplaySelection
 from domain.provisioning.provisioning import needs_provisioning
 from domain.shared.feedback import Cue
 from domain.system.actions import ActionDeps
 from infrastructure.common.qt.overlays.about_overlay import AboutOverlay
 from infrastructure.common.qt.overlays.onboarding_overlay import OnboardingOverlayFactory
+from infrastructure.common.catalog.preferences import DesktopDisplayPreference
+from infrastructure.common.qt.ui.screen_placement import QtDisplays
+from infrastructure.common.qt.ui.screen_watcher import ScreenWatcher
 from infrastructure.common.qt.ui.tray import SystemTray, TrayIconFor, glyph_icon
 
 logger = logging.getLogger(__name__)
@@ -97,6 +102,14 @@ def run_onboarding_or_start(
         start_session()
 
 
+def follow_chosen_display(app: QApplication, placement: DisplayPlacement) -> DisplaySelection:
+    """Aim every surface at the chosen screen — before the first one is built."""
+    selection = DisplaySelection(DesktopDisplayPreference(), QtDisplays(), placement)
+    selection.settle()
+    ScreenWatcher(selection.follow_screen_changes, parent=app)
+    return selection
+
+
 def build_tray(
     *,
     feedback,
@@ -104,6 +117,7 @@ def build_tray(
     log_viewer,
     version: str,
     gamepad,
+    displays: DisplaySelection,
     quit_fn: Callable[[], None],
     keep_alive: Callable[[object], None] = _no_keep_alive,
     icon_for: TrayIconFor = glyph_icon,
@@ -116,6 +130,7 @@ def build_tray(
         on_logs=log_viewer.open,
         on_about=on_about,
         on_quit=quit_fn,
+        displays=displays,
         icon_for=icon_for,
     )
 

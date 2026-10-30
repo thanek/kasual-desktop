@@ -28,7 +28,7 @@ def main():
     from PyQt6.QtWidgets import QApplication
 
     from session import (
-        build_controller, build_tray, defer_start,
+        build_controller, build_tray, defer_start, follow_chosen_display,
         run_onboarding_or_start, setup_logging, wire_notification_badge,
     )
 
@@ -55,6 +55,9 @@ def main():
 
     from version import get_version
     version = get_version()
+
+    from infrastructure.common.qt.ui.screen_placement import RepositioningPlacement
+    display_selection = follow_chosen_display(app, RepositioningPlacement())
 
     # ── OS-specific adapters ────────────────────────────────────────────────
     from infrastructure.windows.input.gamepad_watcher import WindowsGamepadWatcher
@@ -174,8 +177,8 @@ def main():
         log_window = LogWindow(log_file=str(log_file))
         tray = build_tray(
             feedback=feedback, desktop=desktop, log_viewer=log_window,
-            version=version, gamepad=gamepad, quit_fn=app.quit,
-            keep_alive=lambda o: _refs.__setitem__("about", o),
+            version=version, gamepad=gamepad, displays=display_selection,
+            quit_fn=app.quit, keep_alive=lambda o: _refs.__setitem__("about", o),
         )
         controller = build_controller(
             gamepad=gamepad, desktop=desktop, tray=tray, wm=wm,

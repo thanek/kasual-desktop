@@ -27,6 +27,7 @@ from domain.shared.feedback import Cue, Feedback
 from domain.shared.i18n import translate
 from infrastructure.common.qt.ui import styles
 from infrastructure.common.qt.ui.layer_shell import Keyboard
+from infrastructure.common.qt.ui.target_screen import target_screen
 from .base_overlay import BaseOverlay
 
 _CARD_WIDTH = 960
@@ -96,7 +97,7 @@ class _SetupDialog(BaseOverlay):
         outer.setAlignment(Qt.AlignmentFlag.AlignCenter)
         card = self.build_card(_CARD_WIDTH)
         card.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Maximum)
-        screen = QApplication.primaryScreen()
+        screen = target_screen()
         if screen is not None:
             card.setMaximumHeight(
                 int(screen.availableGeometry().height() * _CARD_MAX_HEIGHT_RATIO))

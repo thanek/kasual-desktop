@@ -11,7 +11,7 @@ pushed via :meth:`show_hints` (the ``HintBarView`` port).
 
 import qtawesome as qta
 from PyQt6.QtCore import Qt, QSize
-from PyQt6.QtGui import QGuiApplication, QPainter
+from PyQt6.QtGui import QPainter
 from PyQt6.QtWidgets import QHBoxLayout, QLabel, QVBoxLayout, QWidget
 
 from domain.navigation.bar_views import HintBarView
@@ -20,6 +20,7 @@ from domain.shared.i18n import translate
 from infrastructure.common.qt._meta import ProtocolQtMeta
 from infrastructure.common.qt.ui import styles
 from infrastructure.common.qt.ui.surface_hiding import SurfaceHiding
+from infrastructure.common.qt.ui.target_screen import target_screen
 from infrastructure.common.qt.ui.layer_shell import Anchor, Keyboard, Layer
 from infrastructure.common.qt.ui.top_surface import (
     GNOME_PANEL_CLEARANCE, home_chrome_edge_margin,
@@ -144,14 +145,14 @@ class HintBar(QWidget, HintBarView, metaclass=ProtocolQtMeta):
     # ── Positioning ──────────────────────────────────────────────────────────
 
     def position_at_bottom(self) -> None:
-        """Size the bar to the bottom strip of the primary screen.
+        """Size the bar to the bottom strip of the target screen.
 
         Called by the Desktop *before* show(). Skipped where layer-shell anchors
         already size the surface; on GNOME the position is ignored (Mutter places
         top-levels) but the width must be ours, set before the first map."""
         if surface_sized_by_compositor():
             return
-        screen = QGuiApplication.primaryScreen()
+        screen = target_screen()
         if screen is not None:
             g = screen.geometry()
             self.setGeometry(
