@@ -21,7 +21,7 @@ from domain.lifecycle.window_manager import WindowManager
 from domain.shell.wallpaper import SystemWallpaper
 
 if TYPE_CHECKING:
-    from domain.display.display import DisplayPlacement
+    from domain.display.display import DisplayPlacement, PrimaryDisplay
     from domain.display.relaunch import AnnouncedRelaunch
     from infrastructure.common.qt.desktop.surface import DesktopSurface
     from infrastructure.common.qt.ui.tray import TrayIconFor
@@ -294,6 +294,16 @@ def build_desktop_surface(compositor: Compositor | None = None) -> "DesktopSurfa
             return GnomeSurface()
     from infrastructure.linux.wayland.surface import LayerShellSurface
     return LayerShellSurface(cede_to_bottom=compositor in CEDE_BY_SINKING)
+
+
+def build_primary_display(compositor: Compositor) -> "PrimaryDisplay | None":
+    if compositor is not Compositor.GNOME:
+        return None
+    from infrastructure.gnome.helper import helper_present
+    if not helper_present():
+        return None
+    from infrastructure.gnome.display.primary import GnomePrimaryDisplay
+    return GnomePrimaryDisplay()
 
 
 def build_display_placement(

@@ -126,3 +126,11 @@ def set_target_monitor(connector: str | None) -> None:
         logger.warning("Kasual Helper cannot move Kasual Desktop to another screen "
                        "(%s) — update the extension and log in again",
                        reply.errorMessage())
+
+
+def lend_primary_monitor() -> None:
+    call("LendPrimaryMonitor")
+
+
+def reclaim_primary_monitor() -> None:
+    call("ReclaimPrimaryMonitor")

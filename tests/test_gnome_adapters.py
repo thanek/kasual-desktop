@@ -337,3 +337,14 @@ class TestGnomeWallpaper:
         with patch("infrastructure.gnome.display.wallpaper.subprocess.run",
                    side_effect=FileNotFoundError):
             assert GnomeSystemWallpaper().current() is None
+
+
+class TestGnomePrimaryDisplay:
+    def test_lends_and_reclaims_through_the_helper(self):
+        from infrastructure.gnome.display.primary import GnomePrimaryDisplay
+        with patch("infrastructure.gnome.helper.call") as call:
+            primary = GnomePrimaryDisplay()
+            primary.lend_to_kasual_screen()
+            primary.reclaim()
+        assert [c.args for c in call.call_args_list] == [
+            ("LendPrimaryMonitor",), ("ReclaimPrimaryMonitor",)]

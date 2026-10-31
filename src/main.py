@@ -6,7 +6,7 @@ from pathlib import Path
 
 from infrastructure.linux.compositor import (
     CEDE_BY_SINKING, Compositor, build_desktop_surface, build_display_placement,
-    build_screensaver_waker,
+    build_primary_display, build_screensaver_waker,
     build_system_wallpaper, build_tray_icon_source, build_window_manager,
     detect_compositor, layer_shell_available,
 )
@@ -83,6 +83,7 @@ from domain.shell.background_hint import BackgroundHint
 from domain.shell.desktop_control import DesktopControl
 from infrastructure.common.qt.i18n import install_translations
 from infrastructure.linux.session_restart import ExecSessionRestart
+from domain.display.launched_apps_screen import LaunchedAppsFollowKasual
 from domain.display.relaunch import AnnouncedRelaunch
 
 logger = logging.getLogger(__name__)
@@ -238,6 +239,14 @@ def main() -> None:
     gamepad_access_view = QtSetupView(gamepad, feedback)
     gamepad_access = _gamepad_access_gate(gamepad_access_view)
 
+    def keep_launched_apps_on_kasual_screen(process_manager: AppManager) -> None:
+        primary = build_primary_display(COMPOSITOR)
+        if primary is None:
+            return
+        primary.reclaim()
+        launched_apps = LaunchedAppsFollowKasual(process_manager, primary, QtScheduler())
+        app.aboutToQuit.connect(launched_apps.release)
+
     def start_session() -> DesktopControl:
         """Bring up the Desktop and controller from the (now-provisioned) apps.
 
@@ -269,12 +278,14 @@ def main() -> None:
         brightness = select_brightness_control()
         # Ahead of the controller below: launching a game already needs it.
         hud = MangoHudControl()
+        process_manager = AppManager()
+        keep_launched_apps_on_kasual_screen(process_manager)
         desktop = build_desktop(
             apps=apps, gamepad=gamepad, window_manager=wm,
             wallpaper=build_system_wallpaper(COMPOSITOR), feedback=feedback,
             volume=volume, brightness=brightness,
             power=power, scheduler=QtScheduler(),
-            process_manager=AppManager(), notifications=notification_center,
+            process_manager=process_manager, notifications=notification_center,
             network_control=NMNetworkControl(),
             displays=display_selection,
             audio_outputs=PactlAudioOutputs(),

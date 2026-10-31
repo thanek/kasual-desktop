@@ -46,6 +46,8 @@ const IFACE = `
     <method name="SetTargetMonitor">
       <arg type="s" direction="in" name="connector"/>
     </method>
+    <method name="LendPrimaryMonitor"/>
+    <method name="ReclaimPrimaryMonitor"/>
     <method name="ActivateSurface">
       <arg type="s" direction="in" name="title"/>
     </method>
@@ -78,6 +80,13 @@ const DEFAULT_LAYER = 3;
 const NO_MONITOR = -1;
 const OVERLAY_LAYER = 3;
 const KEYBOARD_NONE = 0;
+
+const DISPLAY_CONFIG = ['org.gnome.Mutter.DisplayConfig',
+    '/org/gnome/Mutter/DisplayConfig', 'org.gnome.Mutter.DisplayConfig'];
+const APPLY_TEMPORARILY = 1;
+const MONITOR_PROPERTIES_KEPT = ['color-mode', 'rgb-range'];
+
+const CHROME_SETTLE_MS = [100, 1000];
 
 const FOCUS_RETRY_MS = 100;
 const FOCUS_ATTEMPTS = 20;
@@ -198,6 +207,54 @@ function stackedBottomToTop(windows) {
     return global.display.sort_windows_by_stacking(windows);
 }
 
+function callDisplayConfig(method, parameters, onReply) {
+    Gio.DBus.session.call(...DISPLAY_CONFIG, method, parameters, null,
+        Gio.DBusCallFlags.NONE, -1, null, (bus, result) => {
+            try {
+                onReply?.(bus.call_finish(result).deepUnpack());
+            } catch (e) {
+                console.log(`${TAG} DisplayConfig.${method} failed: ${e.message}`);
+            }
+        });
+}
+
+function currentModes(monitors) {
+    const modes = new Map();
+    for (const [[connector], modeList, properties] of monitors) {
+        const current = modeList.find(mode => mode[6]['is-current']?.deepUnpack());
+        if (current)
+            modes.set(connector, {id: current[0], properties});
+    }
+    return modes;
+}
+
+function keptMonitorProperties(properties) {
+    const kept = {};
+    for (const key of MONITOR_PROPERTIES_KEPT)
+        if (key in properties)
+            kept[key] = properties[key];
+    return kept;
+}
+
+function primaryConnectorOf(logicalMonitors) {
+    const primary = logicalMonitors.find(logical => logical[4]);
+    return primary ? primary[5][0][0] : '';
+}
+
+function configWithPrimary(logicalMonitors, modes, connector) {
+    return logicalMonitors.map(([x, y, scale, transform, , monitors]) => {
+        const connectors = monitors.map(([name]) => name);
+        return [x, y, scale, transform, connectors.includes(connector),
+            connectors.map(name => [name, modes.get(name).id,
+                keptMonitorProperties(modes.get(name).properties)])];
+    });
+}
+
+function layoutProperties(properties) {
+    return properties['supports-changing-layout-mode']?.deepUnpack()
+        ? {'layout-mode': properties['layout-mode']} : {};
+}
+
 class Helper {
     constructor() {
         this._dbus = Gio.DBusExportedObject.wrapJSObject(IFACE, this);
@@ -214,6 +271,8 @@ class Helper {
         this._roles = new Map();
         this._targetConnector = '';
         this._desktopMonitor = NO_MONITOR;
+        this._primaryLent = false;
+        this._primaryOwner = '';
         this._pinned = new Set();
         this._unredirectApi = null;
         this._restackedId = 0;
@@ -226,6 +285,7 @@ class Helper {
         this._focusAttempts = 0;
         this._windowSignals = new Map();
         this._realGetRunning = null;
+        this._chromeSettleIds = [];
 
         this._hideFromAppLists();
         this._windowCreatedId = global.display.connect(
@@ -234,6 +294,8 @@ class Helper {
                 this._bringToKasualOnceShown(win);
             });
         this._suppressReadyBannerForOwnWindows();
+        this._monitorsChangedId = Main.layoutManager.connect(
+            'monitors-changed', () => this._recheckChromeOnceSettled());
         // A ceded Desktop's depth follows the focus (see _focusIsOrdinaryWindow).
         this._focusId = global.display.connect('notify::focus-window', () => {
             this._scheduleSync();
@@ -253,6 +315,8 @@ class Helper {
         this._anchorSourceId = 0;
         this._focusSourceId = 0;
         global.display.disconnect(this._windowCreatedId);
+        Main.layoutManager.disconnect(this._monitorsChangedId);
+        this._forgetChromeRechecks();
         this._restoreReadyBanner();
         global.display.disconnect(this._focusId);
         for (const [win, ids] of this._windowSignals)
@@ -260,6 +324,7 @@ class Helper {
                 win.disconnect(id);
         this._windowSignals.clear();
         this._showFromAppLists();
+        this.ReclaimPrimaryMonitor();
         this._virtualPointer = null;
         this._appClass = null;
         this._sync();
@@ -416,6 +481,7 @@ class Helper {
         if (!role || !role.anchors)
             return;
         if (win.is_fullscreen()) {
+            this._moveToTargetMonitor(win);
             this._gatherAroundDesktop(win);
             return;
         }
@@ -503,6 +569,26 @@ class Helper {
 
     // A frame rect read straight from 'size-changed' can still be the size we
     // requested rather than the one the client committed.
+    _recheckChromeOnceSettled() {
+        this._forgetChromeRechecks();
+        if (typeof Main.layoutManager._updateVisibility !== 'function')
+            return;
+        this._chromeSettleIds = CHROME_SETTLE_MS.map(delay => {
+            const sourceId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, delay, () => {
+                this._chromeSettleIds = this._chromeSettleIds.filter(id => id !== sourceId);
+                Main.layoutManager._updateVisibility();
+                return GLib.SOURCE_REMOVE;
+            });
+            return sourceId;
+        });
+    }
+
+    _forgetChromeRechecks() {
+        for (const id of this._chromeSettleIds)
+            GLib.source_remove(id);
+        this._chromeSettleIds = [];
+    }
+
     _scheduleAnchor(win) {
         this._anchorPending.add(win);
         if (this._anchorSourceId)
@@ -731,6 +817,19 @@ class Helper {
             targetConnector: this._targetConnector,
             targetMonitor: this._chosenMonitor(),
             desktopMonitor: this._desktopMonitor,
+            monitors: Main.layoutManager.monitors.map((m, index) => ({
+                index,
+                primary: index === Main.layoutManager.primaryIndex,
+                mutterInFullscreen: global.display.get_monitor_in_fullscreen(index),
+                shellInFullscreen: m.inFullscreen,
+            })),
+            panels: Main.uiGroup.get_children()
+                .filter(actor => actor.name === 'panelBox')
+                .map(actor => ({
+                    visible: actor.visible,
+                    mapped: actor.mapped,
+                    x: actor.x, y: actor.y, width: actor.width, height: actor.height,
+                })),
             // Bottom-to-top, the order that decides what covers what.
             stack: stackedBottomToTop(mappedWindows()).map((w, depth) => {
                 const actor = w.get_compositor_private();
@@ -839,6 +938,42 @@ class Helper {
         this._targetConnector = connector;
         for (const win of this._ourWindows())
             this._moveToTargetMonitor(win);
+        if (this._primaryLent)
+            this._makePrimary(connector || this._primaryOwner);
+    }
+
+    LendPrimaryMonitor() {
+        this._primaryLent = true;
+        this._makePrimary(this._targetConnector);
+    }
+
+    ReclaimPrimaryMonitor() {
+        if (!this._primaryLent)
+            return;
+        this._primaryLent = false;
+        this._makePrimary(this._primaryOwner);
+        this._primaryOwner = '';
+    }
+
+    _makePrimary(connector) {
+        if (!connector)
+            return;
+        callDisplayConfig('GetCurrentState', null,
+            ([serial, monitors, logicalMonitors, properties]) => {
+                const current = primaryConnectorOf(logicalMonitors);
+                const known = logicalMonitors.some(logical =>
+                    logical[5].some(([name]) => name === connector));
+                if (!known || current === connector)
+                    return;
+                if (this._primaryLent && !this._primaryOwner)
+                    this._primaryOwner = current;
+                const config = configWithPrimary(
+                    logicalMonitors, currentModes(monitors), connector);
+                callDisplayConfig('ApplyMonitorsConfig',
+                    new GLib.Variant('(uua(iiduba(ssa{sv}))a{sv})', [
+                        serial, APPLY_TEMPORARILY, config, layoutProperties(properties)]));
+                console.log(`${TAG} primary monitor ${current} → ${connector}`);
+            });
     }
 
     // Qt cannot activate its own window without a Wayland token, and Kasual is
