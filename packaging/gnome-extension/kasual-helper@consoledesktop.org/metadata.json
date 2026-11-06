@@ -2,6 +2,6 @@
   "uuid": "kasual-helper@consoledesktop.org",
   "name": "Kasual Helper",
   "description": "Companion extension for Kasual Desktop. Mutter implements no wlr-layer-shell and exposes no window list to clients, so this extension bridges both over D-Bus: it reports windows with their PIDs, activates/minimizes/closes them, and keeps Kasual's surfaces stacked above fullscreen games.",
-  "shell-version": ["45", "46", "47", "48", "49", "50"],
+  "shell-version": ["45", "46", "47", "48", "49", "50", "51"],
   "url": "https://github.com/thanek/kasual-desktop"
 }

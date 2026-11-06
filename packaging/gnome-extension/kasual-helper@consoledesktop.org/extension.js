@@ -124,6 +124,13 @@ function raiseWindow(w) {
     else if (typeof w.raise === 'function') w.raise();
 }
 
+function defaultSeat() {
+    const backend = typeof Clutter.get_default_backend === 'function'
+        ? Clutter.get_default_backend()
+        : global.stage.context.get_backend();
+    return backend.get_default_seat();
+}
+
 function lowerWindow(w) {
     if (typeof w.lower_with_transients === 'function')
         w.lower_with_transients(global.get_current_time());
@@ -439,6 +446,10 @@ class Helper {
             }
             return;
         }
+        if (typeof banner?._onWindowDemandsAttention === 'function') {
+            this._filterTrackedBanner(banner);
+            return;
+        }
         // Shell internals moved: fall back to clearing the flag post-hoc.
         this._flagClearId = global.display.connect(
             'window-demands-attention', (_d, win) => {
@@ -447,10 +458,38 @@ class Helper {
             });
     }
 
+    _filterTrackedBanner(banner) {
+        const skipOurs = (display, window) => {
+            if (!(window && this._isOurs(window)))
+                banner._onWindowDemandsAttention(display, window);
+        };
+        this._trackedBanner = banner;
+        global.display.disconnectObject(banner);
+        global.display.connectObject(
+            'window-demands-attention', skipOurs,
+            'window-marked-urgent', skipOurs,
+            banner);
+    }
+
+    _restoreTrackedBanner() {
+        const banner = this._trackedBanner;
+        const showBanner = banner._onWindowDemandsAttention.bind(banner);
+        this._trackedBanner = null;
+        global.display.disconnectObject(banner);
+        global.display.connectObject(
+            'window-demands-attention', showBanner,
+            'window-marked-urgent', showBanner,
+            banner);
+    }
+
     _restoreReadyBanner() {
         if (this._flagClearId) {
             global.display.disconnect(this._flagClearId);
             this._flagClearId = 0;
+            return;
+        }
+        if (this._trackedBanner) {
+            this._restoreTrackedBanner();
             return;
         }
         const filter = this._bannerFilter;
@@ -1079,8 +1118,7 @@ class Helper {
     // without moving the cursor — see mutter's handle_idletime_for_event().
     SimulateUserActivity() {
         if (!this._virtualPointer) {
-            const seat = Clutter.get_default_backend().get_default_seat();
-            this._virtualPointer = seat.create_virtual_device(
+            this._virtualPointer = defaultSeat().create_virtual_device(
                 Clutter.InputDeviceType.POINTER_DEVICE);
         }
         this._virtualPointer.notify_relative_motion(Clutter.CURRENT_TIME, 0, 0);
