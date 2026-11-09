@@ -378,7 +378,7 @@ class Desktop(QWidget, DesktopView, DesktopShell, DesktopControl, metaclass=Prot
         self._desktop.resume()
 
     def withdraw(self) -> None:
-        """Leave the screen when the controller goes away, chrome included."""
+        self._chrome.drop_open_menu()
         self.withdraw_view()
 
     # ── Hint bar / Home chrome (decisions live in the HomeChrome coordinator) ─

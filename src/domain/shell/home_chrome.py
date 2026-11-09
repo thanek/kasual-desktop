@@ -137,6 +137,11 @@ class HomeChrome:
             self._surface.collapse_immediately()
             self._surface.hide()
 
+    def drop_open_menu(self) -> None:
+        if self._surface is not None:
+            self._surface.collapse_immediately()
+        self._overlay_owns_hints = False
+
     def on_desktop_activated(self) -> None:
         """Coming forward from an app always lands on the bare Home chrome —
         never a leftover menu from the app just left."""
