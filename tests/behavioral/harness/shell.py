@@ -297,7 +297,6 @@ def pick_menu_action(kd: KDClient, pad: VirtualPad, action: str) -> None:
 # ── the performance HUD ──────────────────────────────────────────────────────
 
 def expect_no_hud_card(kd: KDClient, what: str) -> None:
-    """The HUD is a game's business; over anything else its slider must not be there."""
     if _section(kd.snapshot(), HUD) is None:
         report(f'no HUD slider over the {what}', 'PASS', 'the slider is offered to games only')
         return
@@ -309,7 +308,6 @@ def hud_level(kd: KDClient) -> int:
 
 
 def step_hud_level(kd: KDClient, pad: VirtualPad, step: int) -> None:
-    """Move the HUD slider one notch, and check that KD's own level moved with it."""
     if _section(kd.snapshot(), HUD) is None:
         report('the menu offers the HUD slider', 'FAIL', 'no HUD slider over the game')
         raise ScenarioAborted('the HUD slider is not on the menu')

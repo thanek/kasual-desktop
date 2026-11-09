@@ -15,7 +15,7 @@ from domain.lifecycle.window_manager import WindowManager
 from domain.shell.desktop_control import DesktopControl
 from domain.shell.overlay import SectionedHomeOverlay, SectionedOverlayFactory
 from domain.shell.session import SessionPolicy
-from domain.shell.session_collaborators import ConnectionIndicator
+from domain.shell.session_collaborators import ConnectionIndicator, SessionSound
 from domain.system.actions import ActionDeps
 from domain.system.action_view import make_action_confirm
 from domain.system.hud import HudControl
@@ -40,6 +40,7 @@ class Application:
         wm:              WindowManager,
         overlay_factory: SectionedOverlayFactory,
         hud:             HudControl,
+        sound:           SessionSound,
     ) -> None:
         self._desktop         = desktop
         self._app_control     = app_control
@@ -51,7 +52,7 @@ class Application:
         # SectionedHomeOverlay that composes its own zones; the controller hands it
         # only the foreground context plus the dispatch/cancel/hint callbacks.
         self._overlay: SectionedHomeOverlay | None = None
-        self._session         = SessionPolicy(view=desktop, indicator=tray)
+        self._session         = SessionPolicy(view=desktop, indicator=tray, sound=sound)
         # System actions (sleep/shutdown/…) run through the domain ActionRunner,
         # gating the confirmable ones on the Desktop's tracked confirm dialog.
         self._action_runner = ActionRunner(

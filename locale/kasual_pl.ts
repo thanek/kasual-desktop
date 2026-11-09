@@ -241,11 +241,6 @@
 </context><context>
     <name>Kasual Desktop</name>
     <message>
-        <location filename="../src/domain/display/choices.py" line="20" />
-        <source>Chosen by the system</source>
-        <translation>Wybrany przez system</translation>
-    </message>
-    <message>
         <location filename="../src/domain/display/relaunch.py" line="26" />
         <source>Kasual Desktop will restart</source>
         <translation>Kasual Desktop uruchomi się ponownie</translation>
@@ -649,9 +644,14 @@
         <translation>Dotyczy to każdego kompozytora z layer-shell obsługiwanego przez Kasual Desktop — KWin, Sway, Hyprland, cosmic-comp, labwc i wayfire — nie tylko tego. Wyjątkiem jest GNOME: tam tę samą pracę wykonuje dołączone rozszerzenie Shella.</translation>
     </message>
     <message>
-        <location filename="../src/domain/shared/choice.py" line="22" />
+        <location filename="../src/domain/shared/choice.py" line="33" />
         <source>{0} (not connected)</source>
         <translation>{0} (niepodłączony)</translation>
+    </message>
+    <message>
+        <location filename="../src/domain/shared/choice.py" line="38" />
+        <source>Chosen by the system</source>
+        <translation>Wybrany przez system</translation>
     </message>
     <message>
         <location filename="../src/domain/shell/background_hint.py" line="48" />
@@ -709,7 +709,7 @@
         <translation>Powiadomienia</translation>
     </message>
     <message>
-        <location filename="../src/infrastructure/common/qt/overlays/configuration_overlay.py" line="119" />
+        <location filename="../src/infrastructure/common/qt/overlays/configuration_overlay.py" line="118" />
         <location filename="../src/domain/system/actions.py" line="88" />
         <source>Configuration</source>
         <translation>Konfiguracja</translation>
@@ -725,12 +725,12 @@
         <translation>Sprawdź dostęp do pada</translation>
     </message>
     <message>
-        <location filename="../src/domain/system/hud.py" line="35" />
+        <location filename="../src/domain/system/hud.py" line="32" />
         <source>Off</source>
         <translation>Wył.</translation>
     </message>
     <message>
-        <location filename="../src/domain/system/hud.py" line="80" />
+        <location filename="../src/domain/system/hud.py" line="74" />
         <source>Performance overlay</source>
         <translation>Nakładka wydajności</translation>
     </message>
@@ -741,7 +741,7 @@
         <translation>Ekran</translation>
     </message>
     <message>
-        <location filename="../src/infrastructure/common/qt/overlays/configuration_overlay.py" line="104" />
+        <location filename="../src/infrastructure/common/qt/overlays/configuration_overlay.py" line="103" />
         <source>Audio output</source>
         <translation>Wyjście audio</translation>
     </message>

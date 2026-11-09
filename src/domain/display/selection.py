@@ -4,6 +4,7 @@ connected, otherwise wherever the system puts it — the pick itself is kept."""
 from domain.display.display import (
     SYSTEM_DECIDES, Display, DisplayPlacement, DisplayPreference, Displays,
 )
+from domain.shared.choice import remembered_but_absent
 
 _NOTHING_APPLIED_YET = object()
 
@@ -23,11 +24,7 @@ class DisplaySelection:
     def options(self) -> list[Display]:
         connected = self._displays.connected()
         preferred = self._preference.preferred()
-        remembered_but_absent = (
-            preferred is not SYSTEM_DECIDES
-            and all(display.id != preferred for display in connected)
-        )
-        if remembered_but_absent:
+        if remembered_but_absent(connected, preferred):
             return [*connected, Display(preferred, preferred, connected=False)]
         return connected
 

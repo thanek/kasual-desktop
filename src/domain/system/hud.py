@@ -1,5 +1,4 @@
-"""The in-game performance HUD — port plus the level slider's logic: whether it
-is offered, what a level reads as, and where a step lands."""
+"""The in-game performance HUD and its level slider."""
 
 from __future__ import annotations
 
@@ -17,8 +16,6 @@ HUD_OFF = 0
 
 @dataclass(frozen=True)
 class HudLevel:
-    """``HUD_OFF`` or a detail level up to ``most_detailed``; construction clamps."""
-
     value:         int
     most_detailed: int
 
@@ -43,8 +40,6 @@ class HudLevel:
 
 
 class HudControl(Protocol):
-    """Port onto the performance HUD; ``is_available`` gates the whole feature."""
-
     def is_available(self) -> bool: ...
     def level(self) -> HudLevel: ...
     def set_level(self, level: HudLevel) -> None: ...
@@ -70,7 +65,6 @@ def hud_launch_env(hud: HudControl, app: App) -> Mapping[str, str]:
 
 def hud_menu_item(hud: HudControl, foreground_is_game: bool,
                   foreground_pid: int | None) -> MenuItem | None:
-    """The HUD level slider, or ``None`` when moving it would change nothing on screen."""
     if not hud.is_available():
         return None
     if not foreground_is_game:

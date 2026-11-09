@@ -4,7 +4,7 @@ reach them."""
 from dataclasses import dataclass
 from typing import Protocol
 
-SYSTEM_DECIDES = None
+from domain.shared.choice import SYSTEM_DECIDES as SYSTEM_DECIDES
 
 
 @dataclass(frozen=True)

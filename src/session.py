@@ -134,7 +134,7 @@ def build_tray(
     )
 
 
-def build_controller(*, gamepad, desktop, tray, wm, power, hud) -> Application:
+def build_controller(*, gamepad, desktop, tray, wm, power, hud, sound) -> Application:
     return Application(
         gamepad=gamepad,
         desktop=desktop,
@@ -144,6 +144,7 @@ def build_controller(*, gamepad, desktop, tray, wm, power, hud) -> Application:
         wm=wm,
         overlay_factory=desktop.home_overlay_factory(),
         hud=hud,
+        sound=sound,
     )
 
 

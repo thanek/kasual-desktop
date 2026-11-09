@@ -1,12 +1,7 @@
-"""The devices sound can play through, the port that lists and switches them,
-and how they are offered to the user to pick from."""
+"""The devices sound can play through, and the port that lists and switches them."""
 
 from dataclasses import dataclass
 from typing import Protocol
-
-from domain.shared.choice import Choice, connection_aware_label
-
-OutputChoice = Choice[str]
 
 
 @dataclass(frozen=True)
@@ -25,14 +20,3 @@ class AudioOutputs(Protocol):
 def active_output_label(outputs: AudioOutputs) -> str | None:
     active = outputs.active()
     return next((output.label for output in outputs.available() if output.id == active), None)
-
-
-def output_choices(outputs: AudioOutputs) -> list[OutputChoice]:
-    active = outputs.active()
-    return [
-        OutputChoice(
-            connection_aware_label(output.label, output.connected), output.id,
-            pickable=output.connected, chosen=output.id == active,
-        )
-        for output in outputs.available()
-    ]

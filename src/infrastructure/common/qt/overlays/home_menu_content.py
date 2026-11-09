@@ -85,8 +85,6 @@ class _SliderRow(Protocol):
 
 
 class _Zone:
-    """A rendered section; ``sliders`` is non-empty where ◄► adjusts instead of A."""
-
     def __init__(self, kind: SectionKind, items: list[MenuItem],
                  widgets: list[QWidget], columns: int = 1,
                  sliders: "list[_SliderRow] | None" = None) -> None:
@@ -381,8 +379,7 @@ class HomeMenuContent(QWidget):
         col.setSpacing(18)
         for row in rows:
             col.addWidget(row)
-        # Fixed, not max: under AlignHCenter a mere maximum collapses to the
-        # slider's tiny size hint.
+        # A maximum width collapses to the slider's size hint under AlignHCenter.
         container.setFixedWidth(_QUICK_WIDTH)
         self._zones_layout.addWidget(container, alignment=Qt.AlignmentFlag.AlignHCenter)
 

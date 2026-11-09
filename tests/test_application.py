@@ -5,6 +5,8 @@ The controller is pure wiring (no Qt): it subscribes to the gamepad through the
 port, and routes activated menu items. Here we drive it entirely over fakes.
 """
 
+from unittest.mock import MagicMock
+
 from application import Application
 from domain.shared.event_emitter import EventEmitter
 from domain.input.gamepad_events import (
@@ -208,8 +210,6 @@ class FakePower:
 
 
 class FakeHud:
-    """HudControl port — starts unavailable."""
-
     def __init__(self, available=False):
         self.available = available
         self.current = HudLevel(HUD_OFF, 4)
@@ -235,6 +235,7 @@ def make_app(desktop=None, gamepad=None, factory=None, tray=None, wm=None, hud=N
         wm=wm,
         overlay_factory=factory,
         hud=hud,
+        sound=MagicMock(),
     )
     return controller, desktop, gamepad, factory, tray, wm
 

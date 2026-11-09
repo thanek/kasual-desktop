@@ -1,7 +1,8 @@
 """The collaborators SessionPolicy drives as the controller connects/disconnects.
 
-Desktop visibility (the Desktop), the connection surface (the system tray) and
-anything dismissable on disconnect (the Home Overlay).
+Desktop visibility (the Desktop), the connection surface (the system tray), the
+sound output Kasual Desktop borrows while in charge, and anything dismissable on
+disconnect (the Home Overlay).
 """
 
 from typing import Protocol
@@ -15,6 +16,11 @@ class SessionView(Protocol):
         """Leave the screen entirely — the Home chrome (header, hint bar) is its
         own surface and must come down with it."""
         ...
+
+
+class SessionSound(Protocol):
+    def take_over(self) -> None: ...
+    def give_back(self) -> None: ...
 
 
 class ConnectionIndicator(Protocol):

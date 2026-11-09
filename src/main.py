@@ -64,6 +64,8 @@ from infrastructure.linux.power.power import SystemdPowerControl
 from infrastructure.linux.audio.qt_multimedia_env import apply_qt_multimedia_overrides
 from domain.system.silenced_power import SilencedPowerControl
 from infrastructure.linux.audio.outputs import PactlAudioOutputs
+from infrastructure.linux.audio.background import AudioWorker, BackgroundKasualOutput
+from domain.audio.kasual_output import KasualOutput
 from infrastructure.linux.audio.volume import PactlVolumeControl
 from infrastructure.linux.display.brightness import select_brightness_control
 from infrastructure.linux.display.screensaver import (
@@ -77,7 +79,8 @@ from infrastructure.linux.notifications.notifier import FreedesktopNotifier
 from infrastructure.linux.network.network_manager import NMNetworkControl, NMNetworkMonitor
 from domain.notifications.center import NotificationCenter
 from infrastructure.common.catalog.preferences import (
-    DesktopBackgroundHintMemory, DesktopHudSetupMemory, DesktopPowerPreference,
+    DesktopBackgroundHintMemory, DesktopBorrowedOutputMemory, DesktopHudSetupMemory,
+    DesktopOutputPreference, DesktopPowerPreference,
 )
 from domain.shell.background_hint import BackgroundHint
 from domain.shell.desktop_control import DesktopControl
@@ -247,6 +250,18 @@ def main() -> None:
         launched_apps = LaunchedAppsFollowKasual(process_manager, primary, QtScheduler())
         app.aboutToQuit.connect(launched_apps.release)
 
+    def sound_follows_kasual(audio_outputs: PactlAudioOutputs,
+                             worker: AudioWorker) -> BackgroundKasualOutput:
+        kasual_output = BackgroundKasualOutput(
+            KasualOutput(DesktopOutputPreference(), audio_outputs,
+                         DesktopBorrowedOutputMemory()),
+            worker,
+        )
+        if not gamepad.is_connected():
+            kasual_output.give_back()
+        app.aboutToQuit.connect(kasual_output.give_back_before_exit)
+        return kasual_output
+
     def start_session() -> DesktopControl:
         """Bring up the Desktop and controller from the (now-provisioned) apps.
 
@@ -275,6 +290,9 @@ def main() -> None:
         notification_monitor.on_notification(notification_center.record)
 
         volume = PactlVolumeControl()
+        audio_worker = AudioWorker()
+        audio_outputs = PactlAudioOutputs(run_in_background=audio_worker.run)
+        kasual_output = sound_follows_kasual(audio_outputs, audio_worker)
         brightness = select_brightness_control()
         # Ahead of the controller below: launching a game already needs it.
         hud = MangoHudControl()
@@ -288,7 +306,8 @@ def main() -> None:
             process_manager=process_manager, notifications=notification_center,
             network_control=NMNetworkControl(),
             displays=display_selection,
-            audio_outputs=PactlAudioOutputs(),
+            audio_outputs=audio_outputs,
+            audio_output=kasual_output,
             order_store=DesktopTileOrderStore(),
             settings_store=DesktopTileSettingsStore(),
             app_pinning=DesktopAppPinning(),
@@ -338,7 +357,7 @@ def main() -> None:
 
         controller = build_controller(
             gamepad=gamepad, desktop=desktop, tray=tray, wm=wm,
-            power=power, hud=hud,
+            power=power, hud=hud, sound=kasual_output,
         )
 
         if test_api_enabled():

@@ -65,6 +65,7 @@ def _make_desktop(mock_gamepad, apps=None):
         network_control=MagicMock(),
         displays=MagicMock(),
         audio_outputs=MagicMock(),
+        audio_output=MagicMock(),
         order_store=MagicMock(),
         settings_store=MagicMock(),
         app_pinning=MagicMock(),

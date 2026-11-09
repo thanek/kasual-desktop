@@ -527,6 +527,24 @@ X-Kasual-Env=MANGOHUD=1;FOO=bar     # extra environment variables (optional)
 > `Exec=/home/you/kasual-desktop/apps/yt/yt.sh`) — relative paths do not resolve
 > from `~/.config`.
 
+### Audio output (Linux)
+
+The **Audio output** list in Kasual Desktop's Configuration picks the device
+Kasual Desktop plays through **while it is in charge** — that is, while a
+controller is connected. The system's own output is never configured here:
+
+- **Controller connects** → Kasual Desktop remembers the output the system is
+  using and switches to its own (if that one is plugged in — a TV that is off
+  leaves the sound where it is).
+- **Controller goes away, or Kasual Desktop quits** → the remembered output comes
+  back. If you changed the output by hand in the meantime, your change stays.
+- **Chosen by the system** (the default) → Kasual Desktop never touches the sound.
+
+The remembered output is kept in `preferences.json`, so a crash in console mode
+still hands the sound back on the next start. Change the desktop output the usual
+way (GNOME Settings, `pavucontrol`, …) — Kasual Desktop picks it up the next time
+it takes over.
+
 ---
 
 ## 🎚️ In-Game HUD

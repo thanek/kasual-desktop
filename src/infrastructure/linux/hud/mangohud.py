@@ -1,15 +1,9 @@
-"""MangoHudControl — the :class:`HudControl` port backed by MangoHud's config.
+"""MangoHudControl — the :class:`HudControl` port over ``MangoHud.conf``.
 
-``~/.config/MangoHud/MangoHud.conf`` is the HUD's state and its absence the
-absence of the feature. An active ``no_display`` line hides the overlay; while it
-is shown, ``preset=N`` picks MangoHud's built-in detail level (1 FPS only …
-4 detailed). MangoHud watches the file and re-reads both on every write, so a
-running game follows the slider live. The user's own lines stay untouched and
-still override what a preset sets.
-
-The config alone never puts the overlay on screen: MangoHud's Vulkan layer is
-*implicit*, gated on ``MANGOHUD=1``, which reaches only what Kasual Desktop starts
-itself — hence ``launch_env``, ``is_attached`` and :class:`MangoHudSession`.
+``no_display`` hides the overlay and ``preset=N`` sets its detail level; MangoHud
+re-reads the file on every write and lets the user's own lines override the preset.
+Its Vulkan layer loads only under ``MANGOHUD=1``, which reaches just what Kasual
+Desktop starts itself.
 """
 
 from __future__ import annotations

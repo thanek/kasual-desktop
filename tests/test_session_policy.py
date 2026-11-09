@@ -34,10 +34,35 @@ class FakeOverlay:
         self.dismissed += 1
 
 
-def _make():
+class FakeSound:
+    def __init__(self):
+        self.steps: list[str] = []
+
+    def take_over(self):
+        self.steps.append("take_over")
+
+    def give_back(self):
+        self.steps.append("give_back")
+
+
+def _make(sound=None):
     view = FakeView()
     indicator = FakeIndicator()
-    return SessionPolicy(view, indicator), view, indicator
+    return SessionPolicy(view, indicator, sound or FakeSound()), view, indicator
+
+
+class TestSound:
+    def test_a_connected_controller_takes_the_sound_over(self):
+        sound = FakeSound()
+        policy, _, _ = _make(sound)
+        policy.gamepad_connected_changed(True, overlay=None)
+        assert sound.steps == ["take_over"]
+
+    def test_a_lost_controller_gives_the_sound_back(self):
+        sound = FakeSound()
+        policy, _, _ = _make(sound)
+        policy.gamepad_connected_changed(False, overlay=None)
+        assert sound.steps == ["give_back"]
 
 
 class TestConnected:

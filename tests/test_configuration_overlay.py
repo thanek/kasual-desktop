@@ -4,7 +4,8 @@ from unittest.mock import MagicMock
 
 from PyQt6.QtWidgets import QLabel
 
-from domain.audio.output import AudioOutput, output_choices
+from domain.audio.kasual_output import output_choices
+from domain.audio.output import AudioOutput
 from domain.display.choices import screen_choices
 from domain.display.display import SYSTEM_DECIDES, Display
 from domain.input.vocabulary import Event
@@ -35,27 +36,27 @@ class FakeDisplays:
         self._chosen = display_id
 
 
-class FakeAudioOutputs:
-    def __init__(self, outputs=(), active=None):
+class FakeOutputPicker:
+    def __init__(self, outputs=(), chosen=SYSTEM_DECIDES):
         self._outputs = list(outputs)
-        self._active = active
-        self.activated = []
+        self._chosen = chosen
+        self.choices = []
 
-    def available(self):
+    def options(self):
         return self._outputs
 
-    def active(self):
-        return self._active
+    def chosen(self):
+        return self._chosen
 
-    def activate(self, output_id):
-        self.activated.append(output_id)
-        self._active = output_id
+    def choose(self, output_id):
+        self.choices.append(output_id)
+        self._chosen = output_id
 
 
-def _overlay(mock_gamepad, displays, audio_outputs=None):
+def _overlay(mock_gamepad, displays, audio_output=None):
     from infrastructure.common.qt.overlays.configuration_overlay import ConfigurationOverlay
     return ConfigurationOverlay(
-        mock_gamepad, displays, audio_outputs or FakeAudioOutputs(), MagicMock())
+        mock_gamepad, displays, audio_output or FakeOutputPicker(), MagicMock())
 
 
 def _labels(overlay):
@@ -83,13 +84,13 @@ class TestScreenChoices:
 
 
 class TestOutputChoices:
-    def test_offers_every_output_and_marks_the_active_one(self):
-        choices = output_choices(FakeAudioOutputs([SPEAKERS, HDMI], active="alsa.hdmi"))
+    def test_the_system_comes_first_then_every_output_with_the_chosen_one_marked(self):
+        choices = output_choices(FakeOutputPicker([SPEAKERS, HDMI], chosen="alsa.hdmi"))
         assert [(c.value, c.chosen) for c in choices] == [
-            ("alsa.speaker", False), ("alsa.hdmi", True)]
+            (SYSTEM_DECIDES, False), ("alsa.speaker", False), ("alsa.hdmi", True)]
 
     def test_an_unplugged_output_is_shown_but_not_pickable(self):
-        unplugged = output_choices(FakeAudioOutputs([HEADPHONES]))[0]
+        unplugged = output_choices(FakeOutputPicker([HEADPHONES]))[1]
         assert unplugged.pickable is False
         assert "Headphones" in unplugged.label
 
@@ -147,23 +148,31 @@ class TestConfigurationOverlay:
 class TestAudioSection:
     def test_lists_every_output_under_its_own_heading(self, mock_gamepad):
         overlay = _overlay(mock_gamepad, FakeDisplays(MONITORS),
-                           FakeAudioOutputs([SPEAKERS, HDMI]))
+                           FakeOutputPicker([SPEAKERS, HDMI]))
         assert {"Audio output", "USB Audio Speakers", "HDMI Audio"} <= set(_labels(overlay))
+        assert _labels(overlay).count("Chosen by the system") == 2
 
     def test_is_left_out_when_the_system_offers_no_outputs(self, mock_gamepad):
         overlay = _overlay(mock_gamepad, FakeDisplays(MONITORS))
         assert "Audio output" not in _labels(overlay)
 
-    def test_picking_an_output_activates_it_and_leaves_the_screen_alone(self, mock_gamepad):
+    def test_picking_an_output_chooses_it_for_kasual_and_leaves_the_screen_alone(
+            self, mock_gamepad):
         displays = FakeDisplays(MONITORS)
-        outputs = FakeAudioOutputs([SPEAKERS, HDMI], active="alsa.speaker")
+        outputs = FakeOutputPicker([SPEAKERS, HDMI])
         overlay = _overlay(mock_gamepad, displays, outputs)
-        _press(overlay, Event.DOWN, Event.DOWN, Event.DOWN, Event.DOWN, Event.SELECT)
-        assert outputs.activated == ["alsa.hdmi"]
+        _press(overlay, *[Event.DOWN] * 5, Event.SELECT)
+        assert outputs.choices == ["alsa.hdmi"]
         assert displays.choices == []
 
+    def test_picking_the_system_hands_the_choice_back(self, mock_gamepad):
+        outputs = FakeOutputPicker([SPEAKERS, HDMI], chosen="alsa.hdmi")
+        overlay = _overlay(mock_gamepad, FakeDisplays(MONITORS), outputs)
+        _press(overlay, *[Event.DOWN] * 3, Event.SELECT)
+        assert outputs.choices == [SYSTEM_DECIDES]
+
     def test_skips_an_unplugged_output(self, mock_gamepad):
-        outputs = FakeAudioOutputs([SPEAKERS, HEADPHONES, HDMI])
+        outputs = FakeOutputPicker([SPEAKERS, HEADPHONES, HDMI])
         overlay = _overlay(mock_gamepad, FakeDisplays(MONITORS), outputs)
         _press(overlay, *[Event.DOWN] * 5, Event.SELECT)
-        assert outputs.activated == ["alsa.hdmi"]
+        assert outputs.choices == ["alsa.hdmi"]

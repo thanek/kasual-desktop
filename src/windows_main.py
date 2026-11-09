@@ -84,6 +84,7 @@ def main():
     # ── System adapters ─────────────────────────────────────────────────────
     from infrastructure.windows.power.power import WindowsPowerControl
     from infrastructure.windows.audio.outputs import NoAudioOutputs
+    from domain.audio.kasual_output import KasualOutput
     from infrastructure.windows.audio.volume import WindowsVolumeControl
     from infrastructure.windows.display.brightness import WindowsBrightnessControl
     from infrastructure.windows.network.network import WindowsNetworkProbe, WindowsNetworkControl
@@ -99,7 +100,9 @@ def main():
     # read the same volume/brightness controls and power-default preference.
     volume = WindowsVolumeControl()
     brightness = WindowsBrightnessControl()
-    from infrastructure.common.catalog.preferences import DesktopPowerPreference
+    from infrastructure.common.catalog.preferences import (
+        DesktopBorrowedOutputMemory, DesktopOutputPreference, DesktopPowerPreference,
+    )
     power_preference = DesktopPowerPreference()
 
     # ── Catalog ─────────────────────────────────────────────────────────────
@@ -141,6 +144,8 @@ def main():
         notification_source = WindowsNotificationSource()
         notification_source.on_notification(notification_center.record)
 
+        kasual_output = KasualOutput(
+            DesktopOutputPreference(), NoAudioOutputs(), DesktopBorrowedOutputMemory())
         desktop = build_desktop(
             apps=load_apps(),
             gamepad=gamepad,
@@ -156,6 +161,7 @@ def main():
             network_control=WindowsNetworkControl(),
             displays=display_selection,
             audio_outputs=NoAudioOutputs(),
+            audio_output=kasual_output,
             order_store=DesktopTileOrderStore(),
             settings_store=DesktopTileSettingsStore(),
             app_pinning=WindowsAppPinning(),
@@ -185,7 +191,7 @@ def main():
         )
         controller = build_controller(
             gamepad=gamepad, desktop=desktop, tray=tray, wm=wm,
-            power=power, hud=WindowsRtssHudControl(),
+            power=power, hud=WindowsRtssHudControl(), sound=kasual_output,
         )
         _refs.update(desktop=desktop, tray=tray, controller=controller)
 

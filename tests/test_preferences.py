@@ -1,12 +1,14 @@
-"""Tests for the JSON-backed scalar preferences (DesktopPowerPreference)."""
+"""Tests for the JSON-backed scalar preferences."""
 
 import json
 
 import pytest
 
 from domain.system.actions import SLEEP, RESTART, SHUTDOWN
+from domain.audio.output import AudioOutput
 from infrastructure.common.catalog.preferences import (
-    DesktopBackgroundHintMemory, DesktopDisplayPreference, DesktopPowerPreference,
+    DesktopBackgroundHintMemory, DesktopBorrowedOutputMemory, DesktopDisplayPreference,
+    DesktopOutputPreference, DesktopPowerPreference,
 )
 
 
@@ -95,3 +97,39 @@ class TestDisplayPreference:
     def test_ignores_a_value_that_names_no_screen(self, cfg):
         (cfg / "preferences.json").write_text(json.dumps({"display": 3}))
         assert DesktopDisplayPreference().preferred() is None
+
+
+HDMI = AudioOutput("alsa_card.pci-0000_01_00.1:hdmi-output-0", "HDMI/DisplayPort – SAMSUNG")
+
+
+class TestOutputPreference:
+    def test_the_system_decides_when_unset(self, cfg):
+        assert DesktopOutputPreference().preferred() is None
+
+    def test_persists_the_output_with_its_label(self, cfg):
+        DesktopOutputPreference().set_preferred(HDMI)
+        assert DesktopOutputPreference().preferred() == HDMI
+
+    def test_clearing_returns_the_choice_to_the_system(self, cfg):
+        DesktopOutputPreference().set_preferred(HDMI)
+        DesktopOutputPreference().set_preferred(None)
+        assert DesktopOutputPreference().preferred() is None
+
+    def test_keeps_the_other_preferences(self, cfg):
+        DesktopPowerPreference().set_default(RESTART)
+        DesktopOutputPreference().set_preferred(HDMI)
+        assert DesktopPowerPreference().default() == RESTART
+
+
+class TestBorrowedOutputMemory:
+    def test_nothing_borrowed_until_remembered(self, cfg):
+        assert DesktopBorrowedOutputMemory().borrowed_from_system() is None
+
+    def test_the_loan_outlives_the_process(self, cfg):
+        DesktopBorrowedOutputMemory().remember_borrowed_from_system("usb:speaker")
+        assert DesktopBorrowedOutputMemory().borrowed_from_system() == "usb:speaker"
+
+    def test_forgetting_clears_it(self, cfg):
+        DesktopBorrowedOutputMemory().remember_borrowed_from_system("usb:speaker")
+        DesktopBorrowedOutputMemory().remember_borrowed_from_system(None)
+        assert DesktopBorrowedOutputMemory().borrowed_from_system() is None

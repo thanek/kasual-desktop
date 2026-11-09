@@ -1,5 +1,5 @@
 """Centred modal with Kasual Desktop's settings: the screen it runs on and the
-device sound plays through.
+device its sound plays through while it is in charge.
 
 Picking a screen goes through the same `DisplaySelection.choose` the tray menu
 uses, so both paths have identical consequences. The audio section is left out
@@ -17,7 +17,7 @@ from PyQt6.QtWidgets import (
     QFrame, QHBoxLayout, QLabel, QScrollArea, QSizePolicy, QVBoxLayout, QWidget,
 )
 
-from domain.audio.output import AudioOutputs, output_choices
+from domain.audio.kasual_output import OutputPicker, output_choices
 from domain.display.choices import screen_choices
 from domain.display.selection import DisplaySelection
 from domain.input.pad_control import PadControl
@@ -62,7 +62,7 @@ class ConfigurationOverlay(BaseOverlay):
         self,
         gamepad: PadControl,
         displays: DisplaySelection,
-        audio_outputs: AudioOutputs,
+        audio_output: OutputPicker,
         feedback: Feedback,
         parent: QWidget | None = None,
         dim: bool = True,
@@ -96,13 +96,12 @@ class ConfigurationOverlay(BaseOverlay):
         self._sections.setSpacing(8)
         self._add_section(translate("Kasual Desktop", "Screen"),
                           screen_choices(displays), displays.choose)
-        audio = output_choices(audio_outputs)
-        if audio:
+        if audio_output.options():
             self._sections.addSpacing(10)
             self._sections.addWidget(styles.separator())
             self._sections.addSpacing(10)
             self._add_section(translate("Kasual Desktop", "Audio output"),
-                              audio, audio_outputs.activate)
+                              output_choices(audio_output), audio_output.choose)
         layout.addWidget(self._scrolling(sections))
 
         outer.addWidget(card)
