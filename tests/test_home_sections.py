@@ -5,7 +5,7 @@ no Qt. Labels come back localized (identity without a translator installed).
 """
 
 from domain.menu.entry import (
-    CLOSE_APP, POWER, RETURN_TO_APP, RETURN_TO_DESKTOP, TOGGLE_HUD,
+    CLOSE_APP, POWER, RETURN_TO_APP, RETURN_TO_DESKTOP, HUD_LEVEL,
 )
 from domain.menu.home import SectionKind, compose_home_sections
 from domain.system.actions import (
@@ -16,9 +16,8 @@ from domain.catalog.target import AppTarget, WindowTarget
 
 
 class FakeHud:
-    def __init__(self, available=False, enabled=True, attached=True):
+    def __init__(self, available=False, attached=True):
         self._available = available
-        self._enabled = enabled
         self._attached = attached
 
     def is_available(self):
@@ -26,15 +25,6 @@ class FakeHud:
 
     def is_attached(self, pid):
         return self._attached
-
-    def is_enabled(self):
-        return self._enabled
-
-    def enable(self):
-        self._enabled = True
-
-    def disable(self):
-        self._enabled = False
 
 
 def _desktop(brightness=True, power_default=SLEEP):
@@ -127,7 +117,7 @@ class TestAppContext:
     def test_hud_section_when_game_and_available(self):
         s = self._app(hud=FakeHud(available=True), game=True)
         hud = _by_kind(s, SectionKind.HUD)
-        assert [i.action for i in hud.items] == [TOGGLE_HUD]
+        assert [i.action for i in hud.items] == [HUD_LEVEL]
 
     def test_no_hud_section_when_unavailable(self):
         s = self._app(hud=FakeHud(available=False), game=True)

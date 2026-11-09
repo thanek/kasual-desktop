@@ -9,6 +9,7 @@ it appears and feeds it pad events via :meth:`configure` / :meth:`handle_pad`.
 import logging
 from collections.abc import Callable
 from dataclasses import dataclass
+from typing import Protocol
 
 import qtawesome as qta
 from PyQt6.QtCore import (
@@ -31,7 +32,7 @@ from domain.shared.feedback import Cue, Feedback
 from domain.system.actions import HIDE_DESKTOP, VOLUME
 from domain.system.bounded_value import BoundedValue
 from domain.system.brightness import Brightness, BrightnessControl
-from domain.system.hud import HudControl
+from domain.system.hud import HudControl, HudLevel
 from domain.system.power_menu import PowerMenu
 from domain.system.volume import Volume, VolumeControl
 from infrastructure.common.qt.ui import styles
@@ -78,17 +79,27 @@ def _quick_row_style(selected: bool) -> str:
     return f"background-color: transparent; border: 2px solid transparent; border-radius: {_QUICK_RADIUS}px;"
 
 
+class _SliderRow(Protocol):
+    def adjust(self, sign: int) -> bool: ...
+    def set_from_raw(self, raw: int) -> bool: ...
+
+
 class _Zone:
-    """A rendered section: its kind, the source items, the row/card widgets, the
-    grid width, and the current selection within it."""
+    """A rendered section; ``sliders`` is non-empty where ◄► adjusts instead of A."""
 
     def __init__(self, kind: SectionKind, items: list[MenuItem],
-                 widgets: list[QWidget], columns: int = 1) -> None:
+                 widgets: list[QWidget], columns: int = 1,
+                 sliders: "list[_SliderRow] | None" = None) -> None:
         self.kind = kind
         self.items = items
         self.widgets = widgets
         self.columns = columns
+        self.sliders = sliders or []
         self.index = 0
+
+    @property
+    def is_adjustable(self) -> bool:
+        return bool(self.sliders)
 
 
 @dataclass
@@ -113,6 +124,30 @@ class _QuickRow:
         with QSignalBlocker(self.slider):
             self.slider.setValue(new.value)
         self.vlabel.setText(f"{new.value}%")
+        return True
+
+
+@dataclass
+class _HudRow:
+    hud: HudControl
+    level: HudLevel
+    slider: QSlider
+    vlabel: QLabel
+
+    def adjust(self, sign: int) -> bool:
+        return self._commit(self.level.adjusted(sign))
+
+    def set_from_raw(self, raw: int) -> bool:
+        return self._commit(self.level.at(raw))
+
+    def _commit(self, new: HudLevel) -> bool:
+        if new == self.level:
+            return False
+        self.level = new
+        self.hud.set_level(new)
+        with QSignalBlocker(self.slider):
+            self.slider.setValue(new.value)
+        self.vlabel.setText(new.label)
         return True
 
 
@@ -206,6 +241,7 @@ class HomeMenuContent(QWidget):
         self._request_hide = request_hide
         self._header = header
         self._on_power_chooser = on_power_chooser
+        self._hud = hud
         sections = compose_home_sections(
             foreground, hud,
             brightness_controllable=self._brightness.is_controllable(),
@@ -262,57 +298,93 @@ class HomeMenuContent(QWidget):
                 self._zones_layout.addWidget(styles.separator())
             if section.kind == SectionKind.QUICK:
                 self._zones.append(self._build_quick(section))
+            elif section.kind == SectionKind.HUD:
+                self._zones.append(self._build_hud(section))
             else:
                 self._zones.append(self._build_cards(section))
 
     def _build_quick(self, section: HomeSection) -> _Zone:
-        zone_index = len(self._zones)   # the index this zone takes once appended
+        zone_index = len(self._zones)
+        rows: list[QWidget] = []
+        for row_i, item in enumerate(section.items):
+            control = self._control_for(item.action)
+            value = self._last_values.get(item.action) or self._default_value(item.action)
+            slider = self._slider(zone_index, row_i, maximum=100, value=value.value)
+            vlabel = self._value_label(f"{value.value}%")
+            if item.action == VOLUME:
+                middle = self._with_caption_below(slider, self._output_name_caption())
+            else:
+                middle = slider
+            rows.append(self._slider_row(zone_index, row_i, item.icon, middle, vlabel))
+            self._quick_state.append(_QuickRow(control, value, slider, vlabel))
+            self._fetch_value_async(item.action, control, len(self._quick_state) - 1)
+        self._add_slider_rows(rows)
+        return _Zone(SectionKind.QUICK, section.items, rows, sliders=self._quick_state)
+
+    def _build_hud(self, section: HomeSection) -> _Zone:
+        zone_index = len(self._zones)
+        item = section.items[0]
+        level = self._hud.level()
+        slider = self._slider(zone_index, 0, maximum=level.most_detailed, value=level.value)
+        vlabel = self._value_label(level.label)
+        caption = self._caption(item.label)
+        row = self._slider_row(zone_index, 0, item.icon,
+                               self._with_caption_below(slider, caption), vlabel)
+        self._add_slider_rows([row])
+        return _Zone(SectionKind.HUD, section.items, [row],
+                     sliders=[_HudRow(self._hud, level, slider, vlabel)])
+
+    def _slider(self, zone_index: int, row_i: int, *, maximum: int, value: int) -> QSlider:
+        slider = QSlider(Qt.Orientation.Horizontal)
+        slider.setRange(0, maximum)
+        slider.setPageStep(1)
+        slider.setValue(value)
+        slider.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        slider.setStyleSheet(_SLIDER_QSS)
+        slider.valueChanged.connect(
+            lambda raw, zi=zone_index, ci=row_i: self._on_slider(zi, ci, raw))
+        return slider
+
+    @staticmethod
+    def _value_label(text: str) -> QLabel:
+        vlabel = QLabel(text)
+        vlabel.setFixedWidth(52)
+        vlabel.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        vlabel.setStyleSheet("color: white; font-size: 18px; background: transparent;")
+        return vlabel
+
+    def _slider_row(self, zone_index: int, row_i: int, icon_name: str,
+                    middle: QWidget | QVBoxLayout, vlabel: QLabel) -> _RoundedFrame:
+        row = _RoundedFrame()
+        row.setFrameShape(QFrame.Shape.NoFrame)
+        row.setStyleSheet(_quick_row_style(False))
+        row.hovered.connect(lambda zi=zone_index, ci=row_i: self._hover_item(zi, ci))
+        rl = QHBoxLayout(row)
+        rl.setContentsMargins(12, 8, 12, 8)
+        rl.setSpacing(12)
+        icon = QLabel()
+        icon.setPixmap(qta.icon(icon_name, color="white").pixmap(24, 24))
+        icon.setStyleSheet("background: transparent;")
+        rl.addWidget(icon)
+        if isinstance(middle, QVBoxLayout):
+            rl.addLayout(middle, 1)
+        else:
+            rl.addWidget(middle, 1)
+        rl.addWidget(vlabel)
+        return row
+
+    def _add_slider_rows(self, rows: list[QWidget]) -> None:
         container = QWidget()
         container.setStyleSheet("background: transparent;")
         col = QVBoxLayout(container)
         col.setContentsMargins(0, 0, 0, 0)
         col.setSpacing(18)
-        rows: list[QWidget] = []
-        for row_i, item in enumerate(section.items):
-            control = self._control_for(item.action)
-            value = self._last_values.get(item.action) or self._default_value(item.action)
-            row = _RoundedFrame()
-            row.setFrameShape(QFrame.Shape.NoFrame)
-            row.setStyleSheet(_quick_row_style(False))
-            row.hovered.connect(lambda zi=zone_index, ci=row_i: self._hover_item(zi, ci))
-            rl = QHBoxLayout(row)
-            rl.setContentsMargins(12, 8, 12, 8)
-            rl.setSpacing(12)
-            icon = QLabel()
-            icon.setPixmap(qta.icon(item.icon, color="white").pixmap(24, 24))
-            icon.setStyleSheet("background: transparent;")
-            rl.addWidget(icon)
-            slider = QSlider(Qt.Orientation.Horizontal)
-            slider.setRange(0, 100)
-            slider.setValue(value.value)
-            slider.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-            slider.setStyleSheet(_SLIDER_QSS)
-            slider.valueChanged.connect(
-                lambda raw, zi=zone_index, ci=row_i: self._on_slider(zi, ci, raw))
-            if item.action == VOLUME:
-                rl.addLayout(self._with_output_name_below(slider), 1)
-            else:
-                rl.addWidget(slider, 1)
-            vlabel = QLabel(f"{value.value}%")
-            vlabel.setFixedWidth(52)
-            vlabel.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-            vlabel.setStyleSheet("color: white; font-size: 18px; background: transparent;")
-            rl.addWidget(vlabel)
+        for row in rows:
             col.addWidget(row)
-            rows.append(row)
-            self._quick_state.append(
-                _QuickRow(control, value, slider, vlabel))
-            self._fetch_value_async(item.action, control, len(self._quick_state) - 1)
         # Fixed, not max: under AlignHCenter a mere maximum collapses to the
         # slider's tiny size hint.
         container.setFixedWidth(_QUICK_WIDTH)
         self._zones_layout.addWidget(container, alignment=Qt.AlignmentFlag.AlignHCenter)
-        return _Zone(SectionKind.QUICK, section.items, rows)
 
     def _build_cards(self, section: HomeSection) -> _Zone:
         zone_index = len(self._zones)
@@ -339,18 +411,26 @@ class HomeMenuContent(QWidget):
         self._zones_layout.addWidget(container, alignment=Qt.AlignmentFlag.AlignHCenter)
         return _Zone(section.kind, section.items, cards, columns=1)
 
-    def _with_output_name_below(self, slider: QSlider) -> QVBoxLayout:
+    @staticmethod
+    def _with_caption_below(slider: QSlider, caption: QLabel) -> QVBoxLayout:
         column = QVBoxLayout()
         column.setContentsMargins(0, 0, 0, 0)
         column.setSpacing(2)
         column.addWidget(slider)
-        self._output_name = QLabel()
-        self._output_name.setStyleSheet(
-            "color: #9aa0aa; font-size: 14px; background: transparent;")
-        self._show_output_name(self._last_output_name)
-        column.addWidget(self._output_name)
-        self._fetch_output_name_async()
+        column.addWidget(caption)
         return column
+
+    @staticmethod
+    def _caption(text: str = "") -> QLabel:
+        caption = QLabel(text)
+        caption.setStyleSheet("color: #9aa0aa; font-size: 14px; background: transparent;")
+        return caption
+
+    def _output_name_caption(self) -> QLabel:
+        self._output_name = self._caption()
+        self._show_output_name(self._last_output_name)
+        self._fetch_output_name_async()
+        return self._output_name
 
     def _fetch_output_name_async(self) -> None:
         gen = self._build_gen
@@ -410,18 +490,16 @@ class HomeMenuContent(QWidget):
         else:
             key = RETURN_TO_DESKTOP
         for zi, zone in enumerate(self._zones):
-            if zone.kind in (SectionKind.QUICK, SectionKind.HEADER):
+            if zone.is_adjustable or zone.kind == SectionKind.HEADER:
                 continue
             for ci, item in enumerate(zone.items):
                 if item.action == key:
                     self._active = zi
                     zone.index = ci
                     return
-        # Fall back to the first non-chrome zone (never open focused on the header
-        # or a slider) — the Actions zone in every composed context.
         self._active = next(
             (zi for zi, z in enumerate(self._zones)
-             if z.kind not in (SectionKind.QUICK, SectionKind.HEADER)),
+             if not z.is_adjustable and z.kind != SectionKind.HEADER),
             0,
         )
 
@@ -457,8 +535,8 @@ class HomeMenuContent(QWidget):
             return
         if zone is None:
             return
-        if zone.kind == SectionKind.QUICK:
-            self._quick_event(zone, event)
+        if zone.is_adjustable:
+            self._slider_event(zone, event)
         else:
             self._cards_event(zone, event)
 
@@ -492,7 +570,7 @@ class HomeMenuContent(QWidget):
         self.sync_hints()
         self._feedback.play(Cue.CURSOR)
 
-    def _quick_event(self, zone: _Zone, event: str) -> None:
+    def _slider_event(self, zone: _Zone, event: str) -> None:
         if event == Event.UP:
             if zone.index == 0:
                 self._cross_to_zone(-1, landing="last")
@@ -504,9 +582,9 @@ class HomeMenuContent(QWidget):
             else:
                 self._move_within(zone, +1)
         elif event == Event.LEFT:
-            self._adjust(zone.index, -1)
+            self._adjust(zone.sliders[zone.index], -1)
         elif event == Event.RIGHT:
-            self._adjust(zone.index, +1)
+            self._adjust(zone.sliders[zone.index], +1)
 
     def _cards_event(self, zone: _Zone, event: str) -> None:
         n = len(zone.items)
@@ -549,8 +627,8 @@ class HomeMenuContent(QWidget):
             self.sync_hints()
             self._feedback.play(Cue.CURSOR)
 
-    def _adjust(self, slider_index: int, sign: int) -> None:
-        if self._quick_state[slider_index].adjust(sign):
+    def _adjust(self, slider: _SliderRow, sign: int) -> None:
+        if slider.adjust(sign):
             self._feedback.play(Cue.CURSOR)
 
     def _nudge_volume(self, sign: int) -> None:
@@ -619,7 +697,7 @@ class HomeMenuContent(QWidget):
         runs for genuine drags; the row snaps the handle to any domain re-clamp."""
         self._active = zone_i
         self._zones[zone_i].index = item_i
-        self._quick_state[item_i].set_from_raw(raw)
+        self._zones[zone_i].sliders[item_i].set_from_raw(raw)
         self._render()
         self.sync_hints()
 
@@ -672,7 +750,7 @@ class HomeMenuContent(QWidget):
                 continue
             for wi, widget in enumerate(zone.widgets):
                 selected = active and wi == zone.index
-                if zone.kind == SectionKind.QUICK:
+                if zone.is_adjustable:
                     widget.setStyleSheet(_quick_row_style(selected))
                 else:
                     widget.setStyleSheet(
@@ -684,7 +762,7 @@ class HomeMenuContent(QWidget):
         if self._set_hints is None or not self._zones:
             return
         zone = self._zones[self._active]
-        if zone.kind == SectionKind.QUICK:
+        if zone.is_adjustable:
             hints = nav_hints.OVERLAY_QUICK
         elif zone.kind == SectionKind.HEADER:
             # The header row navigates left/right; Y/Options only applies to

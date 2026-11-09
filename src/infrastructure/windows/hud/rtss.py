@@ -10,18 +10,20 @@ dwXOR`` and returns the result, so bit ``RTSSHOOKSFLAG_OSD_VISIBLE`` (0x1) — t
 global OSD on/off — is read and flipped directly:
 
   - **read**    ⟺ ``SetFlags(0xFFFFFFFF, 0)`` returns the word unchanged;
-  - **enable**  → ``SetFlags(~OSD_VISIBLE, OSD_VISIBLE)`` (clear then set the bit);
-  - **disable** → ``SetFlags(~OSD_VISIBLE, 0)`` (clear the bit).
+  - **show**    → ``SetFlags(~OSD_VISIBLE, OSD_VISIBLE)`` (clear then set the bit);
+  - **hide**    → ``SetFlags(~OSD_VISIBLE, 0)`` (clear the bit).
+
+RTSS has no detail levels of its own, so the slider offers just Off and 1.
 
 This is the Windows analogue of :class:`infrastructure.linux.hud.mangohud.MangoHudControl`:
 it needs no elevation and writes no files, and — unlike the persistent ``EnableOSD``
 profile property whose only writable copy lives under RTSS's ``Program Files``
-folder — it reflects the live state, so the toggle's label is always accurate. The
+folder — it reflects the live state, so the slider never shows a stale one. The
 flag is *runtime* visibility (like pressing the OSD hotkey), which is exactly what a
-HUD toggle wants.
+HUD slider wants.
 
 The whole feature is gated on RTSS running: with no RTSS process there is no flags
-word to read, so the toggle is never offered (``is_available``). The DLL access sits
+word to read, so the slider is never offered (``is_available``). The DLL access sits
 behind the :class:`_RtssFlags` seam so the bit logic is unit-testable without RTSS
 installed.
 """
@@ -34,7 +36,7 @@ from ctypes import wintypes
 from pathlib import Path
 from typing import Protocol
 
-from domain.system.hud import HudControl
+from domain.system.hud import HUD_OFF, HudControl, HudLevel
 
 logger = logging.getLogger(__name__)
 
@@ -42,6 +44,7 @@ logger = logging.getLogger(__name__)
 RTSSHOOKSFLAG_OSD_VISIBLE = 0x00000001
 _MASK32 = 0xFFFFFFFF
 _DLL_NAME = "RTSSHooks64.dll"
+_OSD_ONLY_LEVEL = 1
 
 
 class _RtssFlags(Protocol):
@@ -129,13 +132,14 @@ class WindowsRtssHudControl(HudControl):
     def is_available(self) -> bool:
         return self._flags.available()
 
-    def is_enabled(self) -> bool:
+    def level(self) -> HudLevel:
+        shown = _OSD_ONLY_LEVEL if self._osd_visible() else HUD_OFF
+        return HudLevel(shown, _OSD_ONLY_LEVEL)
+
+    def set_level(self, level: HudLevel) -> None:
+        osd_bit_after = 0 if level.is_off else RTSSHOOKSFLAG_OSD_VISIBLE
+        self._flags.write(~RTSSHOOKSFLAG_OSD_VISIBLE, osd_bit_after)
+
+    def _osd_visible(self) -> bool:
         word = self._flags.read()
         return word is not None and bool(word & RTSSHOOKSFLAG_OSD_VISIBLE)
-
-    def enable(self) -> None:
-        # clear the OSD bit, then set it — independent of the prior state
-        self._flags.write(~RTSSHOOKSFLAG_OSD_VISIBLE, RTSSHOOKSFLAG_OSD_VISIBLE)
-
-    def disable(self) -> None:
-        self._flags.write(~RTSSHOOKSFLAG_OSD_VISIBLE, 0)  # clear the OSD bit

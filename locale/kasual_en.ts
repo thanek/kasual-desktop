@@ -726,14 +726,14 @@
         <translation>Check gamepad access</translation>
     </message>
     <message>
-        <location filename="../src/domain/system/hud.py" line="54" />
-        <source>Disable HUD</source>
-        <translation>Disable HUD</translation>
+        <location filename="../src/domain/system/hud.py" line="35" />
+        <source>Off</source>
+        <translation>Off</translation>
     </message>
     <message>
-        <location filename="../src/domain/system/hud.py" line="55" />
-        <source>Enable HUD</source>
-        <translation>Enable HUD</translation>
+        <location filename="../src/domain/system/hud.py" line="80" />
+        <source>Performance overlay</source>
+        <translation>Performance overlay</translation>
     </message>
     <message>
         <location filename="../src/infrastructure/common/qt/ui/tray.py" line="68" />
@@ -831,6 +831,14 @@
         <location filename="../src/infrastructure/common/single_instance.py" line="64" />
         <source>Kasual Desktop did not start</source>
         <translation>Kasual Desktop did not start</translation>
+    </message>
+    <message>
+        <source>Disable HUD</source>
+        <translation type="vanished">Disable HUD</translation>
+    </message>
+    <message>
+        <source>Enable HUD</source>
+        <translation type="vanished">Enable HUD</translation>
     </message>
     <message>
         <source>Kasual Desktop needs its GNOME Shell helper extension to manage windows.

@@ -54,6 +54,6 @@ class ShellIntrospectionService(QObject):
         state = asdict(self._shell.snapshot())
         state['hud'] = {
             'available': self._hud is not None and self._hud.is_available(),
-            'enabled': self._hud is not None and self._hud.is_enabled(),
+            'level': self._hud.level().value if self._hud is not None else None,
         }
         return json.dumps(state)

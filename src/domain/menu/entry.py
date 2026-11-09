@@ -4,7 +4,7 @@
 RETURN_TO_APP     = "return_to_app"
 CLOSE_APP         = "close_app"
 RETURN_TO_DESKTOP = "return_to_desktop"
-TOGGLE_HUD        = "toggle_hud"
+HUD_LEVEL         = "hud_level"
 POWER             = "power"
 
 # ── Tile Popover actions ─────────────────────────────────────────────────────

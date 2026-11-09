@@ -7,6 +7,7 @@ clear/set that single bit while leaving the rest of the word (e.g. the limiter
 bit 0x4) untouched. No RTSS / DLL is needed, so these run on any platform.
 """
 
+from domain.system.hud import HUD_OFF
 from infrastructure.windows.hud.rtss import (
     RTSSHOOKSFLAG_OSD_VISIBLE,
     WindowsRtssHudControl,
@@ -50,61 +51,67 @@ class TestAvailability:
         assert control.is_available() is True
 
 
+def _shown(control) -> bool:
+    return not control.level().is_off
+
+
+def _show(control) -> None:
+    control.set_level(control.level().at(1))
+
+
+def _hide(control) -> None:
+    control.set_level(control.level().at(HUD_OFF))
+
+
 class TestState:
-    def test_enabled_when_osd_bit_set(self):
+    def test_shown_when_osd_bit_set(self):
         control, _ = _control(word=RTSSHOOKSFLAG_OSD_VISIBLE)
-        assert control.is_enabled() is True
+        assert _shown(control) is True
 
-    def test_disabled_when_osd_bit_clear(self):
-        control, _ = _control(word=_LIMITER_BIT)  # other bits set, OSD clear
-        assert control.is_enabled() is False
+    def test_hidden_when_osd_bit_clear(self):
+        control, _ = _control(word=_LIMITER_BIT)
+        assert _shown(control) is False
 
-    def test_disabled_when_unavailable(self):
-        # read() returns None with no RTSS — must read as not-enabled, never crash.
+    def test_hidden_when_unavailable(self):
         control, _ = _control(word=RTSSHOOKSFLAG_OSD_VISIBLE, available=False)
-        assert control.is_enabled() is False
+        assert _shown(control) is False
+
+    def test_offers_a_single_detail_level(self):
+        control, _ = _control(word=RTSSHOOKSFLAG_OSD_VISIBLE)
+        assert control.level().most_detailed == 1
 
 
-class TestEnable:
+class TestShow:
     def test_sets_osd_bit(self):
         control, flags = _control(word=0)
-        control.enable()
-        assert control.is_enabled() is True
+        _show(control)
+        assert _shown(control) is True
         assert flags.word & RTSSHOOKSFLAG_OSD_VISIBLE
 
     def test_preserves_other_flags(self):
         control, flags = _control(word=_LIMITER_BIT)
-        control.enable()
+        _show(control)
         assert flags.word == (_LIMITER_BIT | RTSSHOOKSFLAG_OSD_VISIBLE)
 
     def test_idempotent_when_already_on(self):
         control, flags = _control(word=_LIMITER_BIT | RTSSHOOKSFLAG_OSD_VISIBLE)
-        control.enable()
+        _show(control)
         assert flags.word == (_LIMITER_BIT | RTSSHOOKSFLAG_OSD_VISIBLE)
 
 
-class TestDisable:
+class TestHide:
     def test_clears_osd_bit(self):
         control, flags = _control(word=RTSSHOOKSFLAG_OSD_VISIBLE)
-        control.disable()
-        assert control.is_enabled() is False
+        _hide(control)
+        assert _shown(control) is False
         assert not (flags.word & RTSSHOOKSFLAG_OSD_VISIBLE)
 
     def test_preserves_other_flags(self):
         control, flags = _control(word=_LIMITER_BIT | RTSSHOOKSFLAG_OSD_VISIBLE)
-        control.disable()
+        _hide(control)
         assert flags.word == _LIMITER_BIT
 
     def test_idempotent_when_already_off(self):
         control, flags = _control(word=_LIMITER_BIT)
-        control.disable()
+        _hide(control)
         assert flags.word == _LIMITER_BIT
-
-
-class TestRoundTrip:
-    def test_disable_then_enable_returns_enabled(self):
-        control, _ = _control(word=RTSSHOOKSFLAG_OSD_VISIBLE)
-        control.disable()
-        assert control.is_enabled() is False
-        control.enable()
-        assert control.is_enabled() is True

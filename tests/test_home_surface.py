@@ -19,6 +19,7 @@ from domain.input.vocabulary import Event
 from domain.menu.entry import POWER, RETURN_TO_APP, RETURN_TO_DESKTOP
 from domain.system.actions import NETWORK
 from domain.system.brightness import Brightness
+from domain.system.hud import HUD_OFF, HudLevel
 from domain.system.volume import Volume
 from infrastructure.common.qt.desktop.home_surface import HomeSurface
 
@@ -456,6 +457,46 @@ class TestOnDemand:
         assert cancelled == [1]
         assert surface.is_showing() is False
 
+    def _focus_hud_slider(self, surface, hud):
+        from domain.menu.home import SectionKind
+        surface.show_for_context(
+            foreground=AppTarget(index=0, app_id="game", name="Game"), foreground_is_game=True,
+            hud=hud, on_action=lambda i: None, on_cancel=None, set_hints=lambda h: None,
+        )
+        content = surface._content
+        content.active = next(zi for zi, z in enumerate(content.zones)
+                              if z.kind == SectionKind.HUD)
+        return content
+
+    def test_hud_slider_steps_the_level_and_keeps_the_menu_open(self, qapp):
+        surface, _ = _surface(qapp)
+        hud = FakeHud(available=True, level=2)
+        content = self._focus_hud_slider(surface, hud)
+        content.handle_pad(Event.RIGHT)
+        assert hud.current.value == 3
+        content.handle_pad(Event.LEFT)
+        content.handle_pad(Event.LEFT)
+        content.handle_pad(Event.LEFT)
+        assert hud.current.value == HUD_OFF
+        assert surface.is_showing() is True
+
+    def test_hud_slider_stops_at_off(self, qapp):
+        surface, _ = _surface(qapp)
+        hud = FakeHud(available=True, level=HUD_OFF)
+        content = self._focus_hud_slider(surface, hud)
+        content.handle_pad(Event.LEFT)
+        assert hud.current.value == HUD_OFF
+
+    def test_select_on_hud_slider_dispatches_nothing(self, qapp):
+        surface, _ = _surface(qapp)
+        dispatched = []
+        hud = FakeHud(available=True, level=2)
+        content = self._focus_hud_slider(surface, hud)
+        surface._content._on_action = dispatched.append
+        content.handle_pad(Event.SELECT)
+        assert dispatched == []
+        assert surface.is_showing() is True
+
     def test_minimized_focuses_hide_desktop(self, qapp):
         # Over a minimized Kasual the surface opens focused on "Minimize"'s
         # counterpart — HIDE_DESKTOP is the restore entry, pre-focused so A
@@ -594,10 +635,14 @@ class TestOutsideClick:
 
 
 class FakeHud:
-    def is_available(self): return False
-    def is_enabled(self): return True
-    def enable(self): ...
-    def disable(self): ...
+    def __init__(self, available=False, level=2):
+        self._available = available
+        self.current = HudLevel(level, 4)
+
+    def is_available(self): return self._available
+    def is_attached(self, pid): return True
+    def level(self): return self.current
+    def set_level(self, level): self.current = level
 
 
 class TestStatusHeader:

@@ -36,7 +36,7 @@ from domain.menu.item import MenuItem
 from domain.shared.event_emitter import Unsubscribe
 from domain.shared.feedback import Cue, Feedback
 from domain.system.brightness import BrightnessControl
-from domain.system.hud import HudControl
+from domain.system.hud import HUD_OFF, HudControl, HudLevel
 from domain.system.power_menu import PowerMenu
 from domain.system.volume import VolumeControl
 from infrastructure.common.qt.ui import styles
@@ -53,7 +53,7 @@ from infrastructure.common.qt.overlays.home_menu_content import CARD_WIDTH, Home
 logger = logging.getLogger(__name__)
 
 # Caps the expanded panel; sized for the busiest context (a game with both a
-# brightness slider and the HUD toggle, ~526px) — tighter clips row content.
+# brightness slider and the HUD slider, ~526px) — tighter clips row content.
 CONTENT_H   = 550
 MORPH_MS    = 180   # collapse↔expand animation duration
 # The surface is ALWAYS this tall (sized for the expanded state) and anchored to
@@ -71,9 +71,8 @@ class _NullHud(HudControl):
     type-satisfying placeholder for the embedded content."""
 
     def is_available(self) -> bool: return False
-    def is_enabled(self) -> bool: return False
-    def enable(self) -> None: ...
-    def disable(self) -> None: ...
+    def level(self) -> HudLevel: return HudLevel(HUD_OFF, HUD_OFF)
+    def set_level(self, level: HudLevel) -> None: ...
 
 
 class HomeSurface(QWidget):

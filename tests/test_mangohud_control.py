@@ -1,13 +1,12 @@
 """Tests for MangoHudControl — the HudControl port over MangoHud.conf.
 
 Drives the adapter against a real temp config file, asserting how it reads the
-on/off state from `no_display` and how enable/disable rewrite the file.
+level from `no_display` and `preset=`, and how setting one rewrites the file.
 """
 
 from pathlib import Path
 
-import pytest
-
+from domain.system.hud import HUD_OFF
 from infrastructure.linux.hud.mangohud import MangoHudControl
 
 
@@ -35,60 +34,81 @@ class TestLaunchEnv:
         assert control.launch_env() == {"MANGOHUD": "1"}
 
 
-class TestState:
-    def test_enabled_when_no_no_display(self, tmp_path):
-        control, _ = _control(tmp_path, "fps_limit=60\ngpu_stats\n")
-        assert control.is_enabled() is True
+def _set(control: MangoHudControl, value: int) -> None:
+    control.set_level(control.level().at(value))
 
-    def test_enabled_when_no_display_commented(self, tmp_path):
-        control, _ = _control(tmp_path, "fps_limit=60\n# no_display\n")
-        assert control.is_enabled() is True
 
-    def test_disabled_with_active_no_display(self, tmp_path):
-        control, _ = _control(tmp_path, "fps_limit=60\nno_display\n")
-        assert control.is_enabled() is False
+class TestLevel:
+    def test_off_with_active_no_display(self, tmp_path):
+        control, _ = _control(tmp_path, "fps_limit=60\npreset=2\nno_display\n")
+        assert control.level().value == HUD_OFF
 
-    def test_disabled_with_no_display_value(self, tmp_path):
+    def test_off_with_no_display_value(self, tmp_path):
         control, _ = _control(tmp_path, "no_display=1\n")
-        assert control.is_enabled() is False
+        assert control.level().value == HUD_OFF
+
+    def test_off_with_the_hiding_preset(self, tmp_path):
+        control, _ = _control(tmp_path, "preset=0\n")
+        assert control.level().value == HUD_OFF
+
+    def test_reads_the_active_preset(self, tmp_path):
+        control, _ = _control(tmp_path, "# no_display\npreset=2\n")
+        assert control.level().value == 2
+
+    def test_first_of_a_preset_list(self, tmp_path):
+        control, _ = _control(tmp_path, "preset=3,1\n")
+        assert control.level().value == 3
+
+    def test_commented_preset_does_not_count(self, tmp_path):
+        control, _ = _control(tmp_path, "# preset=1\n")
+        assert control.level().value == 4
+
+    def test_own_layout_reads_as_most_detailed(self, tmp_path):
+        control, _ = _control(tmp_path, "fps_limit=60\ngpu_stats\n")
+        assert control.level().value == 4
+
+    def test_default_preset_reads_as_most_detailed(self, tmp_path):
+        control, _ = _control(tmp_path, "preset=-1\n")
+        assert control.level().value == 4
+
+    def test_offers_mangohuds_four_presets(self, tmp_path):
+        control, _ = _control(tmp_path, "")
+        assert control.level().most_detailed == 4
 
 
-class TestEnable:
-    def test_comments_out_active_no_display(self, tmp_path):
-        control, path = _control(tmp_path, "fps_limit=60\nno_display\n")
-        control.enable()
-        assert control.is_enabled() is True
-        assert "# no_display" in path.read_text()
+class TestSetDetailLevel:
+    def test_comments_out_no_display_and_sets_the_preset(self, tmp_path):
+        control, path = _control(tmp_path, "fps_limit=60\nno_display=1\n")
+        _set(control, 1)
+        assert path.read_text() == "fps_limit=60\n# no_display=1\npreset=1\n"
 
-    def test_preserves_value_when_commenting(self, tmp_path):
-        control, path = _control(tmp_path, "no_display=1\n")
-        control.enable()
-        assert "# no_display=1" in path.read_text()
+    def test_replaces_the_active_preset_in_place(self, tmp_path):
+        control, path = _control(tmp_path, "preset=1\nfps_limit=60\n")
+        _set(control, 3)
+        assert path.read_text() == "preset=3\nfps_limit=60\n"
 
-    def test_no_op_when_already_enabled(self, tmp_path):
-        control, path = _control(tmp_path, "fps_limit=60\n")
-        control.enable()
-        assert path.read_text() == "fps_limit=60\n"  # untouched
+    def test_no_op_when_already_there(self, tmp_path):
+        control, path = _control(tmp_path, "preset=2\n")
+        mtime = path.stat().st_mtime_ns
+        _set(control, 2)
+        assert path.stat().st_mtime_ns == mtime
 
 
-class TestDisable:
+class TestSetOff:
     def test_appends_no_display_when_absent(self, tmp_path):
-        control, path = _control(tmp_path, "fps_limit=60\n")
-        control.disable()
-        assert control.is_enabled() is False
-        assert "no_display" in path.read_text()
+        control, path = _control(tmp_path, "fps_limit=60\npreset=2\n")
+        _set(control, HUD_OFF)
+        assert path.read_text() == "fps_limit=60\npreset=2\nno_display\n"
 
     def test_uncomments_existing_no_display(self, tmp_path):
         control, path = _control(tmp_path, "fps_limit=60\n# no_display\n")
-        control.disable()
-        assert control.is_enabled() is False
-        lines = path.read_text().splitlines()
-        assert "no_display" in lines  # active, not commented
+        _set(control, HUD_OFF)
+        assert "no_display" in path.read_text().splitlines()
 
-    def test_no_op_when_already_disabled(self, tmp_path):
+    def test_no_op_when_already_off(self, tmp_path):
         control, path = _control(tmp_path, "no_display\n")
-        control.disable()
-        assert path.read_text() == "no_display\n"  # untouched
+        _set(control, HUD_OFF)
+        assert path.read_text() == "no_display\n"
 
 
 class TestAttachment:
@@ -122,9 +142,10 @@ class TestAttachment:
 
 
 class TestRoundTrip:
-    def test_disable_then_enable_returns_enabled(self, tmp_path):
+    def test_off_then_back_on_restores_the_level(self, tmp_path):
         control, _ = _control(tmp_path, "fps_limit=60\n")
-        control.disable()
-        assert control.is_enabled() is False
-        control.enable()
-        assert control.is_enabled() is True
+        _set(control, 2)
+        _set(control, HUD_OFF)
+        assert control.level().value == HUD_OFF
+        _set(control, 2)
+        assert control.level().value == 2

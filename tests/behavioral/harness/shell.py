@@ -159,11 +159,11 @@ HIDE_DESKTOP      = 'hide_desktop'
 RETURN_TO_DESKTOP = 'return_to_desktop'
 RETURN_TO_APP     = 'return_to_app'
 CLOSE_APP         = 'close_app'
-TOGGLE_HUD        = 'toggle_hud'
+HUD_LEVEL         = 'hud_level'
 
 QUICK   = 'quick'     # the sliders
 ACTIONS = 'actions'   # the cards
-HUD     = 'hud'       # the performance-HUD toggle, offered over a game and nowhere else
+HUD     = 'hud'       # the performance-HUD level slider, offered over a game and nowhere else
 
 
 def _focused_item(snapshot: dict) -> dict | None:
@@ -297,36 +297,36 @@ def pick_menu_action(kd: KDClient, pad: VirtualPad, action: str) -> None:
 # ── the performance HUD ──────────────────────────────────────────────────────
 
 def expect_no_hud_card(kd: KDClient, what: str) -> None:
-    """The HUD is a game's business. Over anything else the card must not be there —
-    a silent regression nobody would notice until the menu grew a card that does
-    nothing."""
+    """The HUD is a game's business; over anything else its slider must not be there."""
     if _section(kd.snapshot(), HUD) is None:
-        report(f'no HUD card over the {what}', 'PASS', 'the toggle is offered to games only')
+        report(f'no HUD slider over the {what}', 'PASS', 'the slider is offered to games only')
         return
-    report(f'no HUD card over the {what}', 'FAIL', 'the HUD toggle is on the menu')
+    report(f'no HUD slider over the {what}', 'FAIL', 'the HUD slider is on the menu')
 
 
-def toggle_hud(kd: KDClient, pad: VirtualPad) -> None:
-    """Flip the HUD from the menu, and check that KD's own state flipped with it."""
-    snapshot = kd.snapshot()
-    if _section(snapshot, HUD) is None:
-        report('the menu offers the HUD toggle', 'FAIL', 'no HUD card over the game')
-        raise ScenarioAborted('the HUD toggle is not on the menu')
-    was = snapshot['hud']['enabled']
-    report('the menu offers the HUD toggle', 'PASS',
-           f'{_section(snapshot, HUD)["items"][0]["label"]!r} '
-           f'(HUD is {"on" if was else "off"})')
+def hud_level(kd: KDClient) -> int:
+    return kd.snapshot()['hud']['level']
 
-    pick_menu_action(kd, pad, TOGGLE_HUD)
+
+def step_hud_level(kd: KDClient, pad: VirtualPad, step: int) -> None:
+    """Move the HUD slider one notch, and check that KD's own level moved with it."""
+    if _section(kd.snapshot(), HUD) is None:
+        report('the menu offers the HUD slider', 'FAIL', 'no HUD slider over the game')
+        raise ScenarioAborted('the HUD slider is not on the menu')
+    was = hud_level(kd)
+    focus_menu_action(kd, pad, HUD_LEVEL)
+    report('the menu offers the HUD slider', 'PASS', f'HUD level {was}')
+
+    pad.right() if step > 0 else pad.left()
+    expected = was + step
     try:
-        kd.wait_until(lambda s: s['hud']['enabled'] != was, timeouts.CEDE,
-                      f'the HUD to turn {"off" if was else "on"}')
+        kd.wait_until(lambda s: s['hud']['level'] == expected, timeouts.CEDE,
+                      f'the HUD level to reach {expected}')
     except TimeoutError:
-        report('the HUD toggle takes effect', 'FAIL',
-               f'still {"on" if was else "off"} after the press')
+        report('the HUD slider takes effect', 'FAIL',
+               f'still {hud_level(kd)} after the press, expected {expected}')
         return
-    report('the HUD toggle takes effect', 'PASS',
-           f'{"on" if was else "off"} → {"off" if was else "on"}')
+    report('the HUD slider takes effect', 'PASS', f'{was} → {expected}')
 
 
 # ── a tile's own popover ─────────────────────────────────────────────────────

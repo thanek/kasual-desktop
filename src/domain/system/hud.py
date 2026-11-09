@@ -1,25 +1,53 @@
-"""The in-game performance HUD (MangoHud) — port plus the toggle's logic: whether
-it is offered, how it reads, and which way a press flips it."""
+"""The in-game performance HUD — port plus the level slider's logic: whether it
+is offered, what a level reads as, and where a step lands."""
 
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import Protocol
+from dataclasses import dataclass, replace
+from typing import Protocol, Self
 
 from domain.catalog.app import App
-from domain.menu.entry import TOGGLE_HUD
+from domain.menu.entry import HUD_LEVEL
 from domain.menu.item import MenuItem
 from domain.shared.i18n import translate
 
+HUD_OFF = 0
+
+
+@dataclass(frozen=True)
+class HudLevel:
+    """``HUD_OFF`` or a detail level up to ``most_detailed``; construction clamps."""
+
+    value:         int
+    most_detailed: int
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "value", max(HUD_OFF, min(self.most_detailed, self.value)))
+
+    @property
+    def is_off(self) -> bool:
+        return self.value == HUD_OFF
+
+    @property
+    def label(self) -> str:
+        if self.is_off:
+            return translate("Kasual Desktop", "Off")
+        return str(self.value)
+
+    def adjusted(self, delta: int) -> Self:
+        return replace(self, value=self.value + delta)
+
+    def at(self, value: int) -> Self:
+        return replace(self, value=value)
+
 
 class HudControl(Protocol):
-    """Port onto the performance HUD's availability and on/off state.
-    ``is_available`` gates the whole feature."""
+    """Port onto the performance HUD; ``is_available`` gates the whole feature."""
 
     def is_available(self) -> bool: ...
-    def is_enabled(self) -> bool: ...
-    def enable(self) -> None: ...
-    def disable(self) -> None: ...
+    def level(self) -> HudLevel: ...
+    def set_level(self, level: HudLevel) -> None: ...
 
     def launch_env(self) -> Mapping[str, str]:
         """Environment a game must be started with for the HUD to attach to it;
@@ -42,22 +70,12 @@ def hud_launch_env(hud: HudControl, app: App) -> Mapping[str, str]:
 
 def hud_menu_item(hud: HudControl, foreground_is_game: bool,
                   foreground_pid: int | None) -> MenuItem | None:
-    """The HUD toggle, or ``None`` when a press would have nothing to switch. The
-    label always names what a press will do."""
+    """The HUD level slider, or ``None`` when moving it would change nothing on screen."""
     if not hud.is_available():
         return None
     if not foreground_is_game:
         return None
     if not hud.is_attached(foreground_pid):
         return None
-    if hud.is_enabled():
-        return MenuItem(translate("Kasual Desktop", "Disable HUD"), TOGGLE_HUD, "fa5s.eye-slash")
-    return MenuItem(translate("Kasual Desktop", "Enable HUD"), TOGGLE_HUD, "fa5s.eye")
-
-
-def toggle_hud(hud: HudControl) -> None:
-    """Flip the HUD: turn it off when on, on when off."""
-    if hud.is_enabled():
-        hud.disable()
-    else:
-        hud.enable()
+    return MenuItem(translate("Kasual Desktop", "Performance overlay"), HUD_LEVEL,
+                    "fa5s.tachometer-alt")

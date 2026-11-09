@@ -28,7 +28,7 @@ in-game HUD, …) live behind platform adapters. See [Architecture](#-architectu
 - **Overlay System**: Advanced support for system overlays (e.g., notifications, menus) that run on top of application windows.
 - **System Integration**: Window management (KWin / Sway / Hyprland / COSMIC / GNOME on Linux, Win32 on Windows), system notifications, network, audio and brightness controls.
 - **First-Run Onboarding**: A provisioning picker seeds your catalog from installed apps (curated starter set on Linux; Start-Menu scan on Windows).
-- **In-Game HUD Toggle**: Show or hide the performance overlay for games straight from the controller menu — **[MangoHud](https://github.com/flightlessmango/MangoHud)** on Linux, **[RivaTuner Statistics Server](https://www.guru3d.com/page/rivatuner-rtss-overlay/)** (MSI Afterburner) on Windows. See [In-Game HUD](#-in-game-hud).
+- **In-Game HUD Level**: Set the performance overlay's detail level (Off → 1 → 2 → 3 → 4, like SteamOS's Performance Overlay) for games straight from the controller menu — **[MangoHud](https://github.com/flightlessmango/MangoHud)** on Linux, **[RivaTuner Statistics Server](https://www.guru3d.com/page/rivatuner-rtss-overlay/)** (MSI Afterburner) on Windows. See [In-Game HUD](#-in-game-hud).
 - **Advanced Audio System**: System sounds and audio feedback.
 - **Screensaver Aware** (Linux): a gamepad is invisible to the compositor's idle
   timers, so Kasual Desktop holds a screensaver inhibition while its UI is on
@@ -532,17 +532,19 @@ X-Kasual-Env=MANGOHUD=1;FOO=bar     # extra environment variables (optional)
 ## 🎚️ In-Game HUD
 
 Over a running **game**, the Home Overlay (opened with `BTN_MODE`) offers an
-**Enable HUD / Disable HUD** entry that shows or hides the performance overlay.
-The label always reflects the current state, so you know whether a press will
-turn it on or off. The backend differs per platform:
+**Performance overlay** slider, stepped with ◄ / ►: **Off → 1 → 2 → 3 → 4**, the
+same scale as SteamOS's Performance Overlay Level. The change applies live and
+the menu stays open, so you can watch the overlay change behind it. The backend
+differs per platform:
 
 | | Linux | Windows |
 |---|---|---|
 | Overlay | [MangoHud](https://github.com/flightlessmango/MangoHud) | [RivaTuner Statistics Server](https://www.guru3d.com/page/rivatuner-rtss-overlay/) (MSI Afterburner) |
-| Mechanism | edits `no_display` in `MangoHud.conf` | flips RTSS's runtime OSD-visible flag |
+| Mechanism | edits `no_display` and `preset=` in `MangoHud.conf` | flips RTSS's runtime OSD-visible flag |
+| Levels | Off, MangoHud presets 1–4 | Off, 1 (RTSS has no detail levels) |
 | Gated on | the config file existing, and the layer being loaded in the game | RTSS running |
 
-### When the toggle appears
+### When the slider appears
 
 Only over a **game** — never on the bare desktop or over ordinary apps — and only
 over a game the overlay is actually loaded into. On Linux that means the game's
@@ -624,10 +626,20 @@ screen reads. How a foreground is recognised as a game differs per platform:
   the `mangohud` wrapper (`LD_PRELOAD`) — e.g. `mangohud %command%` in a game's
   Steam launch options, or the Heroic/Lutris "MangoHud" wrapper toggle.
 
-**How toggling works** — the toggle comments/uncomments the `no_display` line in
-`~/.config/MangoHud/MangoHud.conf`. MangoHud watches this file (via `inotify`)
-and reloads it on every change, so the HUD appears or disappears **immediately**
-— on already-running games as well as newly-launched ones.
+**How the levels work** — **Off** uncomments (or appends) a `no_display` line in
+`~/.config/MangoHud/MangoHud.conf`; levels **1–4** comment it out and write
+`preset=N`, MangoHud's built-in presets: 1 FPS only, 2 horizontal bar, 3
+extended, 4 detailed. MangoHud watches this file (via `inotify`) and reloads it,
+preset included, on every change, so the HUD changes **immediately** — on
+already-running games as well as newly-launched ones. A config with no `preset=`
+line (MangoHud's default, your own layout) reads as level 4 until you move the
+slider.
+
+> **Your own lines win over the preset.** MangoHud applies the preset first and
+> then every option in `MangoHud.conf` on top of it, so a config filled in by
+> hand or by GOverlay (`gpu_stats`, `table_columns=3`, …) blurs the difference
+> between levels 2–4. For SteamOS-like levels keep the display options out of
+> `MangoHud.conf` and leave only styling (font, colours, position) there.
 
 > **Caveat:** a per-game **FPS limit set in Steam** injects
 > `MANGOHUD_CONFIG=...,no_display=1`. MangoHud re-applies `MANGOHUD_CONFIG` on

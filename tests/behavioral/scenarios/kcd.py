@@ -20,11 +20,11 @@ TILE_ID = 'Kingdom Come Deliverance'
 APPID = '379430'
 
 
-def _flip_the_hud_off_and_on_again(session: Session, game: SteamGame) -> None:
+def _step_the_hud_level_and_back(session: Session, game: SteamGame) -> None:
     shell.check_home_menu_over_game(session.kd, session.pad, game)
-    shell.toggle_hud(session.kd, session.pad)
-    shell.open_home_menu(session.kd, session.pad, hold=True)
-    shell.toggle_hud(session.kd, session.pad)
+    step = -1 if shell.hud_level(session.kd) else +1
+    shell.step_hud_level(session.kd, session.pad, step)
+    shell.step_hud_level(session.kd, session.pad, -step)
 
 
 def _body(session: Session) -> None:
@@ -43,7 +43,7 @@ def _body(session: Session) -> None:
     game.check_hud_not_overridden(window)
     shell.check_kd_ceded(session.kd)
 
-    _flip_the_hud_off_and_on_again(session, game)
+    _step_the_hud_level_and_back(session, game)
 
 
 SCENARIO = Scenario(
