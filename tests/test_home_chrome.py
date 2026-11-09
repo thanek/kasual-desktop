@@ -132,6 +132,17 @@ class TestSurfaceVisibilitySync:
         chrome.sync()
         assert surface.calls == []
 
+    def test_dropping_the_open_menu_takes_it_and_the_bar_down_with_the_desktop(self):
+        surface = FakeHomeSurface(expanded=True)
+        hintbar = FakeHintBar()
+        chrome, _ = _chrome(visible=False, surface=surface, hintbar=hintbar)
+        chrome.begin_overlay_hints()
+        chrome.drop_open_menu()
+        chrome.sync()
+        assert not surface.is_open()
+        assert surface.calls[-1] == "hide"
+        assert hintbar.calls[-1] == "hide"
+
     def test_no_surface_is_fine(self):
         chrome, _ = _chrome(visible=True, surface=None)
         chrome.sync()   # must not raise
