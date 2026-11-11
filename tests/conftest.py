@@ -23,6 +23,16 @@ except ImportError:
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 import pytest
+from PyQt6.QtCore import QCoreApplication, QEvent
+from PyQt6.QtWidgets import QApplication
+
+
+@pytest.fixture(scope="session", autouse=True)
+def delete_leftover_windows_before_pyqt_exits(qapp):
+    yield
+    for window in QApplication.topLevelWidgets():
+        window.deleteLater()
+    QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete.value)
 
 
 @pytest.fixture(autouse=True)
