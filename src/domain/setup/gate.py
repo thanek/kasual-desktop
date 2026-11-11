@@ -28,6 +28,9 @@ class SetupGate:
         self._remedies = remedies or {}
         self._on_abort = on_abort
 
+    def is_ready(self) -> bool:
+        return self._readiness.is_ready()
+
     def ensure(self, on_done: Callable[[], None], *, force: bool = False) -> None:
         """*force* serves deliberate re-entry: on a ready system the confirmation
         itself is what the user came for."""

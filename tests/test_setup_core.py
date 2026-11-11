@@ -190,6 +190,14 @@ class TestGate:
                   view).ensure(lambda: None, force=True)
         assert view.report.state is Readiness.READY
 
+    def test_reports_readiness_without_presenting_the_card(self):
+        view = _View()
+        requirement = _Requirement(met=False)
+        gate = SetupGate(SetupReadiness(requirement, _Facts(), ()), view)
+        assert not gate.is_ready()
+        requirement.resolve()
+        assert gate.is_ready() and view.report is None
+
     def test_rechecking_reruns_the_assessment(self):
         view = _View()
         requirement = _Requirement(met=False)

@@ -141,8 +141,8 @@ class TestAppContext:
 
 
 class TestGamepadAccessEntry:
-    """The entry that reopens the gamepad-access card. Offered only where the pad
-    comes from evdev and there is something to grant — never on Windows."""
+    """The entry that reopens the gamepad-access card. Offered only while the pad
+    comes from evdev and its access is still not granted — never on Windows."""
 
     def _actions(self, **kwargs):
         sections = compose_home_sections(
@@ -150,18 +150,18 @@ class TestGamepadAccessEntry:
             **kwargs)
         return [i.action for i in _by_kind(sections, SectionKind.ACTIONS).items]
 
-    def test_offered_where_access_can_be_checked(self):
-        assert GAMEPAD_ACCESS in self._actions(gamepad_access_checkable=True)
+    def test_offered_while_access_is_missing(self):
+        assert GAMEPAD_ACCESS in self._actions(gamepad_access_needed=True)
 
-    def test_withheld_where_it_cannot(self):
-        assert GAMEPAD_ACCESS not in self._actions(gamepad_access_checkable=False)
+    def test_withheld_once_access_is_granted(self):
+        assert GAMEPAD_ACCESS not in self._actions(gamepad_access_needed=False)
 
     def test_withheld_by_default(self):
         assert GAMEPAD_ACCESS not in self._actions()
 
     def test_it_does_not_displace_the_way_back(self):
         """Return to Home screen stays last: minimized, it is the only way back."""
-        actions = self._actions(gamepad_access_checkable=True)
+        actions = self._actions(gamepad_access_needed=True)
         assert actions[-1] == RETURN_TO_DESKTOP
         assert actions[-2] == HIDE_DESKTOP
 
@@ -170,6 +170,6 @@ class TestGamepadAccessEntry:
         sections = compose_home_sections(
             AppTarget(index=0, app_id="steam", name="Steam"), FakeHud(),
             brightness_controllable=True, power_default=SLEEP,
-            gamepad_access_checkable=True)
+            gamepad_access_needed=True)
         actions = _by_kind(sections, SectionKind.ACTIONS).items
         assert all(i.action != GAMEPAD_ACCESS for i in actions)
