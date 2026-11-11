@@ -66,6 +66,7 @@ from domain.system.silenced_power import SilencedPowerControl
 from infrastructure.linux.audio.outputs import PactlAudioOutputs
 from infrastructure.linux.audio.background import AudioWorker, BackgroundKasualOutput
 from domain.audio.kasual_output import KasualOutput
+from infrastructure.common.audio.patience import PollingPatience
 from infrastructure.linux.audio.volume import PactlVolumeControl
 from infrastructure.linux.display.brightness import select_brightness_control
 from infrastructure.linux.display.screensaver import (
@@ -90,6 +91,8 @@ from domain.display.launched_apps_screen import LaunchedAppsFollowKasual
 from domain.display.relaunch import AnnouncedRelaunch
 
 logger = logging.getLogger(__name__)
+
+_AUDIO_RETURNS_AFTER_RESUME_WITHIN_S = 15.0
 
 
 def _extension_gate(app, gamepad, feedback) -> SetupGate | None:
@@ -254,7 +257,8 @@ def main() -> None:
                              worker: AudioWorker) -> BackgroundKasualOutput:
         kasual_output = BackgroundKasualOutput(
             KasualOutput(DesktopOutputPreference(), audio_outputs,
-                         DesktopBorrowedOutputMemory()),
+                         DesktopBorrowedOutputMemory(),
+                         PollingPatience(within_s=_AUDIO_RETURNS_AFTER_RESUME_WITHIN_S)),
             worker,
         )
         if not gamepad.is_connected():

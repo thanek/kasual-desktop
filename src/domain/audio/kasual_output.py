@@ -1,5 +1,6 @@
 """Kasual Desktop's sound output, borrowed from the system while it is in charge."""
 
+from collections.abc import Callable
 from typing import Protocol
 
 from domain.audio.output import AudioOutput, AudioOutputs
@@ -18,6 +19,10 @@ class BorrowedOutputMemory(Protocol):
     def remember_borrowed_from_system(self, output_id: str | None) -> None: ...
 
 
+class Patience(Protocol):
+    def wait_for(self, ready: Callable[[], bool]) -> None: ...
+
+
 class OutputPicker(Protocol):
     def options(self) -> list[AudioOutput]: ...
     def chosen(self) -> str | None: ...
@@ -34,10 +39,12 @@ class KasualOutput(OutputPicker):
         preference: OutputPreference,
         outputs: AudioOutputs,
         borrowed: BorrowedOutputMemory,
+        patience: Patience,
     ) -> None:
         self._preference = preference
         self._outputs = outputs
         self._borrowed = borrowed
+        self._patience = patience
         self._in_charge = False
 
     def options(self) -> list[AudioOutput]:
@@ -72,6 +79,7 @@ class KasualOutput(OutputPicker):
 
     def give_back(self) -> None:
         self._in_charge = False
+        self._wait_until_the_borrowed_output_is_back()
         self._give_back_unless_changed_since(self.chosen())
 
     def _switch_to(self, output_id: str, *, keep_what_was_borrowed: bool) -> None:
@@ -90,10 +98,20 @@ class KasualOutput(OutputPicker):
         if borrowed is None:
             return
         self._borrowed.remember_borrowed_from_system(None)
-        changed_by_hand = self._outputs.active() != playing_for_kasual
-        if changed_by_hand or not self._is_connected(borrowed):
+        if self._moved_away_by_hand(playing_for_kasual) or not self._is_connected(borrowed):
             return
         self._outputs.activate(borrowed)
+
+    def _wait_until_the_borrowed_output_is_back(self) -> None:
+        borrowed = self._borrowed.borrowed_from_system()
+        if borrowed is not None:
+            self._patience.wait_for(
+                lambda: self._outputs.active() is not None and self._is_connected(borrowed))
+
+    def _moved_away_by_hand(self, playing_for_kasual: str | None) -> bool:
+        if self._outputs.active() == playing_for_kasual:
+            return False
+        return playing_for_kasual is SYSTEM_DECIDES or self._is_connected(playing_for_kasual)
 
     def _known_output(self, output_id: str | None) -> AudioOutput | None:
         found = next((output for output in self._outputs.available()
