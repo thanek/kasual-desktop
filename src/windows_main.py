@@ -85,6 +85,7 @@ def main():
     from infrastructure.windows.power.power import WindowsPowerControl
     from infrastructure.windows.audio.outputs import NoAudioOutputs
     from domain.audio.kasual_output import KasualOutput
+    from infrastructure.common.audio.patience import PollingPatience
     from infrastructure.windows.audio.volume import WindowsVolumeControl
     from infrastructure.windows.display.brightness import WindowsBrightnessControl
     from infrastructure.windows.network.network import WindowsNetworkProbe, WindowsNetworkControl
@@ -145,7 +146,8 @@ def main():
         notification_source.on_notification(notification_center.record)
 
         kasual_output = KasualOutput(
-            DesktopOutputPreference(), NoAudioOutputs(), DesktopBorrowedOutputMemory())
+            DesktopOutputPreference(), NoAudioOutputs(), DesktopBorrowedOutputMemory(),
+            PollingPatience(within_s=0.0))
         desktop = build_desktop(
             apps=load_apps(),
             gamepad=gamepad,

@@ -96,7 +96,7 @@ class HomeSurface(QWidget):
         begin_hints: Callable[[], None],
         set_hints: Callable,
         end_hints: Callable[[], None],
-        gamepad_access_checkable: bool = False,
+        gamepad_access_needed: Callable[[], bool] = lambda: False,
     ) -> None:
         super().__init__()
         self._gamepad = gamepad
@@ -138,7 +138,7 @@ class HomeSurface(QWidget):
         panel_col = QVBoxLayout(self._panel)
         panel_col.setContentsMargins(28, 22, 28, 22)
         self._content = HomeMenuContent(
-            feedback, volume, brightness, power, audio_outputs, gamepad_access_checkable)
+            feedback, volume, brightness, power, audio_outputs, gamepad_access_needed)
         panel_col.addWidget(self._content)
         outer.addWidget(self._panel, alignment=Qt.AlignmentFlag.AlignHCenter)
         outer.addStretch(1)

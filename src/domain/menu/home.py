@@ -71,13 +71,11 @@ def compose_home_sections(
     foreground_is_game: bool = False,
     foreground_pid: int | None = None,
     include_status_actions: bool = True,
-    gamepad_access_checkable: bool = False,
+    gamepad_access_needed: bool = False,
 ) -> HomeSections:
     """Brightness is offered only when the backlight is controllable;
     ``include_status_actions`` drops Power / Configuration / Network / Notifications from the grid
-    when a status header already carries them, so they aren't offered twice;
-    ``gamepad_access_checkable`` is false where the pad does not come from evdev
-    and there is nothing to grant."""
+    when a status header already carries them, so they aren't offered twice."""
     quick = [_action_item(VOLUME)]
     if brightness_controllable:
         quick.append(_action_item(BRIGHTNESS))
@@ -88,7 +86,7 @@ def compose_home_sections(
             actions += [_power_card(power_default),
                         _action_item(CONFIGURATION), _action_item(NETWORK),
                         _action_item(NOTIFICATIONS)]
-        if gamepad_access_checkable:
+        if gamepad_access_needed:
             actions.append(_action_item(GAMEPAD_ACCESS))
         actions += [_action_item(HIDE_DESKTOP), _return_to_desktop_item()]
         return HomeSections(

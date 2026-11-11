@@ -49,11 +49,23 @@ class FakeBorrowed:
         self.output_id = output_id
 
 
-def _kasual(preferred=HDMI, outputs=None, borrowed=None):
+class DevicesComingBack:
+    def __init__(self, arrive=lambda: None):
+        self._arrive = arrive
+        self.waited_until_ready: list[bool] = []
+
+    def wait_for(self, ready):
+        if not ready():
+            self._arrive()
+        self.waited_until_ready.append(ready())
+
+
+def _kasual(preferred=HDMI, outputs=None, borrowed=None, patience=None):
     outputs = outputs or FakeOutputs()
     borrowed = borrowed or FakeBorrowed()
+    patience = patience or DevicesComingBack()
     preference = FakePreference(preferred)
-    return KasualOutput(preference, outputs, borrowed), outputs, borrowed, preference
+    return KasualOutput(preference, outputs, borrowed, patience), outputs, borrowed, preference
 
 
 class TestTakeOver:
@@ -119,6 +131,38 @@ class TestGiveBack:
         kasual.give_back()
         assert outputs.playing == HDMI.id
         assert borrowed.output_id is None
+
+    def test_waits_for_the_systems_output_to_come_back_after_resume(self):
+        outputs = FakeOutputs()
+
+        def usb_audio_comes_back():
+            outputs.outputs = [SPEAKERS, HDMI]
+            outputs.playing = HDMI.id
+
+        patience = DevicesComingBack(usb_audio_comes_back)
+        kasual, _, borrowed, _ = _kasual(outputs=outputs, patience=patience)
+        kasual.take_over()
+        outputs.outputs = [HDMI]
+        outputs.playing = None
+        kasual.give_back()
+        assert patience.waited_until_ready == [True]
+        assert outputs.playing == SPEAKERS.id
+        assert borrowed.output_id is None
+
+    def test_returns_the_systems_output_when_kasuals_output_vanished(self):
+        outputs = FakeOutputs([SPEAKERS, HDMI, HEADPHONES])
+        kasual, _, borrowed, _ = _kasual(outputs=outputs)
+        kasual.take_over()
+        outputs.outputs = [SPEAKERS, HEADPHONES]
+        outputs.playing = HEADPHONES.id
+        kasual.give_back()
+        assert outputs.playing == SPEAKERS.id
+
+    def test_does_not_wait_when_nothing_was_borrowed(self):
+        patience = DevicesComingBack()
+        kasual, _, _, _ = _kasual(outputs=FakeOutputs(active=HDMI.id), patience=patience)
+        kasual.give_back()
+        assert patience.waited_until_ready == []
 
     def test_returns_a_loan_left_behind_by_an_earlier_run(self):
         kasual, outputs, _, _ = _kasual(outputs=FakeOutputs(active=HDMI.id),

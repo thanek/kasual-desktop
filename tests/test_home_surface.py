@@ -17,7 +17,7 @@ from domain.audio.output import AudioOutput
 from domain.catalog.target import AppTarget
 from domain.input.vocabulary import Event
 from domain.menu.entry import POWER, RETURN_TO_APP, RETURN_TO_DESKTOP
-from domain.system.actions import NETWORK
+from domain.system.actions import GAMEPAD_ACCESS, NETWORK
 from domain.system.brightness import Brightness
 from domain.system.hud import HUD_OFF, HudLevel
 from domain.system.volume import Volume
@@ -121,7 +121,8 @@ class Spy:
         self.hints.append(False)
 
 
-def _surface(qapp, gamepad=None, spy=None, audio_outputs=None):
+def _surface(qapp, gamepad=None, spy=None, audio_outputs=None,
+             gamepad_access_needed=lambda: False):
     from infrastructure.common.qt.overlays.home_header import HomeHeader
     from infrastructure.common.qt.overlays.home_menu_content import CARD_WIDTH
     spy = spy or Spy()
@@ -135,6 +136,7 @@ def _surface(qapp, gamepad=None, spy=None, audio_outputs=None):
         begin_hints=spy.begin_hints,
         set_hints=spy.set_hints,
         end_hints=spy.end_hints,
+        gamepad_access_needed=gamepad_access_needed,
     )
     return surface, spy
 
@@ -787,3 +789,19 @@ class TestActiveAudioOutput:
     def test_hides_the_name_when_no_output_is_known(self, qapp, qtbot):
         label = self._output_name(qapp, qtbot, FakeAudioOutputs())
         assert label.isHidden()
+
+
+class TestGamepadAccessCard:
+    def _offered(self, surface):
+        surface.expand()
+        offered = any(item.action == GAMEPAD_ACCESS
+                      for zone in surface._content.zones for item in zone.items)
+        surface.collapse()
+        return offered
+
+    def test_follows_the_access_state_on_every_open(self, qapp):
+        missing = [True]
+        surface, _ = _surface(qapp, gamepad_access_needed=lambda: missing[0])
+        assert self._offered(surface)
+        missing[0] = False
+        assert not self._offered(surface)

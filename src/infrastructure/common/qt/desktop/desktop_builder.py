@@ -228,8 +228,7 @@ def build_desktop(
             begin_hints=lambda: chrome.begin_overlay_hints(),
             set_hints=lambda h: chrome.set_overlay_hints(h),
             end_hints=lambda: chrome.end_overlay_hints(),
-            gamepad_access_checkable=(
-                setup_gate is not None and setup_view is not None),
+            gamepad_access_needed=_gamepad_access_needed(setup_gate, setup_view),
         )
         home_surface.install_surface()
         power_popover = PowerPopoverController(
@@ -272,3 +271,11 @@ def build_desktop(
         power_popover=power_popover,
     )
     return widget
+
+
+def _gamepad_access_needed(
+    setup_gate: SetupGate | None, setup_view: QtSetupView | None,
+) -> Callable[[], bool]:
+    if setup_gate is None or setup_view is None:
+        return lambda: False
+    return lambda: not setup_gate.is_ready()
