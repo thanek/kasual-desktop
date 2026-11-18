@@ -653,11 +653,105 @@ already-running games as well as newly-launched ones. A config with no `preset=`
 line (MangoHud's default, your own layout) reads as level 4 until you move the
 slider.
 
-> **Your own lines win over the preset.** MangoHud applies the preset first and
-> then every option in `MangoHud.conf` on top of it, so a config filled in by
-> hand or by GOverlay (`gpu_stats`, `table_columns=3`, …) blurs the difference
-> between levels 2–4. For SteamOS-like levels keep the display options out of
-> `MangoHud.conf` and leave only styling (font, colours, position) there.
+**What each level shows is up to you, not Kasual Desktop.** Kasual Desktop only
+picks the preset number; the preset's contents come from MangoHud, either its
+built-in presets or your own `~/.config/MangoHud/presets.conf`, which replaces a
+built-in preset with the same number. Then MangoHud applies every option in
+`MangoHud.conf` **on top of** that preset, so your own lines always win.
+
+That is why a `MangoHud.conf` saved by GOverlay mangles the levels. GOverlay's
+own presets ("FPS only", "Basic horizontal", …) are not MangoHud presets: each
+writes a full set of display options into `MangoHud.conf`. Those options then
+apply to every level. Preset 1 sets `fps_only` and `width=40`, and all the
+metrics re-enabled by the config get squeezed into that narrow box. Preset 2's horizontal bar
+gets the config's `table_columns=3` and its extra metrics on top. Levels 3–4
+look fine only because the config already shows almost everything.
+
+For levels that differ the way SteamOS's do:
+
+1. **Keep only styling and behaviour in `MangoHud.conf`:** position, font,
+   colours, thresholds (`*_load_change`, `*_value`, `fps_color_change`), key
+   bindings, FPS limit, logging, `blacklist`, `gpu_list`. Remove everything that
+   adds an item or shapes the layout: `fps`, `frame_timing`, `gpu_stats`,
+   `cpu_stats`, `vram`, `ram`, `battery`, `*_temp`, `*_power`, `*_clock`/`cpu_mhz`,
+   `engine_version`, `horizontal`, `table_columns`, `hud_compact`, `full`,
+   `fps_only`.
+2. **Optionally, define the four levels yourself** in
+   `~/.config/MangoHud/presets.conf`. MangoHud turns `fps`, `frame_timing`,
+   `cpu_stats` and `gpu_stats` on unless told otherwise, so a preset that should
+   not show them says `=0` explicitly. For example:
+
+   ```ini
+   [preset 1]
+   legacy_layout=0
+   cpu_stats=0
+   gpu_stats=0
+   frame_timing=0
+   frametime=0
+   fps
+   fps_only
+
+   [preset 2]
+   legacy_layout=0
+   horizontal
+   hud_no_margin
+   table_columns=20
+   frame_timing=0
+   frametime=0
+   fps
+   cpu_stats
+   gpu_stats
+   ram
+   vram
+   battery
+
+   [preset 3]
+   legacy_layout=0
+   table_columns=3
+   fps
+   frame_timing
+   cpu_stats
+   cpu_temp
+   cpu_power
+   gpu_stats
+   gpu_temp
+   gpu_power
+   ram
+   vram
+   battery
+
+   [preset 4]
+   legacy_layout=0
+   table_columns=3
+   fps
+   frame_timing
+   cpu_stats
+   cpu_temp
+   cpu_power
+   cpu_mhz
+   core_load
+   gpu_name
+   gpu_stats
+   gpu_temp
+   gpu_junction_temp
+   gpu_power
+   gpu_core_clock
+   gpu_mem_clock
+   gpu_fan
+   throttling_status
+   ram
+   vram
+   swap
+   procmem
+   io_read
+   io_write
+   battery
+   engine_version
+   vulkan_driver
+   ```
+
+Saving from GOverlay again writes the display options back into
+`MangoHud.conf`. Remove them after each save.
 
 > **Caveat:** a per-game **FPS limit set in Steam** injects
 > `MANGOHUD_CONFIG=...,no_display=1`. MangoHud re-applies `MANGOHUD_CONFIG` on

@@ -40,7 +40,7 @@ from infrastructure.linux.qt.desktop.cede_depth import CedeDepthWatcher
 from infrastructure.linux.qt.desktop.deferred_hide import DeferredHide
 from infrastructure.linux.qt.desktop.deferred_show import DeferredShow
 from infrastructure.common.qt.cursor_auto_hide import CursorAutoHide
-from infrastructure.common.qt.icons import install_fontawesome5
+from infrastructure.common.qt.icons import install_bundled_fontawesome5
 from infrastructure.common.catalog.app_config import (
     DesktopAppProvisioning, DesktopTileSettingsStore, DesktopTileOrderStore,
     load_apps,
@@ -213,9 +213,7 @@ def main() -> None:
         sys.exit(0)
     app.aboutToQuit.connect(guard.release)
 
-    # Use the bundled genuine Font Awesome 5 fonts, not the distro's Fork Awesome
-    # substitute (see icons.install_fontawesome5). Before any icon is built.
-    install_fontawesome5()
+    install_bundled_fontawesome5()
 
     session_restart = ExecSessionRestart(app)
     display_selection = follow_chosen_display(app, build_display_placement(
