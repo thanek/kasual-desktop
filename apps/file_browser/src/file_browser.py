@@ -34,6 +34,7 @@ from gamepad import find_pad, PadListener
 from image_mode import ImageMode
 from info_dialog import InfoDialog
 from info_mode import InfoMode
+from kasual_screen import show_fullscreen_where_kasual_is
 from thumbnails import Thumbnailer, find_thumbnail, is_image
 from video_mode import VideoMode
 
@@ -1405,7 +1406,7 @@ def main() -> None:
         app.installTranslator(translator)
 
     window = FileBrowserWindow()
-    window.showFullScreen()
+    show_fullscreen_where_kasual_is(window)
 
     if os.environ.get("KD_TEST_API") == "1" or not _is_packaged():
         from introspection import BrowserIntrospectionService

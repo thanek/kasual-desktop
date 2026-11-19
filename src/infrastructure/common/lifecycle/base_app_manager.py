@@ -21,6 +21,7 @@ from domain.lifecycle.app_events import AppStarted, AppFinished, AppLaunchFailed
 from domain.lifecycle.process_manager import ProcessManager
 from domain.shared.event_emitter import EventEmitter, Unsubscribe
 from infrastructure.common.qt._meta import ProtocolQtMeta
+from infrastructure.common.qt.ui.target_screen import target_screen
 from version import test_api_enabled
 
 logger = logging.getLogger(__name__)
@@ -100,6 +101,9 @@ class BaseAppManager(QObject, ProcessManager, metaclass=ProtocolQtMeta):
         # In dev the flag is implied by the source checkout, never exported — hand it down.
         if test_api_enabled():
             proc_env["KD_TEST_API"] = "1"
+        screen = target_screen()
+        if screen is not None:
+            proc_env["KD_SCREEN"] = screen.name()
         proc_env.update(env or {})
         return proc_env
 

@@ -339,6 +339,10 @@ def main() -> None:
             follow_kasual.setParent(app)
             follow_kasual.start()
             app.aboutToQuit.connect(follow_kasual.stop)
+        elif COMPOSITOR is Compositor.COSMIC:
+            from infrastructure.cosmic.wm.window_manager import CosmicWindowManager
+            if isinstance(wm, CosmicWindowManager):
+                wm.follow_kasual(paused=desktop.is_paused)
 
         # No screensaver while the Desktop is on screen; released when it hides,
         # so an idle session with KD minimized still locks/blanks normally.

@@ -14,7 +14,7 @@ from __future__ import annotations
 import logging
 
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from infrastructure.cosmic.wm import protocol
 from infrastructure.linux.wayland import wire
@@ -33,6 +33,7 @@ class Toplevel:
     activated: bool = False
     fullscreen: bool = False
     minimized: bool = False
+    outputs: set[int] = field(default_factory=set)
 
 
 class CosmicToplevels:
@@ -95,6 +96,10 @@ class CosmicToplevels:
     def close_window(self, handle: int) -> None:
         self._request(protocol.MANAGER_CLOSE, wire.object_id(handle))
 
+    def move_to_workspace(self, handle: int, workspace: int, output: int) -> None:
+        self._request(protocol.MANAGER_MOVE_TO_EXT_WORKSPACE, wire.object_id(handle),
+                      wire.object_id(workspace), wire.object_id(output))
+
     def _request(self, opcode: int, *args: bytes) -> None:
         self._client.send(self._manager, opcode, *args)
 
@@ -139,12 +144,20 @@ class CosmicToplevels:
             self._drop(foreign)
 
     def _on_handle_event(self, handle: int, opcode: int, reader: wire.Reader) -> None:
-        if opcode != protocol.HANDLE_EVENT_STATE:
-            return
-        states = set(reader.uint_array())
         toplevel = self._toplevels.get(self._foreign_of.get(handle, -1))
         if toplevel is None:
             return
+        if opcode == protocol.HANDLE_EVENT_OUTPUT_ENTER:
+            toplevel.outputs.add(reader.object_id())
+            self._on_change()
+            return
+        if opcode == protocol.HANDLE_EVENT_OUTPUT_LEAVE:
+            toplevel.outputs.discard(reader.object_id())
+            self._on_change()
+            return
+        if opcode != protocol.HANDLE_EVENT_STATE:
+            return
+        states = set(reader.uint_array())
         toplevel.activated = protocol.State.ACTIVATED in states
         toplevel.fullscreen = protocol.State.FULLSCREEN in states
         toplevel.minimized = protocol.State.MINIMIZED in states

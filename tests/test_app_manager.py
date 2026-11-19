@@ -160,6 +160,15 @@ class TestLaunch:
         assert "QT_FFMPEG_ENCODING_HW_DEVICE_TYPES" not in env
         assert "QT_AUDIO_BACKEND" not in env
 
+    def test_tells_launched_apps_which_screen_kasual_is_on(self, qapp):
+        am = _make_manager()
+        screen = MagicMock()
+        screen.name.return_value = "HDMI-A-1"
+        with patch("infrastructure.common.lifecycle.base_app_manager.target_screen",
+                   return_value=screen):
+            popen, _ = self._launch(am)
+        assert popen.call_args.kwargs["env"]["KD_SCREEN"] == "HDMI-A-1"
+
     def test_args_converted_to_strings(self, qapp):
         am = _make_manager()
         popen, _ = self._launch(am, command="cmd", args=[1, 2, 3])

@@ -357,6 +357,13 @@ class TestIsGamepad:
         d = self._make_device()   # brak EV_KEY
         assert GamepadWatcher._is_gamepad(d) is False
 
+    def test_rejects_our_own_virtual_pad(self):
+        from infrastructure.linux.input.gamepad_watcher import GamepadWatcher, VIRTUAL_DEVICE_NAME
+        d = self._make_device(keys=[ecodes.BTN_SOUTH, ecodes.BTN_EAST, ecodes.BTN_NORTH,
+                                     ecodes.BTN_WEST, ecodes.BTN_START, ecodes.BTN_SELECT])
+        d.name = VIRTUAL_DEVICE_NAME
+        assert GamepadWatcher._is_gamepad(d) is False
+
     def test_rejects_on_exception(self):
         from infrastructure.linux.input.gamepad_watcher import GamepadWatcher
         from unittest.mock import MagicMock

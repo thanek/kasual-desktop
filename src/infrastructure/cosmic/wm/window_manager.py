@@ -16,10 +16,15 @@ from __future__ import annotations
 
 import logging
 
+from collections.abc import Callable
+
 from PyQt6.QtCore import QObject
 from PyQt6.QtGui import QGuiApplication
 
 from domain.catalog.window import Window
+from infrastructure.cosmic.wm.follow_kasual import (
+    CosmicOutputsAndWorkspaces, CosmicWindowsFollowKasual,
+)
 from infrastructure.cosmic.wm.fullscreen import ForegroundFullscreen
 from infrastructure.cosmic.wm.pids import WindowPidResolver, representative_pid
 from infrastructure.cosmic.wm.toplevels import CosmicToplevels
@@ -39,9 +44,9 @@ class CosmicWindowManager(PollingWindowManager):
     ) -> None:
         super().__init__(parent)
         self._client = client or WaylandClient()
+        self._follow: CosmicWindowsFollowKasual | None = None
         try:
-            self._toplevels = CosmicToplevels(
-                self._client, self._request_list_refresh)
+            self._toplevels = CosmicToplevels(self._client, self._on_toplevels_changed)
         except Exception:
             # The connection is ours only when we opened it, but either way a
             # refused start must not leave a socket behind for the caller to
@@ -53,6 +58,19 @@ class CosmicWindowManager(PollingWindowManager):
         self._fullscreen = ForegroundFullscreen(self._xwayland)
         self._candidate_pids: dict[str, frozenset[int]] = {}
         self._client.start(on_disconnect=self._on_disconnect)
+
+    def _on_toplevels_changed(self) -> None:
+        if self._follow is not None:
+            self._follow.apply()
+        self._request_list_refresh()
+
+    def follow_kasual(self, paused: Callable[[], bool]) -> None:
+        if not CosmicOutputsAndWorkspaces.available(self._client):
+            logger.warning("COSMIC offers no ext-workspace; launched apps stay where "
+                           "cosmic-comp puts them")
+            return
+        self._follow = CosmicWindowsFollowKasual(
+            self._client, self._toplevels, paused, QGuiApplication.desktopFileName())
 
     def _on_disconnect(self) -> None:
         logger.warning("Wayland connection lost; the window list stops updating")

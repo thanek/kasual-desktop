@@ -166,6 +166,13 @@ class TestMirror:
         assert by_id["id-a"].activated is False
         assert by_id["id-b"].activated is True
 
+    def test_tracks_the_outputs_a_toplevel_is_on(self, mirror, compositor):
+        announce(compositor, mirror, FOREIGN_A, "id-a", "Firefox", "firefox")
+        compositor.send(FIRST_HANDLE, protocol.HANDLE_EVENT_OUTPUT_ENTER, wire.object_id(5))
+        compositor.send(FIRST_HANDLE, protocol.HANDLE_EVENT_OUTPUT_ENTER, wire.object_id(6))
+        compositor.send(FIRST_HANDLE, protocol.HANDLE_EVENT_OUTPUT_LEAVE, wire.object_id(5))
+        assert pump(lambda: mirror.toplevels()[0].outputs == {6})
+
     def test_handle_for_maps_the_domain_id_to_the_control_handle(
             self, mirror, compositor):
         announce(compositor, mirror, FOREIGN_A, "id-a", "Firefox", "firefox")
@@ -204,6 +211,13 @@ class TestOperations:
         opened.close_window(FIRST_HANDLE)
         assert pump(lambda: self._manager_requests(compositor) == [
             (protocol.MANAGER_CLOSE, wire.object_id(FIRST_HANDLE))])
+
+    def test_move_to_workspace_names_workspace_and_output(self, opened, compositor):
+        opened.move_to_workspace(FIRST_HANDLE, 0xFF000010, 5)
+        assert pump(lambda: self._manager_requests(compositor) == [
+            (protocol.MANAGER_MOVE_TO_EXT_WORKSPACE,
+             wire.object_id(FIRST_HANDLE) + wire.object_id(0xFF000010)
+             + wire.object_id(5))])
 
     def test_a_broken_connection_does_not_escape(self, opened, compositor):
         compositor.hang_up()

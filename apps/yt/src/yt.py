@@ -12,6 +12,7 @@ from padbackend import (
     find_pad,
 )
 from adblocker import AdBlocker, JS_PATCH
+from kasual_screen import show_fullscreen_where_kasual_is
 
 # On Linux, Kasual grabs the physical gamepad and exposes a virtual
 # "kasual-vpad" device; the app reads from it because the physical pad is
@@ -77,7 +78,7 @@ def main() -> None:
     view.setPage(page)
     view.setUrl(QUrl("https://www.youtube.com/tv#"))
     window.setCentralWidget(view)
-    window.showFullScreen()
+    show_fullscreen_where_kasual_is(window)
 
     def _start_pad():
         try:

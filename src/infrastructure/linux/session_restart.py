@@ -26,4 +26,16 @@ class ExecSessionRestart(SessionRestart):
             return
         logger.info("Restarting Kasual Desktop")
         logging.shutdown()
+        _close_everything_but_stdio_on_exec()
         os.execv(sys.executable, [sys.executable, *sys.argv])
+
+
+def _close_everything_but_stdio_on_exec() -> None:
+    for name in os.listdir("/proc/self/fd"):
+        fd = int(name)
+        if fd <= 2:
+            continue
+        try:
+            os.set_inheritable(fd, False)
+        except OSError:
+            pass

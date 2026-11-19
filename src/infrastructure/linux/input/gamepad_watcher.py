@@ -370,6 +370,8 @@ class GamepadWatcher(BaseGamepadWatcher):
     @staticmethod
     def _is_gamepad(device: InputDevice) -> bool:
         try:
+            if device.name == VIRTUAL_DEVICE_NAME:
+                return False
             caps = device.capabilities()
             if ecodes.EV_KEY not in caps:
                 return False
