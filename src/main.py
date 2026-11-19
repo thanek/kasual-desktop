@@ -335,6 +335,13 @@ def main() -> None:
         # this runs; delivered on the GUI thread by the monitor's signal hop.
         wire_notification_badge(notification_monitor, desktop)
 
+        if COMPOSITOR is Compositor.KDE:
+            from infrastructure.kde.display.follow_kasual import KdeWindowsFollowKasual
+            follow_kasual = KdeWindowsFollowKasual(paused=desktop.is_paused)
+            follow_kasual.setParent(app)
+            follow_kasual.start()
+            app.aboutToQuit.connect(follow_kasual.stop)
+
         # No screensaver while the Desktop is on screen; released when it hides,
         # so an idle session with KD minimized still locks/blanks normally.
         inhibitor = ScreenSaverInhibitor()

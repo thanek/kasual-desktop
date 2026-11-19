@@ -397,6 +397,9 @@ class Desktop(QWidget, DesktopView, DesktopShell, DesktopControl, metaclass=Prot
     def is_visible(self) -> bool:
         return self._surface.is_visible()
 
+    def is_paused(self) -> bool:
+        return self._state.paused
+
     def show_fullscreen(self) -> None:
         self._surface.show_fullscreen()
         self._chrome.sync()

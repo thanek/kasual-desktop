@@ -456,10 +456,18 @@ class TestOnAppFinished:
 
     def test_does_not_reshow_when_visible(self):
         c = _make(visible=True)
+        c.gamepad.top_handler.return_value = c.pad
         c.fg.set(AppTarget(index=0, app_id="app0", name="App"))
         c.lc.on_app_finished("app0")
         assert c.view.shown == 0          # already visible — no re-show
         c.gamepad.push_handler.assert_not_called()
+
+    def test_app_dying_before_its_window_gives_the_pad_back(self):
+        c = _make(visible=True)
+        c.fg.set(AppTarget(index=0, app_id="app0", name="App"))
+        c.lc.on_app_finished("app0")
+        assert c.view.shown == 0
+        c.gamepad.push_handler.assert_called_with(c.pad)
 
     def test_keeps_foreground_for_other_app(self):
         c = _make(visible=True)

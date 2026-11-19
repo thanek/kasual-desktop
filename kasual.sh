@@ -19,6 +19,14 @@ fi
 # which wins through PATH — so the interpreter is named outright rather than
 # looked up. The shell integration itself is chosen per compositor by src/main.py.
 export PYTHONNOUSERSITE=1
+keep_launched_apps_off_the_venv() {
+    [ -n "$VIRTUAL_ENV" ] || return
+    PATH=":$PATH:"
+    PATH="${PATH//:$VIRTUAL_ENV\/bin:/:}"
+    PATH="${PATH#:}"; PATH="${PATH%:}"
+    export PATH
+}
+keep_launched_apps_off_the_venv
 unset VIRTUAL_ENV VIRTUAL_ENV_PROMPT
 export QT_QPA_PLATFORM=wayland
 

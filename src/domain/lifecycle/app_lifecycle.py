@@ -276,11 +276,14 @@ class AppLifecycle(AppControl):
         self._transitions.show.cancel()
         self._transitions.cede_depth.cancel()
         self._foreground.clear_if_app(app_id)
-        if not self._view.is_visible():
+        if not self._view.is_visible() or self._nothing_drives_the_pad():
             self.reactivate_desktop()
         # Steam re-enumerates the gamepad on exit, leaving our evdev fd dead;
         # delay long enough for the kernel to surface the replacement.
         self._scheduler.call_later(1000, self._gamepad.refresh)
+
+    def _nothing_drives_the_pad(self) -> bool:
+        return self._gamepad.top_handler() is None
 
     def _still_windowed(self, app_id: str) -> bool:
         app = self._app_by_id(app_id)
