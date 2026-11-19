@@ -1396,7 +1396,7 @@ def main() -> None:
     # Wayland takes the window's app_id from here; without it the window reports
     # "python3" and Kasual Desktop cannot tell its own app from a foreign one.
     app.setDesktopFileName(APP_ID)
-    fa_icons.install_fontawesome5()
+    fa_icons.install_bundled_fontawesome5()
     sound_player.init()
 
     locale_dir = str(Path(__file__).parent.parent / "locale")
