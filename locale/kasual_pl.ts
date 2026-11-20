@@ -367,12 +367,12 @@
         <translation>Wróć do ekranu głównego</translation>
     </message>
     <message>
-        <location filename="../src/domain/menu/home.py" line="102" />
+        <location filename="../src/domain/menu/home.py" line="100" />
         <source>Return to {0}</source>
         <translation>Powrót do {0}</translation>
     </message>
     <message>
-        <location filename="../src/domain/menu/home.py" line="104" />
+        <location filename="../src/domain/menu/home.py" line="102" />
         <source>Close {0}</source>
         <translation>Zamknij {0}</translation>
     </message>
@@ -444,72 +444,82 @@
         <translation>{0} godz. temu</translation>
     </message>
     <message>
-        <location filename="../src/domain/preflight/extension.py" line="63" />
+        <location filename="../src/domain/preflight/extension.py" line="78" />
         <source>Kasual Desktop needs its GNOME Shell helper</source>
         <translation>Kasual Desktop potrzebuje swojego rozszerzenia GNOME Shell</translation>
     </message>
     <message>
-        <location filename="../src/domain/preflight/extension.py" line="65" />
+        <location filename="../src/domain/preflight/extension.py" line="80" />
         <source>Kasual Desktop cannot tell what state the helper extension is in on this system.</source>
         <translation>Kasual Desktop nie potrafi ustalić, w jakim stanie jest rozszerzenie pomocnicze w tym systemie.</translation>
     </message>
     <message>
-        <location filename="../src/domain/preflight/extension.py" line="86" />
+        <location filename="../src/domain/preflight/extension.py" line="104" />
         <source>The Kasual Helper extension is running</source>
         <translation>Rozszerzenie Kasual Helper działa</translation>
     </message>
     <message>
-        <location filename="../src/domain/preflight/extension.py" line="90" />
+        <location filename="../src/domain/preflight/extension.py" line="108" />
         <source>The Kasual Helper extension is not answering</source>
         <translation>Rozszerzenie Kasual Helper nie odpowiada</translation>
     </message>
     <message>
-        <location filename="../src/domain/preflight/extension.py" line="93" />
+        <location filename="../src/domain/preflight/extension.py" line="111" />
         <source>GNOME lets no application arrange windows on its own, so Kasual Desktop does that through its Shell extension. Nothing else can stand in for it here.</source>
         <translation>GNOME nie pozwala żadnej aplikacji samodzielnie układać okien, więc Kasual Desktop robi to przez swoje rozszerzenie Shella. Nic innego go tutaj nie zastąpi.</translation>
     </message>
     <message>
-        <location filename="../src/domain/preflight/extension_recipes.py" line="23" />
-        <source>Enable</source>
-        <translation>Włącz</translation>
-    </message>
-    <message>
-        <location filename="../src/domain/preflight/extension_recipes.py" line="35" />
-        <source>Install Kasual Desktop's package</source>
-        <translation>Zainstaluj pakiet Kasual Desktop</translation>
-    </message>
-    <message>
-        <location filename="../src/domain/preflight/extension_recipes.py" line="36" />
-        <source>The extension ships inside it. A source checkout run in place has never put it where GNOME Shell looks.</source>
-        <translation>Rozszerzenie jest w środku. Uruchomienie wprost z repozytorium źródłowego nigdy nie umieszcza go tam, gdzie szuka GNOME Shell.</translation>
-    </message>
-    <message>
-        <location filename="../src/domain/preflight/extension_recipes.py" line="53" />
+        <location filename="../src/domain/preflight/extension_recipes.py" line="26" />
         <source>Log out</source>
         <translation>Wyloguj</translation>
     </message>
     <message>
-        <location filename="../src/domain/preflight/extension_recipes.py" line="56" />
-        <source>Start a fresh session</source>
-        <translation>Rozpocznij nową sesję</translation>
+        <location filename="../src/domain/preflight/extension_recipes.py" line="32" />
+        <source>Enable</source>
+        <translation>Włącz</translation>
     </message>
     <message>
-        <location filename="../src/domain/preflight/extension_recipes.py" line="57" />
-        <source>The extension is installed, but GNOME Shell built its list of extensions when you logged in and cannot be made to look again. Log out and back in.</source>
-        <translation>Rozszerzenie jest zainstalowane, ale GNOME Shell zbudował listę rozszerzeń przy logowaniu i nie da się go zmusić do ponownego spojrzenia. Wyloguj się i zaloguj ponownie.</translation>
+        <location filename="../src/domain/preflight/extension_recipes.py" line="49" />
+        <source>Installing the extension</source>
+        <translation>Instalacja rozszerzenia</translation>
     </message>
     <message>
-        <location filename="../src/domain/preflight/extension_recipes.py" line="72" />
-        <source>Enable the extension</source>
-        <translation>Włącz rozszerzenie</translation>
+        <location filename="../src/domain/preflight/extension_recipes.py" line="50" />
+        <source>The extension ships inside Kasual Desktop's package. A source checkout run in place has never put it where GNOME Shell looks.</source>
+        <translation>Rozszerzenie jest częścią pakietu Kasual Desktop. Uruchomienie z kopii źródeł nigdy nie umieszcza go tam, gdzie szuka go GNOME Shell.</translation>
     </message>
     <message>
-        <location filename="../src/domain/preflight/extension_recipes.py" line="73" />
+        <location filename="../src/domain/preflight/extension_recipes.py" line="58" />
+        <source>Logging out</source>
+        <translation>Wylogowanie się</translation>
+    </message>
+    <message>
+        <location filename="../src/domain/preflight/extension_recipes.py" line="59" />
+        <source>GNOME Shell builds its list of extensions when you log in and cannot be made to look again, so one installed since then waits for the next session. Log out and back in.</source>
+        <translation>GNOME Shell tworzy listę rozszerzeń przy logowaniu i nie da się go zmusić do ponownego sprawdzenia, więc rozszerzenie zainstalowane później czeka na następną sesję. Wyloguj się i zaloguj ponownie.</translation>
+    </message>
+    <message>
+        <location filename="../src/domain/preflight/extension_recipes.py" line="68" />
+        <source>Enabling the extension</source>
+        <translation>Aktywacja rozszerzenia</translation>
+    </message>
+    <message>
+        <location filename="../src/domain/preflight/extension_recipes.py" line="69" />
         <source>GNOME keeps extensions off until they are turned on, once per user.</source>
         <translation>GNOME trzyma rozszerzenia wyłączone, dopóki nie włączy ich każdy użytkownik u siebie.</translation>
     </message>
     <message>
-        <location filename="../src/domain/preflight/extension_recipes.py" line="83" />
+        <location filename="../src/domain/preflight/extension_recipes.py" line="77" />
+        <source>Starting Kasual Desktop</source>
+        <translation>Start Kasual Desktop</translation>
+    </message>
+    <message>
+        <location filename="../src/domain/preflight/extension_recipes.py" line="78" />
+        <source>Kasual Desktop starts on its own as soon as the extension answers.</source>
+        <translation>Kasual Desktop uruchomi się sam, gdy tylko rozszerzenie zacznie odpowiadać.</translation>
+    </message>
+    <message>
+        <location filename="../src/domain/preflight/extension_recipes.py" line="88" />
         <source>The extension is part of Kasual Desktop, not a third-party add-on: it is what carries out the window operations Mutter offers no protocol for.</source>
         <translation>Rozszerzenie jest częścią Kasual Desktop, a nie dodatkiem z zewnątrz: to ono wykonuje operacje na oknach, na które Mutter nie daje protokołu.</translation>
     </message>
@@ -761,33 +771,38 @@
         <translation>Brak powiadomień</translation>
     </message>
     <message>
-        <location filename="../src/infrastructure/common/qt/overlays/setup_overlay.py" line="185" />
+        <location filename="../src/infrastructure/common/qt/overlays/setup_overlay.py" line="196" />
         <source>Check again</source>
         <translation>Sprawdź ponownie</translation>
     </message>
     <message>
         <location filename="../src/infrastructure/common/qt/ui/tray.py" line="78" />
-        <location filename="../src/infrastructure/common/qt/overlays/setup_overlay.py" line="192" />
+        <location filename="../src/infrastructure/common/qt/overlays/setup_overlay.py" line="203" />
         <source>Quit</source>
         <translation>Zamknij</translation>
     </message>
     <message>
-        <location filename="../src/infrastructure/common/qt/overlays/setup_overlay.py" line="193" />
+        <location filename="../src/infrastructure/common/qt/overlays/setup_overlay.py" line="204" />
         <source>Continue</source>
         <translation>Kontynuuj</translation>
     </message>
     <message>
-        <location filename="../src/infrastructure/common/qt/overlays/setup_overlay.py" line="246" />
+        <location filename="../src/infrastructure/common/qt/overlays/setup_overlay.py" line="257" />
+        <source>Kasual Desktop ticks off each step it finds done. Take the next one, then check again.</source>
+        <translation>Kasual Desktop odhacza kroki, które są już wykonane. Wykonaj kolejny i sprawdź ponownie.</translation>
+    </message>
+    <message>
+        <location filename="../src/infrastructure/common/qt/overlays/setup_overlay.py" line="263" />
         <source>Work through these steps in a terminal, then check again.</source>
         <translation>Wykonaj te kroki w terminalu, a potem sprawdź ponownie.</translation>
     </message>
     <message>
-        <location filename="../src/infrastructure/common/qt/overlays/setup_overlay.py" line="250" />
+        <location filename="../src/infrastructure/common/qt/overlays/setup_overlay.py" line="267" />
         <source>Work through these steps in a terminal, then check again. You can also continue now and come back later.</source>
         <translation>Wykonaj te kroki w terminalu, a potem sprawdź ponownie. Możesz też kontynuować teraz i wrócić do tego później.</translation>
     </message>
     <message>
-        <location filename="../src/infrastructure/common/qt/overlays/setup_overlay.py" line="355" />
+        <location filename="../src/infrastructure/common/qt/overlays/setup_overlay.py" line="386" />
         <source>Copy to clipboard</source>
         <translation>Kopiuj do schowka</translation>
     </message>
@@ -830,6 +845,26 @@
         <location filename="../src/infrastructure/common/single_instance.py" line="64" />
         <source>Kasual Desktop did not start</source>
         <translation>Kasual Desktop nie został uruchomiony</translation>
+    </message>
+    <message>
+        <source>Install Kasual Desktop's package</source>
+        <translation type="vanished">Zainstaluj pakiet Kasual Desktop</translation>
+    </message>
+    <message>
+        <source>The extension ships inside it. A source checkout run in place has never put it where GNOME Shell looks.</source>
+        <translation type="vanished">Rozszerzenie jest w środku. Uruchomienie wprost z repozytorium źródłowego nigdy nie umieszcza go tam, gdzie szuka GNOME Shell.</translation>
+    </message>
+    <message>
+        <source>Start a fresh session</source>
+        <translation type="vanished">Rozpocznij nową sesję</translation>
+    </message>
+    <message>
+        <source>The extension is installed, but GNOME Shell built its list of extensions when you logged in and cannot be made to look again. Log out and back in.</source>
+        <translation type="vanished">Rozszerzenie jest zainstalowane, ale GNOME Shell zbudował listę rozszerzeń przy logowaniu i nie da się go zmusić do ponownego spojrzenia. Wyloguj się i zaloguj ponownie.</translation>
+    </message>
+    <message>
+        <source>Enable the extension</source>
+        <translation type="vanished">Włącz rozszerzenie</translation>
     </message>
     <message>
         <source>Disable HUD</source>

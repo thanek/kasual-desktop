@@ -61,6 +61,7 @@ class Recipe:
     distros: tuple[str, ...] = ()
     traits: tuple[str, ...] = ()
     remedies: tuple[Remedy, ...] = ()
+    timeline: bool = False
 
 
 @dataclass(frozen=True)
@@ -142,10 +143,15 @@ class ReadinessReport:
     steps: tuple[StepStatus, ...] = ()
     notice: str = ""
     remedies: tuple[Remedy, ...] = ()
+    timeline: bool = False
 
     @property
     def remaining(self) -> int:
         return sum(1 for status in self.steps if not status.done)
+
+    @property
+    def current(self) -> StepStatus | None:
+        return next((status for status in self.steps if not status.done), None)
 
 
 def recipe_for(machine: MachineProfile, recipes: tuple[Recipe, ...]) -> Recipe | None:

@@ -23,6 +23,10 @@ DISABLED = "extension-disabled"
 ABSENT = "extension-absent"
 UNLOADED = "extension-unloaded"
 
+STAGE = "extension-stage"
+INSTALLED = "installed"
+FRESH_SESSION = "fresh-session"
+
 
 class ExtensionState(enum.Enum):
     READY = "ready"
@@ -53,10 +57,21 @@ _TRAITS = {
     ExtensionState.UNLOADED: UNLOADED,
 }
 
+_STAGES_PASSED = {
+    INSTALLED: frozenset({
+        ExtensionState.UNLOADED, ExtensionState.DISABLED, ExtensionState.READY}),
+    FRESH_SESSION: frozenset({ExtensionState.DISABLED, ExtensionState.READY}),
+}
+
+
+def stage_check(stage: str) -> Check:
+    return Check(STAGE, stage)
+
 
 class HelperExtension(Requirement):
     def __init__(self, probe: ExtensionProbe) -> None:
         self._probe = probe
+        self._last_assessed_state: ExtensionState | None = None
 
     def subject(self) -> Subject:
         return Subject(
@@ -71,13 +86,16 @@ class HelperExtension(Requirement):
         )
 
     def assess(self) -> Assessment:
-        state = self._probe.state()
+        state = self._last_assessed_state = self._probe.state()
         trait = _TRAITS.get(state)
         return Assessment(
             (self._status(state),), () if trait is None else (trait,))
 
     def satisfied(self, check: Check) -> bool:
-        return False
+        if check.kind != STAGE or self._last_assessed_state is None:
+            return False
+        return self._last_assessed_state in _STAGES_PASSED.get(
+            check.value, frozenset())
 
     @staticmethod
     def _status(state: ExtensionState) -> StatusLine:

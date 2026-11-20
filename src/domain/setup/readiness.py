@@ -38,6 +38,7 @@ class SetupReadiness:
             self._evaluate(recipe, assessment),
             recipe.notice,
             recipe.remedies,
+            recipe.timeline,
         )
 
     def _profile(self, assessment: Assessment) -> MachineProfile:

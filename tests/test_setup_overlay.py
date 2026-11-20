@@ -304,3 +304,56 @@ class TestLayout:
         card = _card(mock_gamepad, statuses)
         detail = card._statuses_container.findChildren(QLabel)[-1]
         assert detail.heightForWidth(detail.width()) <= detail.height()
+
+
+class _PathRequirement(_Requirement):
+    def satisfied(self, check):
+        return check.value == "behind"
+
+
+def _timeline_card(mock_gamepad):
+    from domain.setup.plan import Check
+    steps = (
+        Step("First stop", "already done", Check("stage", "behind")),
+        Step("Second stop", "do this now", Check("stage", "ahead"), command="run-it"),
+        Step("Third stop", "comes later", GOAL_REACHED),
+    )
+    view = QtSetupView(mock_gamepad, MagicMock())
+    SetupGate(
+        SetupReadiness(
+            _PathRequirement(_UNMET), _Facts(),
+            (Recipe(key="path", notice="n", steps=steps, timeline=True),)),
+        view,
+    ).ensure(lambda: None, force=True)
+    return view.current
+
+
+class TestTimeline:
+    def _timeline(self, card):
+        from infrastructure.common.qt.overlays.setup_overlay import _Timeline
+        return card._steps_container.findChildren(_Timeline)[0]
+
+    def test_every_stop_is_on_the_line(self, mock_gamepad):
+        timeline = self._timeline(_timeline_card(mock_gamepad))
+        assert [s.step.title for s in timeline.steps] == [
+            "First stop", "Second stop", "Third stop"]
+
+    def test_it_knows_where_the_user_stands(self, mock_gamepad):
+        assert self._timeline(_timeline_card(mock_gamepad)).current == 1
+
+    def test_only_the_current_step_is_spelled_out(self, mock_gamepad):
+        texts = _texts(card := _timeline_card(mock_gamepad), card._steps_container)
+        assert "do this now" in texts and "run-it" in texts
+        assert "already done" not in texts and "comes later" not in texts
+
+    def test_it_is_numbered_by_its_place_on_the_path(self, mock_gamepad):
+        card = _timeline_card(mock_gamepad)
+        assert "○  2. Second stop" in _texts(card, card._steps_container)
+
+    def test_it_is_given_room_for_its_labels(self, mock_gamepad):
+        assert self._timeline(_timeline_card(mock_gamepad)).minimumHeight() > 44
+
+    def test_a_plain_recipe_stays_a_list(self, mock_gamepad):
+        from infrastructure.common.qt.overlays.setup_overlay import _Timeline
+        card = _card(mock_gamepad, _UNMET)
+        assert card._steps_container.findChildren(_Timeline) == []

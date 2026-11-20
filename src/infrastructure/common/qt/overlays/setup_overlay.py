@@ -9,8 +9,8 @@ import enum
 from collections.abc import Callable
 
 import qtawesome
-from PyQt6.QtCore import QSize, Qt, QTimer
-from PyQt6.QtGui import QKeyEvent
+from PyQt6.QtCore import QPointF, QRectF, QSize, Qt, QTimer
+from PyQt6.QtGui import QColor, QFont, QFontMetrics, QKeyEvent, QPainter, QPen
 from PyQt6.QtWidgets import (
     QApplication, QFrame, QHBoxLayout, QLabel, QPushButton, QScrollArea,
     QSizePolicy, QVBoxLayout, QWidget,
@@ -47,6 +47,17 @@ _INDENT_PX = 28
 _SCROLLBAR_PX = 12
 _NARROWEST_TEXT_WIDTH = (
     _CARD_WIDTH - 2 * _CARD_MARGIN - _INDENT_PX - _SCROLLBAR_PX)
+
+_TIMELINE_WIDTH = _CARD_WIDTH - 2 * _CARD_MARGIN
+_NODE_RADIUS = 22
+_NODE_RING_PX = 3
+_CONNECTOR_PX = 4
+_NODE_LABEL_GAP = 10
+_NODE_LABEL_PX = 16
+_NODE_MARK_PX = 18
+_NODE_LABEL_SIDE_GAP = 8
+_AHEAD_RING = styles.COLOR_BTN_HI
+_AHEAD_TEXT = "#a7afbd"
 
 
 class _Confirmation(enum.Enum):
@@ -232,7 +243,7 @@ class _SetupDialog(BaseOverlay):
         ready = report.state is Readiness.READY
         _set_text(self._notice, "" if ready else report.notice)
         self._notice.setVisible(not ready and bool(report.notice))
-        self._rebuild_steps(() if ready else report.steps)
+        self._rebuild_steps(() if ready else report.steps, report.timeline)
         self._render_confirmation()
         self._render_buttons(self._cursor.index)
 
@@ -242,6 +253,12 @@ class _SetupDialog(BaseOverlay):
             return ""
         if report.state is Readiness.UNSUPPORTED:
             return report.subject.unsupported
+        if report.timeline:
+            return translate(
+                "Kasual Desktop",
+                "Kasual Desktop ticks off each step it finds done. Take the "
+                "next one, then check again.",
+            )
         if report.subject.blocking:
             return translate(
                 "Kasual Desktop",
@@ -293,15 +310,29 @@ class _SetupDialog(BaseOverlay):
             return wording.failed, wording.detail_failed
         return wording.unchecked, wording.detail_unchecked
 
-    def _rebuild_steps(self, steps: tuple[StepStatus, ...]) -> None:
+    def _rebuild_steps(
+        self, steps: tuple[StepStatus, ...], timeline: bool = False
+    ) -> None:
         _clear(self._steps_layout)
-        for number, status in enumerate(steps, start=1):
-            step = self._step_widget(number, status)
-            self._steps_layout.addWidget(step)
-            _visible_before_measuring(step)
+        if timeline and steps:
+            self._show_timeline(steps)
+        else:
+            for number, status in enumerate(steps, start=1):
+                self._add_step(self._step_widget(number, status))
         self._steps_area.setVisible(bool(steps))
         if steps:
             self._fit_steps_height()
+
+    def _show_timeline(self, steps: tuple[StepStatus, ...]) -> None:
+        self._add_step(_Timeline(steps))
+        current = next(
+            (i for i, status in enumerate(steps) if not status.done), None)
+        if current is not None:
+            self._add_step(self._step_widget(current + 1, steps[current]))
+
+    def _add_step(self, widget: QWidget) -> None:
+        self._steps_layout.addWidget(widget)
+        _visible_before_measuring(widget)
 
     def _step_widget(self, number: int, status: StepStatus) -> QWidget:
         holder = QWidget()
@@ -474,6 +505,105 @@ class _SetupDialog(BaseOverlay):
             self._cursor.handle_pad(Event.UP)
         elif key in (Qt.Key.Key_Right, Qt.Key.Key_Down):
             self._cursor.handle_pad(Event.DOWN)
+
+
+class _Timeline(QWidget):
+    def __init__(self, steps: tuple[StepStatus, ...]) -> None:
+        super().__init__()
+        self.steps = steps
+        self._current = next(
+            (i for i, status in enumerate(steps) if not status.done), -1)
+        self._label_font = QFont()
+        self._label_font.setPixelSize(_NODE_LABEL_PX)
+        self._current_font = QFont(self._label_font)
+        self._current_font.setBold(True)
+        self._mark_font = QFont()
+        self._mark_font.setPixelSize(_NODE_MARK_PX)
+        self._mark_font.setBold(True)
+        self.setStyleSheet("background: transparent;")
+        self.setMinimumHeight(self._height_for(_TIMELINE_WIDTH))
+
+    @property
+    def current(self) -> int:
+        return self._current
+
+    def _column(self, width: int) -> float:
+        return width / max(len(self.steps), 1)
+
+    def _label_rect(self, index: int, width: int) -> QRectF:
+        column = self._column(width)
+        top = 2 * _NODE_RADIUS + _NODE_LABEL_GAP
+        return QRectF(index * column + _NODE_LABEL_SIDE_GAP / 2, top,
+                      column - _NODE_LABEL_SIDE_GAP, 1000)
+
+    def _height_for(self, width: int) -> int:
+        metrics = QFontMetrics(self._current_font)
+        tallest = max(
+            (metrics.boundingRect(
+                self._label_rect(i, width).toRect(),
+                int(Qt.AlignmentFlag.AlignHCenter | Qt.TextFlag.TextWordWrap),
+                status.step.title).height()
+             for i, status in enumerate(self.steps)),
+            default=0)
+        return 2 * _NODE_RADIUS + _NODE_LABEL_GAP + tallest + 4
+
+    def paintEvent(self, event) -> None:
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        width = self.width()
+        column = self._column(width)
+        cy = _NODE_RADIUS + 1
+        centers = [column * (i + 0.5) for i in range(len(self.steps))]
+        for i in range(len(centers) - 1):
+            done = self.steps[i].done and self.steps[i + 1].done
+            reached = self.steps[i].done
+            color = styles.COLOR_RUNNING if done else (
+                styles.COLOR_ACCENT if reached else _AHEAD_RING)
+            painter.setPen(QPen(QColor(color), _CONNECTOR_PX))
+            painter.drawLine(QPointF(centers[i] + _NODE_RADIUS, cy),
+                             QPointF(centers[i + 1] - _NODE_RADIUS, cy))
+        for i, (status, cx) in enumerate(zip(self.steps, centers)):
+            self._paint_node(painter, i, status, QPointF(cx, cy))
+            self._paint_label(painter, i, status, width)
+        painter.end()
+
+    def _paint_node(
+        self, painter: QPainter, index: int, status: StepStatus, center: QPointF
+    ) -> None:
+        radius = _NODE_RADIUS - _NODE_RING_PX / 2
+        if status.done:
+            painter.setPen(QPen(QColor(styles.COLOR_RUNNING), _NODE_RING_PX))
+            painter.setBrush(QColor(styles.COLOR_RUNNING))
+            mark, mark_color = _DONE_MARK, styles.COLOR_CARD_BG
+        else:
+            ring = (styles.COLOR_ACCENT if index == self._current
+                    else _AHEAD_RING)
+            painter.setPen(QPen(QColor(ring), _NODE_RING_PX))
+            painter.setBrush(QColor(styles.COLOR_CARD_BG))
+            mark, mark_color = str(index + 1), ring
+        painter.drawEllipse(center, radius, radius)
+        painter.setPen(QColor(mark_color))
+        painter.setFont(self._mark_font)
+        box = QRectF(center.x() - radius, center.y() - radius, 2 * radius, 2 * radius)
+        painter.drawText(box, Qt.AlignmentFlag.AlignCenter, mark)
+
+    def _paint_label(
+        self, painter: QPainter, index: int, status: StepStatus, width: int
+    ) -> None:
+        if status.done:
+            color = styles.COLOR_RUNNING
+        elif index == self._current:
+            color = styles.COLOR_ACCENT
+        else:
+            color = _AHEAD_TEXT
+        painter.setPen(QColor(color))
+        painter.setFont(
+            self._current_font if index == self._current else self._label_font)
+        painter.drawText(
+            self._label_rect(index, width),
+            int(Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignTop
+                | Qt.TextFlag.TextWordWrap),
+            status.step.title)
 
 
 def _visible_before_measuring(widget: QWidget) -> None:

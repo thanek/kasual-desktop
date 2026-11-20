@@ -1,14 +1,16 @@
 """Show a setup card on its own, without starting Kasual Desktop.
 
 Usage:
-    python3 setup_card_preview.py [source|packaged|no-udev|no-uinput|ready|gnome]
+    python3 setup_card_preview.py [source|packaged|no-udev|no-uinput|ready|gnome[:state]]
 
 source     pretends the access rule was never installed (a source checkout)
 packaged   pretends the rule is installed but has not been applied
 no-udev    pretends a host with no udevadm at all
 no-uinput  pretends /dev/uinput is closed, with the gamepad readable
 ready      uses this machine as it really is
-gnome      the helper-extension card, which blocks instead of letting you past
+gnome      the helper-extension card, which blocks instead of letting you past;
+           gnome:absent, gnome:unloaded (the default) and gnome:disabled pick
+           the point on its timeline the card opens at
 
 In the pretending scenarios the fault stays until the marker file exists, so
 "Check again" has something to discover: with the card open, run
@@ -107,10 +109,10 @@ def _gamepad_access_gate(view, scenario):
     )
 
 
-def _extension_gate(view, app):
+def _extension_gate(view, app, state):
     return SetupGate(
         SetupReadiness(
-            HelperExtension(FakeProbe(ExtensionState.UNLOADED)),
+            HelperExtension(FakeProbe(state)),
             LinuxSystemFacts(),
             extension_recipes("kasual-helper@consoledesktop.org"),
         ),
@@ -123,7 +125,14 @@ def _extension_gate(view, app):
 
 def main() -> None:
     scenario = sys.argv[1] if len(sys.argv) > 1 else "source"
-    if scenario not in _SCENARIOS and scenario != "gnome":
+    gnome, _, state_name = scenario.partition(":")
+    gnome = gnome == "gnome"
+    states = {s.value: s for s in ExtensionState if s is not ExtensionState.READY}
+    if gnome:
+        state = states.get(state_name or "unloaded")
+        if state is None:
+            sys.exit(__doc__)
+    elif scenario not in _SCENARIOS:
         sys.exit(__doc__)
 
     app = QApplication(sys.argv)
@@ -131,7 +140,7 @@ def main() -> None:
     install_translations(app, str(REPO / "locale"))
 
     view = QtSetupView(MagicMock(), MagicMock())
-    gate = (_extension_gate(view, app) if scenario == "gnome"
+    gate = (_extension_gate(view, app, state) if gnome
             else _gamepad_access_gate(view, scenario))
     gate.ensure(app.quit, force=True)
     sys.exit(app.exec())

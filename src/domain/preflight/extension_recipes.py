@@ -5,7 +5,8 @@ after the composition root installs the translator.
 """
 
 from domain.preflight.extension import (
-    ABSENT, DISABLED, ENABLE, LOG_OUT, UNLOADED,
+    ABSENT, DISABLED, ENABLE, FRESH_SESSION, INSTALLED, LOG_OUT, UNLOADED,
+    stage_check,
 )
 from domain.setup.plan import GOAL_REACHED, Recipe, Remedy, Step
 from domain.shared.i18n import translate
@@ -15,67 +16,71 @@ def all_recipes(uuid: str) -> tuple[Recipe, ...]:
     return (_absent(uuid), _unloaded(uuid), _disabled(uuid))
 
 
-def _disabled(uuid: str) -> Recipe:
-    return Recipe(
-        key="enable",
-        traits=(DISABLED,),
-        notice=_notice(),
-        remedies=(Remedy(ENABLE, translate("Kasual Desktop", "Enable")),),
-        steps=(_enable_step(uuid),),
-    )
-
-
 def _absent(uuid: str) -> Recipe:
-    return Recipe(
-        key="install",
-        traits=(ABSENT,),
-        notice=_notice(),
-        steps=(
-            Step(
-                title=translate("Kasual Desktop", "Install Kasual Desktop's package"),
-                instruction=translate(
-                    "Kasual Desktop",
-                    "The extension ships inside it. A source checkout run in "
-                    "place has never put it where GNOME Shell looks.",
-                ),
-                check=GOAL_REACHED,
-            ),
-            _enable_step(uuid),
-        ),
-    )
+    return _recipe("install", ABSENT, uuid)
 
 
 def _unloaded(uuid: str) -> Recipe:
+    return _recipe(
+        "relogin", UNLOADED, uuid,
+        Remedy(LOG_OUT, translate("Kasual Desktop", "Log out")))
+
+
+def _disabled(uuid: str) -> Recipe:
+    return _recipe(
+        "enable", DISABLED, uuid,
+        Remedy(ENABLE, translate("Kasual Desktop", "Enable")))
+
+
+def _recipe(key: str, trait: str, uuid: str, *remedies: Remedy) -> Recipe:
     return Recipe(
-        key="relogin",
-        traits=(UNLOADED,),
+        key=key,
+        traits=(trait,),
         notice=_notice(),
-        remedies=(Remedy(LOG_OUT, translate("Kasual Desktop", "Log out")),),
-        steps=(
-            Step(
-                title=translate("Kasual Desktop", "Start a fresh session"),
-                instruction=translate(
-                    "Kasual Desktop",
-                    "The extension is installed, but GNOME Shell built its list "
-                    "of extensions when you logged in and cannot be made to look "
-                    "again. Log out and back in.",
-                ),
-                check=GOAL_REACHED,
-            ),
-            _enable_step(uuid),
-        ),
+        remedies=remedies,
+        steps=_path(uuid),
+        timeline=True,
     )
 
 
-def _enable_step(uuid: str) -> Step:
-    return Step(
-        title=translate("Kasual Desktop", "Enable the extension"),
-        instruction=translate(
-            "Kasual Desktop",
-            "GNOME keeps extensions off until they are turned on, once per user.",
+def _path(uuid: str) -> tuple[Step, ...]:
+    return (
+        Step(
+            title=translate("Kasual Desktop", "Installing the extension"),
+            instruction=translate(
+                "Kasual Desktop",
+                "The extension ships inside Kasual Desktop's package. A source "
+                "checkout run in place has never put it where GNOME Shell looks.",
+            ),
+            check=stage_check(INSTALLED),
         ),
-        check=GOAL_REACHED,
-        command=f"gnome-extensions enable {uuid}",
+        Step(
+            title=translate("Kasual Desktop", "Logging out"),
+            instruction=translate(
+                "Kasual Desktop",
+                "GNOME Shell builds its list of extensions when you log in and "
+                "cannot be made to look again, so one installed since then waits "
+                "for the next session. Log out and back in.",
+            ),
+            check=stage_check(FRESH_SESSION),
+        ),
+        Step(
+            title=translate("Kasual Desktop", "Enabling the extension"),
+            instruction=translate(
+                "Kasual Desktop",
+                "GNOME keeps extensions off until they are turned on, once per user.",
+            ),
+            check=GOAL_REACHED,
+            command=f"gnome-extensions enable {uuid}",
+        ),
+        Step(
+            title=translate("Kasual Desktop", "Starting Kasual Desktop"),
+            instruction=translate(
+                "Kasual Desktop",
+                "Kasual Desktop starts on its own as soon as the extension answers.",
+            ),
+            check=GOAL_REACHED,
+        ),
     )
 
 

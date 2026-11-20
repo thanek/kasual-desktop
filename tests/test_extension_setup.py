@@ -122,10 +122,30 @@ class TestRecipeChosen:
         return _readiness(state).report()
 
     def test_unresolvable_states_reach_the_user_as_themselves(self):
-        """UNLOADED needs a re-login, not the enable command ABSENT advertises."""
+        """UNLOADED needs a re-login, not the install ABSENT is stuck at."""
         absent = self._report(ExtensionState.ABSENT)
         unloaded = self._report(ExtensionState.UNLOADED)
-        assert absent.steps[0].step.title != unloaded.steps[0].step.title
+        assert absent.current.step.title != unloaded.current.step.title
+
+    def test_every_state_walks_the_same_path(self):
+        titles = {
+            tuple(s.step.title for s in self._report(state).steps)
+            for state in (ExtensionState.ABSENT, ExtensionState.UNLOADED,
+                          ExtensionState.DISABLED)
+        }
+        assert len(titles) == 1 and len(next(iter(titles))) == 4
+
+    def test_it_is_shown_as_a_timeline(self):
+        assert self._report(ExtensionState.UNLOADED).timeline
+
+    @pytest.mark.parametrize(
+        "state,done",
+        [(ExtensionState.ABSENT, [False, False, False, False]),
+         (ExtensionState.UNLOADED, [True, False, False, False]),
+         (ExtensionState.DISABLED, [True, True, False, False])],
+    )
+    def test_what_is_behind_the_user_is_ticked_off(self, state, done):
+        assert [s.done for s in self._report(state).steps] == done
 
     def test_disabled_offers_to_enable_it_for_you(self):
         report = self._report(ExtensionState.DISABLED)
