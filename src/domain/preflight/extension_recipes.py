@@ -12,31 +12,37 @@ from domain.setup.plan import GOAL_REACHED, Recipe, Remedy, Step
 from domain.shared.i18n import translate
 
 
-def all_recipes(uuid: str) -> tuple[Recipe, ...]:
-    return (_absent(uuid), _unloaded(uuid), _disabled(uuid))
+def all_recipes(uuid: str, desktop: str) -> tuple[Recipe, ...]:
+    return (
+        _absent(uuid, desktop),
+        _unloaded(uuid, desktop),
+        _disabled(uuid, desktop),
+    )
 
 
-def _absent(uuid: str) -> Recipe:
-    return _recipe("install", ABSENT, uuid)
+def _absent(uuid: str, desktop: str) -> Recipe:
+    return _recipe("install", ABSENT, uuid, desktop)
 
 
-def _unloaded(uuid: str) -> Recipe:
+def _unloaded(uuid: str, desktop: str) -> Recipe:
     return _recipe(
-        "relogin", UNLOADED, uuid,
+        "relogin", UNLOADED, uuid, desktop,
         Remedy(LOG_OUT, translate("Kasual Desktop", "Log out")))
 
 
-def _disabled(uuid: str) -> Recipe:
+def _disabled(uuid: str, desktop: str) -> Recipe:
     return _recipe(
-        "enable", DISABLED, uuid,
+        "enable", DISABLED, uuid, desktop,
         Remedy(ENABLE, translate("Kasual Desktop", "Enable")))
 
 
-def _recipe(key: str, trait: str, uuid: str, *remedies: Remedy) -> Recipe:
+def _recipe(
+    key: str, trait: str, uuid: str, desktop: str, *remedies: Remedy
+) -> Recipe:
     return Recipe(
         key=key,
         traits=(trait,),
-        notice=_notice(),
+        notice=_notice(desktop),
         remedies=remedies,
         steps=_path(uuid),
         timeline=True,
@@ -50,7 +56,9 @@ def _path(uuid: str) -> tuple[Step, ...]:
             instruction=translate(
                 "Kasual Desktop",
                 "The extension ships inside Kasual Desktop's package. A source "
-                "checkout run in place has never put it where GNOME Shell looks.",
+                "checkout run in place has never put it where GNOME Shell looks. "
+                "You need to install the extension, e.g. with the "
+                "./tools/reinstall_gnome_extension.sh script.",
             ),
             check=stage_check(INSTALLED),
         ),
@@ -58,9 +66,8 @@ def _path(uuid: str) -> tuple[Step, ...]:
             title=translate("Kasual Desktop", "Logging out"),
             instruction=translate(
                 "Kasual Desktop",
-                "GNOME Shell builds its list of extensions when you log in and "
-                "cannot be made to look again, so one installed since then waits "
-                "for the next session. Log out and back in.",
+                "The extension is already on the system, but the session needs "
+                "reloading. To do that, log out and log back in.",
             ),
             check=stage_check(FRESH_SESSION),
         ),
@@ -68,25 +75,18 @@ def _path(uuid: str) -> tuple[Step, ...]:
             title=translate("Kasual Desktop", "Enabling the extension"),
             instruction=translate(
                 "Kasual Desktop",
-                "GNOME keeps extensions off until they are turned on, once per user.",
+                "The extension is already on the system, but it is not enabled "
+                "yet. You can enable it with the command, or by clicking Enable.",
             ),
             check=GOAL_REACHED,
             command=f"gnome-extensions enable {uuid}",
         ),
-        Step(
-            title=translate("Kasual Desktop", "Starting Kasual Desktop"),
-            instruction=translate(
-                "Kasual Desktop",
-                "Kasual Desktop starts on its own as soon as the extension answers.",
-            ),
-            check=GOAL_REACHED,
-        ),
     )
 
 
-def _notice() -> str:
+def _notice(desktop: str) -> str:
     return translate(
         "Kasual Desktop",
-        "The extension is part of Kasual Desktop, not a third-party add-on: it "
-        "is what carries out the window operations Mutter offers no protocol for.",
-    )
+        "Kasual Desktop on {0} needs the Kasual Helper extension running. This "
+        "window walks you through installing it on your desktop, step by step.",
+    ).format(desktop)

@@ -237,12 +237,13 @@ class _SetupDialog(BaseOverlay):
 
     def _apply(self, report: ReadinessReport) -> None:
         self._report = report
-        self._rebuild_statuses(report.statuses)
+        self._rebuild_statuses(() if report.timeline else report.statuses)
         _set_text(self._guidance, self._guidance_text(report))
         self._guidance.setVisible(bool(self._guidance.text()))
         ready = report.state is Readiness.READY
-        _set_text(self._notice, "" if ready else report.notice)
-        self._notice.setVisible(not ready and bool(report.notice))
+        notice = "" if ready or report.timeline else report.notice
+        _set_text(self._notice, notice)
+        self._notice.setVisible(bool(notice))
         self._rebuild_steps(() if ready else report.steps, report.timeline)
         self._render_confirmation()
         self._render_buttons(self._cursor.index)
@@ -254,11 +255,7 @@ class _SetupDialog(BaseOverlay):
         if report.state is Readiness.UNSUPPORTED:
             return report.subject.unsupported
         if report.timeline:
-            return translate(
-                "Kasual Desktop",
-                "Kasual Desktop ticks off each step it finds done. Take the "
-                "next one, then check again.",
-            )
+            return report.notice
         if report.subject.blocking:
             return translate(
                 "Kasual Desktop",
@@ -287,6 +284,7 @@ class _SetupDialog(BaseOverlay):
                 layout.addWidget(detail)
             self._statuses_layout.addWidget(holder)
             _visible_before_measuring(holder)
+        self._statuses_container.setVisible(bool(statuses))
 
     def _render_confirmation(self) -> None:
         wording = self._report.subject.verification
@@ -325,41 +323,52 @@ class _SetupDialog(BaseOverlay):
 
     def _show_timeline(self, steps: tuple[StepStatus, ...]) -> None:
         self._add_step(_Timeline(steps))
-        current = next(
-            (i for i, status in enumerate(steps) if not status.done), None)
+        current = next((status for status in steps if not status.done), None)
         if current is not None:
-            self._add_step(self._step_widget(current + 1, steps[current]))
+            self._add_step(self._current_step_details(current))
 
     def _add_step(self, widget: QWidget) -> None:
         self._steps_layout.addWidget(widget)
         _visible_before_measuring(widget)
 
     def _step_widget(self, number: int, status: StepStatus) -> QWidget:
+        holder, layout = self._step_holder()
+        layout.addWidget(self._step_heading(number, status))
+        self._add_step_details(layout, status)
+        return holder
+
+    def _current_step_details(self, status: StepStatus) -> QWidget:
+        holder, layout = self._step_holder()
+        self._add_step_details(layout, status)
+        return holder
+
+    @staticmethod
+    def _step_holder() -> tuple[QWidget, QVBoxLayout]:
         holder = QWidget()
         holder.setStyleSheet("background: transparent;")
         layout = QVBoxLayout(holder)
         layout.setContentsMargins(_INDENT_PX, 0, 0, 0)
         layout.setSpacing(4)
         layout.setAlignment(Qt.AlignmentFlag.AlignTop)
+        return holder, layout
 
+    @staticmethod
+    def _step_heading(number: int, status: StepStatus) -> QLabel:
         mark = _DONE_MARK if status.done else _PENDING_MARK
         color = styles.COLOR_RUNNING if status.done else styles.COLOR_ACCENT
-        heading = _wrapped(
+        return _wrapped(
             f"font-size: 18px; font-weight: bold; color: {color};"
             " background: transparent;",
             f"{mark}  {number}. {status.step.title}",
         )
-        layout.addWidget(heading)
 
-        instruction = _wrapped(
+    def _add_step_details(self, layout: QVBoxLayout, status: StepStatus) -> None:
+        layout.addWidget(_wrapped(
             f"font-size: 16px; color: {styles.COLOR_TEXT}; background: transparent;",
             status.step.instruction,
-        )
-        layout.addWidget(instruction)
-
+        ))
         if status.step.command:
             layout.addWidget(self._command_field(status.step.command))
-        return holder
 
     def _command_field(self, command: str) -> QWidget:
         field = QWidget()

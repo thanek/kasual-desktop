@@ -41,6 +41,7 @@ from domain.preflight.extension_recipes import (                        # noqa: 
 from domain.setup.gate import SetupGate                                 # noqa: E402
 from domain.setup.readiness import SetupReadiness                       # noqa: E402
 from infrastructure.common.qt.i18n import install_translations          # noqa: E402
+from infrastructure.common.qt.icons import install_bundled_fontawesome5  # noqa: E402
 from infrastructure.common.qt.overlays.setup_overlay import QtSetupView  # noqa: E402
 from infrastructure.linux.input.access import (                         # noqa: E402
     RULE_FILE, LinuxDeviceAccess,
@@ -114,7 +115,7 @@ def _extension_gate(view, app, state):
         SetupReadiness(
             HelperExtension(FakeProbe(state)),
             LinuxSystemFacts(),
-            extension_recipes("kasual-helper@consoledesktop.org"),
+            extension_recipes("kasual-helper@consoledesktop.org", "GNOME"),
         ),
         view,
         remedies={ENABLE: lambda: print("enable pressed"),
@@ -138,6 +139,7 @@ def main() -> None:
     app = QApplication(sys.argv)
     app.setApplicationName("Kasual Desktop")
     install_translations(app, str(REPO / "locale"))
+    install_bundled_fontawesome5()
 
     view = QtSetupView(MagicMock(), MagicMock())
     gate = (_extension_gate(view, app, state) if gnome

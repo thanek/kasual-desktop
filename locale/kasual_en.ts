@@ -465,64 +465,49 @@
         <translation>The Kasual Helper extension is not answering</translation>
     </message>
     <message>
-        <location filename="../src/domain/preflight/extension.py" line="111" />
-        <source>GNOME lets no application arrange windows on its own, so Kasual Desktop does that through its Shell extension. Nothing else can stand in for it here.</source>
-        <translation>GNOME lets no application arrange windows on its own, so Kasual Desktop does that through its Shell extension. Nothing else can stand in for it here.</translation>
-    </message>
-    <message>
-        <location filename="../src/domain/preflight/extension_recipes.py" line="26" />
+        <location filename="../src/domain/preflight/extension_recipes.py" line="30" />
         <source>Log out</source>
         <translation>Log out</translation>
     </message>
     <message>
-        <location filename="../src/domain/preflight/extension_recipes.py" line="32" />
+        <location filename="../src/domain/preflight/extension_recipes.py" line="36" />
         <source>Enable</source>
         <translation>Enable</translation>
     </message>
     <message>
-        <location filename="../src/domain/preflight/extension_recipes.py" line="49" />
+        <location filename="../src/domain/preflight/extension_recipes.py" line="55" />
         <source>Installing the extension</source>
         <translation>Installing the extension</translation>
     </message>
     <message>
-        <location filename="../src/domain/preflight/extension_recipes.py" line="50" />
-        <source>The extension ships inside Kasual Desktop's package. A source checkout run in place has never put it where GNOME Shell looks.</source>
-        <translation>The extension ships inside Kasual Desktop's package. A source checkout run in place has never put it where GNOME Shell looks.</translation>
+        <location filename="../src/domain/preflight/extension_recipes.py" line="56" />
+        <source>The extension ships inside Kasual Desktop's package. A source checkout run in place has never put it where GNOME Shell looks. You need to install the extension, e.g. with the ./tools/reinstall_gnome_extension.sh script.</source>
+        <translation>The extension ships inside Kasual Desktop's package. A source checkout run in place has never put it where GNOME Shell looks. You need to install the extension, e.g. with the ./tools/reinstall_gnome_extension.sh script.</translation>
     </message>
     <message>
-        <location filename="../src/domain/preflight/extension_recipes.py" line="58" />
+        <location filename="../src/domain/preflight/extension_recipes.py" line="66" />
         <source>Logging out</source>
         <translation>Logging out</translation>
     </message>
     <message>
-        <location filename="../src/domain/preflight/extension_recipes.py" line="59" />
-        <source>GNOME Shell builds its list of extensions when you log in and cannot be made to look again, so one installed since then waits for the next session. Log out and back in.</source>
-        <translation>GNOME Shell builds its list of extensions when you log in and cannot be made to look again, so one installed since then waits for the next session. Log out and back in.</translation>
+        <location filename="../src/domain/preflight/extension_recipes.py" line="67" />
+        <source>The extension is already on the system, but the session needs reloading. To do that, log out and log back in.</source>
+        <translation>The extension is already on the system, but the session needs reloading. To do that, log out and log back in.</translation>
     </message>
     <message>
-        <location filename="../src/domain/preflight/extension_recipes.py" line="68" />
+        <location filename="../src/domain/preflight/extension_recipes.py" line="75" />
         <source>Enabling the extension</source>
         <translation>Enabling the extension</translation>
     </message>
     <message>
-        <location filename="../src/domain/preflight/extension_recipes.py" line="69" />
-        <source>GNOME keeps extensions off until they are turned on, once per user.</source>
-        <translation>GNOME keeps extensions off until they are turned on, once per user.</translation>
-    </message>
-    <message>
-        <location filename="../src/domain/preflight/extension_recipes.py" line="77" />
-        <source>Starting Kasual Desktop</source>
-        <translation>Starting Kasual Desktop</translation>
-    </message>
-    <message>
-        <location filename="../src/domain/preflight/extension_recipes.py" line="78" />
-        <source>Kasual Desktop starts on its own as soon as the extension answers.</source>
-        <translation>Kasual Desktop starts on its own as soon as the extension answers.</translation>
+        <location filename="../src/domain/preflight/extension_recipes.py" line="76" />
+        <source>The extension is already on the system, but it is not enabled yet. You can enable it with the command, or by clicking Enable.</source>
+        <translation>The extension is already on the system, but it is not enabled yet. You can enable it with the command, or by clicking Enable.</translation>
     </message>
     <message>
         <location filename="../src/domain/preflight/extension_recipes.py" line="88" />
-        <source>The extension is part of Kasual Desktop, not a third-party add-on: it is what carries out the window operations Mutter offers no protocol for.</source>
-        <translation>The extension is part of Kasual Desktop, not a third-party add-on: it is what carries out the window operations Mutter offers no protocol for.</translation>
+        <source>Kasual Desktop on {0} needs the Kasual Helper extension running. This window walks you through installing it on your desktop, step by step.</source>
+        <translation>Kasual Desktop on {0} needs the Kasual Helper extension running. This window walks you through installing it on your desktop, step by step.</translation>
     </message>
     <message>
         <location filename="../src/domain/preflight/hud.py" line="44" />
@@ -788,22 +773,17 @@
         <translation>Continue</translation>
     </message>
     <message>
-        <location filename="../src/infrastructure/common/qt/overlays/setup_overlay.py" line="257" />
-        <source>Kasual Desktop ticks off each step it finds done. Take the next one, then check again.</source>
-        <translation>Kasual Desktop ticks off each step it finds done. Take the next one, then check again.</translation>
-    </message>
-    <message>
-        <location filename="../src/infrastructure/common/qt/overlays/setup_overlay.py" line="263" />
+        <location filename="../src/infrastructure/common/qt/overlays/setup_overlay.py" line="260" />
         <source>Work through these steps in a terminal, then check again.</source>
         <translation>Work through these steps in a terminal, then check again.</translation>
     </message>
     <message>
-        <location filename="../src/infrastructure/common/qt/overlays/setup_overlay.py" line="267" />
+        <location filename="../src/infrastructure/common/qt/overlays/setup_overlay.py" line="264" />
         <source>Work through these steps in a terminal, then check again. You can also continue now and come back later.</source>
         <translation>Work through these steps in a terminal, then check again. You can also continue now and come back later.</translation>
     </message>
     <message>
-        <location filename="../src/infrastructure/common/qt/overlays/setup_overlay.py" line="386" />
+        <location filename="../src/infrastructure/common/qt/overlays/setup_overlay.py" line="384" />
         <source>Copy to clipboard</source>
         <translation>Copy to clipboard</translation>
     </message>
@@ -846,6 +826,38 @@
         <location filename="../src/infrastructure/common/single_instance.py" line="64" />
         <source>Kasual Desktop did not start</source>
         <translation>Kasual Desktop did not start</translation>
+    </message>
+    <message>
+        <source>The extension ships inside Kasual Desktop's package. A source checkout run in place has never put it where GNOME Shell looks.</source>
+        <translation type="vanished">The extension ships inside Kasual Desktop's package. A source checkout run in place has never put it where GNOME Shell looks.</translation>
+    </message>
+    <message>
+        <source>GNOME lets no application arrange windows on its own, so Kasual Desktop does that through its Shell extension. Nothing else can stand in for it here.</source>
+        <translation type="vanished">GNOME lets no application arrange windows on its own, so Kasual Desktop does that through its Shell extension. Nothing else can stand in for it here.</translation>
+    </message>
+    <message>
+        <source>GNOME Shell builds its list of extensions when you log in and cannot be made to look again, so one installed since then waits for the next session. Log out and back in.</source>
+        <translation type="vanished">GNOME Shell builds its list of extensions when you log in and cannot be made to look again, so one installed since then waits for the next session. Log out and back in.</translation>
+    </message>
+    <message>
+        <source>GNOME keeps extensions off until they are turned on, once per user.</source>
+        <translation type="vanished">GNOME keeps extensions off until they are turned on, once per user.</translation>
+    </message>
+    <message>
+        <source>Starting Kasual Desktop</source>
+        <translation type="vanished">Starting Kasual Desktop</translation>
+    </message>
+    <message>
+        <source>Kasual Desktop starts on its own as soon as the extension answers.</source>
+        <translation type="vanished">Kasual Desktop starts on its own as soon as the extension answers.</translation>
+    </message>
+    <message>
+        <source>The extension is part of Kasual Desktop, not a third-party add-on: it is what carries out the window operations Mutter offers no protocol for.</source>
+        <translation type="vanished">The extension is part of Kasual Desktop, not a third-party add-on: it is what carries out the window operations Mutter offers no protocol for.</translation>
+    </message>
+    <message>
+        <source>Kasual Desktop ticks off each step it finds done. Take the next one, then check again.</source>
+        <translation type="vanished">Kasual Desktop ticks off each step it finds done. Take the next one, then check again.</translation>
     </message>
     <message>
         <source>Install Kasual Desktop's package</source>

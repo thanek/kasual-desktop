@@ -108,10 +108,4 @@ class HelperExtension(Requirement):
             translate(
                 "Kasual Desktop", "The Kasual Helper extension is not answering"),
             met=False,
-            detail=translate(
-                "Kasual Desktop",
-                "GNOME lets no application arrange windows on its own, so Kasual "
-                "Desktop does that through its Shell extension. Nothing else can "
-                "stand in for it here.",
-            ),
         )

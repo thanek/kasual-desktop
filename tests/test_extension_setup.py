@@ -59,7 +59,7 @@ class _Facts:
 
 def _readiness(*states):
     return SetupReadiness(
-        HelperExtension(_Probe(*states)), _Facts(), all_recipes(_UUID))
+        HelperExtension(_Probe(*states)), _Facts(), all_recipes(_UUID, "GNOME"))
 
 
 class TestProbeState:
@@ -110,7 +110,7 @@ class TestRequirement:
                 return ExtensionState.DISABLED
 
         SetupReadiness(
-            HelperExtension(_Counting()), _Facts(), all_recipes(_UUID)).report()
+            HelperExtension(_Counting()), _Facts(), all_recipes(_UUID, "GNOME")).report()
         assert len(calls) == 1
 
     def test_it_is_a_requirement_with_no_way_past_it(self):
@@ -133,16 +133,16 @@ class TestRecipeChosen:
             for state in (ExtensionState.ABSENT, ExtensionState.UNLOADED,
                           ExtensionState.DISABLED)
         }
-        assert len(titles) == 1 and len(next(iter(titles))) == 4
+        assert len(titles) == 1 and len(next(iter(titles))) == 3
 
     def test_it_is_shown_as_a_timeline(self):
         assert self._report(ExtensionState.UNLOADED).timeline
 
     @pytest.mark.parametrize(
         "state,done",
-        [(ExtensionState.ABSENT, [False, False, False, False]),
-         (ExtensionState.UNLOADED, [True, False, False, False]),
-         (ExtensionState.DISABLED, [True, True, False, False])],
+        [(ExtensionState.ABSENT, [False, False, False]),
+         (ExtensionState.UNLOADED, [True, False, False]),
+         (ExtensionState.DISABLED, [True, True, False])],
     )
     def test_what_is_behind_the_user_is_ticked_off(self, state, done):
         assert [s.done for s in self._report(state).steps] == done
@@ -213,7 +213,7 @@ class TestCard:
     def _present(self, mock_gamepad, probe, *, on_done=None, **kwargs):
         view = self._view(mock_gamepad)
         readiness = SetupReadiness(
-            HelperExtension(probe), _Facts(), all_recipes(_UUID))
+            HelperExtension(probe), _Facts(), all_recipes(_UUID, "GNOME"))
         kwargs.setdefault("on_abort", lambda: None)
         SetupGate(readiness, view, **kwargs).ensure(
             on_done or (lambda: None), force=True)
@@ -233,7 +233,7 @@ class TestCard:
         probe = _Probe(ExtensionState.DISABLED, ExtensionState.READY)
         view = self._view(mock_gamepad)
         SetupGate(
-            SetupReadiness(HelperExtension(probe), _Facts(), all_recipes(_UUID)),
+            SetupReadiness(HelperExtension(probe), _Facts(), all_recipes(_UUID, "GNOME")),
             view,
             on_abort=lambda: None,
         ).ensure(lambda: done.append(True))
@@ -247,7 +247,7 @@ class TestCard:
         probe = _Probe(ExtensionState.DISABLED, ExtensionState.READY)
         view = self._view(mock_gamepad)
         SetupGate(
-            SetupReadiness(HelperExtension(probe), _Facts(), all_recipes(_UUID)),
+            SetupReadiness(HelperExtension(probe), _Facts(), all_recipes(_UUID, "GNOME")),
             view,
             remedies={ENABLE: lambda: None},
             on_abort=lambda: None,

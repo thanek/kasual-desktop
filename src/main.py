@@ -113,7 +113,7 @@ def _extension_gate(app, gamepad, feedback) -> SetupGate | None:
         SetupReadiness(
             HelperExtension(GnomeExtensionProbe()),
             LinuxSystemFacts(),
-            all_recipes(EXTENSION_UUID),
+            all_recipes(EXTENSION_UUID, "GNOME"),
         ),
         QtSetupView(gamepad, feedback),
         remedies={ENABLE: activator.enable,

@@ -346,9 +346,15 @@ class TestTimeline:
         assert "do this now" in texts and "run-it" in texts
         assert "already done" not in texts and "comes later" not in texts
 
-    def test_it_is_numbered_by_its_place_on_the_path(self, mock_gamepad):
+    def test_the_current_step_is_named_only_on_the_line(self, mock_gamepad):
         card = _timeline_card(mock_gamepad)
-        assert "○  2. Second stop" in _texts(card, card._steps_container)
+        assert not any(
+            "Second stop" in text for text in _texts(card, card._steps_container))
+
+    def test_its_notice_is_the_only_intro(self, mock_gamepad):
+        card = _timeline_card(mock_gamepad)
+        assert card._guidance.text() == "n"
+        assert card._notice.isHidden() and card._statuses_container.isHidden()
 
     def test_it_is_given_room_for_its_labels(self, mock_gamepad):
         assert self._timeline(_timeline_card(mock_gamepad)).minimumHeight() > 44
