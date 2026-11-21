@@ -28,6 +28,12 @@ from PyQt6.QtWidgets import QApplication
 
 
 @pytest.fixture(scope="session", autouse=True)
+def bundled_fontawesome5(qapp):
+    from infrastructure.common.qt.icons import install_bundled_fontawesome5
+    install_bundled_fontawesome5()
+
+
+@pytest.fixture(scope="session", autouse=True)
 def delete_leftover_windows_before_pyqt_exits(qapp):
     yield
     for window in QApplication.topLevelWidgets():
