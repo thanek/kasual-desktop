@@ -17,7 +17,7 @@ RPM_DEPS=(
     python3 python3-pyqt6 python3-pyqt6-webengine python3-QtAwesome
     python3-evdev python3-xlib layer-shell-qt qt6-qtwayland brightnessctl
 )
-RPM_DEV_DEPS=(python3-pytest python3-pytest-qt python3-pytest-subtests python3-websocket-client)
+RPM_DEV_DEPS=(python3-pytest python3-pytest-qt python3-pytest-subprocess python3-websocket-client)
 
 ARCH_DEPS=(
     python python-pyqt6 python-pyqt6-webengine python-qtawesome
