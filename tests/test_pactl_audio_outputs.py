@@ -1,6 +1,7 @@
 """Reading and switching audio outputs through ``pactl``, the way GNOME lists them."""
 
 import json
+import subprocess
 from unittest.mock import patch
 
 from domain.audio.output import AudioOutput
@@ -57,25 +58,94 @@ _SONOS_SINK = {"name": "raop_sink.sonos", "description": "Sonos", "properties": 
 
 
 class FakePactl:
-    def __init__(self, sinks, default_sink, sinks_after_profile_switch=None):
+    def __init__(self, sinks, default_sink, sinks_after_profile_switch=None,
+                 cards=_CARDS, texts=None):
         self.sinks = sinks
         self.default_sink = default_sink
         self.sinks_after_profile_switch = sinks_after_profile_switch
+        self.cards = cards
+        self.texts = texts or {}
         self.commands = []
 
-    def check_output(self, argv, **_):
+    def check_output(self, argv, env=None, **_):
         if argv[1:] == ["-f", "json", "list", "cards"]:
-            return json.dumps(_CARDS)
+            return json.dumps(self.cards)
         if argv[1:] == ["-f", "json", "list", "sinks"]:
             return json.dumps(self.sinks)
         if argv[1:] == ["get-default-sink"]:
             return self.default_sink + "\n"
+        if argv[1] == "list":
+            assert env["LC_ALL"] == "C"
+            if argv[2] not in self.texts:
+                raise subprocess.CalledProcessError(1, argv)
+            return self.texts[argv[2]]
         raise AssertionError(argv)
 
     def run(self, argv, **_):
         self.commands.append(argv[1:])
         if argv[1] == "set-card-profile" and self.sinks_after_profile_switch:
             self.sinks = self.sinks_after_profile_switch
+
+
+ONBOARD = "alsa_card.pci-0000_00_03.0"
+
+_NULL_CARDS = [
+    {"name": ONBOARD, "active_profile": "output:analog-stereo",
+     "properties": {"device.description": "(null)"},
+     "ports": {
+         "analog-output-lineout": {"description": "(null)", "availability": "availability unknown",
+                                   "properties": {"device.product.name": "(null)"},
+                                   "profiles": ["output:analog-stereo"]},
+         "analog-output-headphones": {"description": "(null)",
+                                      "availability": "availability unknown",
+                                      "properties": {}, "profiles": ["output:analog-stereo"]},
+     },
+     "profiles": {"output:analog-stereo": {"sinks": 1, "available": True, "priority": 6500}}},
+]
+
+_NULL_SINKS = [
+    {"name": "alsa_output.pci-0000_00_03.0.analog-stereo", "description": "(null)",
+     "active_port": "analog-output-lineout", "properties": {"device.name": ONBOARD},
+     "ports": [{"name": "analog-output-lineout", "description": "(null)"}]},
+    {"name": "raop_sink.glosnik", "description": "(null)", "properties": {}, "ports": []},
+]
+
+_TEXT_CARDS = """Card #44
+\tName: alsa_card.pci-0000_00_03.0
+\tDriver: alsa
+\tProperties:
+\t\tdevice.product.name = "82801FB High Definition Audio Controller"
+\t\tdevice.description = "Wbudowany dźwięk"
+\tProfiles:
+\t\toutput:analog-stereo: Wyjście Analogowe stereo (sinks: 1, sources: 0, priority: 6500, available: yes)
+\tActive Profile: output:analog-stereo
+\tPorts:
+\t\tanalog-output-lineout: Wyjście liniowe (tył) (type: Line, priority: 9000, availability unknown)
+\t\t\tProperties:
+\t\t\t\tport.type = "line"
+\t\t\tPart of profile(s): output:analog-stereo
+"""
+
+_TEXT_SINKS = """Sink #51
+\tState: SUSPENDED
+\tName: alsa_output.pci-0000_00_03.0.analog-stereo
+\tDescription: Wbudowany dźwięk Analogowe stereo
+\tVolume: front-left: 32768 /  50% / -18.06 dB,   front-right: 32768 /  50% / -18.06 dB
+\t        balance 0.00
+\tPorts:
+\t\tanalog-output-lineout: Wyjście liniowe (tył) (type: Line, priority: 9000, availability unknown)
+\tActive Port: analog-output-lineout
+
+Sink #55
+\tName: raop_sink.glosnik
+\tDescription: Głośnik w salonie
+\tProperties:
+\t\tdevice.description = "Głośnik w salonie"
+"""
+
+
+def _polish_pactl(texts):
+    return FakePactl(_NULL_SINKS, _NULL_SINKS[0]["name"], cards=_NULL_CARDS, texts=texts)
 
 
 def _with(pactl, use):
@@ -97,6 +167,32 @@ class TestAvailable:
             AudioOutput(f"{USB}:[Out] Speaker", "Speakers – USB Audio"),
             AudioOutput("raop_sink.sonos", "Sonos"),
         ]
+
+    def test_names_mangled_to_null_by_pactl_json_come_from_its_text_listing(self):
+        pactl = _polish_pactl({"cards": _TEXT_CARDS, "sinks": _TEXT_SINKS})
+        assert _with(pactl, lambda o: o.available()) == [
+            AudioOutput(f"{ONBOARD}:analog-output-lineout", "Wyjście liniowe (tył) – Wbudowany dźwięk"),
+            AudioOutput(f"{ONBOARD}:analog-output-headphones", "analog-output-headphones – Wbudowany dźwięk"),
+            AudioOutput("raop_sink.glosnik", "Głośnik w salonie"),
+        ]
+
+    def test_names_missing_from_the_text_listing_fall_back_to_identifiers(self):
+        pactl = _polish_pactl({"cards": "", "sinks": ""})
+        assert _with(pactl, lambda o: o.available()) == [
+            AudioOutput(f"{ONBOARD}:analog-output-lineout", f"analog-output-lineout – {ONBOARD}"),
+            AudioOutput(f"{ONBOARD}:analog-output-headphones", f"analog-output-headphones – {ONBOARD}"),
+            AudioOutput("raop_sink.glosnik", "raop_sink.glosnik"),
+        ]
+
+    def test_a_failing_text_listing_still_lists_and_switches_the_outputs(self):
+        pactl = _polish_pactl({})
+        assert [output.id for output in _with(pactl, lambda o: o.available())] == [
+            f"{ONBOARD}:analog-output-lineout",
+            f"{ONBOARD}:analog-output-headphones",
+            "raop_sink.glosnik",
+        ]
+        _with(pactl, lambda o: o.activate("raop_sink.glosnik"))
+        assert pactl.commands == [["set-default-sink", "raop_sink.glosnik"]]
 
     def test_offers_nothing_when_pactl_is_missing(self):
         with patch("infrastructure.linux.audio.outputs.subprocess.check_output",

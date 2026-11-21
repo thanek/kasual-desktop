@@ -8,18 +8,23 @@ port outside the card's active profile switches the profile first.
 import json
 import logging
 import os
+import re
 import subprocess
 import threading
 import time
-from collections.abc import Callable
-from dataclasses import dataclass
+from collections.abc import Callable, Iterable
+from dataclasses import dataclass, field
 
 from domain.audio.output import AudioOutput, AudioOutputs
 
 logger = logging.getLogger(__name__)
 
 _UNPLUGGED = "not available"
-_ASCII_ONLY_JSON_ENV = {**os.environ, "LC_ALL": "C"}
+_NULL = "(null)"
+_ENGLISH_HEADERS_ENV = {**os.environ, "LC_ALL": "C"}
+_TEXT_FIELD = re.compile(r"^\t(?P<key>[A-Z][\w ]*):(?: (?P<value>.*))?$")
+_TEXT_PROPERTY = re.compile(r'^\t\t(?P<key>[\w.-]+) = "(?P<value>.*)"$')
+_TEXT_PORT = re.compile(r"^\t\t(?P<name>[^\t]+?): (?P<description>.*) \((?:type|priority): ")
 _SINK_APPEARS_WITHIN_S = 2.0
 _SINK_POLL_S = 0.1
 
@@ -28,6 +33,13 @@ Work = Callable[[], None]
 
 def _on_daemon_thread(work: Work) -> None:
     threading.Thread(target=work, daemon=True, name="audio-output-switch").start()
+
+
+@dataclass
+class _Readable:
+    description: str | None = None
+    properties: dict[str, str] = field(default_factory=dict)
+    ports: dict[str, str] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -114,7 +126,7 @@ def _card_routes(card: dict) -> list[_Route]:
             continue
         needs_switch = card.get("active_profile") not in profiles
         routes.append(_Route(
-            AudioOutput(_port_id(card["name"], name), _port_label(card, port),
+            AudioOutput(_port_id(card["name"], name), _port_label(card, name, port),
                         connected=port.get("availability") != _UNPLUGGED),
             card=card["name"], port=name,
             profile_to_switch_to=profiles[0] if needs_switch else None,
@@ -133,11 +145,11 @@ def _is_output_port(name: str) -> bool:
     return name.startswith("[Out]") or "output" in name
 
 
-def _port_label(card: dict, port: dict) -> str:
+def _port_label(card: dict, name: str, port: dict) -> str:
     device = (port.get("properties", {}).get("device.product.name")
               or card.get("properties", {}).get("device.description")
               or card["name"])
-    return f"{port.get('description') or ''} – {device}".strip(" –")
+    return f"{port.get('description') or name} – {device}"
 
 
 def _sink_route(sink: dict) -> _Route:
@@ -165,14 +177,70 @@ def _port_id(card: str, port: str) -> str:
 
 
 def _pactl_list(kind: str) -> list[dict]:
-    return json.loads(subprocess.check_output(
-        ["pactl", "-f", "json", "list", kind],
-        text=True, stderr=subprocess.DEVNULL, env=_ASCII_ONLY_JSON_ENV,
-    ))
+    raw = _pactl_output("-f", "json", "list", kind)
+    listing = json.loads(raw)
+    if f'"{_NULL}"' in raw:
+        _repair_nulls(listing, _readable_list(kind))
+    return listing
 
 
-def _pactl_output(*args: str) -> str:
-    return subprocess.check_output(["pactl", *args], text=True, stderr=subprocess.DEVNULL)
+def _readable_list(kind: str) -> dict[str, _Readable]:
+    try:
+        return _parse_text_list(_pactl_output("list", kind, env=_ENGLISH_HEADERS_ENV))
+    except (OSError, subprocess.CalledProcessError) as exc:
+        logger.warning("Cannot read readable %s names: %s", kind, exc)
+        return {}
+
+
+def _parse_text_list(text: str) -> dict[str, _Readable]:
+    objects: dict[str, _Readable] = {}
+    entry = section = None
+    for line in text.splitlines():
+        if not line.startswith("\t"):
+            entry = section = None
+        elif match := _TEXT_FIELD.match(line):
+            section = match["key"]
+            if section == "Name":
+                entry = objects.setdefault(match["value"], _Readable())
+            elif section == "Description" and entry is not None:
+                entry.description = match["value"]
+        elif entry is None:
+            continue
+        elif section == "Properties" and (match := _TEXT_PROPERTY.match(line)):
+            entry.properties[match["key"]] = match["value"]
+        elif section == "Ports" and (match := _TEXT_PORT.match(line)):
+            entry.ports[match["name"]] = match["description"]
+    return objects
+
+
+def _repair_nulls(listing: list[dict], readable: dict[str, _Readable]) -> None:
+    for item in listing:
+        names = readable.get(item.get("name"), _Readable())
+        _fill_nulls(item, {"description": names.description})
+        _fill_nulls(item.get("properties", {}), names.properties)
+        for port_name, port in _named_ports(item):
+            _fill_nulls(port, {"description": names.ports.get(port_name)})
+            _fill_nulls(port.get("properties", {}), {})
+
+
+def _named_ports(item: dict) -> Iterable[tuple[str | None, dict]]:
+    ports = item.get("ports", [])
+    if isinstance(ports, dict):
+        return ports.items()
+    return ((port.get("name"), port) for port in ports)
+
+
+def _fill_nulls(fields: dict, readable: dict) -> None:
+    for key in [key for key, value in fields.items() if value == _NULL]:
+        if readable.get(key):
+            fields[key] = readable[key]
+        else:
+            del fields[key]
+
+
+def _pactl_output(*args: str, env: dict[str, str] | None = None) -> str:
+    return subprocess.check_output(["pactl", *args], text=True,
+                                   stderr=subprocess.DEVNULL, env=env)
 
 
 def _pactl(*args: str) -> None:
