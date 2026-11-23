@@ -16,7 +16,10 @@ from domain.provisioning.ports import AppDiscovery
 BUNDLED_WM_CLASS = {
     "file_browser.sh": "kasual-file-browser",
     "yt.sh":           "kasual-youtube",
+    "vod.sh":          "kasual-vod",
 }
+
+NETFLIX_URL = "https://www.netflix.com"
 
 
 def with_bundled_identity(app: App) -> App:
@@ -60,6 +63,21 @@ def starter_candidates(discovery: AppDiscovery, bundled_base: str) -> list[Candi
             default_selected=True,
         ),
     ]
+
+    if discovery.is_available("firefox"):
+        candidates.append(CandidateApp(
+            key="netflix",
+            app=with_real_icon(App(
+                name="Netflix",
+                command=f"{bundled_base}/apps/vod/vod.sh",
+                args=(NETFLIX_URL,),
+                wm_class=BUNDLED_WM_CLASS["vod.sh"],
+                icon="fa5s.film",
+                color="#e50914",
+            ), "netflix"),
+            order=35,
+            default_selected=False,
+        ))
 
     if discovery.is_available("steam"):
         candidates.append(CandidateApp(

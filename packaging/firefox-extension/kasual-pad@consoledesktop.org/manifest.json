@@ -1,0 +1,58 @@
+{
+  "manifest_version": 2,
+  "name": "Kasual Desktop Pad",
+  "version": "0.1.0",
+  "description": "Gamepad navigation for streaming services in Kasual Desktop.",
+  "default_locale": "en",
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "kasual-pad@consoledesktop.org",
+      "strict_min_version": "128.0"
+    }
+  },
+  "background": {
+    "scripts": [
+      "src/namespace.js",
+      "src/cue.js",
+      "src/background/sound_player.js",
+      "src/background/viewport_fitter.js"
+    ]
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://www.netflix.com/*"
+      ],
+      "run_at": "document_idle",
+      "css": [
+        "src/sites/netflix.css"
+      ],
+      "js": [
+        "src/namespace.js",
+        "src/intent.js",
+        "src/cue.js",
+        "src/pad_layout.js",
+        "src/gamepad_source.js",
+        "src/overlay_root.js",
+        "src/keyboard.js",
+        "src/pointer.js",
+        "src/still_pointer_guard.js",
+        "src/viewport_fit.js",
+        "src/sound_feedback.js",
+        "src/candidates.js",
+        "src/focus_highlight.js",
+        "src/spatial_focus.js",
+        "src/hints.js",
+        "src/hint_bar.js",
+        "src/text_entry.js",
+        "src/onscreen_keyboard_layout.js",
+        "src/onscreen_keyboard.js",
+        "src/pad_diagnostics.js",
+        "src/sites/netflix_floors.js",
+        "src/sites/netflix.js",
+        "src/pad_controller.js",
+        "src/main.js"
+      ]
+    }
+  ]
+}

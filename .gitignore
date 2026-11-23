@@ -9,3 +9,4 @@ btn_mode_daemon
 .idea
 apps/*/tools
 tests/behavioral/artifacts/
+packaging/firefox-extension/*/sounds/

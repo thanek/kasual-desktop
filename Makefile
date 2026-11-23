@@ -4,6 +4,7 @@
 #   make rpm     # -> dist/kasual-desktop-<version>.noarch.rpm
 #   make arch    # -> dist/kasual-desktop-<version>-1-any.pkg.tar.zst
 #   make stage   # populate build/stage/ (what gets packaged)
+#   make firefox-extension  # copy the feedback cues into the Firefox extension
 #   make clean
 #
 # Version is derived from git tags; pyproject.toml is a fallback for tarball builds.
@@ -25,6 +26,10 @@ STAGE    := build/stage
 APPROOT  := $(STAGE)/usr/share/kasual-desktop
 EXT_UUID := kasual-helper@consoledesktop.org
 EXTROOT  := $(STAGE)/usr/share/gnome-shell/extensions/$(EXT_UUID)
+FIREFOX_EXT := packaging/firefox-extension/kasual-pad@consoledesktop.org
+FIREFOX_EXT_CUES := cursor select popup_open popup_close
+FIREFOX_APP_ID := {ec8030f7-c20a-464f-9b0e-13a3a9e97384}
+FIREFOX_EXTROOT := $(STAGE)/usr/share/mozilla/extensions/$(FIREFOX_APP_ID)/kasual-pad@consoledesktop.org
 
 # What lands under /usr/share/kasual-desktop. Excludes test/dev cruft and the
 # source .ts translations (only compiled .qm ship).
@@ -36,7 +41,7 @@ RSYNC_EXCLUDES := \
 	--exclude='*.ts' \
 	--exclude='.gitignore'
 
-.PHONY: all deb rpm arch stage clean
+.PHONY: all deb rpm arch stage clean firefox-extension
 
 all: deb rpm arch
 
@@ -61,6 +66,9 @@ stage:
 	install -Dm644 packaging/gnome-extension/$(EXT_UUID)/metadata.json $(EXTROOT)/metadata.json
 	install -Dm644 packaging/gnome-extension/$(EXT_UUID)/extension.js  $(EXTROOT)/extension.js
 	chmod +x $(APPROOT)/apps/*/*.sh
+	mkdir -p $(FIREFOX_EXTROOT)/sounds
+	rsync -a --exclude='sounds' --exclude='README.md' $(FIREFOX_EXT)/ $(FIREFOX_EXTROOT)/
+	install -m644 $(FIREFOX_EXT_CUES:%=sounds/%.wav) $(FIREFOX_EXTROOT)/sounds/
 
 deb: stage
 	@mkdir -p dist
@@ -74,5 +82,9 @@ arch: stage
 	@mkdir -p dist
 	KASUAL_VERSION=$(VERSION) nfpm pkg -f nfpm.yaml -p archlinux -t dist/
 
+firefox-extension:
+	install -d $(FIREFOX_EXT)/sounds
+	install -m644 $(FIREFOX_EXT_CUES:%=sounds/%.wav) $(FIREFOX_EXT)/sounds/
+
 clean:
-	rm -rf build dist
+	rm -rf build dist $(FIREFOX_EXT)/sounds

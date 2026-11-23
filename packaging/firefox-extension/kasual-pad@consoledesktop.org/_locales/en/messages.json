@@ -1,0 +1,65 @@
+{
+  "navigate": {
+    "message": "Navigate"
+  },
+  "volume": {
+    "message": "Volume"
+  },
+  "showHideMenu": {
+    "message": "Show/Hide menu"
+  },
+  "select": {
+    "message": "Select"
+  },
+  "back": {
+    "message": "Back"
+  },
+  "close": {
+    "message": "Close"
+  },
+  "scrollRow": {
+    "message": "Scroll row"
+  },
+  "seek": {
+    "message": "Seek"
+  },
+  "seekLong": {
+    "message": "±30 s"
+  },
+  "controls": {
+    "message": "Controls"
+  },
+  "playPause": {
+    "message": "Play/Pause"
+  },
+  "skip": {
+    "message": "Skip"
+  },
+  "exitPlayer": {
+    "message": "Exit"
+  },
+  "hideControls": {
+    "message": "Hide controls"
+  },
+  "search": {
+    "message": "Search"
+  },
+  "type": {
+    "message": "Type"
+  },
+  "delete": {
+    "message": "Delete"
+  },
+  "space": {
+    "message": "Space"
+  },
+  "done": {
+    "message": "Done"
+  },
+  "diacritics": {
+    "message": "Accents"
+  },
+  "section": {
+    "message": "Section"
+  }
+}

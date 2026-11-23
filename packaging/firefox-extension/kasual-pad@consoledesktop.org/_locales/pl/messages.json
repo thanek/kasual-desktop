@@ -1,0 +1,65 @@
+{
+  "navigate": {
+    "message": "Nawigacja"
+  },
+  "volume": {
+    "message": "Głośność"
+  },
+  "showHideMenu": {
+    "message": "Pokaż/ukryj menu"
+  },
+  "select": {
+    "message": "Wybierz"
+  },
+  "back": {
+    "message": "Wstecz"
+  },
+  "close": {
+    "message": "Zamknij"
+  },
+  "scrollRow": {
+    "message": "Przewiń rząd"
+  },
+  "seek": {
+    "message": "Przewiń"
+  },
+  "seekLong": {
+    "message": "±30 s"
+  },
+  "controls": {
+    "message": "Kontrolki"
+  },
+  "playPause": {
+    "message": "Odtwórz/pauza"
+  },
+  "skip": {
+    "message": "Pomiń"
+  },
+  "exitPlayer": {
+    "message": "Zakończ"
+  },
+  "hideControls": {
+    "message": "Ukryj kontrolki"
+  },
+  "search": {
+    "message": "Szukaj"
+  },
+  "type": {
+    "message": "Wpisz"
+  },
+  "delete": {
+    "message": "Usuń"
+  },
+  "space": {
+    "message": "Spacja"
+  },
+  "done": {
+    "message": "Gotowe"
+  },
+  "diacritics": {
+    "message": "Polskie znaki"
+  },
+  "section": {
+    "message": "Sekcja"
+  }
+}

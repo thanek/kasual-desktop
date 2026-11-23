@@ -89,6 +89,23 @@ class TestStarterCandidates:
         assert steam.app.icon_theme == "steam" and steam.app.icon == "fa5b.steam"
         assert youtube.app.icon_theme == "youtube" and youtube.app.icon == "fa5b.youtube"
 
+    def test_netflix_offered_only_with_firefox(self):
+        assert "netflix" not in {c.key for c in starter_candidates(FakeDiscovery(set()), "/x")}
+        assert "netflix" in {c.key for c in starter_candidates(FakeDiscovery({"firefox"}), "/x")}
+
+    def test_netflix_opens_the_service_in_the_bundled_kiosk_launcher(self):
+        netflix = next(c for c in starter_candidates(FakeDiscovery({"firefox"}), "/opt/kd")
+                       if c.key == "netflix")
+        assert netflix.app.name == "Netflix"
+        assert netflix.app.command == "/opt/kd/apps/vod/vod.sh"
+        assert netflix.app.args == ("https://www.netflix.com",)
+        assert netflix.app.wm_class == "kasual-vod"
+
+    def test_netflix_needs_a_subscription_so_it_is_opt_in(self):
+        netflix = next(c for c in starter_candidates(FakeDiscovery({"firefox"}), "/x")
+                       if c.key == "netflix")
+        assert not netflix.default_selected
+
     def test_heroic_uses_reverse_dns_icon_when_present(self):
         heroic = next(
             c for c in starter_candidates(
