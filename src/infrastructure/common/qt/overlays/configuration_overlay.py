@@ -6,7 +6,7 @@ from functools import partial
 
 import qtawesome as qta
 from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtGui import QKeyEvent
+from PyQt6.QtGui import QKeyEvent, QShowEvent
 from PyQt6.QtWidgets import (
     QFrame, QHBoxLayout, QLabel, QScrollArea, QSizePolicy, QVBoxLayout, QWidget,
 )
@@ -15,6 +15,7 @@ from domain.audio.kasual_output import OutputPicker, output_choices
 from domain.display.choices import screen_choices
 from domain.display.selection import DisplaySelection
 from domain.input.pad_control import PadControl
+from domain.input.vocabulary import Event
 from domain.menu.cursor import MenuCursor
 from domain.shared.choice import Choice
 from domain.shared.feedback import Cue, Feedback
@@ -28,7 +29,9 @@ from infrastructure.common.qt.ui.toggle_switch import ToggleSwitch
 from .base_overlay import BaseOverlay
 
 _CARD_WIDTH       = 640
-_LIST_MAX_HEIGHT  = 620
+_ROWS_SHOWN_AT_ONCE = 3
+_ROW_SPACING      = 8
+_GAP_BEFORE_SCROLLBAR = 8
 _MAX_LABEL_CHARS  = 44
 _MARK_SIZE        = 18
 _MARK_GLYPH = "fa5s.check"
@@ -48,6 +51,7 @@ _LABEL_UNPICKABLE = "font-size: 18px; color: #6b717c; background: transparent;"
 @dataclass(frozen=True)
 class _Row:
     frame: QFrame
+    section: int
     activate: Callable[[], None]
     pickable: bool = True
     chosen: bool = False
@@ -68,6 +72,8 @@ class ConfigurationOverlay(BaseOverlay):
     ) -> None:
         super().__init__(gamepad, self._handle_pad, feedback, parent, dim=dim)
         self._rows: list[_Row] = []
+        self._row_to_return_to: list[int] = []
+        self._scrolled_lists: list[QScrollArea] = []
         self._cursor = MenuCursor(
             count=lambda: len(self._rows),
             render=self._render_selection,
@@ -87,11 +93,8 @@ class ConfigurationOverlay(BaseOverlay):
         layout.setSpacing(18)
         layout.addLayout(self._title_row())
 
-        sections = QWidget()
-        sections.setStyleSheet("background: transparent;")
-        self._sections = QVBoxLayout(sections)
-        self._sections.setContentsMargins(0, 0, 0, 0)
-        self._sections.setSpacing(8)
+        self._sections = QVBoxLayout()
+        self._sections.setSpacing(_ROW_SPACING)
         self._add_section(translate("Kasual Desktop", "Screen"),
                           screen_choices(displays), displays.choose)
         if audio_output.options():
@@ -101,7 +104,7 @@ class ConfigurationOverlay(BaseOverlay):
         if autostart is not None:
             self._separate_sections()
             self._add_startup_section(autostart)
-        layout.addWidget(self._scrolling(sections))
+        layout.addLayout(self._sections)
 
         outer.addWidget(card)
 
@@ -121,7 +124,44 @@ class ConfigurationOverlay(BaseOverlay):
         row.addStretch()
         return row
 
-    def _scrolling(self, content: QWidget) -> QScrollArea:
+    def _add_section(self, title: str, choices: list[Choice], pick: Callable) -> None:
+        section = self._open_section(title)
+        frames = [self._choice_frame(choice) for choice in choices]
+        self._sections.addWidget(self._list_of(frames))
+        for frame, choice in zip(frames, choices):
+            self._register(_Row(
+                frame,
+                section,
+                activate=partial(self._close_and, partial(pick, choice.value)),
+                pickable=choice.pickable,
+                chosen=choice.chosen,
+            ))
+        self._row_to_return_to[section] = self._row_to_start_from(section)
+
+    def _open_section(self, title: str) -> int:
+        self._sections.addWidget(self._section_label(title))
+        self._row_to_return_to.append(len(self._rows))
+        return len(self._row_to_return_to) - 1
+
+    def _row_to_start_from(self, section: int) -> int:
+        pickable = [index for index, row in enumerate(self._rows)
+                    if row.section == section and row.pickable]
+        return next((index for index in pickable if self._rows[index].chosen), pickable[0])
+
+    def _list_of(self, frames: list[QFrame]) -> QWidget:
+        content = QWidget()
+        content.setStyleSheet("background: transparent;")
+        layout = QVBoxLayout(content)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(_ROW_SPACING)
+        for frame in frames:
+            layout.addWidget(frame)
+        if len(frames) <= _ROWS_SHOWN_AT_ONCE:
+            return content
+        layout.setContentsMargins(0, 0, _GAP_BEFORE_SCROLLBAR, 0)
+        return self._scrolling(content, frames[0])
+
+    def _scrolling(self, content: QWidget, typical_row: QFrame) -> QScrollArea:
         scroll = QScrollArea()
         scroll.setWidget(content)
         scroll.setWidgetResizable(True)
@@ -129,40 +169,31 @@ class ConfigurationOverlay(BaseOverlay):
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         scroll.setStyleSheet(styles.flat_scrollbar())
         content.ensurePolished()
-        scroll.setFixedHeight(min(content.sizeHint().height(), _LIST_MAX_HEIGHT))
-        self._scroll = scroll
+        scroll.setFixedHeight(
+            _ROWS_SHOWN_AT_ONCE * typical_row.sizeHint().height()
+            + (_ROWS_SHOWN_AT_ONCE - 1) * _ROW_SPACING)
+        self._scrolled_lists.append(scroll)
         return scroll
-
-    def _add_section(self, title: str, choices: list[Choice], pick: Callable) -> None:
-        self._sections.addWidget(self._section_label(title))
-        for choice in choices:
-            self._add_row(_Row(
-                self._choice_frame(choice),
-                activate=partial(self._close_and, partial(pick, choice.value)),
-                pickable=choice.pickable,
-                chosen=choice.chosen,
-            ))
 
     def _add_startup_section(self, autostart: Autostart) -> None:
         switch = ToggleSwitch()
         switch.setFixedSize(switch.size())
         switch.set_on(autostart.is_enabled(), animate=False)
-        self._sections.addWidget(self._section_label(translate("Kasual Desktop", "Startup")))
-        self._add_row(_Row(
-            self._switch_frame(autostart_label(), switch),
-            activate=partial(self._flip, autostart, switch),
-        ))
+        section = self._open_section(translate("Kasual Desktop", "Startup"))
+        frame = self._switch_frame(autostart_label(), switch)
+        self._sections.addWidget(frame)
+        self._register(_Row(
+            frame, section, activate=partial(self._flip, autostart, switch)))
 
     def _separate_sections(self) -> None:
         self._sections.addSpacing(10)
         self._sections.addWidget(styles.separator())
         self._sections.addSpacing(10)
 
-    def _add_row(self, row: _Row) -> None:
+    def _register(self, row: _Row) -> None:
         index = len(self._rows)
         if row.pickable:
             row.frame.mousePressEvent = lambda _event: self._activate_by_pointer(index)
-        self._sections.addWidget(row.frame)
         self._rows.append(row)
 
     @staticmethod
@@ -214,17 +245,46 @@ class ConfigurationOverlay(BaseOverlay):
         for i, row in enumerate(self._rows):
             row.frame.setStyleSheet(_ROW_SELECTED if i == index else _ROW_NORMAL)
         if 0 <= index < len(self._rows):
-            self._scroll.ensureWidgetVisible(self._rows[index].frame)
+            self._row_to_return_to[self._rows[index].section] = index
+            self._scroll_to(self._rows[index])
+
+    def _scroll_to(self, row: _Row) -> None:
+        for scrolled in self._scrolled_lists:
+            if scrolled.isAncestorOf(row.frame):
+                with_its_neighbours = row.frame.height() + _ROW_SPACING
+                scrolled.ensureWidgetVisible(row.frame, 0, with_its_neighbours)
+
+    def showEvent(self, event: QShowEvent) -> None:
+        super().showEvent(event)
+        for row in self._rows:
+            if row.chosen:
+                self._scroll_to(row)
+        self._render_selection(self._cursor.index)
 
     def _handle_pad(self, event: str) -> None:
-        self._cursor.handle_pad(event)
+        if event == Event.SECTION_PREV:
+            self._switch_section(-1)
+        elif event == Event.SECTION_NEXT:
+            self._switch_section(+1)
+        else:
+            self._cursor.handle_pad(event)
 
-    _KEY_MAP = nav_key_map()
+    def _switch_section(self, delta: int) -> None:
+        current = self._rows[self._cursor.index].section
+        last = len(self._row_to_return_to) - 1
+        target = max(0, min(current + delta, last))
+        self._cursor.hover(self._row_to_return_to[target])
+
+    _KEY_MAP = {
+        **nav_key_map(),
+        Qt.Key.Key_BracketLeft:  Event.SECTION_PREV,
+        Qt.Key.Key_BracketRight: Event.SECTION_NEXT,
+    }
 
     def keyPressEvent(self, event: QKeyEvent) -> None:
         mapped = self._KEY_MAP.get(event.key())
         if mapped is not None:
-            self._cursor.handle_pad(mapped)
+            self._handle_pad(mapped)
 
     def _on_outside_click(self) -> None:
         self._close()

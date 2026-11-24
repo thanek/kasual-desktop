@@ -53,7 +53,6 @@ _KEY_EVENTS = {
 class _Group(IntEnum):
     RECALL = 0
     COLOR = 1
-    CLOSE = 2
 
 
 def _home_glyph_on_dark_disc() -> QIcon:
@@ -165,8 +164,6 @@ class TileSettings(BaseOverlay):
         layout.addWidget(styles.separator())
         layout.addWidget(_section_label(translate("Desktop", "Tile color:")))
         layout.addLayout(self._build_swatch_grid())
-        layout.addSpacing(8)
-        layout.addWidget(self._build_close_button(), 0, Qt.AlignmentFlag.AlignCenter)
         outer.addWidget(card)
 
     def _card_width(self) -> int:
@@ -216,14 +213,6 @@ class TileSettings(BaseOverlay):
             self._swatches.append(btn)
         return grid
 
-    def _build_close_button(self) -> QPushButton:
-        self._btn_close = QPushButton("✘  " + translate("Desktop", "Close"))
-        self._btn_close.setMinimumSize(210, 80)
-        self._btn_close.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-        self._btn_close.clicked.connect(self._close)
-        _bind_hover(self._btn_close, self._focus_close)
-        return self._btn_close
-
     # ── Gamepad ──────────────────────────────────────────────────────────────
 
     def _handle_pad(self, event: str) -> None:
@@ -237,10 +226,8 @@ class TileSettings(BaseOverlay):
             self._activate()
         elif self._active_group == _Group.RECALL:
             self._recall_nav(event)
-        elif self._active_group == _Group.COLOR:
+        else:
             self._color_nav(event)
-        elif event == Event.UP:
-            self._switch_group(-1)
 
     def _recall_nav(self, event: str) -> None:
         if event == Event.LEFT:
@@ -253,11 +240,10 @@ class TileSettings(BaseOverlay):
     def _color_nav(self, event: str) -> None:
         row = self._color_cursor.index // _MAX_SWATCHES_PER_ROW
         last_row = (len(self._colors) - 1) // _MAX_SWATCHES_PER_ROW
+        nothing_below = event == Event.DOWN and row == last_row
         if event == Event.UP and row == 0:
             self._switch_group(-1)
-        elif event == Event.DOWN and row == last_row:
-            self._switch_group(+1)
-        else:
+        elif not nothing_below:
             self._color_cursor.handle_pad(event)
 
     # ── Keyboard / mouse ─────────────────────────────────────────────────────
@@ -273,7 +259,7 @@ class TileSettings(BaseOverlay):
     # ── Focus groups ─────────────────────────────────────────────────────────
 
     def _switch_group(self, delta: int) -> None:
-        new = max(_Group.RECALL, min(self._active_group + delta, _Group.CLOSE))
+        new = max(_Group.RECALL, min(self._active_group + delta, _Group.COLOR))
         if new == self._active_group:
             return
         if new == _Group.RECALL:
@@ -285,10 +271,8 @@ class TileSettings(BaseOverlay):
     def _activate(self) -> None:
         if self._active_group == _Group.RECALL:
             self._choose_recall(self._recall_index)
-        elif self._active_group == _Group.COLOR:
-            self._choose_color(self._color_cursor.index)
         else:
-            self._close()
+            self._choose_color(self._color_cursor.index)
 
     def _focus_recall(self, index: int) -> None:
         self._move_focus(_Group.RECALL, changed=self._recall_index != index)
@@ -298,10 +282,6 @@ class TileSettings(BaseOverlay):
     def _focus_color(self, index: int) -> None:
         self._move_focus(_Group.COLOR, changed=self._color_cursor.index != index)
         self._color_cursor.index = index
-        self._render_all()
-
-    def _focus_close(self) -> None:
-        self._move_focus(_Group.CLOSE, changed=False)
         self._render_all()
 
     def _move_focus(self, group: _Group, *, changed: bool) -> None:
@@ -343,7 +323,6 @@ class TileSettings(BaseOverlay):
     def _render_all(self) -> None:
         self._render_recall()
         self._refresh_swatches(self._color_cursor.index)
-        self._render_close()
 
     def _render_recall(self) -> None:
         group_focused = self._active_group == _Group.RECALL
@@ -353,11 +332,6 @@ class TileSettings(BaseOverlay):
                 btn,
                 role="selected" if trigger == self._trigger else "secondary",
                 focused=group_focused and i == self._recall_index)
-
-    def _render_close(self) -> None:
-        styles.style_dialog_button(
-            self._btn_close, role="primary",
-            focused=self._active_group == _Group.CLOSE)
 
     def _refresh_swatches(self, index: int) -> None:
         group_focused = self._active_group == _Group.COLOR

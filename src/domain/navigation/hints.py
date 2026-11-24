@@ -179,6 +179,7 @@ CONFIGURATION = Hints(
         ButtonHint(Button.A, translate("HintBar", "Select")),
         ButtonHint(Button.B, translate("HintBar", "Close")),
     ),
+    bumpers=_SECTION,
 )
 
 NETWORK = Hints(
