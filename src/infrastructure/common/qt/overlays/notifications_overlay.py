@@ -159,6 +159,10 @@ class NotificationsOverlay(BaseOverlay):
         self._feedback.play(Cue.POPUP_OPEN)
         self._show()
 
+    @property
+    def summaries(self) -> tuple[str, ...]:
+        return tuple(item.summary for item in self._items)
+
     # ── Building the list ────────────────────────────────────────────────────
 
     def _build_list(self) -> QWidget:

@@ -37,7 +37,8 @@ from domain.shell.home_actions import HomeActions
 from domain.shell.home_chrome import HomeChrome
 from domain.shell.introspection import (
     HEADER, TILES, ConfirmSnapshot, FocusSnapshot, HomeMenuSnapshot, MenuItemSnapshot,
-    MenuSectionSnapshot, ShellSnapshot, TileMenuSnapshot, TileSettingsSnapshot, TileSnapshot,
+    MenuSectionSnapshot, NotificationsSnapshot, ShellSnapshot, TileMenuSnapshot,
+    TileSettingsSnapshot, TileSnapshot,
 )
 from domain.shell.open_overlays import OpenOverlays
 from domain.system.autostart import Autostart
@@ -318,6 +319,28 @@ class Desktop(QWidget, DesktopView, DesktopShell, DesktopControl, metaclass=Prot
             confirm_focused=dialog.confirm_focused,
         )
 
+    def _notifications_snapshot(self) -> NotificationsSnapshot:
+        overlay = self._dialogs.active_topbar_overlay if self._dialogs is not None else None
+        if not isinstance(overlay, NotificationsOverlay):
+            return NotificationsSnapshot(open=False)
+        return NotificationsSnapshot(open=True, summaries=overlay.summaries)
+
+    def _focus_snapshot(self, tiles: tuple[TileSnapshot, ...]) -> FocusSnapshot:
+        header_index = self._nav.topbar_index if self._nav is not None else None
+        if header_index is not None:
+            return FocusSnapshot(
+                zone=HEADER, header_action=self._topbar.action_key_at(header_index))
+        tile_index = (
+            self._tilebar.current_app_index() if self._tilebar.current_is_app() else None)
+        on_a_known_tile = tile_index is not None and tile_index < len(tiles)
+        return FocusSnapshot(
+            zone=TILES,
+            cursor=self._tilebar.cursor_index(),
+            kind=self._tilebar.current_kind(),
+            tile_index=tile_index,
+            app_id=tiles[tile_index].app_id if on_a_known_tile else None,
+        )
+
     def snapshot(self) -> ShellSnapshot:
         windows = self._tilebar.last_windows
         tiles = tuple(
@@ -325,11 +348,6 @@ class Desktop(QWidget, DesktopView, DesktopShell, DesktopControl, metaclass=Prot
                          running=self._tilebar.is_tile_running(i, windows),
                          color=self._tilebar.painted_color(i))
             for i, app in enumerate(self._apps)
-        )
-        on_tiles = self._nav is None or self._nav.in_tiles
-        index = (
-            self._tilebar.current_app_index()
-            if on_tiles and self._tilebar.current_is_app() else None
         )
         return ShellSnapshot(
             desktop_visible=self._surface.is_visible(),
@@ -343,13 +361,8 @@ class Desktop(QWidget, DesktopView, DesktopShell, DesktopControl, metaclass=Prot
             tile_menu=self._tile_menu_snapshot(),
             tile_settings=self._tile_settings_snapshot(),
             confirm=self._confirm_snapshot(),
-            focus=FocusSnapshot(
-                zone=TILES if on_tiles else HEADER,
-                cursor=self._tilebar.cursor_index() if on_tiles else None,
-                kind=self._tilebar.current_kind() if on_tiles else None,
-                tile_index=index,
-                app_id=tiles[index].app_id if index is not None and index < len(tiles) else None,
-            ),
+            notifications=self._notifications_snapshot(),
+            focus=self._focus_snapshot(tiles),
             tiles=tiles,
             foreground=current.name if (current := self._lifecycle.current_app()) else None,
         )

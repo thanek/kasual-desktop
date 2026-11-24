@@ -4,11 +4,16 @@ An open menu needs a layer-shell surface, which no unit test has; that path is c
 by the `minimize` behavioral scenario, which reads this very snapshot back.
 """
 
+from datetime import datetime
 from unittest.mock import MagicMock, patch
 
 from domain.catalog.app import App
 from domain.catalog.window import Window
+from domain.input.vocabulary import Event
 from domain.menu.palette import TILE_COLORS
+from domain.notifications.notification import Notification
+from domain.system.actions import NOTIFICATIONS
+from domain.menu.entry import POWER
 from test_desktop_lifecycle import _make_desktop
 
 
@@ -127,3 +132,47 @@ class TestTileCursor:
             focus = desktop.snapshot().focus
         assert focus.zone == 'header'
         assert (focus.cursor, focus.kind) == (None, None)
+
+
+class TestNotifications:
+    def _with_notification(self, mock_gamepad, summary):
+        desktop = _make_desktop(mock_gamepad)
+        desktop._notifications.record(
+            Notification(app_name='a', summary=summary, timestamp=datetime.now()))
+        return desktop
+
+    def test_a_closed_list_shows_nothing(self, mock_gamepad):
+        notifications = self._with_notification(mock_gamepad, 's').snapshot().notifications
+        assert not notifications.open
+        assert notifications.summaries == ()
+
+    def test_an_open_list_reports_what_it_shows(self, mock_gamepad):
+        desktop = self._with_notification(mock_gamepad, 'New mail')
+        desktop.open_notifications_overlay()
+        notifications = desktop.snapshot().notifications
+        assert notifications.open
+        assert notifications.summaries == ('New mail',)
+
+    def test_a_list_left_with_b_is_closed(self, mock_gamepad):
+        desktop = self._with_notification(mock_gamepad, 'New mail')
+        desktop.open_notifications_overlay()
+        desktop._dialogs.active_topbar_overlay._close()
+        assert not desktop.snapshot().notifications.open
+
+    def test_a_dismissed_list_is_closed(self, mock_gamepad):
+        desktop = self._with_notification(mock_gamepad, 'New mail')
+        desktop.open_notifications_overlay()
+        desktop.dismiss_overlays()
+        assert not desktop.snapshot().notifications.open
+
+
+class TestHeaderFocus:
+    def test_the_header_reports_the_focused_button(self, mock_gamepad):
+        desktop = _make_desktop(mock_gamepad)
+        desktop._nav.handle_pad(Event.UP)
+        assert desktop.snapshot().focus.header_action == POWER
+        desktop._nav.handle_pad(Event.LEFT)
+        assert desktop.snapshot().focus.header_action == NOTIFICATIONS
+
+    def test_the_tiles_focus_no_button(self, mock_gamepad):
+        assert _make_desktop(mock_gamepad).snapshot().focus.header_action is None

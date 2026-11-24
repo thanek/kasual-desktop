@@ -55,7 +55,7 @@ def running_environment() -> dict[str, str]:
 _SNAPSHOT_KEYS = frozenset({
     'desktop_visible', 'desktop_mapped', 'desktop_sunk', 'home_header_mapped',
     'hint_bar_mapped', 'home_menu', 'tile_menu', 'tile_settings', 'confirm', 'hud',
-    'focus', 'tiles', 'foreground',
+    'focus', 'tiles', 'foreground', 'notifications',
 })
 
 

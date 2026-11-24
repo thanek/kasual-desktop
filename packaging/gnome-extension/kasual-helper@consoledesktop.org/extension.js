@@ -903,7 +903,16 @@ class Helper {
                     } : null,
                 };
             }),
+            banners: this._banners(),
         }, null, 1);
+    }
+
+    _banners() {
+        const tray = Main.messageTray;
+        return {
+            shown: tray.visible ? tray._notification?.title ?? null : null,
+            queued: (tray._notificationQueue ?? []).map(({title}) => title),
+        };
     }
 
     // The pixels Mutter actually holds for that window, past every status flag.

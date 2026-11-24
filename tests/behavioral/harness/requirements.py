@@ -198,6 +198,21 @@ def window_source() -> Requirement:
     )
 
 
+def popup_source() -> Requirement:
+    def a_backend_answers(_kd: KDClient | None) -> bool:
+        from tests.behavioral.harness.popups import build_popup_source
+        source = build_popup_source()
+        return source is not None and source.is_available()
+
+    return Requirement(
+        'the harness can see this desktop\'s notification popups',
+        a_backend_answers,
+        remedy='GNOME: the running Kasual Helper extension predates this harness — '
+               'tools/reinstall_gnome_extension.sh, then log in again. '
+               'Elsewhere: no popup backend yet',
+    )
+
+
 def steam_devtools_client() -> Requirement:
     """Two PyPI packages install a module called ``websocket`` and only
     ``websocket-client`` has the functions, so the import alone proves nothing."""

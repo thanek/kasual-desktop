@@ -38,3 +38,22 @@ def focus_tile(kd: KDClient, pad: VirtualPad, app_id: str) -> dict:
         steps_left -= 1
 
     return snap
+
+
+def focus_header_action(kd: KDClient, pad: VirtualPad, action: str) -> dict:
+    snap = kd.snapshot()
+    if snap['focus']['zone'] != 'header':
+        pad.up()
+        snap = kd.wait_until(lambda s: s['focus']['zone'] == 'header',
+                             timeouts.TILE_FOCUS, 'focus up on the header')
+
+    first = snap['focus']['header_action']
+    while snap['focus']['header_action'] != action:
+        before = snap['focus']['header_action']
+        pad.left()
+        snap = kd.wait_until(
+            lambda s, b=before: s['focus']['header_action'] != b, timeouts.TILE_FOCUS,
+            f'header cursor to move off {before!r}')
+        if snap['focus']['header_action'] == first:
+            raise TimeoutError(f'walked the whole header without reaching {action!r}')
+    return snap

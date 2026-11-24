@@ -29,11 +29,12 @@ class FocusSnapshot:
     ``kind`` place the cursor across the whole bar.
     """
 
-    zone:       str
-    cursor:     int | None = None
-    kind:       str | None = None
-    tile_index: int | None = None
-    app_id:     str | None = None
+    zone:          str
+    cursor:        int | None = None
+    kind:          str | None = None
+    tile_index:    int | None = None
+    app_id:        str | None = None
+    header_action: str | None = None
 
 
 @dataclass(frozen=True)
@@ -95,6 +96,12 @@ class ConfirmSnapshot:
 
 
 @dataclass(frozen=True)
+class NotificationsSnapshot:
+    open:      bool
+    summaries: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
 class ShellSnapshot:
     """The Home view (tiles, focus), the Home menu, and which shell surfaces are
     on screen.
@@ -117,6 +124,7 @@ class ShellSnapshot:
     tile_menu:          TileMenuSnapshot
     tile_settings:      TileSettingsSnapshot
     confirm:            ConfirmSnapshot
+    notifications:      NotificationsSnapshot
     focus:              FocusSnapshot
     tiles:              tuple[TileSnapshot, ...]
     foreground:         str | None = None

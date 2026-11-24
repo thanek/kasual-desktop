@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING
 
 from tests.behavioral.harness import timeouts
 from tests.behavioral.harness.kd_client import KasualDesktopUnavailable, KDClient
-from tests.behavioral.harness.navigation import focus_tile
+from tests.behavioral.harness.navigation import focus_header_action, focus_tile
 from tests.behavioral.harness.report import ScenarioAborted, report
 from tests.behavioral.harness.virtual_pad import VirtualPad
 
@@ -499,6 +499,40 @@ def leave_tile_settings(kd: KDClient, pad: VirtualPad) -> None:
         report('left the tile settings', 'FAIL', 'B pressed, they stayed open')
         raise ScenarioAborted('the tile settings never closed') from exc
     report('left the tile settings', 'PASS', 'B pressed')
+
+
+# ── the notifications list ───────────────────────────────────────────────────
+
+NOTIFICATIONS = 'notifications'
+
+
+def open_notifications(kd: KDClient, pad: VirtualPad) -> None:
+    try:
+        focus_header_action(kd, pad, NOTIFICATIONS)
+        pad.confirm()
+        kd.wait_until(lambda s: s['notifications']['open'], timeouts.NOTIFICATIONS,
+                      'the notifications list')
+    except TimeoutError as exc:
+        report('notifications list open', 'FAIL', str(exc))
+        raise ScenarioAborted('the notifications list never opened') from exc
+    report('notifications list open', 'PASS', 'A pressed on the bell')
+
+
+def expect_listed_once(kd: KDClient, summary: str) -> None:
+    listed = kd.snapshot()['notifications']['summaries'].count(summary)
+    report(f'{summary!r} is listed once', 'PASS' if listed == 1 else 'FAIL',
+           '' if listed == 1 else f'listed {listed} times')
+
+
+def leave_notifications(kd: KDClient, pad: VirtualPad) -> None:
+    pad.back()
+    try:
+        kd.wait_until(lambda s: not s['notifications']['open'], timeouts.NOTIFICATIONS,
+                      'the notifications list to close')
+    except TimeoutError as exc:
+        report('left the notifications list', 'FAIL', 'B pressed, it stayed open')
+        raise ScenarioAborted('the notifications list never closed') from exc
+    report('left the notifications list', 'PASS', 'B pressed')
 
 
 # ── closing and leaving ──────────────────────────────────────────────────────

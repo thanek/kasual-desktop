@@ -42,6 +42,10 @@ class FocusNavigator:
     def in_tiles(self) -> bool:
         return self._mode == _Mode.TILES
 
+    @property
+    def topbar_index(self) -> int | None:
+        return None if self.in_tiles else self._topbar_index
+
     def handle_pad(self, event: str) -> None:
         if self._mode == _Mode.TILES:
             if event == Event.LEFT:

@@ -69,6 +69,7 @@ class DialogHostController:
         self._confirm_dialog: ConfirmDialog | None = None
         self._tile_settings: TileSettings | None = None
         self._tile_popover: TilePopoverMenu | None = None
+        self._topbar_overlay: BaseOverlay | None = None
 
     @property
     def tile_popover_open(self) -> bool:
@@ -82,11 +83,14 @@ class DialogHostController:
     def active_tile_settings(self) -> TileSettings | None:
         return self._tile_settings
 
+    @property
+    def active_topbar_overlay(self) -> BaseOverlay | None:
+        return self._topbar_overlay
+
     def cancel(self) -> None:
-        """Drop the confirm/settings handles when the overlay group is torn
-        down externally (the registry clears the widgets themselves)."""
         self._confirm_dialog = None
         self._tile_settings = None
+        self._topbar_overlay = None
 
     # ── Confirmation dialog ─────────────────────────────────────────────────
 
@@ -225,11 +229,11 @@ class DialogHostController:
     # ── Generic top-bar overlays (Network / Notifications) ─────────────────
 
     def present(self, overlay: BaseOverlay) -> None:
-        """Track a freshly opened top-bar overlay; return focus to the bar when
-        it closes. The registry then pauses/resumes/cancels it with the group."""
+        self._topbar_overlay = overlay
         self._overlays.register(overlay)
         overlay.closed.connect(lambda: self._on_overlay_closed(overlay))
 
     def _on_overlay_closed(self, overlay: BaseOverlay) -> None:
+        self._topbar_overlay = None
         self._overlays.forget(overlay)
         self._nav.focus_topbar()

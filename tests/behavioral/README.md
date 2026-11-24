@@ -242,6 +242,9 @@ Inside `harness/`:
   bundled browser's own test API (published only under `KD_TEST_API=1`, which it
   inherits from the KD that launched it) — where it is and what its cursor is on — so
   "I walked its folders" is a fact, not a guess at an unchanging window title.
+- **Steps against popups** — `popups.py`: the desktop's own notification popups, on
+  screen and queued, read through a `PopupSource`; `sources/gnome_popups.py` asks the
+  Kasual Helper extension.
 - **The run** — `session.py`: bring-up, teardown, artifact, exit code. A scenario
   body starts with KD already on the Home view and both sources of truth open, and
   may give up anywhere by raising `ScenarioAborted` — the teardown still runs.
@@ -329,6 +332,14 @@ first draft of this suite "passed" through.
   at once, with the settings still open, and keep it after B. The color is read from the
   tile's resolved Qt style, not from the catalog. It writes to the catalog, so it refuses
   to run unless KD was started on a throwaway config (`./tests_behav.sh prepare`).
+- **`notification_popups`** — real notifications, a pad and nothing else. With KD
+  minimized, an ordinary popup must leave on its own; over the Home view a critical one
+  must stay, and opening the notifications list must clear it together with the one
+  queued behind it, each listed exactly once. It minimizes KD for the ordinary popup
+  because GNOME holds those back while anything is fullscreen on its primary monitor.
+  Mouse or keyboard input hides popups with or without KD, so the run reads the
+  session's idle time and fails rather than pass on input it did not expect. GNOME
+  only: no other desktop has a popup backend yet.
 - **`steam_w3`** — the same walk through Steam's UI, but the game stops at the RED Launcher,
   which has to be *used*: a window that maps after KD has ceded and must still be
   reachable by the pad.
