@@ -7,6 +7,7 @@ from domain.notifications.center import NotificationCenter
 from datetime import datetime
 
 from domain.notifications.notification import Notification
+from domain.notifications.popups import UncontrolledPopups
 from domain.shell.home_chrome import HomeChrome
 
 
@@ -75,6 +76,14 @@ class FakeHeader:
         self.badges.append(count)
 
 
+class FakePopups(UncontrolledPopups):
+    def __init__(self):
+        self.dismissals = 0
+
+    def dismiss_all(self):
+        self.dismissals += 1
+
+
 class FakePowerPreference:
     def __init__(self, default="sleep"):
         self._default = default
@@ -90,6 +99,7 @@ def _chrome(
     hintbar=None,
     header=None,
     notifications=None,
+    popups=None,
     power_preference=None,
 ):
     calls = []
@@ -99,6 +109,7 @@ def _chrome(
         hintbar=hintbar or FakeHintBar(),
         header=header or FakeHeader(),
         notifications=notifications or NotificationCenter(),
+        notification_popups=popups or FakePopups(),
         render_screen_hints=lambda: calls.append("render"),
         dismiss_overlays=lambda: calls.append("dismiss"),
         show_notifications_view=lambda: calls.append("show_view"),
@@ -280,3 +291,9 @@ class TestOpenNotifications:
         assert seen == [1]
         assert center.unread_count == 0
         assert header.badges == [0]
+
+    def test_system_popups_are_dismissed(self):
+        popups = FakePopups()
+        chrome, _ = _chrome(popups=popups)
+        chrome.open_notifications()
+        assert popups.dismissals == 1

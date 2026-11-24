@@ -23,6 +23,7 @@ from domain.shell.wallpaper import SystemWallpaper
 if TYPE_CHECKING:
     from domain.display.display import DisplayPlacement, PrimaryDisplay
     from domain.display.relaunch import AnnouncedRelaunch
+    from domain.notifications.popups import NotificationPopups
     from infrastructure.common.qt.desktop.surface import DesktopSurface
     from infrastructure.common.qt.ui.tray import TrayIconFor
     from infrastructure.linux.autostart import XdgAutostart
@@ -330,6 +331,14 @@ def build_primary_display(compositor: Compositor) -> "PrimaryDisplay | None":
         return None
     from infrastructure.gnome.display.primary import GnomePrimaryDisplay
     return GnomePrimaryDisplay()
+
+
+def build_notification_popups(compositor: Compositor) -> "NotificationPopups":
+    if compositor is Compositor.GNOME:
+        from infrastructure.gnome.notifications.popups import GnomeNotificationPopups
+        return GnomeNotificationPopups()
+    from domain.notifications.popups import UncontrolledPopups
+    return UncontrolledPopups()
 
 
 def build_display_placement(

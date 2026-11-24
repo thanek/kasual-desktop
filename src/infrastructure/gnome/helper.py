@@ -64,12 +64,17 @@ def list_windows_json() -> str | None:
     return arguments[0] if arguments else "[]"
 
 
+def _call_ignoring_reply(method: str) -> None:
+    message = QDBusMessage.createMethodCall(SERVICE, OBJECT_PATH, INTERFACE, method)
+    QDBusConnection.sessionBus().asyncCall(message)
+
+
 def simulate_user_activity() -> None:
-    """Reset GNOME's idle time (unblanks the screen; a locked shield stays locked).
-    Fire-and-forget: without the extension the message is a harmless no-op."""
-    msg = QDBusMessage.createMethodCall(
-        SERVICE, OBJECT_PATH, INTERFACE, "SimulateUserActivity")
-    QDBusConnection.sessionBus().asyncCall(msg)
+    _call_ignoring_reply("SimulateUserActivity")
+
+
+def dismiss_banners() -> None:
+    _call_ignoring_reply("DismissBanners")
 
 
 def set_surface_role(title: str, layer: int, anchors: int, keyboard: int) -> None:

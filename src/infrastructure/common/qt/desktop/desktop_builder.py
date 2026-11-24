@@ -33,6 +33,7 @@ from domain.navigation.focus_navigator import FocusNavigator
 from domain.navigation.tile_mover import TileMover
 from domain.network.control import NetworkControl
 from domain.notifications.center import NotificationCenter
+from domain.notifications.popups import NotificationPopups
 from domain.provisioning.add_apps import AppAdder
 from domain.setup.gate import SetupGate
 from domain.shared.feedback import Feedback
@@ -76,6 +77,7 @@ def build_desktop(
     scheduler: Scheduler,
     process_manager: ProcessManager,
     notifications: NotificationCenter,
+    notification_popups: NotificationPopups,
     network_control: NetworkControl,
     displays: DisplaySelection,
     audio_outputs: AudioOutputs,
@@ -245,6 +247,7 @@ def build_desktop(
         hintbar=widget._hintbar,
         header=widget._home_header,
         notifications=notifications,
+        notification_popups=notification_popups,
         render_screen_hints=nav.render,
         dismiss_overlays=widget.dismiss_overlays,
         show_notifications_view=widget._show_notifications_view,

@@ -116,6 +116,12 @@ Desktop's frameless surfaces stacked above a fullscreen game — including
 suppressing Mutter's direct scanout, which would otherwise hide any overlay drawn
 over the game.
 
+It also keeps notification banners from getting stuck: GNOME hides a banner only
+after it sees keyboard or mouse input, so while a gamepad is connected the extension
+lets ordinary banners expire on their own. Critical ones stay until the
+notifications list is opened in Kasual Desktop, which dismisses every banner; they
+all remain in GNOME's own notification list.
+
 `./install.sh` installs it for the current user; the packages ship it system-wide.
 Either way it lands on disk after the running GNOME Shell built its extension
 list, and Wayland offers no way to reload the Shell — so **log out and back in

@@ -120,3 +120,55 @@ class TestParseNotifyBlocks:
         )
         found, _ = parse_notify_blocks(text)
         assert found == []   # the GetCapabilities call is not a Notify
+
+
+_RELAYED_BY_GNOME_SHELL = """\
+method call time=1.0 sender=:1.9 -> destination=:1.25 serial=9 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=Notify
+   string "notify-send"
+   uint32 0
+   string ""
+   string "Once"
+   string "only"
+   array [
+   ]
+   array [
+      dict entry(
+         string "urgency"
+         variant             byte 2
+      )
+   ]
+   int32 -1
+method call time=1.1 sender=:1.25 -> destination=:1.15 serial=586 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=Notify
+   string "notify-send"
+   uint32 0
+   string ""
+   string "Once"
+   string "only"
+   array [
+   ]
+   array [
+      dict entry(
+         string "x-shell-sender-pid"
+         variant             uint32 382852
+      )
+      dict entry(
+         string "x-shell-sender"
+         variant             string ":1.9"
+      )
+   ]
+   int32 -1
+"""
+
+
+class TestGnomeShellRelay:
+    def test_a_relayed_notification_counts_once(self):
+        found, leftover = parse_notify_blocks(_RELAYED_BY_GNOME_SHELL)
+        assert [a.summary for a in found] == ["Once"]
+        assert leftover == ""
+
+    def test_the_relay_is_dropped_when_streamed_line_by_line(self):
+        summaries, buffer = [], ""
+        for line in _RELAYED_BY_GNOME_SHELL.splitlines(keepends=True):
+            found, buffer = parse_notify_blocks(buffer + line)
+            summaries += [a.summary for a in found]
+        assert summaries == ["Once"]

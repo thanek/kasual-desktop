@@ -10,6 +10,7 @@ const TAG = '[kasual-helper]';
 
 const BUS_NAME = 'org.consoledesktop.GnomeHelper';
 const OBJECT_PATH = '/org/consoledesktop/GnomeHelper';
+const NAME_OWNED_WHILE_A_GAMEPAD_DRIVES = 'org.consoledesktop.KasualGamepad';
 
 const IFACE = `
 <node>
@@ -71,6 +72,7 @@ const IFACE = `
       <arg type="s" name="json"/>
     </signal>
     <method name="SimulateUserActivity"/>
+    <method name="DismissBanners"/>
   </interface>
 </node>`;
 
@@ -301,6 +303,7 @@ class Helper {
                 this._bringToKasualOnceShown(win);
             });
         this._suppressReadyBannerForOwnWindows();
+        this._expireBannersWhileAGamepadDrives();
         this._monitorsChangedId = Main.layoutManager.connect(
             'monitors-changed', () => this._recheckChromeOnceSettled());
         // A ceded Desktop's depth follows the focus (see _focusIsOrdinaryWindow).
@@ -325,6 +328,7 @@ class Helper {
         Main.layoutManager.disconnect(this._monitorsChangedId);
         this._forgetChromeRechecks();
         this._restoreReadyBanner();
+        this._letBannersWaitForInput();
         global.display.disconnect(this._focusId);
         for (const [win, ids] of this._windowSignals)
             for (const id of ids)
@@ -1122,6 +1126,48 @@ class Helper {
                 Clutter.InputDeviceType.POINTER_DEVICE);
         }
         this._virtualPointer.notify_relative_motion(Clutter.CURRENT_TIME, 0, 0);
+    }
+
+    DismissBanners() {
+        this._dropQueuedBanners();
+        if (Main.messageTray.visible)
+            Main.messageTray._expireNotification?.();
+    }
+
+    _dropQueuedBanners() {
+        for (const source of Main.messageTray.getSources())
+            for (const notification of source.notifications)
+                notification.acknowledged = true;
+    }
+
+    // The Shell hides a banner only after seeing input, and a gamepad is none.
+    _expireBannersWhileAGamepadDrives() {
+        this._gamepadDrives = false;
+        this._gamepadWatchId = Gio.bus_watch_name_on_connection(
+            Gio.DBus.session, NAME_OWNED_WHILE_A_GAMEPAD_DRIVES,
+            Gio.BusNameWatcherFlags.NONE,
+            () => {
+                this._gamepadDrives = true;
+                this._expireBannerAlreadyShown();
+            },
+            () => (this._gamepadDrives = false));
+        this._bannerShownId = Main.messageTray.connect(
+            'notify::visible', () => this._countGamepadAsInput());
+    }
+
+    _countGamepadAsInput() {
+        if (this._gamepadDrives && Main.messageTray.visible)
+            Main.messageTray._userActiveWhileNotificationShown = true;
+    }
+
+    _expireBannerAlreadyShown() {
+        if (Main.messageTray.visible)
+            Main.messageTray._onIdleMonitorBecameActive?.();
+    }
+
+    _letBannersWaitForInput() {
+        Main.messageTray.disconnect(this._bannerShownId);
+        Gio.bus_unwatch_name(this._gamepadWatchId);
     }
 
     // The class stays registered: an OSD mapped later, over a game, must pin too.
