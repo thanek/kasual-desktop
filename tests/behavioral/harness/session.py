@@ -54,6 +54,7 @@ class Scenario:
     title: str
     body: Callable[['Session'], None]
     requires: tuple[Requirement, ...] = field(default_factory=tuple)
+    ignored_because: str = ''
 
     def run(self) -> int:
         return Session(self).run()

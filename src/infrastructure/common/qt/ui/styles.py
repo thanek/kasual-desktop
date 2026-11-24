@@ -19,6 +19,7 @@ _TOPBAR_RADIUS = 30
 _DIALOG_RADIUS = 25
 # Kept ≤ half the menu row's min-height (58px) — Qt QSS squares corners past that.
 _MENU_RADIUS   = 24
+_MENU_FONT_PX = 24
 
 
 def apply_card_shadow(
@@ -236,10 +237,10 @@ def style_dialog_button(btn, *, role: str = "primary", focused: bool = False) ->
     apply_focus_glow(btn, focused)
 
 
-def home_menu_item_normal() -> str:
+def home_menu_item_normal(font_px: int = _MENU_FONT_PX) -> str:
     return f"""
         QPushButton {{
-            font-size: 24px;
+            font-size: {font_px}px;
             padding: 18px 32px;
             background-color: {COLOR_CARD_BG};
             color: white;
@@ -250,10 +251,10 @@ def home_menu_item_normal() -> str:
     """
 
 
-def home_menu_item_selected() -> str:
+def home_menu_item_selected(font_px: int = _MENU_FONT_PX) -> str:
     return f"""
         QPushButton {{
-            font-size: 24px;
+            font-size: {font_px}px;
             padding: 18px 32px;
             background-color: {COLOR_ACCENT};
             color: black;

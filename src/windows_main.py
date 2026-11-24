@@ -118,6 +118,9 @@ def main():
     )
     from infrastructure.windows.catalog.app_discovery import WindowsAppDiscovery
 
+    from infrastructure.windows.autostart import WindowsAutostart, command_running
+    autostart = WindowsAutostart(command_running(Path(__file__).resolve()))
+
     provisioning = DesktopAppProvisioning()
     provisioning_uc = ProvisioningUseCase(
         provisioning,
@@ -164,6 +167,7 @@ def main():
             displays=display_selection,
             audio_outputs=NoAudioOutputs(),
             audio_output=kasual_output,
+            autostart=autostart,
             order_store=DesktopTileOrderStore(),
             settings_store=DesktopTileSettingsStore(),
             app_pinning=WindowsAppPinning(),
@@ -227,7 +231,7 @@ def main():
     # Provisioning use-case (`candidates()` / `complete()`) rather than bypassing
     # it. The Windows-specific Start Menu scan lives in `WindowsAppDiscovery`.
     run_onboarding_or_start(
-        provisioning, provisioning_uc, gamepad, feedback, start_session,
+        provisioning, provisioning_uc, gamepad, feedback, start_session, autostart,
         keep_alive=lambda o: _refs.__setitem__("onboarding", o),
     )
 

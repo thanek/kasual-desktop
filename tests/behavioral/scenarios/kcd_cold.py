@@ -15,7 +15,7 @@ either way.
 
 from tests.behavioral.harness import requirements as require
 from tests.behavioral.harness import shell, steam_ui, timeouts
-from tests.behavioral.harness.game import SteamGame
+from tests.behavioral.harness.game import KCD_OPENS_IN_A_WINDOW, SteamGame
 from tests.behavioral.harness.session import Scenario, Session
 from tests.behavioral.harness.steam_ui import CefDebugging, SteamUI
 
@@ -60,6 +60,7 @@ SCENARIO = Scenario(
     title='launch Kingdom Come from its tile with Steam cold, pushing it through Big '
           'Picture if the cold start drops the launch',
     body=_body,
+    ignored_because=KCD_OPENS_IN_A_WINDOW,
     requires=(
         require.window_source(),
         require.command('steam'),

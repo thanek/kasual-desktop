@@ -1,10 +1,4 @@
-"""Centred modal with Kasual Desktop's settings: the screen it runs on and the
-device its sound plays through while it is in charge.
-
-Picking a screen goes through the same `DisplaySelection.choose` the tray menu
-uses, so both paths have identical consequences. The audio section is left out
-where the system offers no outputs to switch between.
-"""
+"""Centred modal with Kasual Desktop's settings."""
 
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -27,11 +21,13 @@ from domain.shared.feedback import Cue, Feedback
 from domain.shared.i18n import translate
 from domain.shared.text import truncate
 from domain.system.actions import ACTIONS, CONFIGURATION
+from domain.system.autostart import Autostart, autostart_label
 from infrastructure.common.qt.ui import styles
 from infrastructure.common.qt.ui.nav_key_map import nav_key_map
+from infrastructure.common.qt.ui.toggle_switch import ToggleSwitch
 from .base_overlay import BaseOverlay
 
-_CARD_WIDTH       = 560
+_CARD_WIDTH       = 640
 _LIST_MAX_HEIGHT  = 620
 _MAX_LABEL_CHARS  = 44
 _MARK_SIZE        = 18
@@ -50,9 +46,11 @@ _LABEL_UNPICKABLE = "font-size: 18px; color: #6b717c; background: transparent;"
 
 
 @dataclass(frozen=True)
-class _Option:
-    choice: Choice
-    pick: Callable[[], None]
+class _Row:
+    frame: QFrame
+    activate: Callable[[], None]
+    pickable: bool = True
+    chosen: bool = False
 
 
 class ConfigurationOverlay(BaseOverlay):
@@ -64,19 +62,19 @@ class ConfigurationOverlay(BaseOverlay):
         displays: DisplaySelection,
         audio_output: OutputPicker,
         feedback: Feedback,
+        autostart: Autostart | None = None,
         parent: QWidget | None = None,
         dim: bool = True,
     ) -> None:
         super().__init__(gamepad, self._handle_pad, feedback, parent, dim=dim)
-        self._options: list[_Option] = []
-        self._rows: list[QFrame] = []
+        self._rows: list[_Row] = []
         self._cursor = MenuCursor(
             count=lambda: len(self._rows),
             render=self._render_selection,
-            on_activate=self._pick,
+            on_activate=self._activate,
             on_dismiss=self._close,
             feedback=feedback,
-            is_selectable=lambda index: self._options[index].choice.pickable,
+            is_selectable=lambda index: self._rows[index].pickable,
         )
 
         outer = QVBoxLayout(self)
@@ -97,11 +95,12 @@ class ConfigurationOverlay(BaseOverlay):
         self._add_section(translate("Kasual Desktop", "Screen"),
                           screen_choices(displays), displays.choose)
         if audio_output.options():
-            self._sections.addSpacing(10)
-            self._sections.addWidget(styles.separator())
-            self._sections.addSpacing(10)
+            self._separate_sections()
             self._add_section(translate("Kasual Desktop", "Audio output"),
                               output_choices(audio_output), audio_output.choose)
+        if autostart is not None:
+            self._separate_sections()
+            self._add_startup_section(autostart)
         layout.addWidget(self._scrolling(sections))
 
         outer.addWidget(card)
@@ -137,10 +136,34 @@ class ConfigurationOverlay(BaseOverlay):
     def _add_section(self, title: str, choices: list[Choice], pick: Callable) -> None:
         self._sections.addWidget(self._section_label(title))
         for choice in choices:
-            row = self._choice_row(len(self._rows), choice)
-            self._sections.addWidget(row)
-            self._rows.append(row)
-            self._options.append(_Option(choice, partial(pick, choice.value)))
+            self._add_row(_Row(
+                self._choice_frame(choice),
+                activate=partial(self._close_and, partial(pick, choice.value)),
+                pickable=choice.pickable,
+                chosen=choice.chosen,
+            ))
+
+    def _add_startup_section(self, autostart: Autostart) -> None:
+        switch = ToggleSwitch()
+        switch.setFixedSize(switch.size())
+        switch.set_on(autostart.is_enabled(), animate=False)
+        self._sections.addWidget(self._section_label(translate("Kasual Desktop", "Startup")))
+        self._add_row(_Row(
+            self._switch_frame(autostart_label(), switch),
+            activate=partial(self._flip, autostart, switch),
+        ))
+
+    def _separate_sections(self) -> None:
+        self._sections.addSpacing(10)
+        self._sections.addWidget(styles.separator())
+        self._sections.addSpacing(10)
+
+    def _add_row(self, row: _Row) -> None:
+        index = len(self._rows)
+        if row.pickable:
+            row.frame.mousePressEvent = lambda _event: self._activate_by_pointer(index)
+        self._sections.addWidget(row.frame)
+        self._rows.append(row)
 
     @staticmethod
     def _section_label(text: str) -> QLabel:
@@ -148,40 +171,50 @@ class ConfigurationOverlay(BaseOverlay):
         label.setStyleSheet("font-size: 16px; color: #9aa0aa; background: transparent;")
         return label
 
-    def _choice_row(self, index: int, choice: Choice) -> QFrame:
-        row = QFrame()
-        row.setObjectName("choicerow")
-        row.setStyleSheet(_ROW_NORMAL)
-        if choice.pickable:
-            row.mousePressEvent = lambda _event: self._pick_by_pointer(index)
+    @staticmethod
+    def _row_frame() -> tuple[QFrame, QHBoxLayout]:
+        frame = QFrame()
+        frame.setObjectName("choicerow")
+        frame.setStyleSheet(_ROW_NORMAL)
+        layout = QHBoxLayout(frame)
+        layout.setContentsMargins(16, 10, 16, 10)
+        layout.setSpacing(12)
+        return frame, layout
 
-        h = QHBoxLayout(row)
-        h.setContentsMargins(16, 10, 16, 10)
-        h.setSpacing(12)
+    def _switch_frame(self, text: str, switch: ToggleSwitch) -> QFrame:
+        frame, layout = self._row_frame()
+        label = QLabel(text)
+        label.setStyleSheet(_LABEL_PICKABLE)
+        layout.addWidget(label, 1)
+        layout.addWidget(switch)
+        return frame
+
+    def _choice_frame(self, choice: Choice) -> QFrame:
+        frame, layout = self._row_frame()
         mark = QLabel()
         mark.setFixedSize(_MARK_SIZE, _MARK_SIZE)
         mark.setStyleSheet("background: transparent;")
         if choice.chosen:
             mark.setPixmap(
                 qta.icon(_MARK_GLYPH, color=styles.COLOR_ACCENT).pixmap(_MARK_SIZE, _MARK_SIZE))
-        h.addWidget(mark)
+        layout.addWidget(mark)
         label = QLabel(truncate(choice.label, _MAX_LABEL_CHARS))
         label.setStyleSheet(_LABEL_PICKABLE if choice.pickable else _LABEL_UNPICKABLE)
-        h.addWidget(label, 1)
-        return row
+        layout.addWidget(label, 1)
+        return frame
 
     def _initially_selected(self) -> int:
         return next(
-            (index for index, option in enumerate(self._options)
-             if option.choice.chosen and option.choice.pickable),
+            (index for index, row in enumerate(self._rows)
+             if row.chosen and row.pickable),
             0,
         )
 
     def _render_selection(self, index: int) -> None:
         for i, row in enumerate(self._rows):
-            row.setStyleSheet(_ROW_SELECTED if i == index else _ROW_NORMAL)
+            row.frame.setStyleSheet(_ROW_SELECTED if i == index else _ROW_NORMAL)
         if 0 <= index < len(self._rows):
-            self._scroll.ensureWidgetVisible(self._rows[index])
+            self._scroll.ensureWidgetVisible(self._rows[index].frame)
 
     def _handle_pad(self, event: str) -> None:
         self._cursor.handle_pad(event)
@@ -196,14 +229,22 @@ class ConfigurationOverlay(BaseOverlay):
     def _on_outside_click(self) -> None:
         self._close()
 
-    def _pick_by_pointer(self, index: int) -> None:
+    def _activate_by_pointer(self, index: int) -> None:
         self._cursor.hover(index)
-        self._pick(index)
+        self._activate(index)
 
-    def _pick(self, index: int) -> None:
+    def _activate(self, index: int) -> None:
+        self._rows[index].activate()
+
+    def _close_and(self, pick: Callable[[], None]) -> None:
         if self._dismiss(sound=Cue.SELECT):
             self.closed.emit()
-            self._options[index].pick()
+            pick()
+
+    def _flip(self, autostart: Autostart, switch: ToggleSwitch) -> None:
+        autostart.set_enabled(not autostart.is_enabled())
+        switch.set_on(autostart.is_enabled())
+        self._feedback.play(Cue.SELECT)
 
     def _close(self) -> None:
         if self._dismiss(sound=Cue.POPUP_CLOSE):

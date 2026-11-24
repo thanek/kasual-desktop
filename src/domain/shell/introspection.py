@@ -18,6 +18,7 @@ class TileSnapshot:
     app_id:  str
     name:    str
     running: bool = False
+    color:   str = ''
 
 
 @dataclass(frozen=True)
@@ -73,6 +74,15 @@ class TileMenuSnapshot:
 
 
 @dataclass(frozen=True)
+class TileSettingsSnapshot:
+    open:          bool
+    section:       str = ''
+    colors:        tuple[str, ...] = ()
+    columns:       int = 1
+    focused_color: str = ''
+
+
+@dataclass(frozen=True)
 class ConfirmSnapshot:
     """The confirmation a destructive pick is gated by — closing an app, unpinning.
 
@@ -105,6 +115,7 @@ class ShellSnapshot:
     hint_bar_mapped:    bool
     home_menu:          HomeMenuSnapshot
     tile_menu:          TileMenuSnapshot
+    tile_settings:      TileSettingsSnapshot
     confirm:            ConfirmSnapshot
     focus:              FocusSnapshot
     tiles:              tuple[TileSnapshot, ...]

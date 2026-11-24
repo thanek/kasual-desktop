@@ -42,12 +42,20 @@ def running_pid() -> int | None:
     return pid if os.path.isdir(f'/proc/{pid}') else None
 
 
+def running_environment() -> dict[str, str]:
+    pid = running_pid()
+    if pid is None:
+        return {}
+    entries = Path(f'/proc/{pid}/environ').read_text(errors='replace').split('\0')
+    return dict(entry.split('=', 1) for entry in entries if '=' in entry)
+
+
 # What the harness reads. A KD that answers with less than this is a KD older than
 # the harness — the run would otherwise die of a KeyError halfway through a scenario.
 _SNAPSHOT_KEYS = frozenset({
     'desktop_visible', 'desktop_mapped', 'desktop_sunk', 'home_header_mapped',
-    'hint_bar_mapped', 'home_menu', 'tile_menu', 'confirm', 'hud', 'focus', 'tiles',
-    'foreground',
+    'hint_bar_mapped', 'home_menu', 'tile_menu', 'tile_settings', 'confirm', 'hud',
+    'focus', 'tiles', 'foreground',
 })
 
 

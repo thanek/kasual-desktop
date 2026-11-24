@@ -7,9 +7,12 @@ cd "$(dirname "$0")"
 usage() {
     cat >&2 <<'EOF'
 Usage:
-  tests_behav.sh prepare [--seed|--empty|--dir P]   seed a throwaway config and
+  tests_behav.sh prepare [--seed|--empty] [--dir P] [--display D]
+                                                    seed a throwaway config and
                                                     launch KD with the test API on
-                                                    (defaults to --seed; blocks)
+                                                    (defaults to --seed; blocks);
+                                                    --display puts KD on the named
+                                                    screen, e.g. DP-1
   tests_behav.sh run [ARGS...]                       run the scenarios; ARGS pass
                                                     straight to run.py (a name,
                                                     --list, ...)
