@@ -53,10 +53,24 @@ class FakeOutputPicker:
         self._chosen = output_id
 
 
-def _overlay(mock_gamepad, displays, audio_output=None):
+class FakeAutostart:
+    def __init__(self, enabled=False, writable=True):
+        self._enabled = enabled
+        self._writable = writable
+
+    def is_enabled(self):
+        return self._enabled
+
+    def set_enabled(self, enabled):
+        if self._writable:
+            self._enabled = enabled
+
+
+def _overlay(mock_gamepad, displays, audio_output=None, autostart=None):
     from infrastructure.common.qt.overlays.configuration_overlay import ConfigurationOverlay
     return ConfigurationOverlay(
-        mock_gamepad, displays, audio_output or FakeOutputPicker(), MagicMock())
+        mock_gamepad, displays, audio_output or FakeOutputPicker(), MagicMock(),
+        autostart=autostart)
 
 
 def _labels(overlay):
@@ -176,3 +190,47 @@ class TestAudioSection:
         overlay = _overlay(mock_gamepad, FakeDisplays(MONITORS), outputs)
         _press(overlay, *[Event.DOWN] * 5, Event.SELECT)
         assert outputs.choices == ["alsa.hdmi"]
+
+
+class TestStartupSection:
+    def _switch(self, overlay):
+        from infrastructure.common.qt.ui.toggle_switch import ToggleSwitch
+        return overlay.findChild(ToggleSwitch)
+
+    def _to_the_last_row(self, overlay):
+        _press(overlay, *[Event.DOWN] * len(overlay._rows))
+
+    def test_is_left_out_where_the_session_cannot_autostart(self, mock_gamepad):
+        overlay = _overlay(mock_gamepad, FakeDisplays(MONITORS))
+        assert "Startup" not in _labels(overlay)
+
+    def test_shows_the_current_state(self, mock_gamepad):
+        on = _overlay(mock_gamepad, FakeDisplays(), autostart=FakeAutostart(enabled=True))
+        off = _overlay(mock_gamepad, FakeDisplays(), autostart=FakeAutostart())
+        assert self._switch(on).isChecked() is True
+        assert self._switch(off).isChecked() is False
+
+    def test_selecting_it_flips_it_and_stays_open(self, mock_gamepad):
+        autostart, displays = FakeAutostart(), FakeDisplays(MONITORS)
+        overlay = _overlay(mock_gamepad, displays, autostart=autostart)
+        self._to_the_last_row(overlay)
+        _press(overlay, Event.SELECT)
+        assert autostart.is_enabled() is True
+        assert self._switch(overlay).isChecked() is True
+        assert overlay._handle_pad in mock_gamepad._stack
+        _press(overlay, Event.SELECT)
+        assert autostart.is_enabled() is False
+        assert displays.choices == []
+
+    def test_clicking_it_flips_it(self, mock_gamepad):
+        autostart = FakeAutostart()
+        overlay = _overlay(mock_gamepad, FakeDisplays(MONITORS), autostart=autostart)
+        overlay._rows[-1].frame.mousePressEvent(None)
+        assert autostart.is_enabled() is True
+
+    def test_a_refused_change_is_not_shown_as_made(self, mock_gamepad):
+        overlay = _overlay(mock_gamepad, FakeDisplays(),
+                           autostart=FakeAutostart(writable=False))
+        self._to_the_last_row(overlay)
+        _press(overlay, Event.SELECT)
+        assert self._switch(overlay).isChecked() is False

@@ -44,6 +44,7 @@ from domain.shell.open_overlays import OpenOverlays
 from domain.shell.wallpaper import SystemWallpaper
 from domain.system.action_view import make_action_confirm
 from domain.system.actions import ActionDeps
+from domain.system.autostart import Autostart
 from domain.system.power_control import PowerControl
 from domain.system.power_menu import PowerMenu
 from domain.system.power_preference import PowerPreference
@@ -82,6 +83,7 @@ def build_desktop(
     order_store: TileOrderStore,
     settings_store: TileSettingsStore,
     app_pinning: AppPinning,
+    autostart: Autostart | None = None,
     surface: DesktopSurface | None = None,
     deferred_hide_factory: HideFactory | None = None,
     deferred_show_factory: ShowFactory | None = None,
@@ -129,6 +131,7 @@ def build_desktop(
         displays=displays,
         audio_output=audio_output,
         overlays=overlays,
+        autostart=autostart,
         surface=surface,
         parent_of=parent_of,
         app_adder=app_adder,

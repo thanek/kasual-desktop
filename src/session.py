@@ -20,9 +20,11 @@ from PyQt6.QtWidgets import QApplication
 from application import Application
 from domain.display.display import DisplayPlacement
 from domain.display.selection import DisplaySelection
+from domain.provisioning.candidate import CandidateApp
 from domain.provisioning.provisioning import needs_provisioning
 from domain.shared.feedback import Cue
 from domain.system.actions import ActionDeps
+from domain.system.autostart import Autostart, AutostartChoice
 from infrastructure.common.qt.overlays.about_overlay import AboutOverlay
 from infrastructure.common.qt.overlays.onboarding_overlay import OnboardingOverlayFactory
 from infrastructure.common.catalog.preferences import DesktopDisplayPreference
@@ -82,24 +84,29 @@ def run_onboarding_or_start(
     gamepad,
     feedback,
     start_session: Callable[[], None],
+    autostart: Autostart | None,
     keep_alive: Callable[[object], None] = _no_keep_alive,
 ) -> None:
-    """First run shows the picker; otherwise goes straight to `start_session`.
-
-    Confirming with zero apps still marks the catalog provisioned, so onboarding
-    won't nag on next launch. `keep_alive` lets Windows park the overlay in its
-    `_refs` bookkeeping — Linux's closures already keep it alive.
-    """
-    if needs_provisioning(provisioning):
-        logger.info("First run — showing onboarding")
-        onboarding = OnboardingOverlayFactory(gamepad, feedback).create()
-        keep_alive(onboarding)
-        onboarding.present(
-            provisioning_uc.candidates(),
-            on_confirm=lambda chosen: (provisioning_uc.complete(chosen), start_session()),
-        )
-    else:
+    if not needs_provisioning(provisioning):
         start_session()
+        return
+
+    autostart_choice = AutostartChoice(autostart) if autostart is not None else None
+
+    def complete_onboarding(chosen: list[CandidateApp]) -> None:
+        provisioning_uc.complete(chosen)
+        if autostart_choice is not None:
+            autostart_choice.apply()
+        start_session()
+
+    logger.info("First run — showing onboarding")
+    onboarding = OnboardingOverlayFactory(gamepad, feedback).create()
+    keep_alive(onboarding)
+    onboarding.present(
+        provisioning_uc.candidates(),
+        on_confirm=complete_onboarding,
+        autostart=autostart_choice,
+    )
 
 
 def follow_chosen_display(app: QApplication, placement: DisplayPlacement) -> DisplaySelection:

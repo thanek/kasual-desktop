@@ -25,6 +25,7 @@ if TYPE_CHECKING:
     from domain.display.relaunch import AnnouncedRelaunch
     from infrastructure.common.qt.desktop.surface import DesktopSurface
     from infrastructure.common.qt.ui.tray import TrayIconFor
+    from infrastructure.linux.autostart import XdgAutostart
     from infrastructure.linux.display.screensaver import ScreenSaverWaker
 
 logger = logging.getLogger(__name__)
@@ -48,6 +49,11 @@ WLROOTS = frozenset({
 # wlroots keeps layer-shell TOP above every window; cosmic-comp 1.5.0 dies on an
 # unmap. Either way the Desktop must stay mapped.
 CEDE_BY_SINKING = WLROOTS | {Compositor.COSMIC}
+
+_RUN_AUTOSTART_ENTRIES = frozenset({
+    Compositor.KDE, Compositor.GNOME, Compositor.COSMIC,
+})
+_MAY_RUN_LXSESSION = frozenset({Compositor.LABWC, Compositor.WAYFIRE})
 
 
 def _is_socket(path: str) -> bool:
@@ -294,6 +300,26 @@ def build_desktop_surface(compositor: Compositor | None = None) -> "DesktopSurfa
             return GnomeSurface()
     from infrastructure.linux.wayland.surface import LayerShellSurface
     return LayerShellSurface(cede_to_bottom=compositor in CEDE_BY_SINKING)
+
+
+def build_autostart(launcher: str, compositor: Compositor) -> "XdgAutostart | None":
+    from infrastructure.linux.autostart import XdgAutostart
+    autostart = XdgAutostart(launcher)
+    if autostart.is_enabled() or _session_runs_autostart_entries(compositor):
+        return autostart
+    logger.info("This session runs no XDG autostart entries; autostart is not offered")
+    return None
+
+
+def _session_runs_autostart_entries(compositor: Compositor) -> bool:
+    from infrastructure.linux.autostart import (
+        lxsession_runs_autostart_entries, systemd_runs_autostart_entries,
+    )
+    if compositor in _RUN_AUTOSTART_ENTRIES:
+        return True
+    if compositor in _MAY_RUN_LXSESSION and lxsession_runs_autostart_entries():
+        return True
+    return systemd_runs_autostart_entries()
 
 
 def build_primary_display(compositor: Compositor) -> "PrimaryDisplay | None":

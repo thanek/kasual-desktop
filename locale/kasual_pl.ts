@@ -68,6 +68,7 @@
         <translation>Przywróć</translation>
     </message>
     <message>
+        <location filename="../src/infrastructure/common/qt/overlays/tile_settings.py" line="220" />
         <location filename="../src/domain/menu/tile.py" line="40" />
         <source>Close</source>
         <translation>Zamknij</translation>
@@ -98,39 +99,37 @@
         <translation>Dodaj aplikację</translation>
     </message>
     <message>
-        <location filename="../src/infrastructure/common/qt/overlays/tile_settings.py" line="44" />
+        <location filename="../src/infrastructure/common/qt/overlays/tile_settings.py" line="31" />
         <source>Pressing</source>
         <translation>Wciskając</translation>
     </message>
     <message>
-        <location filename="../src/infrastructure/common/qt/overlays/tile_settings.py" line="45" />
+        <location filename="../src/infrastructure/common/qt/overlays/tile_settings.py" line="32" />
         <source>Holding</source>
         <translation>Przytrzymując</translation>
     </message>
     <message>
-        <location filename="../src/infrastructure/common/qt/overlays/tile_settings.py" line="140" />
-        <source>Settings — {0}</source>
-        <translation>Ustawienia — {0}</translation>
-    </message>
-    <message>
-        <location filename="../src/infrastructure/common/qt/overlays/tile_settings.py" line="147" />
+        <location filename="../src/infrastructure/common/qt/overlays/tile_settings.py" line="163" />
         <source>Call Kasual Desktop menu:</source>
         <translation>Wywołaj menu Kasual Desktop:</translation>
     </message>
     <message>
-        <location filename="../src/infrastructure/common/qt/overlays/tile_settings.py" line="175" />
+        <location filename="../src/infrastructure/common/qt/overlays/tile_settings.py" line="166" />
         <source>Tile color:</source>
         <translation>Kolor kafelka:</translation>
     </message>
     <message>
-        <location filename="../src/infrastructure/common/qt/overlays/tile_settings.py" line="200" />
-        <source>Cancel</source>
-        <translation>Anuluj</translation>
+        <location filename="../src/infrastructure/common/qt/overlays/tile_settings.py" line="179" />
+        <source>Settings — {0}</source>
+        <translation>Ustawienia — {0}</translation>
     </message>
     <message>
-        <location filename="../src/infrastructure/common/qt/overlays/tile_settings.py" line="201" />
+        <source>Cancel</source>
+        <translation type="vanished">Anuluj</translation>
+    </message>
+    <message>
         <source>Save</source>
-        <translation>Zapisz</translation>
+        <translation type="vanished">Zapisz</translation>
     </message>
 </context><context>
     <name>HintBar</name>
@@ -198,7 +197,6 @@
     <message>
         <location filename="../src/domain/navigation/hints.py" line="162" />
         <location filename="../src/domain/navigation/hints.py" line="152" />
-        <location filename="../src/domain/navigation/hints.py" line="142" />
         <location filename="../src/domain/navigation/hints.py" line="96" />
         <source>Cancel</source>
         <translation>Anuluj</translation>
@@ -228,6 +226,7 @@
         <location filename="../src/domain/navigation/hints.py" line="189" />
         <location filename="../src/domain/navigation/hints.py" line="180" />
         <location filename="../src/domain/navigation/hints.py" line="171" />
+        <location filename="../src/domain/navigation/hints.py" line="142" />
         <source>Close</source>
         <translation>Zamknij</translation>
     </message>
@@ -704,7 +703,7 @@
         <translation>Powiadomienia</translation>
     </message>
     <message>
-        <location filename="../src/infrastructure/common/qt/overlays/configuration_overlay.py" line="118" />
+        <location filename="../src/infrastructure/common/qt/overlays/configuration_overlay.py" line="117" />
         <location filename="../src/domain/system/actions.py" line="88" />
         <source>Configuration</source>
         <translation>Konfiguracja</translation>
@@ -720,6 +719,11 @@
         <translation>Sprawdź dostęp do pada</translation>
     </message>
     <message>
+        <location filename="../src/domain/system/autostart.py" line="14" />
+        <source>Start Kasual Desktop at system startup</source>
+        <translation>Uruchamiaj Kasual Desktop przy starcie systemu</translation>
+    </message>
+    <message>
         <location filename="../src/domain/system/hud.py" line="32" />
         <source>Off</source>
         <translation>Wył.</translation>
@@ -731,14 +735,19 @@
     </message>
     <message>
         <location filename="../src/infrastructure/common/qt/ui/tray.py" line="68" />
-        <location filename="../src/infrastructure/common/qt/overlays/configuration_overlay.py" line="97" />
+        <location filename="../src/infrastructure/common/qt/overlays/configuration_overlay.py" line="95" />
         <source>Screen</source>
         <translation>Ekran</translation>
     </message>
     <message>
-        <location filename="../src/infrastructure/common/qt/overlays/configuration_overlay.py" line="103" />
+        <location filename="../src/infrastructure/common/qt/overlays/configuration_overlay.py" line="99" />
         <source>Audio output</source>
         <translation>Wyjście audio</translation>
+    </message>
+    <message>
+        <location filename="../src/infrastructure/common/qt/overlays/configuration_overlay.py" line="150" />
+        <source>Startup</source>
+        <translation>Uruchamianie</translation>
     </message>
     <message>
         <location filename="../src/infrastructure/common/qt/overlays/home_header.py" line="368" />
@@ -782,7 +791,7 @@
         <translation>Wykonaj te kroki w terminalu, a potem sprawdź ponownie. Możesz też kontynuować teraz i wrócić do tego później.</translation>
     </message>
     <message>
-        <location filename="../src/infrastructure/common/qt/overlays/setup_overlay.py" line="384" />
+        <location filename="../src/infrastructure/common/qt/overlays/setup_overlay.py" line="395" />
         <source>Copy to clipboard</source>
         <translation>Kopiuj do schowka</translation>
     </message>
@@ -937,12 +946,12 @@ Włączyć je teraz?</translation>
 </context><context>
     <name>OnboardingOverlay</name>
     <message>
-        <location filename="../src/infrastructure/common/qt/overlays/onboarding_overlay.py" line="101" />
+        <location filename="../src/infrastructure/common/qt/overlays/onboarding_overlay.py" line="112" />
         <source>Welcome — pick your apps</source>
         <translation>Witaj - wybierz aplikacje, z którymi wystartujesz</translation>
     </message>
     <message>
-        <location filename="../src/infrastructure/common/qt/overlays/onboarding_overlay.py" line="129" />
+        <location filename="../src/infrastructure/common/qt/overlays/onboarding_overlay.py" line="140" />
         <source>Confirm</source>
         <translation>Potwierdź</translation>
     </message>

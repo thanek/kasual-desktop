@@ -1,18 +1,8 @@
-"""First-run app picker — the Qt side of provisioning (a ``ProvisioningView``).
-
-A centred card listing the starter candidates as toggle rows plus a Confirm
-action. Pure presentation: renders the domain candidates, drives an
-:class:`AppSelection` for toggle state and a :class:`MenuCursor` for navigation,
-and reports the choice through ``on_confirm``.
-
-On first run it is modal and confirm-only (B/Escape/backdrop do nothing — the
-only way out is Confirm, even with zero apps selected). A reuse that supplies
-``on_cancel`` (the [＋] add-app picker) is dismissable instead. Takes a
-candidate list + callbacks, so it's reusable beyond first-run onboarding.
-"""
+"""First-run app picker, reused by the [＋] tile — the Qt side of provisioning."""
 
 import logging
 from collections.abc import Callable
+from functools import partial
 
 from PyQt6.QtCore import Qt, QSize
 from PyQt6.QtGui import QIcon, QKeyEvent
@@ -28,6 +18,7 @@ from domain.provisioning.candidate import CandidateApp
 from domain.provisioning.ports import ProvisioningView
 from domain.provisioning.selection import AppSelection
 from domain.shared.feedback import Cue, Feedback
+from domain.system.autostart import AutostartChoice, autostart_label
 from infrastructure.common.qt._meta import ProtocolQtMeta
 from infrastructure.common.qt.ui import styles
 from infrastructure.common.qt.ui.layer_shell import Keyboard
@@ -37,48 +28,68 @@ from .base_overlay import BaseOverlay
 
 logger = logging.getLogger(__name__)
 
-# Row icon size — sits comfortably within the 62px-tall toggle rows.
+_NOTHING_FULLSCREEN_TO_STEAL_FOCUS_FROM = Keyboard.ON_DEMAND
 _ROW_ICON_PX     = 36
-# Gap from the toggle to the row's right edge. Wide enough to clear the 10px
-# scrollbar (shown when the list is long) and still leave comfortable spacing.
-_TOGGLE_MARGIN_R = 36
+_CARD_WIDTH      = 640
+_ROW_HEIGHT      = 62
+_ROW_SPACING     = 8
+_APP_FONT_PX     = 24
+_SETTING_FONT_PX = 18
+_MAX_LIST_SHARE_OF_SCREEN = 0.55
+_MAX_LIST_HEIGHT_WITHOUT_SCREEN = 560
+_SPACE_AROUND_SEPARATOR = 6
+_TOGGLE_MARGIN_CLEARING_SCROLLBAR = 36
 
 
 class _ToggleRow(QPushButton):
-    """A picker row: a full-width clickable button with an on/off
-    :class:`ToggleSwitch` anchored to its right edge. The button keeps the
-    styling, hover and click; the switch only reflects the selection state."""
-
-    def __init__(self, parent=None) -> None:
-        super().__init__(parent)
+    def __init__(
+        self,
+        text: str,
+        is_on: Callable[[], bool],
+        flip: Callable[[], None],
+        font_px: int = _APP_FONT_PX,
+    ) -> None:
+        super().__init__(text)
+        self._is_on = is_on
+        self._flip = flip
+        self._font_px = font_px
         self.toggle = ToggleSwitch(self)
+        self.toggle.set_on(is_on(), animate=False)
+        self.setMinimumHeight(_ROW_HEIGHT)
+        self._let_long_text_clip_instead_of_widening_the_card()
+        self.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+
+    def flip(self) -> None:
+        self._flip()
+        self.toggle.set_on(self._is_on())
+
+    def set_selected(self, selected: bool) -> None:
+        self.setStyleSheet(
+            styles.home_menu_item_selected(self._font_px) if selected
+            else styles.home_menu_item_normal(self._font_px))
+
+    def _let_long_text_clip_instead_of_widening_the_card(self) -> None:
+        self.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Fixed)
 
     def resizeEvent(self, event) -> None:
         super().resizeEvent(event)
-        x = self.width() - self.toggle.width() - _TOGGLE_MARGIN_R
+        x = self.width() - self.toggle.width() - _TOGGLE_MARGIN_CLEARING_SCROLLBAR
         y = (self.height() - self.toggle.height()) // 2
         self.toggle.move(x, y)
 
 
 class OnboardingOverlay(BaseOverlay, ProvisioningView, metaclass=ProtocolQtMeta):
-    """The first-run app picker. Created once via its factory, shown by
-    :meth:`present`, which feeds it the candidates and result callback."""
-
     def __init__(self, gamepad: PadControl, feedback: Feedback) -> None:
-        # Opt into keyboard input: onboarding runs with nothing fullscreen, so
-        # grabbing focus is safe and lets the picker be driven by keyboard.
         super().__init__(gamepad, self._handle_pad, feedback,
-                         keyboard=Keyboard.ON_DEMAND)
+                         keyboard=_NOTHING_FULLSCREEN_TO_STEAL_FOCUS_FROM)
         self._candidates: list[CandidateApp] = []
         self._selection: AppSelection | None = None
         self._on_confirm: Callable[[list[CandidateApp]], None] | None = None
         self._on_cancel: Callable[[], None] | None = None
         self._rows:    list[_ToggleRow] = []
         self._confirm: QPushButton | None = None
-        self._return_row: int = 0   # row to return to when Left leaves Confirm
+        self._row_left_for_confirm: int = 0
 
-        # on_dismiss is a no-op: dismissal goes through B/Escape only when a
-        # cancel path is given (see _handle_pad).
         self._cursor = MenuCursor(
             count=lambda: len(self._rows) + 1,
             render=self._render,
@@ -91,15 +102,16 @@ class OnboardingOverlay(BaseOverlay, ProvisioningView, metaclass=ProtocolQtMeta)
         outer = QVBoxLayout(self)
         outer.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
-        card = self.build_card(560)
+        card = self.build_card(_CARD_WIDTH)
         card.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Maximum)
         layout = QVBoxLayout(card)
         layout.setContentsMargins(32, 32, 32, 32)
-        layout.setSpacing(8)
+        layout.setSpacing(_ROW_SPACING)
         layout.setAlignment(Qt.AlignmentFlag.AlignTop)
 
         self._title = QLabel(self.tr("Welcome — pick your apps"))
         self._title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._title.setWordWrap(True)
         self._title.setStyleSheet(
             f"font-size: 28px; color: {styles.COLOR_ACCENT}; font-weight: bold;"
             " background: transparent; padding-bottom: 8px;"
@@ -110,10 +122,8 @@ class OnboardingOverlay(BaseOverlay, ProvisioningView, metaclass=ProtocolQtMeta)
         self._rows_container.setStyleSheet("background: transparent;")
         self._rows_layout = QVBoxLayout(self._rows_container)
         self._rows_layout.setContentsMargins(0, 0, 0, 0)
-        self._rows_layout.setSpacing(8)
+        self._rows_layout.setSpacing(_ROW_SPACING)
 
-        # Scrollable so a long candidate list (e.g. a full Start Menu scan) stays
-        # within the screen; for a short list the area shrinks to fit (see present()).
         self._scroll = QScrollArea()
         self._scroll.setWidget(self._rows_container)
         self._scroll.setWidgetResizable(True)
@@ -124,10 +134,12 @@ class OnboardingOverlay(BaseOverlay, ProvisioningView, metaclass=ProtocolQtMeta)
         self._scroll.setStyleSheet(styles.flat_scrollbar())
         layout.addWidget(self._scroll)
 
-        # Outside the scroll area so it's always visible; navigation-wise it's
-        # the cursor's last index (see _handle_pad).
+        self._settings_layout = QVBoxLayout()
+        self._settings_layout.setSpacing(_ROW_SPACING)
+        layout.addLayout(self._settings_layout)
+
         self._confirm = QPushButton(self.tr("Confirm"))
-        self._confirm.setMinimumHeight(62)
+        self._confirm.setMinimumHeight(_ROW_HEIGHT)
         self._confirm.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self._confirm.clicked.connect(self._confirm_clicked)
         layout.addWidget(self._confirm)
@@ -142,56 +154,67 @@ class OnboardingOverlay(BaseOverlay, ProvisioningView, metaclass=ProtocolQtMeta)
         on_confirm: Callable[[list[CandidateApp]], None],
         on_cancel: Callable[[], None] | None = None,
         title: str | None = None,
+        autostart: AutostartChoice | None = None,
     ) -> None:
-        # No on_cancel = confirm-only (first run). Reuses like the [＋] picker
-        # pass one to enable B/Escape dismissal, and can override the title.
         self._candidates = list(candidates)
         self._selection = AppSelection(self._candidates)
         self._on_confirm = on_confirm
         self._on_cancel = on_cancel
         if title is not None:
             self._title.setText(title)
-        self._build_rows()
+        self._build_app_rows()
+        if autostart is not None:
+            self._build_autostart_row(autostart)
+        self._bind_hover(self._confirm, len(self._rows))
         self._fit_scroll_height()
         self._cursor.reset(0)
         self._feedback.play(Cue.POPUP_OPEN)
         self._show()
 
     def _fit_scroll_height(self) -> None:
-        """Size the scroll area to its rows, capped to ~55% of screen height so a
-        long list scrolls while a short one shrinks to fit (no empty space).
-        Confirm sits below the scroll, so it is not counted here."""
-        n = max(1, len(self._rows))
-        content = n * 62 + (n - 1) * 8
+        n = max(1, len(self._candidates))
+        content = n * _ROW_HEIGHT + (n - 1) * _ROW_SPACING
         screen = target_screen()
-        cap = int(screen.availableGeometry().height() * 0.55) if screen else 560
+        cap = (int(screen.availableGeometry().height() * _MAX_LIST_SHARE_OF_SCREEN)
+               if screen else _MAX_LIST_HEIGHT_WITHOUT_SCREEN)
         self._scroll.setFixedHeight(min(content, cap))
 
     # ── Building ─────────────────────────────────────────────────────────────
 
-    def _build_rows(self) -> None:
+    def _build_app_rows(self) -> None:
         assert self._selection is not None
         self._rows.clear()
         for i, candidate in enumerate(self._candidates):
-            btn = _ToggleRow()
-            btn.setMinimumHeight(62)
-            # Ignore the text's natural width so a long name never widens the row
-            # past the card (it clips inside instead of overflowing the dialog).
-            btn.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Fixed)
+            row = _ToggleRow(
+                f"  {self.tr(candidate.app.name)}",
+                is_on=partial(self._selection.is_selected, i),
+                flip=partial(self._selection.toggle, i),
+            )
             icon = self._candidate_icon(candidate)
             if icon is not None:
-                btn.setIcon(icon)
-                btn.setIconSize(QSize(_ROW_ICON_PX, _ROW_ICON_PX))
-            btn.toggle.set_on(self._selection.is_selected(i), animate=False)
-            btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-            btn.clicked.connect(lambda _checked=False, idx=i: self._row_clicked(idx))
-            self._bind_hover(btn, i)
-            self._rows_layout.addWidget(btn)
-            self._rows.append(btn)
+                row.setIcon(icon)
+                row.setIconSize(QSize(_ROW_ICON_PX, _ROW_ICON_PX))
+            self._add_row(row, self._rows_layout)
 
-        # Confirm is created once (outside the scroll, in __init__); re-bind its
-        # hover index now that the row count — its cursor index — is known.
-        self._bind_hover(self._confirm, len(self._candidates))
+    def _build_autostart_row(self, autostart: AutostartChoice) -> None:
+        self._settings_layout.addSpacing(_SPACE_AROUND_SEPARATOR)
+        self._settings_layout.addWidget(styles.separator())
+        self._settings_layout.addSpacing(_SPACE_AROUND_SEPARATOR)
+        row = _ToggleRow(
+            autostart_label(),
+            is_on=lambda: autostart.is_on,
+            flip=autostart.toggle,
+            font_px=_SETTING_FONT_PX,
+        )
+        self._add_row(row, self._settings_layout)
+        self._settings_layout.addSpacing(_SPACE_AROUND_SEPARATOR)
+
+    def _add_row(self, row: _ToggleRow, layout: QVBoxLayout) -> None:
+        index = len(self._rows)
+        row.clicked.connect(lambda: self._row_clicked(index))
+        self._bind_hover(row, index)
+        layout.addWidget(row)
+        self._rows.append(row)
 
     @staticmethod
     def _candidate_icon(candidate: CandidateApp) -> QIcon | None:
@@ -199,8 +222,6 @@ class OnboardingOverlay(BaseOverlay, ProvisioningView, metaclass=ProtocolQtMeta)
         return resolve_app_icon(candidate.app)
 
     def _bind_hover(self, btn: QPushButton, index: int) -> None:
-        """Move the cursor onto *index* when the pointer enters *btn* (with the
-        cursor sound + repaint), so mouse hover highlights like keyboard/pad."""
         def _enter(event) -> None:
             QPushButton.enterEvent(btn, event)
             self._cursor.hover(index)
@@ -209,17 +230,17 @@ class OnboardingOverlay(BaseOverlay, ProvisioningView, metaclass=ProtocolQtMeta)
     # ── Navigation (delegated to the domain cursor) ──────────────────────────
 
     def _handle_pad(self, event: str) -> None:
-        if event == Event.CANCEL and self._on_cancel is not None:
+        if event == Event.CANCEL and self._is_dismissable():
             self._cancel()
             return
         to_confirm = event in (Event.RIGHT, Event.SECTION_NEXT)
         to_list    = event in (Event.LEFT, Event.SECTION_PREV)
         if to_confirm and self._rows and self._cursor.index < len(self._rows):
-            self._return_row = self._cursor.index
+            self._row_left_for_confirm = self._cursor.index
             self._cursor.hover(len(self._rows))
             return
         if to_list and self._cursor.index == len(self._rows) and self._rows:
-            self._cursor.hover(min(self._return_row, len(self._rows) - 1))
+            self._cursor.hover(min(self._row_left_for_confirm, len(self._rows) - 1))
             return
         self._cursor.handle_pad(event)
 
@@ -235,21 +256,19 @@ class OnboardingOverlay(BaseOverlay, ProvisioningView, metaclass=ProtocolQtMeta)
             self._handle_pad(Event.RIGHT)
         elif key in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
             self._cursor.handle_pad(Event.SELECT)
-        elif key == Qt.Key.Key_Escape and self._on_cancel is not None:
+        elif key == Qt.Key.Key_Escape and self._is_dismissable():
             self._cancel()
         elif key == Qt.Key.Key_Space:
-            # Space toggles the highlighted row's checkbox; a no-op on Confirm.
             index = self._cursor.index
             if index < len(self._rows):
                 self._toggle(index)
 
     def _row_clicked(self, index: int) -> None:
-        """Pointer click on a row: move the cursor there, then toggle it."""
         self._cursor.hover(index)
         self._activate(index)
 
     def _confirm_clicked(self) -> None:
-        self._activate(len(self._rows))   # the Confirm row is last
+        self._confirm_selection()
 
     # ── Actions ──────────────────────────────────────────────────────────────
 
@@ -260,11 +279,8 @@ class OnboardingOverlay(BaseOverlay, ProvisioningView, metaclass=ProtocolQtMeta)
             self._confirm_selection()
 
     def _toggle(self, index: int) -> None:
-        assert self._selection is not None
-        self._selection.toggle(index)
-        self._rows[index].toggle.set_on(self._selection.is_selected(index))
+        self._rows[index].flip()
         self._feedback.play(Cue.SELECT)
-        self._render(self._cursor.index)
 
     def _confirm_selection(self) -> None:
         assert self._selection is not None
@@ -273,31 +289,26 @@ class OnboardingOverlay(BaseOverlay, ProvisioningView, metaclass=ProtocolQtMeta)
             self._on_confirm(chosen)
 
     def _cancel(self) -> None:
-        """Dismiss without applying any selection (the add-app reuse's B / Escape)."""
         if self._dismiss(sound=Cue.EXIT) and self._on_cancel is not None:
             self._on_cancel()
 
+    def _is_dismissable(self) -> bool:
+        return self._on_cancel is not None
+
     def _on_outside_click(self) -> None:
-        # Confirm-only first-run picker (no on_cancel) ignores the backdrop.
-        if self._on_cancel is not None:
+        if self._is_dismissable():
             self._cancel()
 
     # ── Rendering ────────────────────────────────────────────────────────────
 
     def _render(self, index: int) -> None:
-        for i, btn in enumerate(self._rows):
-            btn.setText(f"  {self.tr(self._candidates[i].app.name)}")
-            btn.setStyleSheet(
-                styles.home_menu_item_selected() if i == index
-                else styles.home_menu_item_normal()
-            )
+        for i, row in enumerate(self._rows):
+            row.set_selected(i == index)
         if self._confirm is not None:
             on_confirm_row = index == len(self._rows)
             styles.style_dialog_button(
                 self._confirm, role="primary", focused=on_confirm_row)
-        # Keep the focused row visible as the cursor moves. Confirm sits outside
-        # the scroll area (always visible), so it needs no scrolling.
-        if index < len(self._rows):
+        if index < len(self._candidates):
             self._scroll.ensureWidgetVisible(self._rows[index])
 
 

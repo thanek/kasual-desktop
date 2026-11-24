@@ -40,6 +40,7 @@ from domain.shell.introspection import (
     MenuSectionSnapshot, ShellSnapshot, TileMenuSnapshot, TileSettingsSnapshot, TileSnapshot,
 )
 from domain.shell.open_overlays import OpenOverlays
+from domain.system.autostart import Autostart
 from domain.system.desktop_shell import DesktopShell
 from domain.shell.wallpaper import SystemWallpaper
 from infrastructure.common.qt._meta import ProtocolQtMeta
@@ -85,6 +86,7 @@ class Desktop(QWidget, DesktopView, DesktopShell, DesktopControl, metaclass=Prot
         displays: DisplaySelection,
         audio_output: OutputPicker,
         overlays: OpenOverlays,
+        autostart: Autostart | None = None,
         surface: DesktopSurface | None = None,
         parent_of: 'Callable[[int], int | None] | None' = None,
         app_adder: AppAdder | None = None,
@@ -102,6 +104,7 @@ class Desktop(QWidget, DesktopView, DesktopShell, DesktopControl, metaclass=Prot
         self._network_control = network_control
         self._displays = displays
         self._audio_output = audio_output
+        self._autostart = autostart
         # System-action overlays (volume/brightness/…) and the dialog/popover
         # handles (confirm, tile settings, tile popover) are tracked as a group
         # in this shared registry.
@@ -635,7 +638,7 @@ class Desktop(QWidget, DesktopView, DesktopShell, DesktopControl, metaclass=Prot
     def open_configuration_overlay(self) -> None:
         overlay = ConfigurationOverlay(
             self._gamepad, self._displays, self._audio_output, self._feedback,
-            parent=self, dim=False,
+            autostart=self._autostart, parent=self, dim=False,
         )
         self._dialogs.present(overlay)
         self._hintbar.show_hints(home_hints.CONFIGURATION)

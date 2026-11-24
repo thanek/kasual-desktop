@@ -13,6 +13,7 @@ from PyQt6.QtGui import QEnterEvent, QKeyEvent
 
 from domain.catalog.app import App
 from domain.provisioning.candidate import CandidateApp
+from domain.system.autostart import AutostartChoice
 from infrastructure.common.qt.overlays.onboarding_overlay import OnboardingOverlay
 
 
@@ -227,3 +228,30 @@ class TestHover:
         pos = QPointF(0, 0)
         overlay._rows[1].enterEvent(QEnterEvent(pos, pos, pos))
         assert overlay._cursor.index == 1
+
+
+class TestAutostartRow:
+    def _present(self, mock_gamepad, on_confirm=lambda chosen: None):
+        autostart = AutostartChoice(MagicMock(is_enabled=lambda: False))
+        overlay = OnboardingOverlay(gamepad=mock_gamepad, feedback=MagicMock())
+        overlay.present(_candidates(), on_confirm=on_confirm, autostart=autostart)
+        return overlay, autostart
+
+    def test_is_left_out_unless_offered(self, mock_gamepad):
+        assert len(_present(mock_gamepad)._rows) == len(_candidates())
+
+    def test_comes_after_the_apps_and_starts_off(self, mock_gamepad):
+        overlay, _ = self._present(mock_gamepad)
+        assert len(overlay._rows) == len(_candidates()) + 1
+        assert overlay._rows[-1].toggle.isChecked() is False
+
+    def test_selecting_it_turns_it_on_and_leaves_the_apps_alone(self, mock_gamepad):
+        chosen = []
+        overlay, autostart = self._present(mock_gamepad, on_confirm=chosen.append)
+        for event in ("down", "down", "select"):
+            overlay._handle_pad(event)
+        assert autostart.is_on is True
+        assert overlay._rows[-1].toggle.isChecked() is True
+        overlay._handle_pad("down")
+        overlay._handle_pad("select")
+        assert [c.key for c in chosen[0]] == ["files"]

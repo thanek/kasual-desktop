@@ -5,7 +5,8 @@ import sys
 from pathlib import Path
 
 from infrastructure.linux.compositor import (
-    CEDE_BY_SINKING, Compositor, build_desktop_surface, build_display_placement,
+    CEDE_BY_SINKING, Compositor, build_autostart, build_desktop_surface,
+    build_display_placement,
     build_primary_display, build_screensaver_waker,
     build_system_wallpaper, build_tray_icon_source, build_window_manager,
     detect_compositor, layer_shell_available,
@@ -45,6 +46,7 @@ from infrastructure.common.catalog.app_config import (
     DesktopAppProvisioning, DesktopTileSettingsStore, DesktopTileOrderStore,
     load_apps,
 )
+from infrastructure.linux.autostart import launcher_for
 from infrastructure.linux.catalog.app_discovery import WhichAppDiscovery
 from infrastructure.linux.catalog.app_pinning import DesktopAppPinning
 from infrastructure.linux.catalog.installed_apps import XdgInstalledApps
@@ -206,7 +208,8 @@ def main() -> None:
 
     # Before the single-instance check — its notification is a second instance's
     # only visible string.
-    install_translations(app, str(Path(__file__).parent.parent / "locale"))
+    install_root = Path(__file__).parent.parent
+    install_translations(app, str(install_root / "locale"))
 
     guard = SingleInstanceGuard(log_file.parent, FreedesktopNotifier())
     if not guard.try_lock():
@@ -226,14 +229,11 @@ def main() -> None:
     gamepad.on_activity(screensaver_waker.poke)
     feedback = SoundFeedback()
 
-    # Provisioning: a fresh install has no apps. We detect that via an explicit
-    # marker (not dir-absence, so choosing zero apps still counts) and run
-    # onboarding *before* the session comes up — load_apps() must see whatever
-    # the user just picked. The bundled launchers resolve against the repo root.
+    autostart = build_autostart(launcher_for(install_root), COMPOSITOR)
+
     provisioning = DesktopAppProvisioning()
     provisioning_uc = Provisioning(
-        provisioning, WhichAppDiscovery(),
-        bundled_base=str(Path(__file__).parent.parent),
+        provisioning, WhichAppDiscovery(), bundled_base=str(install_root),
     )
     # The [＋] add-app tile reopens provisioning after first run: it offers every
     # installed app (XDG .desktop scan), minus the apps already pinned, and
@@ -310,6 +310,7 @@ def main() -> None:
             displays=display_selection,
             audio_outputs=audio_outputs,
             audio_output=kasual_output,
+            autostart=autostart,
             order_store=DesktopTileOrderStore(),
             settings_store=DesktopTileSettingsStore(),
             app_pinning=DesktopAppPinning(),
@@ -399,7 +400,7 @@ def main() -> None:
     def start() -> None:
         run_onboarding_or_start(
             provisioning, provisioning_uc, gamepad, feedback,
-            start_session_then_offer_background_hint)
+            start_session_then_offer_background_hint, autostart)
 
     def check_hud() -> None:
         hud_setup = _hud_gate(gamepad_access_view)
