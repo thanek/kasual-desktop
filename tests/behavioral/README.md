@@ -325,6 +325,10 @@ first draft of this suite "passed" through.
   running → close it from the tile's own popover. The other way out of an app and the
   other way of ending one: `file_browser` never leaves the app, this one walks away and
   meets it again as a tile that knows it is running.
+- **`tile_color`** — tile → Settings → another color. The tile must be painted with it
+  at once, with the settings still open, and keep it after B. The color is read from the
+  tile's resolved Qt style, not from the catalog. It writes to the catalog, so it refuses
+  to run unless KD was started on a throwaway config (`./tests_behav.sh prepare`).
 - **`steam_w3`** — the same walk through Steam's UI, but the game stops at the RED Launcher,
   which has to be *used*: a window that maps after KD has ceded and must still be
   reachable by the pad.
@@ -422,6 +426,7 @@ screen, showing nothing:
 
 ```
 ./tests_behav.sh prepare           # --seed by default; --empty for the onboarding flow
+./tests_behav.sh prepare --display DP-1     # on a named screen, else where the system puts it
 ```
 
 The seed holds just the tiles the scenarios touch (plus YouTube), so they are

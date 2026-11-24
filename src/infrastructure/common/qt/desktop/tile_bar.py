@@ -251,6 +251,9 @@ class TileBar(QScrollArea, TileBarView, TileFocusView, TileReorderView, metaclas
         self._apps.recolour(index, color)
         self._tiles[index].set_color(color)
 
+    def painted_color(self, index: int) -> str:
+        return self._tiles[index].painted_color()
+
     def current_app_recall_trigger(self) -> str | None:
         app = self._current_static_app()
         return app.recall_menu_trigger if app else None

@@ -408,6 +408,101 @@ def pick_tile_action(kd: KDClient, pad: VirtualPad, action: str) -> None:
     raise ScenarioAborted(f'{action!r} never took the focus')
 
 
+# ── a tile's settings ────────────────────────────────────────────────────────
+
+COLOR_SECTION = 'color'
+SECTIONS_AT_MOST = 3
+
+
+def expect_tile_settings_open(kd: KDClient) -> None:
+    try:
+        kd.wait_until(lambda s: s['tile_settings']['open'], timeouts.TILE_SETTINGS,
+                      'the tile settings')
+    except TimeoutError as exc:
+        report('tile settings open', 'FAIL', 'picked Settings, nothing opened')
+        raise ScenarioAborted('the tile settings never opened') from exc
+    report('tile settings open', 'PASS')
+
+
+def _focus_the_colors(kd: KDClient, pad: VirtualPad) -> None:
+    for _ in range(SECTIONS_AT_MOST):
+        section = kd.snapshot()['tile_settings']['section']
+        if section == COLOR_SECTION:
+            return
+        pad.down()
+        try:
+            kd.wait_until(lambda s, b=section: s['tile_settings']['section'] != b,
+                          timeouts.TILE_FOCUS, f'the cursor to leave the {section!r} section')
+        except TimeoutError as exc:
+            report('focused the colors', 'FAIL', f'stuck in the {section!r} section')
+            raise ScenarioAborted('the colors never took the focus') from exc
+    report('focused the colors', 'FAIL', 'walked the sections without reaching the colors')
+    raise ScenarioAborted('the colors never took the focus')
+
+
+def _step_towards(pad: VirtualPad, here: int, target: int, columns: int) -> None:
+    here_row, here_column = divmod(here, columns)
+    target_row, target_column = divmod(target, columns)
+    if here_row != target_row:
+        pad.down() if here_row < target_row else pad.up()
+    else:
+        pad.right() if here_column < target_column else pad.left()
+
+
+def pick_tile_color(kd: KDClient, pad: VirtualPad, color: str) -> None:
+    _focus_the_colors(kd, pad)
+    settings = kd.snapshot()['tile_settings']
+    colors = [offered.lower() for offered in settings['colors']]
+    target = colors.index(color)
+
+    for _ in range(len(colors) + 1):
+        here = colors.index(settings['focused_color'].lower())
+        if here == target:
+            pad.confirm()
+            report(f'picked the color {color}', 'PASS', 'A pressed on its swatch')
+            return
+        before = settings['focused_color']
+        _step_towards(pad, here, target, settings['columns'])
+        try:
+            settings = kd.wait_until(
+                lambda s, b=before: s['tile_settings']['focused_color'] != b,
+                timeouts.TILE_FOCUS, f'the cursor to move off {before}')['tile_settings']
+        except TimeoutError as exc:
+            report(f'picked the color {color}', 'FAIL', f'the cursor would not move off {before}')
+            raise ScenarioAborted('the color cursor is stuck') from exc
+        if not settings['open']:
+            report(f'picked the color {color}', 'FAIL', 'the settings closed on the way')
+            raise ScenarioAborted('the tile settings closed on their own')
+
+    report(f'picked the color {color}', 'FAIL', 'the cursor never reached it')
+    raise ScenarioAborted(f'could not focus {color}')
+
+
+def expect_tile_color(kd: KDClient, tile_id: str, color: str, when: str) -> None:
+    what = f'the {tile_id!r} tile is painted {color} {when}'
+    index = kd.tile_index(tile_id)
+    try:
+        kd.wait_until(lambda s: s['tiles'][index]['color'] == color,
+                      timeouts.TILE_SETTINGS, f'the tile to turn {color}')
+    except TimeoutError:
+        report(what, 'FAIL', f'it is painted {kd.tile(tile_id)["color"]}')
+        return
+    report(what, 'PASS')
+
+
+def leave_tile_settings(kd: KDClient, pad: VirtualPad) -> None:
+    pad.back()
+    try:
+        kd.wait_until(lambda s: not s['tile_settings']['open'], timeouts.TILE_SETTINGS,
+                      'the tile settings to close')
+    except TimeoutError as exc:
+        report('left the tile settings', 'FAIL', 'B pressed, they stayed open')
+        raise ScenarioAborted('the tile settings never closed') from exc
+    report('left the tile settings', 'PASS', 'B pressed')
+
+
+# ── closing and leaving ──────────────────────────────────────────────────────
+
 def close_from_open_menu(kd: KDClient, pad: VirtualPad, about: str) -> None:
     pick_menu_action(kd, pad, CLOSE_APP)
     expect_confirm(kd, about=about)

@@ -19,7 +19,3 @@ class TileSettingsEditor:
     def set_recall_trigger(self, index: int, trigger: str) -> None:
         self._catalog.set_recall_trigger(index, trigger)
         self._store.set_recall_trigger(index, trigger)
-
-    def apply(self, index: int, color: str, trigger: str) -> None:
-        self.set_color(index, color)
-        self.set_recall_trigger(index, trigger)

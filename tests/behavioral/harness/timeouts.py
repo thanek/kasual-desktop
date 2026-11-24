@@ -7,6 +7,7 @@ teaches nothing, and these runs are watched by a human anyway.
 HOME_VIEW       = 20.0    # KD's device scan finding the pad, then the Home view
 WINDOW_SOURCE   = 5.0     # the compositor accepting the hook and sending the first stack
 TILE_FOCUS      = 3.0     # one pad press moving the focus
+TILE_SETTINGS   = 5.0     # the tile settings opening, closing, or repainting the tile
 APP_START       = 30.0    # a bundled app coming up, and its own test API answering
 STEAM_UI        = 120.0   # Steam starting up, up to its Big Picture page
 STEAM_INTRO     = 8.0     # Big Picture's intro animation, which swallows a press

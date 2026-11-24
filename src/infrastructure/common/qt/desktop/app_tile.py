@@ -115,6 +115,9 @@ class AppTile(HoverReporting, QWidget):
         if not self._marquee_clip.isHidden():
             self._marquee_clip.setStyleSheet(f"background-color: {color};")
 
+    def painted_color(self) -> str:
+        return self._btn.palette().color(self._btn.backgroundRole()).name()
+
     def set_running(self, running: bool) -> None:
         if running == self._running:
             return

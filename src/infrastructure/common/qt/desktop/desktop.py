@@ -37,7 +37,7 @@ from domain.shell.home_actions import HomeActions
 from domain.shell.home_chrome import HomeChrome
 from domain.shell.introspection import (
     HEADER, TILES, ConfirmSnapshot, FocusSnapshot, HomeMenuSnapshot, MenuItemSnapshot,
-    MenuSectionSnapshot, ShellSnapshot, TileMenuSnapshot, TileSnapshot,
+    MenuSectionSnapshot, ShellSnapshot, TileMenuSnapshot, TileSettingsSnapshot, TileSnapshot,
 )
 from domain.shell.open_overlays import OpenOverlays
 from domain.system.desktop_shell import DesktopShell
@@ -293,6 +293,18 @@ class Desktop(QWidget, DesktopView, DesktopShell, DesktopControl, metaclass=Prot
             ),
         )
 
+    def _tile_settings_snapshot(self) -> TileSettingsSnapshot:
+        settings = self._dialogs.active_tile_settings if self._dialogs is not None else None
+        if settings is None:
+            return TileSettingsSnapshot(open=False)
+        return TileSettingsSnapshot(
+            open=True,
+            section=settings.focused_section,
+            colors=settings.colors,
+            columns=settings.columns,
+            focused_color=settings.color_under_cursor,
+        )
+
     def _confirm_snapshot(self) -> ConfirmSnapshot:
         dialog = self._dialogs.active_confirm if self._dialogs is not None else None
         if dialog is None:
@@ -307,7 +319,8 @@ class Desktop(QWidget, DesktopView, DesktopShell, DesktopControl, metaclass=Prot
         windows = self._tilebar.last_windows
         tiles = tuple(
             TileSnapshot(index=i, app_id=app.id, name=app.name,
-                         running=self._tilebar.is_tile_running(i, windows))
+                         running=self._tilebar.is_tile_running(i, windows),
+                         color=self._tilebar.painted_color(i))
             for i, app in enumerate(self._apps)
         )
         on_tiles = self._nav is None or self._nav.in_tiles
@@ -325,6 +338,7 @@ class Desktop(QWidget, DesktopView, DesktopShell, DesktopControl, metaclass=Prot
             hint_bar_mapped=self._hintbar.is_on_screen(),
             home_menu=self._home_menu_snapshot(),
             tile_menu=self._tile_menu_snapshot(),
+            tile_settings=self._tile_settings_snapshot(),
             confirm=self._confirm_snapshot(),
             focus=FocusSnapshot(
                 zone=TILES if on_tiles else HEADER,

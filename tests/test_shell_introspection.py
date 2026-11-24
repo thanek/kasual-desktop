@@ -8,6 +8,7 @@ from unittest.mock import MagicMock, patch
 
 from domain.catalog.app import App
 from domain.catalog.window import Window
+from domain.menu.palette import TILE_COLORS
 from test_desktop_lifecycle import _make_desktop
 
 
@@ -32,6 +33,40 @@ class TestSnapshot:
         with patch.object(desktop._tilebar, 'is_tile_running',
                           side_effect=lambda idx, _windows: idx == 0):
             assert desktop.snapshot().tiles[0].running is True
+
+    def test_a_tile_reports_the_color_it_is_painted_with(self, mock_gamepad):
+        desktop = _make_desktop(
+            mock_gamepad, apps=[App(name='Netflix', command='vod', color='#e50914')])
+        desktop.show()
+        assert desktop.snapshot().tiles[0].color == '#e50914'
+
+        desktop._tilebar._tiles[0].set_color('#0B1220')
+        assert desktop.snapshot().tiles[0].color == '#0b1220'
+
+    def test_a_color_that_never_reached_the_tile_is_not_reported(self, mock_gamepad):
+        desktop = _make_desktop(
+            mock_gamepad, apps=[App(name='Netflix', command='vod', color='#e50914')])
+        desktop.show()
+        desktop._apps.recolour(0, '#0B1220')
+        assert desktop.snapshot().tiles[0].color == '#e50914'
+
+    def test_closed_tile_settings_offer_nothing(self, mock_gamepad):
+        settings = _make_desktop(mock_gamepad).snapshot().tile_settings
+        assert not settings.open
+        assert settings.colors == ()
+
+    def test_open_tile_settings_report_where_the_cursor_is(self, mock_gamepad):
+        desktop = _make_desktop(
+            mock_gamepad, apps=[App(name='Netflix', command='vod', color=TILE_COLORS[0])])
+        desktop._dialogs.show_tile_settings()
+        overlay = desktop._dialogs.active_tile_settings
+        overlay._handle_pad('section_next')
+        overlay._handle_pad('right')
+
+        settings = desktop.snapshot().tile_settings
+        assert settings.open
+        assert settings.section == 'color'
+        assert settings.focused_color == TILE_COLORS[1]
 
     def test_the_foreground_app_is_the_one_the_shell_believes_in(self, mock_gamepad):
         """Not the one whose process is alive: the shell's belief is what makes it

@@ -139,7 +139,7 @@ TILE_SETTINGS = Hints(
     overlay=_HOME_MENU,
     actions=(
         ButtonHint(Button.A, translate("HintBar", "Select")),
-        ButtonHint(Button.B, translate("HintBar", "Cancel")),
+        ButtonHint(Button.B, translate("HintBar", "Close")),
     ),
     bumpers=_SECTION,
 )

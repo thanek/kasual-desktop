@@ -4,6 +4,11 @@ Testy cyklu życia Desktop: pause().
 
 from unittest.mock import MagicMock
 
+from domain.catalog.app import App
+from domain.catalog.catalog import AppCatalog
+from domain.input.vocabulary import Trigger
+from domain.menu.palette import TILE_COLORS
+
 
 class _NoWallpaper:
     """SystemWallpaper port returning nothing — Desktop paints the fallback."""
@@ -57,7 +62,7 @@ def _make_desktop(mock_gamepad, apps=None):
     from infrastructure.linux.catalog.app_manager import AppManager
     from domain.notifications.center import NotificationCenter
     return build_desktop(
-        apps=list(apps or []), gamepad=mock_gamepad, window_manager=wm,
+        apps=AppCatalog(tuple(apps or ())), gamepad=mock_gamepad, window_manager=wm,
         wallpaper=_NoWallpaper(), feedback=MagicMock(),
         volume=_FakeVolume(), brightness=_FakeBrightness(),
         power=_FakePower(), scheduler=_FakeScheduler(),
@@ -184,3 +189,43 @@ class TestOnAppFinished:
         # handler nie powinien być dodany po raz drugi (push jest idempotentny,
         # ale liczymy, że liczba handlerów nie rośnie)
         assert list(mock_gamepad._stack) == handlers_before
+
+
+# ── Tile settings ───────────────────────────────────────────────────────────────
+
+class TestTileSettings:
+    def _desktop_with_open_settings(self, mock_gamepad):
+        desktop = _make_desktop(
+            mock_gamepad, apps=[App(name="Netflix", command="vod", color="#e50914")])
+        desktop._dialogs.show_tile_settings()
+        return desktop
+
+    def _pick_first_swatch(self, settings):
+        settings._handle_pad("section_next")
+        settings._handle_pad("select")
+
+    def test_color_picked_then_closed_with_b_stays(self, mock_gamepad):
+        desktop = self._desktop_with_open_settings(mock_gamepad)
+        settings = desktop._dialogs._tile_settings
+        self._pick_first_swatch(settings)
+        settings._handle_pad("cancel")
+        desktop._dialogs._tile_settings_editor._store.set_color.assert_called_once_with(
+            0, TILE_COLORS[0])
+        assert desktop._apps[0].color == TILE_COLORS[0]
+        assert desktop._tilebar._tiles[0]._color == TILE_COLORS[0]
+
+    def test_trigger_picked_then_closed_with_b_stays(self, mock_gamepad):
+        desktop = self._desktop_with_open_settings(mock_gamepad)
+        settings = desktop._dialogs._tile_settings
+        settings._handle_pad("right")
+        settings._handle_pad("cancel")
+        desktop._dialogs._tile_settings_editor._store.set_recall_trigger.assert_called_once_with(
+            0, Trigger.HOLD_1S)
+        assert desktop._apps[0].recall_menu_trigger == Trigger.HOLD_1S
+
+    def test_can_be_reopened_after_closing(self, mock_gamepad):
+        desktop = self._desktop_with_open_settings(mock_gamepad)
+        desktop._dialogs._tile_settings._handle_pad("cancel")
+        assert desktop._dialogs._tile_settings is None
+        desktop._dialogs.show_tile_settings()
+        assert desktop._dialogs._tile_settings is not None

@@ -78,6 +78,10 @@ class DialogHostController:
     def active_tile_popover(self) -> 'TilePopoverMenu | None':
         return self._tile_popover
 
+    @property
+    def active_tile_settings(self) -> TileSettings | None:
+        return self._tile_settings
+
     def cancel(self) -> None:
         """Drop the confirm/settings handles when the overlay group is torn
         down externally (the registry clears the widgets themselves)."""
@@ -146,38 +150,25 @@ class DialogHostController:
     # ── Tile settings ───────────────────────────────────────────────────────
 
     def show_tile_settings(self) -> None:
-        """Open the Tile Settings modal for the focused app tile.
-
-        Both sections (recall trigger + colour) are visible at once. Staging a
-        colour previews it live on the tile; *Save* persists both values to the
-        ``.desktop`` file; *Cancel* (or B / Escape / backdrop / BTN_MODE) reverts
-        the preview. The capture of the tile index is safe: the modal is modal,
-        so the focus cannot move underneath it."""
         if self._tile_settings is not None or not self._tilebar.current_is_app():
             return
         index = self._tilebar.current_app_index()
-        original_color = self._tilebar.current_app_color()
 
-        def _on_color_preview(color: str) -> None:
+        def _apply_color(color: str) -> None:
             self._tilebar.set_app_color(index, color)
+            self._tile_settings_editor.set_color(index, color)
 
-        def _on_save(color: str, trigger: str) -> None:
-            self._forget_tile_settings()
-            self._tile_settings_editor.apply(index, color, trigger)
-
-        def _on_cancel() -> None:
-            self._forget_tile_settings()
-            if original_color is not None:
-                self._tilebar.set_app_color(index, original_color)
+        def _apply_trigger(trigger: str) -> None:
+            self._tile_settings_editor.set_recall_trigger(index, trigger)
 
         self._tile_settings = TileSettings(
             app_name=self._tilebar.current_app_name() or "",
             colors=TILE_COLORS,
-            original_color=original_color,
-            original_trigger=self._tilebar.current_app_recall_trigger() or Trigger.CLICK,
-            on_color_preview=_on_color_preview,
-            on_save=_on_save,
-            on_cancel=_on_cancel,
+            color=self._tilebar.current_app_color(),
+            trigger=self._tilebar.current_app_recall_trigger() or Trigger.CLICK,
+            on_color_changed=_apply_color,
+            on_trigger_changed=_apply_trigger,
+            on_closed=self._forget_tile_settings,
             gamepad=self._gamepad,
             feedback=self._feedback,
             parent=self._parent,
@@ -188,7 +179,10 @@ class DialogHostController:
     def _forget_tile_settings(self) -> None:
         self._overlays.forget(self._tile_settings)
         self._tile_settings = None
-        self._nav.render()   # restore the tiles-screen hints
+        self._restore_tiles_screen_hints()
+
+    def _restore_tiles_screen_hints(self) -> None:
+        self._nav.render()
 
     # ── Tile popover ────────────────────────────────────────────────────────
 
@@ -226,7 +220,7 @@ class DialogHostController:
     def _on_tile_popover_closed(self) -> None:
         self._overlays.forget(self._tile_popover)
         self._tile_popover = None
-        self._nav.render()   # restore the tiles-screen hints
+        self._restore_tiles_screen_hints()
 
     # ── Generic top-bar overlays (Network / Notifications) ─────────────────
 

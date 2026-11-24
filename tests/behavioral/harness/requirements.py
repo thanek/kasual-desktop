@@ -154,6 +154,15 @@ def kd_test_api() -> Requirement:
     )
 
 
+def throwaway_config() -> Requirement:
+    return Requirement(
+        'Kasual Desktop runs on a throwaway config (KD_CONFIG_DIR) — this scenario '
+        'writes to the catalog',
+        lambda _kd: 'KD_CONFIG_DIR' in kd_client.running_environment(),
+        remedy='start Kasual Desktop with: ./tests_behav.sh prepare',
+    )
+
+
 def kd_idle() -> Requirement:
     """An app KD still believes is running changes what the pad does: over a game
     BTN_MODE follows its hold-to-recall policy, so a short press opens nothing."""

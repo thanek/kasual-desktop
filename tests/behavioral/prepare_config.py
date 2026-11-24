@@ -7,6 +7,7 @@
     --seed    a provisioned catalog holding just the tiles the scenarios touch
     --empty   an unprovisioned directory (no marker) — for the onboarding flow
     --dir P   use P instead of a fresh temp directory
+    --display D   put Kasual Desktop on the screen named D (DP-1, HDMI-1, ...)
 
 Only the ``export`` line goes to stdout, so the eval above is safe; everything
 else is on stderr.
@@ -20,6 +21,7 @@ File Browser included, where it aborts them. Each scenario arms its own game ins
 from __future__ import annotations
 
 import argparse
+import os
 import shlex
 import sys
 import tempfile
@@ -75,19 +77,38 @@ def _seed_candidates() -> list[CandidateApp]:
     return candidates
 
 
+def _connected_displays() -> list[str]:
+    os.environ.setdefault('QT_QPA_PLATFORM', 'wayland')
+    from PyQt6.QtGui import QGuiApplication
+
+    from infrastructure.common.qt.ui.screen_placement import QtDisplays
+    app = QGuiApplication([])
+    names = [display.id for display in QtDisplays().connected()]
+    del app
+    return names
+
+
+def _connected_display(name: str) -> str:
+    connected = _connected_displays()
+    if name not in connected:
+        raise argparse.ArgumentTypeError(
+            f'no screen named {name!r}; connected: {", ".join(connected)}')
+    return name
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument('--seed', action='store_const', const='seed', dest='mode')
     mode.add_argument('--empty', action='store_const', const='empty', dest='mode')
     parser.add_argument('--dir')
+    parser.add_argument('--display', type=_connected_display)
     parser.set_defaults(mode='seed')
     args = parser.parse_args()
 
     target = Path(args.dir) if args.dir else Path(tempfile.mkdtemp(prefix='kasual-config-'))
     target.mkdir(parents=True, exist_ok=True)
 
-    import os
     os.environ['KD_CONFIG_DIR'] = str(target)
 
     if args.mode == 'seed':
@@ -97,8 +118,12 @@ def main() -> int:
     else:
         print(f'empty {target} — first launch will run onboarding', file=sys.stderr)
 
-    from infrastructure.common.catalog.preferences import DesktopHudSetupMemory
+    from infrastructure.common.catalog.preferences import (
+        DesktopDisplayPreference, DesktopHudSetupMemory,
+    )
     DesktopHudSetupMemory().mark_shown()
+    if args.display is not None:
+        DesktopDisplayPreference().set_preferred(args.display)
 
     print(f'export KD_CONFIG_DIR={shlex.quote(str(target))}')
     return 0
