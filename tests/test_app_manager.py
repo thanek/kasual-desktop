@@ -11,13 +11,16 @@ Tests:
   - _force_kill(proc) — SIGKILL only when THIS process is still tracked
   - running_pid / all_running_pids / is_running
 
-Subprocess.Popen and threading.Thread are always mocked — tests don't
-start any real processes or threads. Skipped on Windows — Windows uses
+Subprocess.Popen and threading.Thread are mocked — apart from the exit command's
+zombie check, tests don't start any real processes or threads. Skipped on Windows — Windows uses
 WindowsAppManager (ShellExecuteEx/subprocess) with its own behaviour.
 """
 
+import os
 import signal
+import subprocess
 import sys
+import time
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -33,12 +36,20 @@ def _make_manager():
     return AppManager()
 
 
-def _running_proc(pid=1234):
+def _running_proc(pid=1234, command="konsole"):
     """Mock procesu który jeszcze działa (poll() → None)."""
     proc = MagicMock()
     proc.poll.return_value = None
     proc.pid = pid
+    proc.args = [command]
     return proc
+
+
+def _wait_until(condition, timeout_s=5.0):
+    deadline = time.monotonic() + timeout_s
+    while not condition():
+        assert time.monotonic() < deadline
+        time.sleep(0.01)
 
 
 def _exited_proc():
@@ -316,6 +327,62 @@ class TestTerminate:
              patch("infrastructure.common.lifecycle.base_app_manager.QTimer.singleShot"):
             am.terminate("a")
         mock_killpg.assert_called_once_with(100, signal.SIGTERM)
+
+
+class TestAppWithItsOwnExitCommand:
+    def _terminate_steam(self, popen_effect=None, command="/usr/bin/steam"):
+        am = _make_manager()
+        am._processes["steam"] = _running_proc(pid=1234, command=command)
+        module = "infrastructure.linux.catalog.app_manager"
+        base = "infrastructure.common.lifecycle.base_app_manager"
+        with patch(f"{module}.subprocess.Popen", side_effect=popen_effect) as popen, \
+             patch(f"{module}.os.getpgid", return_value=1234), \
+             patch(f"{module}.os.killpg") as killpg, \
+             patch(f"{base}.QTimer.singleShot") as timer:
+            am.terminate("steam")
+        return popen, killpg, timer
+
+    def test_steam_is_asked_to_shut_down(self, qapp):
+        popen, _, _ = self._terminate_steam()
+        assert popen.call_args.args[0] == ("steam", "-shutdown")
+
+    def test_steam_is_neither_signalled_nor_killed(self, qapp):
+        _, killpg, timer = self._terminate_steam()
+        killpg.assert_not_called()
+        timer.assert_not_called()
+
+    def test_the_exit_command_leaves_no_zombie(self, qapp):
+        am = _make_manager()
+        am._processes["quick"] = _running_proc(command="quick")
+        spawned = []
+        real_popen = subprocess.Popen
+
+        def spawn(*args, **kwargs):
+            spawned.append(real_popen(*args, **kwargs))
+            return spawned[0]
+
+        module = "infrastructure.linux.catalog.app_manager"
+        with patch(f"{module}._EXIT_COMMANDS", {"quick": ("true",)}), \
+             patch(f"{module}.subprocess.Popen", side_effect=spawn):
+            am.terminate("quick")
+            _wait_until(lambda: not os.path.exists(f"/proc/{spawned[0].pid}"))
+
+    def test_stays_tracked_until_it_is_gone(self, qapp):
+        am = _make_manager()
+        am._processes["steam"] = _running_proc(command="steam")
+        with patch("infrastructure.linux.catalog.app_manager.subprocess.Popen"):
+            am.terminate("steam")
+        assert am.is_running("steam")
+
+    def test_falls_back_to_signals_when_the_command_cannot_run(self, qapp):
+        _, killpg, timer = self._terminate_steam(popen_effect=FileNotFoundError)
+        killpg.assert_called_once_with(1234, signal.SIGTERM)
+        timer.assert_called_once()
+
+    def test_other_apps_are_signalled(self, qapp):
+        popen, killpg, _ = self._terminate_steam(command="konsole")
+        popen.assert_not_called()
+        killpg.assert_called_once_with(1234, signal.SIGTERM)
 
 
 class TestForceKill:

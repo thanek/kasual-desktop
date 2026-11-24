@@ -13,7 +13,7 @@ the `steam://` forwarder KD spawns — is what starts the game.
 
 from tests.behavioral.harness import requirements as require
 from tests.behavioral.harness import shell, timeouts
-from tests.behavioral.harness.game import SteamGame, warm_up_steam
+from tests.behavioral.harness.game import KCD_OPENS_IN_A_WINDOW, SteamGame, warm_up_steam
 from tests.behavioral.harness.session import Scenario, Session
 
 TILE_ID = 'Kingdom Come Deliverance'
@@ -51,6 +51,7 @@ SCENARIO = Scenario(
     title='launch Kingdom Come from its tile straight into the game (Steam warmed in the '
           'background first), recall the Home Menu over it',
     body=_body,
+    ignored_because=KCD_OPENS_IN_A_WINDOW,
     requires=(
         require.window_source(),
         require.command('steam'),

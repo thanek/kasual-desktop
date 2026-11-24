@@ -26,6 +26,8 @@ from version import test_api_enabled
 
 logger = logging.getLogger(__name__)
 
+_FORCE_KILL_AFTER_MS = 3000
+
 
 # Popen, or the Windows _WinHandle wrapper exposing the same pid/poll/wait/terminate surface.
 Proc = Any
@@ -87,9 +89,11 @@ class BaseAppManager(QObject, ProcessManager, metaclass=ProtocolQtMeta):
             return
         proc = self._processes[app_id]
         logger.info("Ending app %s", app_id)
+        if self._ask_to_exit(proc):
+            return
         try:
             self._terminate_proc(proc)
-            QTimer.singleShot(3000, lambda: self._force_kill(proc))
+            QTimer.singleShot(_FORCE_KILL_AFTER_MS, lambda: self._force_kill(proc))
         except Exception as e:
             logger.warning("Failed to terminate app %s: %s", app_id, e)
 
@@ -150,6 +154,9 @@ class BaseAppManager(QObject, ProcessManager, metaclass=ProtocolQtMeta):
 
     def _prepare_env(self, proc_env: dict[str, str]) -> None:
         """Mutate *proc_env* with platform-specific tweaks before user overrides."""
+
+    def _ask_to_exit(self, proc: Proc) -> bool:
+        return False
 
     def _terminate_proc(self, proc: Proc) -> None:
         raise NotImplementedError

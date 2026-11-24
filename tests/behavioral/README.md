@@ -333,6 +333,10 @@ first draft of this suite "passed" through.
   which has to be *used*: a window that maps after KD has ceded and must still be
   reachable by the pad.
 
+A scenario that fails for a reason outside Kasual Desktop sets `ignored_because` on its
+`SCENARIO`: a full run skips it and says why, naming it still runs it. Currently `kcd`
+and `kcd_cold`.
+
 ## Preconditions
 
 Scenarios **declare** what they need rather than documenting it, so the list below
@@ -442,8 +446,8 @@ then `KD_TEST_API=1 ./kasual.sh`.)
 Then, in another terminal, `run` — its arguments pass straight to `run.py`:
 
 ```
-./tests_behav.sh run                # all of them, one after another
-./tests_behav.sh run kcd            # just this one
+./tests_behav.sh run                # all but the ignored ones, one after another
+./tests_behav.sh run kcd            # just this one, ignored or not
 ./tests_behav.sh run --list         # what there is and what it needs; runs nothing
 ```
 

@@ -2,6 +2,7 @@ import logging
 import os
 import signal
 import subprocess
+import threading
 import time
 from collections.abc import Mapping, Sequence
 
@@ -12,6 +13,9 @@ from infrastructure.common.lifecycle.base_app_manager import BaseAppManager
 from infrastructure.linux.audio.qt_multimedia_env import drop_qt_multimedia_overrides
 
 logger = logging.getLogger(__name__)
+
+# Steam's client runs in a container, in a session of its own, out of killpg's reach.
+_EXIT_COMMANDS = {"steam": ("steam", "-shutdown")}
 
 
 class AppManager(BaseAppManager):
@@ -63,6 +67,24 @@ class AppManager(BaseAppManager):
         # struts instead of going truly full-screen, leaving cut-off bars.
         proc_env.pop("QT_WAYLAND_SHELL_INTEGRATION", None)
         drop_qt_multimedia_overrides(proc_env)
+
+    def _ask_to_exit(self, proc: subprocess.Popen) -> bool:
+        exit_command = _EXIT_COMMANDS.get(os.path.basename(proc.args[0]))
+        if exit_command is None:
+            return False
+        logger.info("Asking pid %d to exit: %s", proc.pid, " ".join(exit_command))
+        try:
+            exiting = subprocess.Popen(
+                exit_command, start_new_session=True, env=self._build_env(None))
+        except OSError as exc:
+            logger.error("Cannot run %s: %s", exit_command, exc)
+            return False
+        self._leave_no_zombie(exiting)
+        return True
+
+    @staticmethod
+    def _leave_no_zombie(proc: subprocess.Popen) -> None:
+        threading.Thread(target=proc.wait, daemon=True).start()
 
     def _terminate_proc(self, proc: subprocess.Popen) -> None:
         logger.info("SIGTERM to process group of pid %d", proc.pid)

@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Run the behavioral scenarios against a live Kasual Desktop session.
 
-    python3 tests/behavioral/run.py            run them all, one after another
-    python3 tests/behavioral/run.py kcd        run one
+    python3 tests/behavioral/run.py            run them all but the ignored ones
+    python3 tests/behavioral/run.py kcd        run one, ignored or not
     python3 tests/behavioral/run.py --list     what there is, and what each one needs
 
 Kasual Desktop has to be up first, with the test API on. Point it at a seeded
@@ -48,6 +48,8 @@ def _discover() -> dict[str, Scenario]:
 def _print_list(scenarios: dict[str, Scenario]) -> None:
     for scenario in scenarios.values():
         print(f'\n{scenario.name} — {scenario.title}')
+        if scenario.ignored_because:
+            print(f'  IGNORED: {scenario.ignored_because}')
         for requirement in requirements.BASE + scenario.requires:
             mark = ' ' if requirement.verify else '!'
             print(f'  [{mark}] {requirement.description}')
@@ -55,10 +57,14 @@ def _print_list(scenarios: dict[str, Scenario]) -> None:
 
 
 def _run_all(scenarios: dict[str, Scenario]) -> int:
-    outcomes = {name: scenario.run() for name, scenario in scenarios.items()}
+    outcomes = {name: scenario.run() for name, scenario in scenarios.items()
+                if not scenario.ignored_because}
     print('\n' + '─' * 72)
     for name, code in outcomes.items():
-        print(f'{"OK    " if code == 0 else "FAILED"}  {name}')
+        print(f'{"OK     " if code == 0 else "FAILED "}  {name}')
+    for name, scenario in scenarios.items():
+        if scenario.ignored_because:
+            print(f'IGNORED  {name} — {scenario.ignored_because}')
     return 0 if all(code == 0 for code in outcomes.values()) else 1
 
 
@@ -67,7 +73,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(
         description='Behavioral scenarios for Kasual Desktop, against the live Wayland '
                     'session (KDE, GNOME, Hyprland or Sway). With no arguments, runs '
-                    'them all.')
+                    'all but the ignored ones.')
     parser.add_argument('scenario', nargs='?', choices=sorted(scenarios),
                         help='run only this one')
     parser.add_argument('--list', action='store_true',

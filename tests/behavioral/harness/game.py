@@ -30,6 +30,9 @@ if TYPE_CHECKING:
 
 HUD_ENV = {'MANGOHUD': '1'}
 
+KCD_OPENS_IN_A_WINDOW = (
+    'Kingdom Come opens in a window instead of fullscreen, without Kasual Desktop too')
+
 
 def process_environ(pid: int) -> dict[str, str] | None:
     """The environment *pid* was started with, or None when it cannot be read."""

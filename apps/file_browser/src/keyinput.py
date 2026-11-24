@@ -128,13 +128,7 @@ else:
 
     VIRTUAL_KEYBOARD_NAME = "kasual-vkbd"
 
-    # Named so a key remapper can be told to ignore it: those grab every
-    # keyboard-like device and replay its keys through their own virtual one, and a
-    # grab landing between our press and its release delivers the key twice.
-    _ui = UInput(name=VIRTUAL_KEYBOARD_NAME)
-
     class Key:
-        """Re-export of the Linux ecodes.KEY_* constants the apps use."""
         KEY_ENTER = e.KEY_ENTER
         KEY_ESC = e.KEY_ESC
         KEY_LEFT = e.KEY_LEFT
@@ -149,8 +143,14 @@ else:
         KEY_PAGEUP = e.KEY_PAGEUP
         KEY_PAGEDOWN = e.KEY_PAGEDOWN
 
+    # xwaykeyz replays the keys of any device with a full alphabet, some of them twice.
+    def _keyboard_without_an_alphabet() -> UInput:
+        used = [code for name, code in vars(Key).items() if name.startswith("KEY_")]
+        return UInput({e.EV_KEY: used}, name=VIRTUAL_KEYBOARD_NAME)
+
+    _ui = _keyboard_without_an_alphabet()
+
     def press(key: int) -> None:
-        """Send a key press+release via evdev UInput."""
         _ui.write(e.EV_KEY, key, 1)
         _ui.write(e.EV_KEY, key, 0)
         _ui.syn()
