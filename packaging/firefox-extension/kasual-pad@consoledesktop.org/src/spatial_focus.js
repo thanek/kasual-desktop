@@ -61,6 +61,13 @@
     return document.scrollingElement;
   };
 
+  const isOffScreen = (element) => {
+    const rect = element.getBoundingClientRect();
+    return rect.bottom <= 0 || rect.top >= innerHeight;
+  };
+
+  const startOfMiddleRow = () => ({ x: 0, y: innerHeight / 2 });
+
   const keepComfortablyVisible = (element) => {
     const rect = element.getBoundingClientRect();
     const margin = innerHeight * COMFORT_MARGIN_RATIO;
@@ -124,6 +131,12 @@
         ? nearestTowards(this.#lastKnownCenter, candidates, direction)
         : firstInViewport(candidates);
       if (target) this.jumpTo(this.current ? this.#site.landingFor(this.current, target) : target);
+    }
+
+    scrollBy(pixels) {
+      if (!this.#scope) return;
+      verticalScrollerOf(this.current ?? document.body).scrollBy({ top: pixels, behavior: "instant" });
+      if (!this.current || isOffScreen(this.current)) this.#reanchorNear(startOfMiddleRow());
     }
 
     jumpTo(element) {

@@ -24,6 +24,10 @@
       return this.#keyboard.isOpen ? this.#keyboard.hints() : this.#site.hints();
     }
 
+    scrollBy(pixels) {
+      if (!this.#keyboard.isOpen && this.#site.scrollsFreely()) this.#focus.scrollBy(pixels);
+    }
+
     tick(now) {
       this.#site.tick(now);
       this.#focus.followScope();

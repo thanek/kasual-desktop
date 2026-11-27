@@ -10,6 +10,9 @@
   });
 
   const DIACRITIC_OF = { a: "ą", c: "ć", e: "ę", l: "ł", n: "ń", o: "ó", s: "ś", z: "ż", x: "ź" };
+  const BASE_OF = Object.fromEntries(Object.entries(DIACRITIC_OF).map(([base, diacritic]) => [diacritic, base]));
+
+  const SPECIAL_KEY_TYPED_AS = { " ": KeyKind.SPACE, Backspace: KeyKind.BACKSPACE, Enter: KeyKind.DONE };
 
   const character = (value) => Object.freeze({ kind: KeyKind.CHARACTER, value, units: 1 });
   const special = (kind, units) => Object.freeze({ kind, units });
@@ -44,9 +47,19 @@
     return nearest;
   };
 
+  const baseOf = (character) => BASE_OF[character] ?? character;
+
+  const isKeyFor = (typed) => (key) => {
+    const specialKind = SPECIAL_KEY_TYPED_AS[typed];
+    if (specialKind) return key.kind === specialKind;
+    return key.kind === KeyKind.CHARACTER && key.value === baseOf(typed.toLowerCase());
+  };
+
   KasualPad.KeyKind = KeyKind;
   KasualPad.KEYBOARD_ROWS = ROWS;
   KasualPad.withDiacritic = (value) => DIACRITIC_OF[value] ?? value;
+  KasualPad.isDiacritic = (typed) => typed.toLowerCase() in BASE_OF;
+  KasualPad.typesSpecialKey = (typed) => typed in SPECIAL_KEY_TYPED_AS;
 
   KasualPad.KeyboardCursor = class {
     #row = STARTING_ROW;
@@ -58,6 +71,14 @@
 
     isAt(rowIndex, column) {
       return this.#row === rowIndex && this.#column === column;
+    }
+
+    moveToKeyFor(typed) {
+      const rowIndex = ROWS.findIndex(({ keys }) => keys.some(isKeyFor(typed)));
+      if (rowIndex < 0) return false;
+      this.#row = rowIndex;
+      this.#column = ROWS[rowIndex].keys.findIndex(isKeyFor(typed));
+      return true;
     }
 
     move(direction) {

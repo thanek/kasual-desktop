@@ -6,11 +6,11 @@
     BILLBOARD: '[data-uia="billboard"]',
     BILLBOARD_PLAY: '[data-uia="play-video-button"]',
     TILE: '[data-uia="standard-card"]',
-    LOGO_DUPLICATING_HOME_LINK: '[data-uia="navigation+logo"]',
+    LOGO_LINK: '[data-uia="navigation+logo"], #clcs-header a[href="/"]',
   };
 
   const navigableIn = (scope) =>
-    KasualPad.interactiveElementsIn(scope).filter((element) => !element.closest(Selector.LOGO_DUPLICATING_HOME_LINK));
+    KasualPad.interactiveElementsIn(scope).filter((element) => !element.closest(Selector.LOGO_LINK));
 
   const floorOf = (element) => element.closest(Selector.FLOOR) ?? NAVIGATION_BAR;
   const allFloors = () => [NAVIGATION_BAR, ...document.querySelectorAll(Selector.FLOOR)];

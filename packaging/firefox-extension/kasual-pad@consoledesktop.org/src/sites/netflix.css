@@ -1,3 +1,6 @@
-#member-footer {
+#member-footer,
+[data-uia="loc"] footer,
+[data-uia^="help-menu-toggle"],
+[data-uia="identification"] [data-uia="field-password+container"] {
   display: none !important;
 }

@@ -9,7 +9,6 @@
   };
 
   const fitToTargetWidth = async (tabId, { width, targetWidth }) => {
-    await browser.tabs.setZoomSettings(tabId, { scope: "per-tab" });
     const current = await browser.tabs.getZoom(tabId);
     fittedTabs.add(tabId);
     await zoomTo(tabId, (width * current) / targetWidth);
@@ -20,10 +19,15 @@
     await zoomTo(tabId, UNZOOMED);
   };
 
+  const reportZoom = async (tabId) => ({ zoom: await browser.tabs.getZoom(tabId) });
+
+  const fit = (tabId, request) => (request.fullscreen ? fitToTargetWidth(tabId, request) : undoFit(tabId))
+    .then(() => reportZoom(tabId))
+    .catch((error) => ({ error: error.message }));
+
   browser.runtime.onMessage.addListener(({ fitViewport }, sender) => {
-    if (!fitViewport || !sender.tab) return;
-    if (fitViewport.fullscreen) fitToTargetWidth(sender.tab.id, fitViewport);
-    else undoFit(sender.tab.id);
+    if (!fitViewport || !sender.tab) return undefined;
+    return fit(sender.tab.id, fitViewport);
   });
 
   browser.tabs.onRemoved.addListener((tabId) => fittedTabs.delete(tabId));

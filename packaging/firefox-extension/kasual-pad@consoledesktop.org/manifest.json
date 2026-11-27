@@ -25,18 +25,22 @@
       ],
       "run_at": "document_idle",
       "css": [
+        "src/tv_mode.css",
         "src/sites/netflix.css"
       ],
       "js": [
         "src/namespace.js",
+        "src/tv_mode.js",
         "src/intent.js",
         "src/cue.js",
         "src/pad_layout.js",
         "src/gamepad_source.js",
+        "src/key_source.js",
+        "src/stick_scroll.js",
         "src/overlay_root.js",
         "src/keyboard.js",
         "src/pointer.js",
-        "src/still_pointer_guard.js",
+        "src/stray_pointer_guard.js",
         "src/viewport_fit.js",
         "src/sound_feedback.js",
         "src/candidates.js",

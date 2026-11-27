@@ -2,6 +2,7 @@
   const { Intent } = KasualPad;
 
   const PRESS_THRESHOLD = 0.5;
+  const STICK_DEAD_ZONE = 0.2;
   const TRIGGER_AXIS_PRESSED_ABOVE = 0;
   const TRIGGER_AXIS_AT_REST = -1;
 
@@ -22,6 +23,7 @@
     ],
     triggerAxes: [],
     directionAxes: [{ x: 0, y: 1 }],
+    scrollAxis: 3,
   };
 
   const UNMAPPED_EVDEV_LAYOUT = {
@@ -38,6 +40,7 @@
       [5, Intent.VOLUME_UP],
     ],
     directionAxes: [{ x: 0, y: 1 }, { x: 6, y: 7 }],
+    scrollAxis: 4,
   };
 
   const isPressed = (pad, index) => {
@@ -56,8 +59,19 @@
     if (y >= PRESS_THRESHOLD) active.add(Intent.DOWN);
   };
 
+  const layoutOf = (pad) =>
+    (pad.mapping === "standard" ? STANDARD_LAYOUT_AS_FIREFOX_REPORTS_IT_ON_LINUX : UNMAPPED_EVDEV_LAYOUT);
+
+  const scrollTiltOf = (pad) => {
+    const tilt = pad.axes[layoutOf(pad).scrollAxis] ?? 0;
+    return Math.abs(tilt) > STICK_DEAD_ZONE ? tilt : 0;
+  };
+
+  KasualPad.scrollTilt = (pads) =>
+    pads.map(scrollTiltOf).reduce((strongest, tilt) => (Math.abs(tilt) > Math.abs(strongest) ? tilt : strongest), 0);
+
   KasualPad.activeIntents = (pad) => {
-    const layout = pad.mapping === "standard" ? STANDARD_LAYOUT_AS_FIREFOX_REPORTS_IT_ON_LINUX : UNMAPPED_EVDEV_LAYOUT;
+    const layout = layoutOf(pad);
     const active = new Set();
     for (const [index, intent] of layout.buttons) {
       if (isPressed(pad, index)) active.add(intent);

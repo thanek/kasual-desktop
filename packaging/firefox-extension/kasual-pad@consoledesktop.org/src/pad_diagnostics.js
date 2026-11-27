@@ -43,9 +43,14 @@
     `  intents: ${Array.from(KasualPad.activeIntents(pad)).join(" ") || "-"}`,
   ];
 
+  const describeViewport = () => [
+    `viewport: ${innerWidth}×${innerHeight} css px, scale ${devicePixelRatio.toFixed(3)}`,
+    `fit: ${KasualPad.viewportFitOutcome()}`,
+  ];
+
   const describe = (pads, state) => {
     const padLines = pads.length ? pads.flatMap(describePad) : ["no gamepad visible yet: press any button"];
-    return [`focus: ${describeElement(document.activeElement)}`, ...state, ...padLines].join("\n");
+    return [...describeViewport(), `focus: ${describeElement(document.activeElement)}`, ...state, ...padLines].join("\n");
   };
 
   KasualPad.PadDiagnostics = class {

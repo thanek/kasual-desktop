@@ -123,6 +123,7 @@
       if (hints !== this.#shown) this.#render(hints, now);
       const dozing = hints.autoHide && now - this.#lastActivityAt > AUTO_HIDE_AFTER_MS;
       this.#bar.classList.toggle("dozing", dozing);
+      this.#host.style.zoom = 1 / KasualPad.pageZoom();
       KasualPad.keepInOverlayRoot(this.#host);
     }
 

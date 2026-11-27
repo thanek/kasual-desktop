@@ -4,8 +4,10 @@
   const PLAYER_PATH_PREFIX = "/watch/";
   const HOME_PATH = "/browse";
   const SEARCH_REVEAL_TIMEOUT_MS = 1500;
-  const CONTROLS_KEEP_AWAKE_EVERY_MS = 1000;
+  const CONTROLS_HIDE_AFTER_IDLE_MS = 5000;
   const LONG_SEEK_STEPS = 3;
+  const POINTER_NUDGE_PX = 24;
+  const CONTROLS_GIVE_UP_AFTER_MS = 2000;
 
   const Selector = {
     PLAYER: '[data-uia="player"], .watch-video',
@@ -99,6 +101,8 @@
     else location.assign(HOME_PATH);
   };
 
+  const controlsShown = () => document.querySelector(Selector.PLAY_PAUSE) !== null;
+
   const canSkip = () => document.querySelector(Selector.SKIP_OR_NEXT_EPISODE) !== null;
 
   const clickIfPresent = (selector) => {
@@ -132,6 +136,8 @@
   KasualPad.NetflixSite = class {
     #controlsOpen = false;
     #controlsWokenAt = 0;
+    #controlsLastSeenAt = 0;
+    #pointerNudge = POINTER_NUDGE_PX;
 
     #watchingActions = {
       [Intent.SELECT]: () => KasualPad.pressKey(" "),
@@ -170,18 +176,20 @@
     }
 
     tick(now) {
-      const controlsDozing = now - this.#controlsWokenAt >= CONTROLS_KEEP_AWAKE_EVERY_MS;
-      if (!this.#isPlayerOpen()) this.#controlsOpen = false;
-      else if (this.#controlsOpen && controlsDozing) this.#wakeControls(now);
+      if (controlsShown()) this.#controlsLastSeenAt = now;
+      const controlsLost = now - this.#controlsLastSeenAt >= CONTROLS_GIVE_UP_AFTER_MS;
+      const controlsIdle = now - this.#controlsWokenAt >= CONTROLS_HIDE_AFTER_IDLE_MS;
+      if (!this.#isPlayerOpen() || controlsLost) this.#controlsOpen = false;
+      else if (this.#controlsOpen && controlsIdle) this.#closeControls();
     }
 
     focusScope() {
       if (!this.#isPlayerOpen()) return KasualPad.topmostModal() ?? document;
-      const controlsShown = document.querySelector(Selector.PLAY_PAUSE) !== null;
-      return this.#controlsOpen && controlsShown ? document.querySelector(Selector.PLAYER) : null;
+      return this.#controlsOpen && controlsShown() ? document.querySelector(Selector.PLAYER) : null;
     }
 
     diagnostics(focused) {
+      if (this.#isPlayerOpen()) return [this.#describeControls()];
       return [
         `modal: ${KasualPad.describeElement(KasualPad.topmostModal())}`,
         `floor: ${NetflixFloors.describeFloorOf(focused)}`,
@@ -221,6 +229,10 @@
       return canSkip() ? WATCHING_WITH_SKIP_HINTS : WATCHING_HINTS;
     }
 
+    scrollsFreely() {
+      return !this.#isPlayerOpen();
+    }
+
     hoversOnFocus() {
       return this.#isPlayerOpen();
     }
@@ -240,17 +252,28 @@
 
     #openControls() {
       this.#controlsOpen = true;
+      this.#controlsLastSeenAt = performance.now();
       this.#wakeControls();
     }
 
     #closeControls() {
       this.#controlsOpen = false;
+      const player = document.querySelector(Selector.PLAYER);
+      if (player) KasualPad.movePointerOut(player);
     }
 
     #wakeControls(now = performance.now()) {
       const player = document.querySelector(Selector.PLAYER);
-      if (player) KasualPad.movePointerOver(player);
+      this.#pointerNudge = -this.#pointerNudge;
+      if (player) KasualPad.movePointerOver(player, this.#pointerNudge);
       this.#controlsWokenAt = now;
+    }
+
+    #describeControls() {
+      const requested = this.#controlsOpen ? "requested" : "not requested";
+      const shown = controlsShown() ? "shown" : "absent";
+      const player = KasualPad.describeElement(document.querySelector(Selector.PLAYER));
+      return `controls: ${requested}, play/pause ${shown}, player ${player}`;
     }
 
     #leavePlayer() {

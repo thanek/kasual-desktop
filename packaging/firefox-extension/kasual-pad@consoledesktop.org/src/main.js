@@ -1,5 +1,5 @@
 {
-  KasualPad.ignoreHoverFromStillPointer();
+  KasualPad.ignoreStrayPointerHover();
   KasualPad.fitViewportToTvLayout();
 
   const site = new KasualPad.NetflixSite();
@@ -13,13 +13,19 @@
     ...site.diagnostics(focus.current),
   ]);
 
+  const stickScroll = new KasualPad.StickScroll((pixels) => controller.scrollBy(pixels));
+
+  const handle = (intent) => {
+    hintBar.wake();
+    controller.handle(intent);
+  };
+
+  new KasualPad.KeySource(handle, keyboard).start();
   new KasualPad.GamepadSource(
-    (intent) => {
-      hintBar.wake();
-      controller.handle(intent);
-    },
+    handle,
     (pads, now) => {
       controller.tick(now);
+      stickScroll.follow(pads, now);
       hintBar.show(controller.hints(), now);
       diagnostics.show(pads);
     },

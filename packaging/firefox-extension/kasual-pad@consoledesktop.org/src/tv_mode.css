@@ -1,0 +1,5 @@
+@media (display-mode: fullscreen) {
+  * {
+    cursor: none !important;
+  }
+}

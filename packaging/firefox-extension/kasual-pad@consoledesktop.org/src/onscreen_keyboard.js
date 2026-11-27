@@ -154,6 +154,17 @@
       this.#feedback.play(Cue.POPUP_CLOSE);
     }
 
+    typeFromKeyboard(typed) {
+      const typesCharacter = typed.length === 1;
+      if (!typesCharacter && !KasualPad.typesSpecialKey(typed)) return false;
+      const onLayout = this.#cursor.moveToKeyFor(typed);
+      this.#feedback.play(Cue.SELECT);
+      const { key } = this.#cursor;
+      if (onLayout && key.kind !== KeyKind.CHARACTER) this.#keyActions[key.kind](key);
+      else this.#typeCharacter(typed, onLayout);
+      return true;
+    }
+
     handle(intent) {
       if (!this.#input.isConnected) {
         this.close();
@@ -172,6 +183,11 @@
       const { key } = this.#cursor;
       this.#feedback.play(Cue.SELECT);
       this.#keyActions[key.kind](key);
+    }
+
+    #typeCharacter(character, onLayout) {
+      if (onLayout) this.#diacritics = KasualPad.isDiacritic(character);
+      this.#type(character);
     }
 
     #type(text) {

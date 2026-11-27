@@ -17,8 +17,13 @@ Intents carry the same names as the Kasual Desktop input vocabulary (`src/domain
 | Y | – | skip intro / recap, next episode | skip intro / recap, next episode |
 | LB / RB | previous / next page of the row | seek 30 s | – |
 | LT / RT | previous / next section (navigation bar, billboard, each carousel) | volume | volume |
+| Right stick ↑/↓ | scroll freely, faster the further it is tilted; focus moves to the row in the middle once it leaves the screen | – | – |
+
+A keyboard drives the same actions with the Kasual Desktop keys: arrows for the D-pad, Enter for A, Escape for B, Q for X, `[` / `]` for LB / RB and `-` / `=` for LT / RT. Q, brackets, minus and equals stay ordinary characters while a text field has focus. Y has no key, as in Kasual Desktop.
 
 The on-screen keyboard also opens when A is pressed on a text field. On it: A types the selected key, X deletes, Y adds a space, LT switches to Polish letters (a→ą, z→ż, x→ź…), B closes it.
+
+Typing on a keyboard while it is open goes through it: the typed key lights up, the text shows in its preview, Backspace deletes, Enter and Escape close it.
 
 A hint bar styled after the Kasual Desktop one shows the buttons available on the current screen. While watching, it hides after a few seconds without input. Labels come from `_locales/`.
 
@@ -45,6 +50,6 @@ When Kasual Desktop is running, it grabs the physical pad and forwards it as `ka
 
 `make stage` puts the extension, with its sounds, under `/usr/share/mozilla/extensions/{ec8030f7-c20a-464f-9b0e-13a3a9e97384}/`, the system scope of every Firefox profile. Fedora builds Firefox with unsigned add-ons allowed there; other distributions require the add-on to be signed through addons.mozilla.org (unlisted self-distribution).
 
-Being system-wide, the extension also runs on Netflix in an ordinary Firefox window. It zooms the page to the 1920 px TV layout only while the window is fullscreen, and only for that tab.
+Being system-wide, the extension also runs on Netflix in an ordinary Firefox window. It zooms the page to the 1440 px TV layout only while the window is fullscreen. The kiosk launcher keeps that zoom to its own tab; an ordinary Firefox applies it to every Netflix tab, as it does with any zoom chosen by hand. While fullscreen it also hides the mouse cursor and ignores mouse hover, so a nudged mouse cannot open title previews; clicks still work.
 
 The Netflix tile runs `apps/vod/vod.sh`, which keeps a dedicated profile in `~/.local/share/kasual-desktop/vod-profile`, rewrites its `user.js` (DRM, no first-run pages, sideloaded extensions enabled) and starts Firefox in kiosk mode with the `kasual-vod` window name.
