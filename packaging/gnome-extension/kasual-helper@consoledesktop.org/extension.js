@@ -91,6 +91,10 @@ const MONITOR_PROPERTIES_KEPT = ['color-mode', 'rgb-range'];
 const CHROME_SETTLE_MS = [100, 1000];
 
 const FOCUS_RETRY_MS = 100;
+
+const POINTER_POLL_MS = 100;
+const POINTER_IDLE_MS = 1000;
+const US_PER_MS = 1000;
 const FOCUS_ATTEMPTS = 20;
 
 // Mutter moved the unredirect toggle from Meta to global.compositor across 45–50.
@@ -124,6 +128,82 @@ function activationTime() {
 function raiseWindow(w) {
     if (typeof w.raise_and_make_recent === 'function') w.raise_and_make_recent();
     else if (typeof w.raise === 'function') w.raise();
+}
+
+function cursorTracker() {
+    return global.backend?.get_cursor_tracker?.() ?? Meta.CursorTracker.get_for_display(global.display);
+}
+
+function pointerPosition() {
+    const [x, y] = global.get_pointer();
+    return `${x},${y}`;
+}
+
+function nowMs() {
+    return GLib.get_monotonic_time() / US_PER_MS;
+}
+
+function hideCursor(tracker) {
+    if (typeof tracker.inhibit_cursor_visibility === 'function') tracker.inhibit_cursor_visibility();
+    else tracker.set_pointer_visible(false);
+}
+
+function showCursor(tracker) {
+    if (typeof tracker.uninhibit_cursor_visibility === 'function') tracker.uninhibit_cursor_visibility();
+    else tracker.set_pointer_visible(true);
+}
+
+class IdlePointerHider {
+    constructor() {
+        this._tracker = null;
+        this._pollId = 0;
+        this._hidden = false;
+        this._lastPosition = '';
+        this._stillSince = 0;
+    }
+
+    start() {
+        if (this._tracker)
+            return;
+        this._tracker = cursorTracker();
+        this._noteMoved(pointerPosition());
+        this._pollId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, POINTER_POLL_MS, () => {
+            this._poll();
+            return GLib.SOURCE_CONTINUE;
+        });
+    }
+
+    stop() {
+        if (!this._tracker)
+            return;
+        GLib.source_remove(this._pollId);
+        this._pollId = 0;
+        this._reveal();
+        this._tracker = null;
+    }
+
+    _poll() {
+        const position = pointerPosition();
+        if (position !== this._lastPosition) {
+            this._noteMoved(position);
+            this._reveal();
+        } else if (!this._hidden && nowMs() - this._stillSince >= POINTER_IDLE_MS) {
+            hideCursor(this._tracker);
+            this._hidden = true;
+        }
+    }
+
+    _noteMoved(position) {
+        this._lastPosition = position;
+        this._stillSince = nowMs();
+    }
+
+    _reveal() {
+        if (!this._hidden)
+            return;
+        showCursor(this._tracker);
+        this._hidden = false;
+    }
 }
 
 function defaultSeat() {
@@ -295,6 +375,7 @@ class Helper {
         this._windowSignals = new Map();
         this._realGetRunning = null;
         this._chromeSettleIds = [];
+        this._idlePointer = new IdlePointerHider();
 
         this._hideFromAppLists();
         this._windowCreatedId = global.display.connect(
@@ -1158,8 +1239,12 @@ class Helper {
             () => {
                 this._gamepadDrives = true;
                 this._expireBannerAlreadyShown();
+                this._idlePointer.start();
             },
-            () => (this._gamepadDrives = false));
+            () => {
+                this._gamepadDrives = false;
+                this._idlePointer.stop();
+            });
         this._bannerShownId = Main.messageTray.connect(
             'notify::visible', () => this._countGamepadAsInput());
     }
@@ -1177,6 +1262,7 @@ class Helper {
     _letBannersWaitForInput() {
         Main.messageTray.disconnect(this._bannerShownId);
         Gio.bus_unwatch_name(this._gamepadWatchId);
+        this._idlePointer.stop();
     }
 
     // The class stays registered: an OSD mapped later, over a game, must pin too.
