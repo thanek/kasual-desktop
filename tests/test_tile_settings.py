@@ -37,10 +37,6 @@ def _go_to_colors(overlay):
     _press(overlay, Event.SECTION_NEXT)
 
 
-def _go_to_close_button(overlay):
-    _press(overlay, Event.SECTION_NEXT, Event.SECTION_NEXT)
-
-
 class TestChoosingColor:
     def test_select_applies_the_color_at_once(self, mock_gamepad):
         on_color = MagicMock()
@@ -124,22 +120,20 @@ class TestNavigation:
     @pytest.mark.parametrize("events, expected", [
         ([Event.SECTION_NEXT], _Group.COLOR),
         ([Event.SECTION_NEXT, Event.SECTION_PREV], _Group.RECALL),
-        ([Event.SECTION_NEXT] * 2, _Group.CLOSE),
-        ([Event.SECTION_NEXT] * 3, _Group.CLOSE),
+        ([Event.SECTION_NEXT] * 2, _Group.COLOR),
         ([Event.SECTION_PREV], _Group.RECALL),
         ([Event.UP], _Group.RECALL),
         ([Event.DOWN], _Group.COLOR),
         ([Event.DOWN, Event.UP], _Group.RECALL),
-        ([Event.DOWN, Event.DOWN], _Group.CLOSE),
-        ([Event.DOWN, Event.DOWN, Event.UP], _Group.COLOR),
-        ([Event.DOWN, Event.DOWN, Event.DOWN], _Group.CLOSE),
+        ([Event.DOWN, Event.DOWN], _Group.COLOR),
+        ([Event.DOWN, Event.DOWN, Event.UP], _Group.RECALL),
     ])
     def test_sections(self, mock_gamepad, events, expected):
         overlay = _make(mock_gamepad)
         _press(overlay, *events)
         assert overlay._active_group == expected
 
-    def test_down_stays_in_the_grid_until_its_last_row(self, mock_gamepad):
+    def test_down_stops_at_the_last_row_of_the_grid(self, mock_gamepad):
         on_color = MagicMock()
         overlay = _make(mock_gamepad, colors=TWO_ROWS, color=TWO_ROWS[0],
                         on_color_changed=on_color)
@@ -147,20 +141,11 @@ class TestNavigation:
         _press(overlay, Event.DOWN, Event.SELECT)
         on_color.assert_called_once_with(TWO_ROWS[10])
         _press(overlay, Event.DOWN)
-        assert overlay._active_group == _Group.CLOSE
+        assert overlay.color_under_cursor == TWO_ROWS[10]
 
 
 def _close_with_b(overlay):
     _press(overlay, Event.CANCEL)
-
-
-def _close_with_the_button(overlay):
-    _go_to_close_button(overlay)
-    _press(overlay, Event.SELECT)
-
-
-def _close_with_a_click_on_the_button(overlay):
-    overlay._btn_close.click()
 
 
 def _close_with_a_click_outside(overlay):
@@ -178,8 +163,7 @@ class TestClosing:
         assert overlay._handle_pad in mock_gamepad._stack
 
     @pytest.mark.parametrize("close", [
-        _close_with_b, _close_with_the_button, _close_with_a_click_on_the_button,
-        _close_with_a_click_outside, _close_with_escape,
+        _close_with_b, _close_with_a_click_outside, _close_with_escape,
     ])
     def test_closes_once_and_gives_the_pad_back(self, mock_gamepad, close):
         on_closed = MagicMock()

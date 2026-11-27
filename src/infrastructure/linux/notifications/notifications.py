@@ -28,6 +28,7 @@ import threading
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
+from itertools import pairwise
 
 from PyQt6.QtCore import QObject, pyqtSignal
 
@@ -47,6 +48,9 @@ _MATCH = "interface='org.freedesktop.Notifications',member='Notify'"
 # dbus-monitor writes "method call" / "method return", not underscores.
 _HEADERS = ("method call", "method return", "signal", "error")
 _NOTIFY_HEADER = "method call"
+
+# GNOME Shell forwards every Notify to itself, adding hints of this prefix.
+_GNOME_SHELL_RELAY_HINT = 'string "x-shell-sender'
 
 # Defensive cap: a single notification block is tiny, so if the buffer ever
 # grows past this without resolving, something is wrong — drop it rather than
@@ -120,15 +124,21 @@ def _is_complete_notify(arg_lines: list[str]) -> bool:
     return len(_top_level_scalars(arg_lines)) >= _NOTIFY_SCALAR_COUNT
 
 
-def parse_notify_blocks(text: str) -> tuple[list[_NotifyArgs], str]:
-    """Parse complete `Notify` blocks from streamed dbus-monitor output.
+def _is_notify_call(header: str) -> bool:
+    return header.startswith(_NOTIFY_HEADER) and "member=Notify" in header
 
-    Returns the notifications found plus the unparsed tail to prepend to the
-    next chunk. A block followed by another header is proven complete by that
-    header; the trailing block has no follower yet, so it's only emitted once
-    it has structurally streamed in full (see :func:`_is_complete_notify`) —
-    otherwise a lone final notification would sit in the buffer forever.
-    """
+
+def _is_relayed_by_gnome_shell(arg_lines: list[str]) -> bool:
+    return any(line.strip().startswith(_GNOME_SHELL_RELAY_HINT) for line in arg_lines)
+
+
+def _parse_notify_block(header: str, arg_lines: list[str]) -> _NotifyArgs | None:
+    if not _is_notify_call(header) or _is_relayed_by_gnome_shell(arg_lines):
+        return None
+    return _parse_notify_args(arg_lines)
+
+
+def parse_notify_blocks(text: str) -> tuple[list[_NotifyArgs], str]:
     lines = text.split("\n")
     header_idxs = [
         i for i, l in enumerate(lines)
@@ -137,30 +147,15 @@ def parse_notify_blocks(text: str) -> tuple[list[_NotifyArgs], str]:
     if not header_idxs:
         return [], text
 
-    def notify_args(start: int, end: int) -> _NotifyArgs | None:
-        header = lines[start]
-        if not (header.startswith(_NOTIFY_HEADER) and "member=Notify" in header):
-            return None
-        return _parse_notify_args(lines[start + 1:end])
+    blocks = [(lines[start], lines[start + 1:end])
+              for start, end in pairwise([*header_idxs, len(lines)])]
+    *followed, (last_header, last_args) = blocks
+    last_is_complete = _is_notify_call(last_header) and _is_complete_notify(last_args)
 
-    results: list[_NotifyArgs] = []
-    for k in range(len(header_idxs) - 1):
-        parsed = notify_args(header_idxs[k], header_idxs[k + 1])
-        if parsed is not None:
-            results.append(parsed)
-
-    last = header_idxs[-1]
-    tail = lines[last + 1:]
-    header = lines[last]
-    is_notify = header.startswith(_NOTIFY_HEADER) and "member=Notify" in header
-    if is_notify and _is_complete_notify(tail):
-        parsed = _parse_notify_args(tail)
-        if parsed is not None:
-            results.append(parsed)
-        return results, ""
-
-    leftover = "\n".join(lines[last:])
-    return results, leftover
+    complete = blocks if last_is_complete else followed
+    leftover = "" if last_is_complete else "\n".join(lines[header_idxs[-1]:])
+    parsed = (_parse_notify_block(header, args) for header, args in complete)
+    return [args for args in parsed if args is not None], leftover
 
 
 class FreedesktopNotificationMonitor(QObject, NotificationSource, metaclass=ProtocolQtMeta):

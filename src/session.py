@@ -20,6 +20,8 @@ from PyQt6.QtWidgets import QApplication
 from application import Application
 from domain.display.display import DisplayPlacement
 from domain.display.selection import DisplaySelection
+from domain.input.gamepad_signals import GamepadSignals
+from domain.notifications.popups import NotificationPopups
 from domain.provisioning.candidate import CandidateApp
 from domain.provisioning.provisioning import needs_provisioning
 from domain.shared.feedback import Cue
@@ -153,6 +155,13 @@ def build_controller(*, gamepad, desktop, tray, wm, power, hud, sound) -> Applic
         hud=hud,
         sound=sound,
     )
+
+
+def expire_popups_while_a_gamepad_drives(
+    gamepad: GamepadSignals, popups: NotificationPopups,
+) -> None:
+    gamepad.on_connected(lambda _event: popups.expire_without_keyboard_or_mouse())
+    gamepad.on_disconnected(lambda _event: popups.wait_for_keyboard_or_mouse())
 
 
 def wire_notification_badge(source, desktop) -> None:

@@ -13,6 +13,7 @@ from domain.navigation.hints import Hints
 from domain.network import view as network_view
 from domain.network.status import NetworkKind, NetworkStatus
 from domain.notifications.center import NotificationCenter
+from domain.notifications.popups import NotificationPopups
 from domain.system.actions import ACTIONS
 from domain.system.power_preference import PowerPreference
 
@@ -72,6 +73,7 @@ class HomeChrome:
         hintbar: HintBarSurface,
         header: HeaderStatusView,
         notifications: NotificationCenter,
+        notification_popups: NotificationPopups,
         render_screen_hints: Callable[[], None],
         dismiss_overlays: Callable[[], None],
         show_notifications_view: Callable[[], None],
@@ -82,6 +84,7 @@ class HomeChrome:
         self._hintbar = hintbar
         self._header = header
         self._notifications = notifications
+        self._notification_popups = notification_popups
         self._render_screen_hints = render_screen_hints
         self._dismiss_overlays = dismiss_overlays
         self._show_notifications_view = show_notifications_view
@@ -193,9 +196,10 @@ class HomeChrome:
         self._header.set_notification_badge(self._notifications.unread_count)
 
     def open_notifications(self) -> None:
-        """Present the notifications view, then mark them read and drop the
-        badge — in that order, so the view still sees the unread tally it
-        highlights the new rows by."""
         self._show_notifications_view()
+        self._mark_shown_notifications_read()
+        self._notification_popups.dismiss_all()
+
+    def _mark_shown_notifications_read(self) -> None:
         self._notifications.mark_all_read()
         self.refresh_notification_badge()

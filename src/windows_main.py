@@ -95,6 +95,7 @@ def main():
     from infrastructure.windows.proc import parent_pid
     from infrastructure.common.qt.scheduler import QtScheduler
     from domain.notifications.center import NotificationCenter
+    from domain.notifications.popups import UncontrolledPopups
 
     power = WindowsPowerControl()
     # Shared instances: the Home Overlay's Quick-adjust sliders and the top bar
@@ -163,6 +164,7 @@ def main():
             scheduler=QtScheduler(),
             process_manager=process_manager,
             notifications=notification_center,
+            notification_popups=UncontrolledPopups(),
             network_control=WindowsNetworkControl(),
             displays=display_selection,
             audio_outputs=NoAudioOutputs(),
