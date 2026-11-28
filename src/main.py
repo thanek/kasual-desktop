@@ -6,7 +6,7 @@ from pathlib import Path
 
 from infrastructure.linux.compositor import (
     CEDE_BY_SINKING, Compositor, build_autostart, build_desktop_surface,
-    build_display_placement, build_notification_popups,
+    build_display_placement, build_notification_popups, build_pointer_hiding,
     build_primary_display, build_screensaver_waker,
     build_system_wallpaper, build_tray_icon_source, build_window_manager,
     detect_compositor, layer_shell_available,
@@ -31,7 +31,8 @@ from PyQt6.QtWidgets import QApplication
 from version import get_version, test_api_enabled
 from session import (
     build_controller, build_tray, defer_start, expire_popups_while_a_gamepad_drives,
-    follow_chosen_display, run_onboarding_or_start, setup_logging, wire_notification_badge,
+    follow_chosen_display, hide_idle_pointer_while_a_gamepad_drives,
+    run_onboarding_or_start, setup_logging, wire_notification_badge,
 )
 from infrastructure.common.audio.feedback import SoundFeedback
 from infrastructure.common.single_instance import SingleInstanceGuard
@@ -227,6 +228,7 @@ def main() -> None:
     gamepad = GamepadWatcher()
     screensaver_waker = build_screensaver_waker(COMPOSITOR)
     gamepad.on_activity(screensaver_waker.poke)
+    hide_idle_pointer_while_a_gamepad_drives(app, gamepad, build_pointer_hiding(COMPOSITOR))
     feedback = SoundFeedback()
 
     autostart = build_autostart(launcher_for(install_root), COMPOSITOR)

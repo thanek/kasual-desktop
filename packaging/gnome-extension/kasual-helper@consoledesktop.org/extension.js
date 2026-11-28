@@ -11,6 +11,7 @@ const TAG = '[kasual-helper]';
 const BUS_NAME = 'org.consoledesktop.GnomeHelper';
 const OBJECT_PATH = '/org/consoledesktop/GnomeHelper';
 const NAME_OWNED_WHILE_A_GAMEPAD_DRIVES = 'org.consoledesktop.KasualGamepad';
+const NAME_OWNED_WHILE_THE_IDLE_POINTER_HIDES = 'org.consoledesktop.KasualIdlePointer';
 
 const IFACE = `
 <node>
@@ -385,6 +386,7 @@ class Helper {
             });
         this._suppressReadyBannerForOwnWindows();
         this._expireBannersWhileAGamepadDrives();
+        this._hideIdlePointerWhileAsked();
         this._monitorsChangedId = Main.layoutManager.connect(
             'monitors-changed', () => this._recheckChromeOnceSettled());
         // A ceded Desktop's depth follows the focus (see _focusIsOrdinaryWindow).
@@ -410,6 +412,7 @@ class Helper {
         this._forgetChromeRechecks();
         this._restoreReadyBanner();
         this._letBannersWaitForInput();
+        this._keepPointerVisible();
         global.display.disconnect(this._focusId);
         for (const [win, ids] of this._windowSignals)
             for (const id of ids)
@@ -1239,12 +1242,8 @@ class Helper {
             () => {
                 this._gamepadDrives = true;
                 this._expireBannerAlreadyShown();
-                this._idlePointer.start();
             },
-            () => {
-                this._gamepadDrives = false;
-                this._idlePointer.stop();
-            });
+            () => (this._gamepadDrives = false));
         this._bannerShownId = Main.messageTray.connect(
             'notify::visible', () => this._countGamepadAsInput());
     }
@@ -1262,6 +1261,18 @@ class Helper {
     _letBannersWaitForInput() {
         Main.messageTray.disconnect(this._bannerShownId);
         Gio.bus_unwatch_name(this._gamepadWatchId);
+    }
+
+    _hideIdlePointerWhileAsked() {
+        this._idlePointerWatchId = Gio.bus_watch_name_on_connection(
+            Gio.DBus.session, NAME_OWNED_WHILE_THE_IDLE_POINTER_HIDES,
+            Gio.BusNameWatcherFlags.NONE,
+            () => this._idlePointer.start(),
+            () => this._idlePointer.stop());
+    }
+
+    _keepPointerVisible() {
+        Gio.bus_unwatch_name(this._idlePointerWatchId);
         this._idlePointer.stop();
     }
 

@@ -23,6 +23,7 @@ from domain.shell.wallpaper import SystemWallpaper
 if TYPE_CHECKING:
     from domain.display.display import DisplayPlacement, PrimaryDisplay
     from domain.display.relaunch import AnnouncedRelaunch
+    from domain.input.pointer_hiding import PointerHiding
     from domain.notifications.popups import NotificationPopups
     from infrastructure.common.qt.desktop.surface import DesktopSurface
     from infrastructure.common.qt.ui.tray import TrayIconFor
@@ -339,6 +340,17 @@ def build_notification_popups(compositor: Compositor) -> "NotificationPopups":
         return GnomeNotificationPopups()
     from domain.notifications.popups import UncontrolledPopups
     return UncontrolledPopups()
+
+
+def build_pointer_hiding(compositor: Compositor) -> "PointerHiding":
+    if compositor is Compositor.GNOME:
+        from infrastructure.gnome.input.pointer_hiding import GnomePointerHiding
+        return GnomePointerHiding()
+    if compositor is Compositor.KDE:
+        from infrastructure.kde.input.pointer_hiding import KwinPointerHiding
+        return KwinPointerHiding()
+    from domain.input.pointer_hiding import UncontrolledPointer
+    return UncontrolledPointer()
 
 
 def build_display_placement(

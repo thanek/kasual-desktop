@@ -21,6 +21,7 @@ from application import Application
 from domain.display.display import DisplayPlacement
 from domain.display.selection import DisplaySelection
 from domain.input.gamepad_signals import GamepadSignals
+from domain.input.pointer_hiding import PointerHiding
 from domain.notifications.popups import NotificationPopups
 from domain.provisioning.candidate import CandidateApp
 from domain.provisioning.provisioning import needs_provisioning
@@ -162,6 +163,14 @@ def expire_popups_while_a_gamepad_drives(
 ) -> None:
     gamepad.on_connected(lambda _event: popups.expire_without_keyboard_or_mouse())
     gamepad.on_disconnected(lambda _event: popups.wait_for_keyboard_or_mouse())
+
+
+def hide_idle_pointer_while_a_gamepad_drives(
+    app: QApplication, gamepad: GamepadSignals, pointer: PointerHiding,
+) -> None:
+    gamepad.on_connected(lambda _event: pointer.hide_while_idle())
+    gamepad.on_disconnected(lambda _event: pointer.keep_visible())
+    app.aboutToQuit.connect(pointer.keep_visible)
 
 
 def wire_notification_badge(source, desktop) -> None:
